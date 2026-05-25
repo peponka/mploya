@@ -10,9 +10,11 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
 import 'package:mploya/config/theme.dart';
+import 'package:mploya/core/utils/responsive.dart';
 import 'package:mploya/features/auth/providers/auth_provider.dart';
 import 'package:mploya/features/messaging/models/message_model.dart';
 import 'package:mploya/features/messaging/providers/messaging_provider.dart';
+import 'package:mploya/features/messaging/screens/conversations_list_screen.dart';
 import 'package:mploya/features/messaging/widgets/message_bubble.dart';
 
 // =============================================================================
@@ -254,11 +256,180 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
     final conversation = _findConversation();
     final currentUser = ref.watch(currentUserProvider);
 
+    // ── Mobile: original full-screen chat ──────────────────────────────
+    if (!isDesktop(context)) {
+      return Scaffold(
+        appBar: _buildAppBar(colorScheme, conversation),
+        body: currentUser == null
+            ? _buildDemoBody(colorScheme)
+            : _buildBody(colorScheme, messagesState, currentUser.id),
+      );
+    }
+
+    // ── Desktop: master-detail layout ─────────────────────────────────
+    final chatBody = Column(
+      children: [
+        // Inline app-bar area (not a real AppBar to avoid nested Scaffolds).
+        _buildDesktopAppBarArea(colorScheme, conversation),
+        Expanded(
+          child: currentUser == null
+              ? _buildDemoBody(colorScheme)
+              : _buildBody(colorScheme, messagesState, currentUser.id),
+        ),
+      ],
+    );
+
     return Scaffold(
-      appBar: _buildAppBar(colorScheme, conversation),
-      body: currentUser == null
-          ? _buildDemoBody(colorScheme)
-          : _buildBody(colorScheme, messagesState, currentUser.id),
+      body: Row(
+        children: [
+          SizedBox(
+            width: 340,
+            child: ConversationsListScreen(
+              onSelectChat: (id) {},
+              selectedId: widget.conversationId,
+            ),
+          ),
+          const VerticalDivider(width: 1, color: MployaColors.borderLight),
+          Expanded(child: chatBody),
+        ],
+      ),
+    );
+  }
+
+  /// Builds an inline app-bar area for the desktop layout so we avoid
+  /// nesting Scaffolds.  Mirrors the look of [_buildAppBar].
+  Widget _buildDesktopAppBarArea(
+    ColorScheme colorScheme,
+    Conversation? conversation,
+  ) {
+    final participantName = conversation?.participantName ?? 'Chat';
+    final isOnline = conversation?.isOnline ?? false;
+    final initials = conversation?.participantInitials ?? '?';
+
+    return Container(
+      height: 64,
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        border: Border(
+          bottom: BorderSide(
+            color: colorScheme.outlineVariant.withValues(alpha: 0.3),
+          ),
+        ),
+      ),
+      child: Row(
+        children: [
+          // Participant avatar
+          SizedBox(
+            width: 40,
+            height: 40,
+            child: Stack(
+              children: [
+                CircleAvatar(
+                  radius: 20,
+                  backgroundColor: colorScheme.primaryContainer,
+                  backgroundImage:
+                      conversation?.participantAvatarUrl != null
+                          ? NetworkImage(conversation!.participantAvatarUrl!)
+                          : null,
+                  child: conversation?.participantAvatarUrl == null
+                      ? Text(
+                          initials,
+                          style: GoogleFonts.outfit(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: colorScheme.primary,
+                          ),
+                        )
+                      : null,
+                ),
+                if (isOnline)
+                  Positioned(
+                    bottom: 0,
+                    right: 0,
+                    child: Container(
+                      width: 12,
+                      height: 12,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF00C853),
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: colorScheme.surface,
+                          width: 2,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+
+          // Name + status
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  participantName,
+                  style: GoogleFonts.inter(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: colorScheme.onSurface,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                Text(
+                  _isTyping
+                      ? 'Escribiendo…'
+                      : (isOnline ? 'En línea' : 'Desconectado'),
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    color: _isTyping
+                        ? colorScheme.primary
+                        : colorScheme.onSurfaceVariant,
+                    fontWeight:
+                        _isTyping ? FontWeight.w500 : FontWeight.w400,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Video call button
+          FilledButton.icon(
+            onPressed: () {
+              final name =
+                  _findConversation()?.participantName ?? 'Entrevista Mploya';
+              context.push(
+                '/video-call/lobby?title=${Uri.encodeComponent('Entrevista con $name')}',
+              );
+            },
+            style: FilledButton.styleFrom(
+              backgroundColor: MployaColors.orange,
+              foregroundColor: Colors.white,
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppRadius.pill),
+              ),
+              minimumSize: const Size(48, 48),
+              elevation: 3,
+              shadowColor: MployaColors.orange.withValues(alpha: 0.5),
+            ),
+            icon: const Icon(Icons.videocam_rounded, size: 22),
+            label: Text(
+              'Entrevista',
+              style: GoogleFonts.inter(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 

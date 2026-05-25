@@ -17,6 +17,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:mploya/core/widgets/platform_video_player.dart';
+import 'package:mploya/core/utils/responsive.dart';
 
 import 'package:mploya/config/theme.dart';
 import 'package:mploya/features/profile/models/company_profile_store.dart';
@@ -343,139 +344,213 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
     super.dispose();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.light,
-      child: Scaffold(
-        backgroundColor: Colors.black,
-        body: Stack(
-          children: [
-            // ── Vertical video feed (TikTok-style) ──
-            PageView.builder(
-              controller: _pageController,
-              scrollDirection: Axis.vertical,
-              itemCount: _feedItems.length,
-              onPageChanged: (i) => setState(() => _currentPage = i),
-              itemBuilder: (context, index) {
-                final items = _feedItems;
-                final blobUrl = _userVideoBlobUrl;
-                // First item is user's video if published
-                if (index == 0 && blobUrl != null) {
-                  _ensureUserVideoView(blobUrl);
-                  return _FeedCard(
-                    item: items[index],
-                    videoViewId: _userVideoViewId,
-                    videoBlobUrl: blobUrl,
-                  );
-                }
-                return _FeedCard(item: items[index]);
-              },
-            ),
+  // ── Build the PageView (shared between mobile and desktop) ──
+  Widget _buildPageView({bool isDesktopMode = false}) {
+    return PageView.builder(
+      controller: _pageController,
+      scrollDirection: Axis.vertical,
+      itemCount: _feedItems.length,
+      onPageChanged: (i) => setState(() => _currentPage = i),
+      itemBuilder: (context, index) {
+        final items = _feedItems;
+        final blobUrl = _userVideoBlobUrl;
+        // First item is user's video if published
+        if (index == 0 && blobUrl != null) {
+          _ensureUserVideoView(blobUrl);
+          return _FeedCard(
+            item: items[index],
+            videoViewId: _userVideoViewId,
+            videoBlobUrl: blobUrl,
+            isDesktopMode: isDesktopMode,
+          );
+        }
+        return _FeedCard(
+          item: items[index],
+          isDesktopMode: isDesktopMode,
+        );
+      },
+    );
+  }
 
-            // ── Top bar overlay ──
-            Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.black.withValues(alpha: 0.5),
-                      Colors.transparent,
+  // ── Top bar overlay (shared) ──
+  Widget _buildTopBar(BuildContext context) {
+    return Positioned(
+      top: 0,
+      left: 0,
+      right: 0,
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Colors.black.withValues(alpha: 0.5),
+              Colors.transparent,
+            ],
+          ),
+        ),
+        child: SafeArea(
+          bottom: false,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.md,
+              vertical: AppSpacing.xs,
+            ),
+            child: Row(
+              children: [
+                // ── Record story button ──
+                GestureDetector(
+                  onTap: () => context.push('/video/new-story'),
+                  child: Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      gradient: MployaColors.orangeGradient,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: MployaColors.orange.withValues(alpha: 0.4),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: const Icon(
+                      Icons.videocam_rounded,
+                      color: MployaColors.white,
+                      size: 20,
+                    ),
+                  ),
+                ),
+                const Spacer(),
+                // ── Notification bell with badge ──
+                GestureDetector(
+                  onTap: () => _showNotificationsSheet(context),
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.12),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.notifications_outlined,
+                          color: MployaColors.white,
+                          size: 22,
+                        ),
+                      ),
+                      // Badge count
+                      Positioned(
+                        top: -2,
+                        right: -2,
+                        child: Container(
+                          width: 18,
+                          height: 18,
+                          decoration: const BoxDecoration(
+                            color: MployaColors.orange,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Center(
+                            child: Text(
+                              '3',
+                              style: GoogleFonts.inter(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                color: MployaColors.white,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ),
-                child: SafeArea(
-                  bottom: false,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.md,
-                      vertical: AppSpacing.xs,
-                    ),
-                    child: Row(
-                      children: [
-                        // ── Record story button ──
-                        GestureDetector(
-                          onTap: () => context.push('/video/new-story'),
-                          child: Container(
-                            width: 40,
-                            height: 40,
-                            decoration: BoxDecoration(
-                              gradient: MployaColors.orangeGradient,
-                              shape: BoxShape.circle,
-                              boxShadow: [
-                                BoxShadow(
-                                  color: MployaColors.orange.withValues(alpha: 0.4),
-                                  blurRadius: 12,
-                                  offset: const Offset(0, 4),
-                                ),
-                              ],
-                            ),
-                            child: const Icon(
-                              Icons.videocam_rounded,
-                              color: MployaColors.white,
-                              size: 20,
-                            ),
-                          ),
-                        ),
-                        const Spacer(),
-                        // ── Notification bell with badge ──
-                        GestureDetector(
-                          onTap: () => _showNotificationsSheet(context),
-                          child: Stack(
-                            clipBehavior: Clip.none,
-                            children: [
-                              Container(
-                                width: 40,
-                                height: 40,
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.12),
-                                  shape: BoxShape.circle,
-                                ),
-                                child: const Icon(
-                                  Icons.notifications_outlined,
-                                  color: MployaColors.white,
-                                  size: 22,
-                                ),
-                              ),
-                              // Badge count
-                              Positioned(
-                                top: -2,
-                                right: -2,
-                                child: Container(
-                                  width: 18,
-                                  height: 18,
-                                  decoration: const BoxDecoration(
-                                    color: MployaColors.orange,
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: Center(
-                                    child: Text(
-                                      '3',
-                                      style: GoogleFonts.inter(
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w700,
-                                        color: MployaColors.white,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── Mobile layout (original, untouched) ──
+  Widget _buildMobileBody(BuildContext context) {
+    return Stack(
+      children: [
+        _buildPageView(),
+        _buildTopBar(context),
+      ],
+    );
+  }
+
+  // ── Desktop layout ──
+  Widget _buildDesktopBody(BuildContext context) {
+    final items = _feedItems;
+    final currentItem = items.isNotEmpty && _currentPage < items.length
+        ? items[_currentPage]
+        : null;
+
+    return Row(
+      children: [
+        // ── Left: Constrained video card ──
+        SizedBox(
+          width: 480,
+          child: Stack(
+            children: [
+              // Video card with rounded corners and contained height
+              Padding(
+                padding: const EdgeInsets.all(AppSpacing.lg),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 850),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(AppRadius.xxl),
+                      child: _buildPageView(isDesktopMode: true),
                     ),
                   ),
                 ),
               ),
-            ),
-          ],
+              // Top bar overlay on the video card
+              Padding(
+                padding: const EdgeInsets.all(AppSpacing.lg),
+                child: _buildTopBar(context),
+              ),
+            ],
+          ),
         ),
+
+        // ── Right: Detail panel ──
+        Expanded(
+          child: currentItem != null
+              ? _DesktopDetailPanel(
+                  item: currentItem,
+                  onLike: () {
+                    // Trigger like on the current card
+                  },
+                  onComment: () {},
+                  onSave: () {},
+                  onShare: () {},
+                )
+              : const SizedBox.shrink(),
+        ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final desktop = isDesktop(context);
+
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.light,
+      child: Scaffold(
+        backgroundColor: desktop ? const Color(0xFF0A0A0A) : Colors.black,
+        body: desktop
+            ? _buildDesktopBody(context)
+            : _buildMobileBody(context),
       ),
     );
   }
@@ -543,10 +618,11 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
 // ─── Feed Card ───────────────────────────────────────────────────────
 
 class _FeedCard extends StatefulWidget {
-  const _FeedCard({required this.item, this.videoViewId, this.videoBlobUrl});
+  const _FeedCard({required this.item, this.videoViewId, this.videoBlobUrl, this.isDesktopMode = false});
   final _FeedItem item;
   final String? videoViewId;
   final String? videoBlobUrl;
+  final bool isDesktopMode;
 
   @override
   State<_FeedCard> createState() => _FeedCardState();
@@ -1076,296 +1152,299 @@ class _FeedCardState extends State<_FeedCard> with TickerProviderStateMixin {
             ),
           ),
 
-          // ── Right side actions ──
-          Positioned(
-            right: AppSpacing.md,
-            bottom: 100,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Stealth avatar with glassmorphism
-                Container(
-                  width: 52,
-                  height: 52,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: const LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        Color(0xFF7C3AED),
-                        Color(0xFFF97316),
-                      ],
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFF7C3AED).withValues(alpha: 0.4),
-                        blurRadius: 16,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Container(
-                    margin: const EdgeInsets.all(2),
+          // ── Right side actions (hidden on desktop) ──
+          if (!widget.isDesktopMode)
+            Positioned(
+              right: AppSpacing.md,
+              bottom: 100,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Stealth avatar with glassmorphism
+                  Container(
+                    width: 52,
+                    height: 52,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: Colors.white.withValues(alpha: 0.15),
-                      border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.2),
-                        width: 1,
+                      gradient: const LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          Color(0xFF7C3AED),
+                          Color(0xFFF97316),
+                        ],
                       ),
-                    ),
-                    child: const Icon(
-                      Icons.visibility_off_rounded,
-                      color: Colors.white,
-                      size: 22,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.lg),
-
-                // Like (thumb up)
-                _EngagementButton(
-                  icon: _isLiked
-                      ? Icons.thumb_up_rounded
-                      : Icons.thumb_up_outlined,
-                  label: _isLiked ? '1' : '—',
-                  color: _isLiked
-                      ? MployaColors.orange
-                      : MployaColors.white,
-                  onTap: _handleLike,
-                  scaleAnimation: _likeScaleAnim,
-                ),
-                const SizedBox(height: AppSpacing.lg),
-
-                // Video Reply
-                _EngagementButton(
-                  icon: Icons.videocam_rounded,
-                  label: 'Reply',
-                  color: MployaColors.white,
-                  onTap: () => context.push('/video/reply?name=${widget.item.name}'),
-                ),
-                const SizedBox(height: AppSpacing.lg),
-
-                // Bookmark
-                _EngagementButton(
-                  icon: _isSaved
-                      ? Icons.bookmark_rounded
-                      : Icons.bookmark_border_rounded,
-                  label: _isSaved ? 'Guardado' : 'Guardar',
-                  color: _isSaved
-                      ? MployaColors.orange
-                      : MployaColors.white,
-                  onTap: _handleSave,
-                  scaleAnimation: _saveScaleAnim,
-                  labelFontSize: 10,
-                ),
-                const SizedBox(height: AppSpacing.lg),
-
-                // Share
-                _EngagementButton(
-                  icon: Icons.send_rounded,
-                  label: '—',
-                  color: Colors.white.withValues(alpha: 0.4),
-                  onTap: _showShareSheet,
-                ),
-              ],
-            ).animate().slideX(
-                  begin: 0.3,
-                  duration: 400.ms,
-                  curve: Curves.easeOut,
-                ),
-          ),
-
-          // ── Bottom left info (stealth variant) ──
-          Positioned(
-            left: AppSpacing.md,
-            right: 80,
-            bottom: AppSpacing.xxl + 60,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Headline
-                Text(
-                  item.headlineText,
-                  style: GoogleFonts.outfit(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w800,
-                    color: MployaColors.white,
-                    height: 1.2,
-                  ),
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: AppSpacing.md),
-
-                // Hashtag chips
-                Wrap(
-                  spacing: AppSpacing.xs,
-                  runSpacing: AppSpacing.xs,
-                  children: item.hashtags
-                      .map(
-                        (tag) => Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 5,
-                          ),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF7C3AED).withValues(alpha: 0.25),
-                            borderRadius: BorderRadius.circular(AppRadius.pill),
-                            border: Border.all(
-                              color: const Color(0xFF7C3AED).withValues(alpha: 0.3),
-                              width: 0.5,
-                            ),
-                          ),
-                          child: Text(
-                            tag,
-                            style: GoogleFonts.inter(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                              color: Colors.white.withValues(alpha: 0.9),
-                            ),
-                          ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF7C3AED).withValues(alpha: 0.4),
+                          blurRadius: 16,
+                          offset: const Offset(0, 4),
                         ),
-                      )
-                      .toList(),
-                ),
-                const SizedBox(height: AppSpacing.sm),
-
-                // Name + Confidential badge row
-                Row(
-                  children: [
-                    Flexible(
-                      child: Text(
-                        'Stealth · ${item.stealthTitle}',
-                        style: GoogleFonts.outfit(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w700,
-                          color: MployaColors.white,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                      ],
                     ),
-                    const SizedBox(width: AppSpacing.sm),
-                    // Confidential pill badge
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 3,
-                      ),
+                    child: Container(
+                      margin: const EdgeInsets.all(2),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF7C3AED).withValues(alpha: 0.3),
-                        borderRadius: BorderRadius.circular(AppRadius.pill),
+                        shape: BoxShape.circle,
+                        color: Colors.white.withValues(alpha: 0.15),
                         border: Border.all(
-                          color: const Color(0xFF7C3AED).withValues(alpha: 0.5),
-                          width: 0.5,
+                          color: Colors.white.withValues(alpha: 0.2),
+                          width: 1,
                         ),
                       ),
-                      child: Text(
-                        '🔒 Confidencial',
-                        style: GoogleFonts.inter(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                          color: const Color(0xFFD8B4FE),
-                        ),
+                      child: const Icon(
+                        Icons.visibility_off_rounded,
+                        color: Colors.white,
+                        size: 22,
                       ),
                     ),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.xs),
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
 
-                // Match badge
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 4,
+                  // Like (thumb up)
+                  _EngagementButton(
+                    icon: _isLiked
+                        ? Icons.thumb_up_rounded
+                        : Icons.thumb_up_outlined,
+                    label: _isLiked ? '1' : '—',
+                    color: _isLiked
+                        ? MployaColors.orange
+                        : MployaColors.white,
+                    onTap: _handleLike,
+                    scaleAnimation: _likeScaleAnim,
                   ),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF7C3AED), Color(0xFFF97316)],
-                    ),
-                    borderRadius: BorderRadius.circular(AppRadius.pill),
+                  const SizedBox(height: AppSpacing.lg),
+
+                  // Video Reply
+                  _EngagementButton(
+                    icon: Icons.videocam_rounded,
+                    label: 'Reply',
+                    color: MployaColors.white,
+                    onTap: () => context.push('/video/reply?name=${widget.item.name}'),
                   ),
-                  child: Text(
-                    'Match ${item.matchPercent}%',
-                    style: GoogleFonts.inter(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
+                  const SizedBox(height: AppSpacing.lg),
+
+                  // Bookmark
+                  _EngagementButton(
+                    icon: _isSaved
+                        ? Icons.bookmark_rounded
+                        : Icons.bookmark_border_rounded,
+                    label: _isSaved ? 'Guardado' : 'Guardar',
+                    color: _isSaved
+                        ? MployaColors.orange
+                        : MployaColors.white,
+                    onTap: _handleSave,
+                    scaleAnimation: _saveScaleAnim,
+                    labelFontSize: 10,
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+
+                  // Share
+                  _EngagementButton(
+                    icon: Icons.send_rounded,
+                    label: '—',
+                    color: Colors.white.withValues(alpha: 0.4),
+                    onTap: _showShareSheet,
+                  ),
+                ],
+              ).animate().slideX(
+                    begin: 0.3,
+                    duration: 400.ms,
+                    curve: Curves.easeOut,
+                  ),
+            ),
+
+          // ── Bottom left info (stealth variant, hidden on desktop) ──
+          if (!widget.isDesktopMode)
+            Positioned(
+              left: AppSpacing.md,
+              right: 80,
+              bottom: AppSpacing.xxl + 60,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Headline
+                  Text(
+                    item.headlineText,
+                    style: GoogleFonts.outfit(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
                       color: MployaColors.white,
+                      height: 1.2,
                     ),
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                ),
-                const SizedBox(height: AppSpacing.xs),
+                  const SizedBox(height: AppSpacing.md),
 
-                // Role (anonymized)
-                Text(
-                  '${item.role} · ${item.company}',
-                  style: GoogleFonts.inter(
-                    fontSize: 13,
-                    color: Colors.white.withValues(alpha: 0.6),
-                    fontStyle: FontStyle.italic,
+                  // Hashtag chips
+                  Wrap(
+                    spacing: AppSpacing.xs,
+                    runSpacing: AppSpacing.xs,
+                    children: item.hashtags
+                        .map(
+                          (tag) => Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 5,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF7C3AED).withValues(alpha: 0.25),
+                              borderRadius: BorderRadius.circular(AppRadius.pill),
+                              border: Border.all(
+                                color: const Color(0xFF7C3AED).withValues(alpha: 0.3),
+                                width: 0.5,
+                              ),
+                            ),
+                            child: Text(
+                              tag,
+                              style: GoogleFonts.inter(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                                color: Colors.white.withValues(alpha: 0.9),
+                              ),
+                            ),
+                          ),
+                        )
+                        .toList(),
                   ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ).animate().fadeIn(delay: 200.ms, duration: 500.ms).slideY(
-                  begin: 0.1,
-                  curve: Curves.easeOut,
-                ),
-          ),
+                  const SizedBox(height: AppSpacing.sm),
 
-          // ── Bottom premium unlock banner ──
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: GestureDetector(
-              onTap: () => _showPremiumDialog(context),
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.md,
-                  vertical: AppSpacing.sm + 4,
-                ),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF7C3AED).withValues(alpha: 0.85),
-                  border: Border(
-                    top: BorderSide(
-                      color: const Color(0xFFD8B4FE).withValues(alpha: 0.3),
-                      width: 0.5,
-                    ),
-                  ),
-                ),
-                child: SafeArea(
-                  top: false,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                  // Name + Confidential badge row
+                  Row(
                     children: [
-                      const Text(
-                        '🔓',
-                        style: TextStyle(fontSize: 14),
+                      Flexible(
+                        child: Text(
+                          'Stealth · ${item.stealthTitle}',
+                          style: GoogleFonts.outfit(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700,
+                            color: MployaColors.white,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
-                      const SizedBox(width: AppSpacing.xs),
-                      Text(
-                        'Desbloquear Candidato',
-                        style: GoogleFonts.inter(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white.withValues(alpha: 0.95),
+                      const SizedBox(width: AppSpacing.sm),
+                      // Confidential pill badge
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF7C3AED).withValues(alpha: 0.3),
+                          borderRadius: BorderRadius.circular(AppRadius.pill),
+                          border: Border.all(
+                            color: const Color(0xFF7C3AED).withValues(alpha: 0.5),
+                            width: 0.5,
+                          ),
+                        ),
+                        child: Text(
+                          '🔒 Confidencial',
+                          style: GoogleFonts.inter(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: const Color(0xFFD8B4FE),
+                          ),
                         ),
                       ),
                     ],
                   ),
+                  const SizedBox(height: AppSpacing.xs),
+
+                  // Match badge
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF7C3AED), Color(0xFFF97316)],
+                      ),
+                      borderRadius: BorderRadius.circular(AppRadius.pill),
+                    ),
+                    child: Text(
+                      'Match ${item.matchPercent}%',
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: MployaColors.white,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+
+                  // Role (anonymized)
+                  Text(
+                    '${item.role} · ${item.company}',
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      color: Colors.white.withValues(alpha: 0.6),
+                      fontStyle: FontStyle.italic,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ).animate().fadeIn(delay: 200.ms, duration: 500.ms).slideY(
+                    begin: 0.1,
+                    curve: Curves.easeOut,
+                  ),
+            ),
+
+          // ── Bottom premium unlock banner (hidden on desktop) ──
+          if (!widget.isDesktopMode)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: GestureDetector(
+                onTap: () => _showPremiumDialog(context),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.md,
+                    vertical: AppSpacing.sm + 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF7C3AED).withValues(alpha: 0.85),
+                    border: Border(
+                      top: BorderSide(
+                        color: const Color(0xFFD8B4FE).withValues(alpha: 0.3),
+                        width: 0.5,
+                      ),
+                    ),
+                  ),
+                  child: SafeArea(
+                    top: false,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Text(
+                          '🔓',
+                          style: TextStyle(fontSize: 14),
+                        ),
+                        const SizedBox(width: AppSpacing.xs),
+                        Text(
+                          'Desbloquear Candidato',
+                          style: GoogleFonts.inter(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white.withValues(alpha: 0.95),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
-            ).animate().fadeIn(delay: 400.ms, duration: 500.ms).slideY(
-                  begin: 0.3,
-                  end: 0,
-                  curve: Curves.easeOut,
-                ),
-          ),
+              ).animate().fadeIn(delay: 400.ms, duration: 500.ms).slideY(
+                    begin: 0.3,
+                    end: 0,
+                    curve: Curves.easeOut,
+                  ),
+            ),
         ],
       ),
     );
@@ -1478,222 +1557,673 @@ class _FeedCardState extends State<_FeedCard> with TickerProviderStateMixin {
             ),
           ),
 
-          // ── Right side actions ──
-          Positioned(
-            right: AppSpacing.md,
-            bottom: 100,
+          // ── Right side actions (hidden on desktop) ──
+          if (!widget.isDesktopMode)
+            Positioned(
+              right: AppSpacing.md,
+              bottom: 100,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Avatar with verified dot
+                  GestureDetector(
+                    onTap: () => context.push('/profile/user?id=${Uri.encodeComponent(widget.item.userId)}'),
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        CircleAvatar(
+                          radius: 24,
+                          backgroundColor: item.avatarColor,
+                          child: Text(
+                            item.initial,
+                            style: GoogleFonts.outfit(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w700,
+                              color: MployaColors.white,
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          right: -2,
+                          bottom: -2,
+                          child: Container(
+                            width: 16,
+                            height: 16,
+                            decoration: BoxDecoration(
+                              color: MployaColors.teal,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: item.bgColor,
+                                width: 2,
+                              ),
+                            ),
+                            child: const Icon(
+                              Icons.check,
+                              color: MployaColors.white,
+                              size: 8,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+
+                  // ── Like button (thumb up) ──
+                  _EngagementButton(
+                    icon: _isLiked
+                        ? Icons.thumb_up_rounded
+                        : Icons.thumb_up_outlined,
+                    label: _formatCount(_likeCount),
+                    color: _isLiked
+                        ? MployaColors.orange
+                        : MployaColors.white,
+                    onTap: _handleLike,
+                    scaleAnimation: _likeScaleAnim,
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+
+                  // ── Video Reply button ──
+                  _EngagementButton(
+                    icon: Icons.videocam_rounded,
+                    label: 'Reply',
+                    color: MployaColors.white,
+                    onTap: () => context.push('/video/reply?name=${widget.item.name}'),
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+
+                  // ── Bookmark button ──
+                  _EngagementButton(
+                    icon: _isSaved
+                        ? Icons.bookmark_rounded
+                        : Icons.bookmark_border_rounded,
+                    label: _isSaved ? 'Guardado' : 'Guardar',
+                    color: _isSaved
+                        ? MployaColors.orange
+                        : MployaColors.white,
+                    onTap: _handleSave,
+                    scaleAnimation: _saveScaleAnim,
+                    labelFontSize: 10,
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+
+                  // ── Share button ──
+                  _EngagementButton(
+                    icon: Icons.send_rounded,
+                    label: _formatCount(_shareCount),
+                    color: MployaColors.white,
+                    onTap: _showShareSheet,
+                  ),
+                ],
+              ).animate().slideX(
+                    begin: 0.3,
+                    duration: 400.ms,
+                    curve: Curves.easeOut,
+                  ),
+            ),
+
+          // ── Bottom left info (hidden on desktop) ──
+          if (!widget.isDesktopMode)
+            Positioned(
+              left: AppSpacing.md,
+              right: 80,
+              bottom: AppSpacing.xxl,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Headline text
+                  Text(
+                    item.headlineText,
+                    style: GoogleFonts.outfit(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                      color: MployaColors.white,
+                      height: 1.2,
+                    ),
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+
+                  // Hashtag chips
+                  Wrap(
+                    spacing: AppSpacing.xs,
+                    runSpacing: AppSpacing.xs,
+                    children: item.hashtags
+                        .map(
+                          (tag) => GestureDetector(
+                            onTap: () {
+                              final cleanTag = tag.replaceFirst('#', '');
+                              context.push('/hashtags/detail?tag=$cleanTag');
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 5,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.18),
+                                borderRadius:
+                                    BorderRadius.circular(AppRadius.pill),
+                                border: Border.all(
+                                  color: Colors.white.withValues(alpha: 0.25),
+                                  width: 0.5,
+                                ),
+                              ),
+                              child: Text(
+                                tag,
+                                style: GoogleFonts.inter(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: MployaColors.white,
+                                ),
+                              ),
+                            ),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+
+                  // Name
+                  Text(
+                    item.name,
+                    style: GoogleFonts.outfit(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700,
+                      color: MployaColors.white,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+
+                  // Match badge
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      gradient: MployaColors.orangeGradient,
+                      borderRadius: BorderRadius.circular(AppRadius.pill),
+                    ),
+                    child: Text(
+                      'Match ${item.matchPercent}%',
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: MployaColors.white,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+
+                  // Role + company
+                  Text(
+                    '${item.role} · ${item.company}',
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      color: Colors.white.withValues(alpha: 0.7),
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ).animate().fadeIn(delay: 200.ms, duration: 500.ms).slideY(
+                    begin: 0.1,
+                    curve: Curves.easeOut,
+                  ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Desktop Detail Panel ────────────────────────────────────────────
+
+class _DesktopDetailPanel extends StatelessWidget {
+  const _DesktopDetailPanel({
+    required this.item,
+    required this.onLike,
+    required this.onComment,
+    required this.onSave,
+    required this.onShare,
+  });
+
+  final _FeedItem item;
+  final VoidCallback onLike;
+  final VoidCallback onComment;
+  final VoidCallback onSave;
+  final VoidCallback onShare;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: const Color(0xFF0A0A0A),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 520),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.xl,
+              vertical: AppSpacing.xxl,
+            ),
             child: Column(
-              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Avatar with verified dot
-                GestureDetector(
-                  onTap: () => context.push('/profile/user?id=${Uri.encodeComponent(widget.item.userId)}'),
-                  child: Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      CircleAvatar(
-                        radius: 24,
-                        backgroundColor: item.avatarColor,
+                // ── Avatar + Name row ──
+                Row(
+                  children: [
+                    // Avatar circle
+                    Container(
+                      width: 64,
+                      height: 64,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: item.avatarColor,
+                        boxShadow: [
+                          BoxShadow(
+                            color: item.avatarColor.withValues(alpha: 0.4),
+                            blurRadius: 20,
+                            offset: const Offset(0, 6),
+                          ),
+                        ],
+                      ),
+                      child: Center(
                         child: Text(
                           item.initial,
                           style: GoogleFonts.outfit(
-                            fontSize: 20,
+                            fontSize: 26,
                             fontWeight: FontWeight.w700,
                             color: MployaColors.white,
                           ),
                         ),
                       ),
-                      Positioned(
-                        right: -2,
-                        bottom: -2,
-                        child: Container(
-                          width: 16,
-                          height: 16,
-                          decoration: BoxDecoration(
-                            color: MployaColors.teal,
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: item.bgColor,
-                              width: 2,
+                    ),
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            item.isStealth
+                                ? 'Stealth · ${item.stealthTitle}'
+                                : item.name,
+                            style: GoogleFonts.outfit(
+                              fontSize: 26,
+                              fontWeight: FontWeight.w700,
+                              color: MployaColors.white,
+                              height: 1.2,
                             ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                          child: const Icon(
-                            Icons.check,
-                            color: MployaColors.white,
-                            size: 8,
+                          const SizedBox(height: AppSpacing.xxs),
+                          Text(
+                            '${item.role} · ${item.company}',
+                            style: GoogleFonts.inter(
+                              fontSize: 15,
+                              color: Colors.white.withValues(alpha: 0.6),
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: AppSpacing.xl),
+
+                // ── Headline ──
+                Text(
+                  item.headlineText,
+                  style: GoogleFonts.outfit(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white.withValues(alpha: 0.9),
+                    height: 1.3,
+                    letterSpacing: 0.3,
+                  ),
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                ),
+
+                const SizedBox(height: AppSpacing.lg),
+
+                // ── Match % indicator ──
+                Container(
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(AppRadius.lg),
+                    color: Colors.white.withValues(alpha: 0.06),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.08),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      // Match percentage ring
+                      SizedBox(
+                        width: 56,
+                        height: 56,
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            SizedBox(
+                              width: 56,
+                              height: 56,
+                              child: CircularProgressIndicator(
+                                value: item.matchPercent / 100,
+                                strokeWidth: 5,
+                                backgroundColor: Colors.white.withValues(alpha: 0.1),
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  item.matchPercent >= 90
+                                      ? MployaColors.teal
+                                      : item.matchPercent >= 75
+                                          ? MployaColors.orange
+                                          : const Color(0xFFEAB308),
+                                ),
+                              ),
+                            ),
+                            Text(
+                              '${item.matchPercent}%',
+                              style: GoogleFonts.outfit(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                                color: MployaColors.white,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.md),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Compatibilidad',
+                              style: GoogleFonts.outfit(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: MployaColors.white,
+                              ),
+                            ),
+                            const SizedBox(height: AppSpacing.xxs),
+                            Text(
+                              item.matchPercent >= 90
+                                  ? 'Match excelente con tu búsqueda'
+                                  : item.matchPercent >= 75
+                                      ? 'Buen match con tu perfil'
+                                      : 'Match parcial — revisar perfil',
+                              style: GoogleFonts.inter(
+                                fontSize: 13,
+                                color: Colors.white.withValues(alpha: 0.5),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
                   ),
                 ),
+
                 const SizedBox(height: AppSpacing.lg),
 
-                // ── Like button (thumb up) ──
-                _EngagementButton(
-                  icon: _isLiked
-                      ? Icons.thumb_up_rounded
-                      : Icons.thumb_up_outlined,
-                  label: _formatCount(_likeCount),
-                  color: _isLiked
-                      ? MployaColors.orange
-                      : MployaColors.white,
-                  onTap: _handleLike,
-                  scaleAnimation: _likeScaleAnim,
-                ),
-                const SizedBox(height: AppSpacing.lg),
-
-                // ── Video Reply button ──
-                _EngagementButton(
-                  icon: Icons.videocam_rounded,
-                  label: 'Reply',
-                  color: MployaColors.white,
-                  onTap: () => context.push('/video/reply?name=${widget.item.name}'),
-                ),
-                const SizedBox(height: AppSpacing.lg),
-
-                // ── Bookmark button ──
-                _EngagementButton(
-                  icon: _isSaved
-                      ? Icons.bookmark_rounded
-                      : Icons.bookmark_border_rounded,
-                  label: _isSaved ? 'Guardado' : 'Guardar',
-                  color: _isSaved
-                      ? MployaColors.orange
-                      : MployaColors.white,
-                  onTap: _handleSave,
-                  scaleAnimation: _saveScaleAnim,
-                  labelFontSize: 10,
-                ),
-                const SizedBox(height: AppSpacing.lg),
-
-                // ── Share button ──
-                _EngagementButton(
-                  icon: Icons.send_rounded,
-                  label: _formatCount(_shareCount),
-                  color: MployaColors.white,
-                  onTap: _showShareSheet,
-                ),
-              ],
-            ).animate().slideX(
-                  begin: 0.3,
-                  duration: 400.ms,
-                  curve: Curves.easeOut,
-                ),
-          ),
-
-          // ── Bottom left info ──
-          Positioned(
-            left: AppSpacing.md,
-            right: 80,
-            bottom: AppSpacing.xxl,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Headline text
-                Text(
-                  item.headlineText,
-                  style: GoogleFonts.outfit(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w800,
-                    color: MployaColors.white,
-                    height: 1.2,
-                  ),
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: AppSpacing.md),
-
-                // Hashtag chips
+                // ── Hashtag chips ──
                 Wrap(
-                  spacing: AppSpacing.xs,
-                  runSpacing: AppSpacing.xs,
+                  spacing: AppSpacing.sm,
+                  runSpacing: AppSpacing.sm,
                   children: item.hashtags
                       .map(
-                        (tag) => GestureDetector(
-                          onTap: () {
-                            final cleanTag = tag.replaceFirst('#', '');
-                            context.push('/hashtags/detail?tag=$cleanTag');
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 5,
+                        (tag) => Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            color: item.isStealth
+                                ? const Color(0xFF7C3AED).withValues(alpha: 0.2)
+                                : Colors.white.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(AppRadius.pill),
+                            border: Border.all(
+                              color: item.isStealth
+                                  ? const Color(0xFF7C3AED).withValues(alpha: 0.3)
+                                  : Colors.white.withValues(alpha: 0.15),
+                              width: 0.5,
                             ),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.18),
-                              borderRadius:
-                                  BorderRadius.circular(AppRadius.pill),
-                              border: Border.all(
-                                color: Colors.white.withValues(alpha: 0.25),
-                                width: 0.5,
-                              ),
-                            ),
-                            child: Text(
-                              tag,
-                              style: GoogleFonts.inter(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: MployaColors.white,
-                              ),
+                          ),
+                          child: Text(
+                            tag,
+                            style: GoogleFonts.inter(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.white.withValues(alpha: 0.85),
                             ),
                           ),
                         ),
                       )
                       .toList(),
                 ),
-                const SizedBox(height: AppSpacing.sm),
 
-                // Name
-                Text(
-                  item.name,
-                  style: GoogleFonts.outfit(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
-                    color: MployaColors.white,
+                const SizedBox(height: AppSpacing.xl),
+
+                // ── Confidential badge (stealth only) ──
+                if (item.isStealth)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF7C3AED).withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(AppRadius.pill),
+                        border: Border.all(
+                          color: const Color(0xFF7C3AED).withValues(alpha: 0.4),
+                          width: 0.5,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.shield_rounded,
+                            size: 16,
+                            color: const Color(0xFFD8B4FE).withValues(alpha: 0.8),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            '🔒 Identidad Protegida · Confidencial',
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: const Color(0xFFD8B4FE),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
-                ),
-                const SizedBox(height: AppSpacing.xs),
 
-                // Match badge
+                // ── Divider ──
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    gradient: MployaColors.orangeGradient,
-                    borderRadius: BorderRadius.circular(AppRadius.pill),
-                  ),
-                  child: Text(
-                    'Match ${item.matchPercent}%',
-                    style: GoogleFonts.inter(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: MployaColors.white,
+                  height: 1,
+                  color: Colors.white.withValues(alpha: 0.08),
+                ),
+
+                const SizedBox(height: AppSpacing.lg),
+
+                // ── Action buttons (larger, with labels) ──
+                Row(
+                  children: [
+                    _DesktopActionButton(
+                      icon: Icons.thumb_up_outlined,
+                      label: 'Me gusta',
+                      onTap: onLike,
+                    ),
+                    const SizedBox(width: AppSpacing.md),
+                    _DesktopActionButton(
+                      icon: Icons.videocam_rounded,
+                      label: 'Reply',
+                      onTap: () => context.push('/video/reply?name=${item.name}'),
+                    ),
+                    const SizedBox(width: AppSpacing.md),
+                    _DesktopActionButton(
+                      icon: Icons.bookmark_border_rounded,
+                      label: 'Guardar',
+                      onTap: onSave,
+                    ),
+                    const SizedBox(width: AppSpacing.md),
+                    _DesktopActionButton(
+                      icon: Icons.send_rounded,
+                      label: 'Compartir',
+                      onTap: onShare,
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: AppSpacing.xl),
+
+                // ── 'Ver perfil completo' button ──
+                SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: item.isStealth
+                          ? const LinearGradient(
+                              colors: [Color(0xFF7C3AED), Color(0xFFF97316)],
+                            )
+                          : MployaColors.orangeGradient,
+                      borderRadius: BorderRadius.circular(AppRadius.pill),
+                      boxShadow: [
+                        BoxShadow(
+                          color: (item.isStealth
+                                  ? const Color(0xFF7C3AED)
+                                  : MployaColors.orange)
+                              .withValues(alpha: 0.3),
+                          blurRadius: 16,
+                          offset: const Offset(0, 6),
+                        ),
+                      ],
+                    ),
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: () {
+                          if (item.isStealth) {
+                            // Show premium dialog for stealth profiles
+                          } else {
+                            context.push('/profile/user?id=${Uri.encodeComponent(item.userId)}');
+                          }
+                        },
+                        borderRadius: BorderRadius.circular(AppRadius.pill),
+                        child: Center(
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                item.isStealth
+                                    ? Icons.lock_open_rounded
+                                    : Icons.person_rounded,
+                                color: MployaColors.white,
+                                size: 20,
+                              ),
+                              const SizedBox(width: AppSpacing.sm),
+                              Text(
+                                item.isStealth
+                                    ? 'Desbloquear Candidato'
+                                    : 'Ver perfil completo',
+                                style: GoogleFonts.inter(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                  color: MployaColors.white,
+                                ),
+                              ),
+                              const SizedBox(width: AppSpacing.xs),
+                              const Text(
+                                '→',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  color: MployaColors.white,
+                                  fontWeight: FontWeight.w300,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ),
-                const SizedBox(height: AppSpacing.xs),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
 
-                // Role + company
+// ─── Desktop Action Button ───────────────────────────────────────────
+
+class _DesktopActionButton extends StatelessWidget {
+  const _DesktopActionButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm + 2),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.06),
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              border: Border.all(
+                color: Colors.white.withValues(alpha: 0.08),
+              ),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  icon,
+                  color: Colors.white.withValues(alpha: 0.8),
+                  size: 22,
+                ),
+                const SizedBox(height: AppSpacing.xxs),
                 Text(
-                  '${item.role} · ${item.company}',
+                  label,
                   style: GoogleFonts.inter(
-                    fontSize: 13,
-                    color: Colors.white.withValues(alpha: 0.7),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.white.withValues(alpha: 0.6),
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
               ],
-            ).animate().fadeIn(delay: 200.ms, duration: 500.ms).slideY(
-                  begin: 0.1,
-                  curve: Curves.easeOut,
-                ),
+            ),
           ),
-        ],
+        ),
       ),
     );
   }

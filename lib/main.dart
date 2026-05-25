@@ -43,8 +43,8 @@ Future<void> main() async {
       options: DefaultFirebaseOptions.currentPlatform,
     );
 
-    // Configurar Crashlytics solo en release.
-    if (kReleaseMode) {
+    // Configurar Crashlytics solo en release y no en web.
+    if (!kIsWeb && kReleaseMode) {
       FlutterError.onError =
           FirebaseCrashlytics.instance.recordFlutterFatalError;
       PlatformDispatcher.instance.onError = (error, stack) {
@@ -53,13 +53,17 @@ Future<void> main() async {
       };
     }
 
-    // Registrar handler de notificaciones en background.
-    FirebaseMessaging.onBackgroundMessage(
-      firebaseMessagingBackgroundHandler,
-    );
+    // Registrar handler de notificaciones en background (no soportado en web).
+    if (!kIsWeb) {
+      FirebaseMessaging.onBackgroundMessage(
+        firebaseMessagingBackgroundHandler,
+      );
+    }
 
-    // Inicializar servicio de notificaciones push.
-    await NotificationService.instance.initialize();
+    // Inicializar servicio de notificaciones push (no soportado en web).
+    if (!kIsWeb) {
+      await NotificationService.instance.initialize();
+    }
 
     debugPrint('✅ Firebase inicializado correctamente.');
   } catch (e) {
@@ -71,11 +75,13 @@ Future<void> main() async {
   // Inicializar servicio de pagos (falla silenciosamente si no hay clave).
   await StripeService.instance.initialize();
 
-  // ── Orientación ──
-  await SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-    DeviceOrientation.portraitDown,
-  ]);
+  // ── Orientación (solo mobile) ──
+  if (!kIsWeb) {
+    await SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+    ]);
+  }
 
   // ── Estilo del system chrome ──
   SystemChrome.setSystemUIOverlayStyle(

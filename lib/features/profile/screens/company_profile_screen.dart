@@ -12,6 +12,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'package:mploya/config/theme.dart';
+import 'package:mploya/core/utils/responsive.dart';
 import 'package:mploya/features/profile/models/company_profile_store.dart';
 
 // ─── Perks icon mapping ──────────────────────────────────────────────
@@ -117,7 +118,10 @@ class _CompanyProfileScreenState extends ConsumerState<CompanyProfileScreen> {
     return Scaffold(
       backgroundColor: MployaColors.white,
       body: SafeArea(
-        child: CustomScrollView(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 900),
+            child: CustomScrollView(
           slivers: [
             // ── Header section ──
             SliverToBoxAdapter(
@@ -170,6 +174,8 @@ class _CompanyProfileScreenState extends ConsumerState<CompanyProfileScreen> {
               child: SizedBox(height: AppSpacing.xxl),
             ),
           ],
+        ),
+        ),
         ),
       ),
     );

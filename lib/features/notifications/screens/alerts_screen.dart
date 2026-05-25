@@ -11,6 +11,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'package:mploya/config/theme.dart';
+import 'package:mploya/core/utils/responsive.dart';
 
 // ─── Modelos mock ────────────────────────────────────────────────────
 
@@ -61,7 +62,10 @@ class _AlertsScreenState extends ConsumerState<AlertsScreen> {
     return Scaffold(
       backgroundColor: MployaColors.white,
       body: SafeArea(
-        child: SingleChildScrollView(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 900),
+            child: SingleChildScrollView(
           padding: const EdgeInsets.only(bottom: AppSpacing.xxl),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -208,6 +212,8 @@ class _AlertsScreenState extends ConsumerState<AlertsScreen> {
               }),
             ],
           ),
+          ),
+        ),
         ),
       ),
     );

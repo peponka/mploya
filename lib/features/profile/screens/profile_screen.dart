@@ -15,6 +15,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'package:mploya/config/theme.dart';
+import 'package:mploya/core/utils/responsive.dart';
 import 'package:mploya/features/auth/models/user_model.dart';
 import 'package:mploya/features/auth/providers/auth_provider.dart';
 import 'package:mploya/features/feed/providers/feed_provider.dart';
@@ -180,7 +181,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     return Scaffold(
       backgroundColor: MployaColors.white,
       body: SafeArea(
-        child: SingleChildScrollView(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 900),
+            child: SingleChildScrollView(
           padding: const EdgeInsets.only(bottom: AppSpacing.xxl),
           child: Column(
             children: [
@@ -251,6 +255,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
               ),
             ],
           ),
+        ),
+        ),
         ),
       ),
     );

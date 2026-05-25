@@ -11,6 +11,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'package:mploya/config/theme.dart';
+import 'package:mploya/core/utils/responsive.dart';
 
 // ─── Modelos mock ────────────────────────────────────────────────────
 
@@ -277,16 +278,21 @@ class _MatchesScreenState extends ConsumerState<MatchesScreen> {
   // ─── View A: Three horizontal sections ─────────────────────────────
 
   Widget _buildSectionsView() {
-    return SingleChildScrollView(
+    final desktop = isDesktop(context);
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    // 3 columns for smaller desktop, 4 for wider
+    final crossAxisCount = screenWidth >= 1400 ? 4 : 3;
+
+    Widget content = SingleChildScrollView(
       padding: const EdgeInsets.only(bottom: AppSpacing.xxl),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Title
           Padding(
-            padding: const EdgeInsets.fromLTRB(
+            padding: EdgeInsets.fromLTRB(
               AppSpacing.md,
-              AppSpacing.lg,
+              desktop ? AppSpacing.xl : AppSpacing.lg,
               AppSpacing.md,
               AppSpacing.md,
             ),
@@ -296,7 +302,7 @@ class _MatchesScreenState extends ConsumerState<MatchesScreen> {
                 Text(
                   'Matches',
                   style: GoogleFonts.outfit(
-                    fontSize: 28,
+                    fontSize: desktop ? 32 : 28,
                     fontWeight: FontWeight.w700,
                     color: MployaColors.textPrimary,
                   ),
@@ -323,38 +329,74 @@ class _MatchesScreenState extends ConsumerState<MatchesScreen> {
           // Section 1: Empresas para vos
           _SectionHeader(title: 'EMPRESAS PARA VOS'),
           const SizedBox(height: AppSpacing.sm),
-          SizedBox(
-            height: 195,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              padding:
-                  const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-              itemCount: _companies.length,
-              separatorBuilder: (_, _) =>
-                  const SizedBox(width: AppSpacing.sm),
-              itemBuilder: (context, i) =>
-                  _CompanyCard(company: _companies[i]),
-            ),
-          ).animate().fadeIn(delay: 100.ms, duration: 400.ms),
+          if (desktop)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+              child: GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: crossAxisCount,
+                  crossAxisSpacing: AppSpacing.md,
+                  mainAxisSpacing: AppSpacing.md,
+                  childAspectRatio: 0.85,
+                ),
+                itemCount: _companies.length,
+                itemBuilder: (context, i) =>
+                    _CompanyCard(company: _companies[i]),
+              ),
+            ).animate().fadeIn(delay: 100.ms, duration: 400.ms)
+          else
+            SizedBox(
+              height: 195,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+                itemCount: _companies.length,
+                separatorBuilder: (_, _) =>
+                    const SizedBox(width: AppSpacing.sm),
+                itemBuilder: (context, i) =>
+                    _CompanyCard(company: _companies[i]),
+              ),
+            ).animate().fadeIn(delay: 100.ms, duration: 400.ms),
 
           const SizedBox(height: AppSpacing.xl),
 
           // Section 2: Profesionales como vos
           _SectionHeader(title: 'PROFESIONALES COMO VOS'),
           const SizedBox(height: AppSpacing.sm),
-          SizedBox(
-            height: 170,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              padding:
-                  const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-              itemCount: _professionals.length,
-              separatorBuilder: (_, _) =>
-                  const SizedBox(width: AppSpacing.sm),
-              itemBuilder: (context, i) =>
-                  _ProfessionalCard(professional: _professionals[i]),
-            ),
-          ).animate().fadeIn(delay: 200.ms, duration: 400.ms),
+          if (desktop)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+              child: GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: crossAxisCount,
+                  crossAxisSpacing: AppSpacing.md,
+                  mainAxisSpacing: AppSpacing.md,
+                  childAspectRatio: 0.9,
+                ),
+                itemCount: _professionals.length,
+                itemBuilder: (context, i) =>
+                    _ProfessionalCard(professional: _professionals[i]),
+              ),
+            ).animate().fadeIn(delay: 200.ms, duration: 400.ms)
+          else
+            SizedBox(
+              height: 170,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+                itemCount: _professionals.length,
+                separatorBuilder: (_, _) =>
+                    const SizedBox(width: AppSpacing.sm),
+                itemBuilder: (context, i) =>
+                    _ProfessionalCard(professional: _professionals[i]),
+              ),
+            ).animate().fadeIn(delay: 200.ms, duration: 400.ms),
 
           const SizedBox(height: AppSpacing.xl),
 
@@ -389,22 +431,49 @@ class _MatchesScreenState extends ConsumerState<MatchesScreen> {
             ),
           ),
           const SizedBox(height: AppSpacing.sm),
-          SizedBox(
-            height: 180,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              padding:
-                  const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-              itemCount: _talents.length,
-              separatorBuilder: (_, _) =>
-                  const SizedBox(width: AppSpacing.sm),
-              itemBuilder: (context, i) =>
-                  _TalentCard(talent: _talents[i]),
-            ),
-          ).animate().fadeIn(delay: 300.ms, duration: 400.ms),
+          if (desktop)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+              child: GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: crossAxisCount,
+                  crossAxisSpacing: AppSpacing.md,
+                  mainAxisSpacing: AppSpacing.md,
+                  childAspectRatio: 0.85,
+                ),
+                itemCount: _talents.length,
+                itemBuilder: (context, i) =>
+                    _TalentCard(talent: _talents[i]),
+              ),
+            ).animate().fadeIn(delay: 300.ms, duration: 400.ms)
+          else
+            SizedBox(
+              height: 180,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+                itemCount: _talents.length,
+                separatorBuilder: (_, _) =>
+                    const SizedBox(width: AppSpacing.sm),
+                itemBuilder: (context, i) =>
+                    _TalentCard(talent: _talents[i]),
+              ),
+            ).animate().fadeIn(delay: 300.ms, duration: 400.ms),
         ],
       ),
     );
+
+    if (desktop) {
+      content = ConstrainedContent(
+        maxWidth: 1200,
+        child: content,
+      );
+    }
+
+    return content;
   }
 
   // ─── View B: Connection list ───────────────────────────────────────
@@ -557,9 +626,10 @@ class _MatchesScreenState extends ConsumerState<MatchesScreen> {
   }
 
   Widget _buildListView() {
+    final desktop = isDesktop(context);
     final filters = ['Activos', 'Conectados', 'Pendientes'];
     final filteredList = _filteredConnections;
-    return Column(
+    Widget listContent = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // Back + Title
@@ -580,7 +650,7 @@ class _MatchesScreenState extends ConsumerState<MatchesScreen> {
               Text(
                 'Matches',
                 style: GoogleFonts.outfit(
-                  fontSize: 24,
+                  fontSize: desktop ? 28 : 24,
                   fontWeight: FontWeight.w700,
                   color: MployaColors.textPrimary,
                 ),
@@ -760,6 +830,15 @@ class _MatchesScreenState extends ConsumerState<MatchesScreen> {
         ),
       ],
     );
+
+    if (desktop) {
+      listContent = ConstrainedContent(
+        maxWidth: 1200,
+        child: listContent,
+      );
+    }
+
+    return listContent;
   }
 }
 
@@ -788,140 +867,174 @@ class _SectionHeader extends StatelessWidget {
 
 // ─── Company Card ────────────────────────────────────────────────────
 
-class _CompanyCard extends StatelessWidget {
+class _CompanyCard extends StatefulWidget {
   const _CompanyCard({required this.company});
   final _CompanyMatch company;
 
   @override
+  State<_CompanyCard> createState() => _CompanyCardState();
+}
+
+class _CompanyCardState extends State<_CompanyCard> {
+  bool _hovered = false;
+
+  @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 160,
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: MployaColors.surfaceVariant,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: MployaColors.borderLight),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          // Avatar with green verified badge
-          Stack(
-            clipBehavior: Clip.none,
-            children: [
-              CircleAvatar(
-                radius: 28,
-                backgroundColor: company.color,
-                child: Text(
-                  company.initial,
-                  style: GoogleFonts.outfit(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w700,
-                    color: MployaColors.white,
+    final company = widget.company;
+    final desktop = isDesktop(context);
+    final avatarRadius = desktop ? 32.0 : 28.0;
+    final nameFontSize = desktop ? 15.0 : 14.0;
+    final roleFontSize = desktop ? 13.0 : 12.0;
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      cursor: SystemMouseCursors.click,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        width: desktop ? null : 160,
+        padding: EdgeInsets.all(desktop ? AppSpacing.lg : AppSpacing.md),
+        decoration: BoxDecoration(
+          color: _hovered && desktop
+              ? MployaColors.orange.withValues(alpha: 0.04)
+              : MployaColors.surfaceVariant,
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          border: Border.all(
+            color: _hovered && desktop
+                ? MployaColors.orange.withValues(alpha: 0.3)
+                : MployaColors.borderLight,
+          ),
+          boxShadow: _hovered && desktop
+              ? [
+                  BoxShadow(
+                    color: MployaColors.orange.withValues(alpha: 0.08),
+                    blurRadius: 16,
+                    offset: const Offset(0, 4),
                   ),
-                ),
-              ),
-              Positioned(
-                right: -2,
-                bottom: -2,
-                child: Container(
-                  width: 18,
-                  height: 18,
-                  decoration: BoxDecoration(
-                    color: MployaColors.teal,
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: MployaColors.surfaceVariant,
-                      width: 2,
+                ]
+              : null,
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // Avatar with green verified badge
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                CircleAvatar(
+                  radius: avatarRadius,
+                  backgroundColor: company.color,
+                  child: Text(
+                    company.initial,
+                    style: GoogleFonts.outfit(
+                      fontSize: desktop ? 24.0 : 22.0,
+                      fontWeight: FontWeight.w700,
+                      color: MployaColors.white,
                     ),
                   ),
-                  child: const Icon(
-                    Icons.check,
-                    color: MployaColors.white,
-                    size: 10,
+                ),
+                Positioned(
+                  right: -2,
+                  bottom: -2,
+                  child: Container(
+                    width: 18,
+                    height: 18,
+                    decoration: BoxDecoration(
+                      color: MployaColors.teal,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: MployaColors.surfaceVariant,
+                        width: 2,
+                      ),
+                    ),
+                    child: const Icon(
+                      Icons.check,
+                      color: MployaColors.white,
+                      size: 10,
+                    ),
                   ),
                 ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              company.name,
+              style: GoogleFonts.inter(
+                fontSize: nameFontSize,
+                fontWeight: FontWeight.w600,
+                color: MployaColors.textPrimary,
               ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            company.name,
-            style: GoogleFonts.inter(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: MployaColors.textPrimary,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          const SizedBox(height: 2),
-          Text(
-            company.role,
-            style: GoogleFonts.inter(
-              fontSize: 12,
-              color: MployaColors.textSecondary,
+            const SizedBox(height: 2),
+            Text(
+              company.role,
+              style: GoogleFonts.inter(
+                fontSize: roleFontSize,
+                color: MployaColors.textSecondary,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
             ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          // Action button
-          SizedBox(
-            width: double.infinity,
-            height: 32,
-            child: company.isRequested
-                ? OutlinedButton(
-                    onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Match con ${company.name} pendiente ⏳'),
-                          backgroundColor: MployaColors.textSecondary,
+            const SizedBox(height: AppSpacing.sm),
+            // Action button
+            SizedBox(
+              width: double.infinity,
+              height: desktop ? 36.0 : 32.0,
+              child: company.isRequested
+                  ? OutlinedButton(
+                      onPressed: () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Match con ${company.name} pendiente ⏳'),
+                            backgroundColor: MployaColors.textSecondary,
+                          ),
+                        );
+                      },
+                      style: OutlinedButton.styleFrom(
+                        padding: EdgeInsets.zero,
+                        side: const BorderSide(color: MployaColors.border),
+                        shape: RoundedRectangleBorder(
+                          borderRadius:
+                              BorderRadius.circular(AppRadius.pill),
                         ),
-                      );
-                    },
-                    style: OutlinedButton.styleFrom(
-                      padding: EdgeInsets.zero,
-                      side: const BorderSide(color: MployaColors.border),
-                      shape: RoundedRectangleBorder(
-                        borderRadius:
-                            BorderRadius.circular(AppRadius.pill),
+                      ),
+                      child: Text(
+                        company.actionLabel,
+                        style: GoogleFonts.inter(
+                          fontSize: desktop ? 12.0 : 11.0,
+                          fontWeight: FontWeight.w500,
+                          color: MployaColors.textSecondary,
+                        ),
+                      ),
+                    )
+                  : OutlinedButton(
+                      onPressed: () {
+                        final id = company.name.toLowerCase().replaceAll(' ', '-');
+                        context.push('/chat/match-$id');
+                      },
+                      style: OutlinedButton.styleFrom(
+                        padding: EdgeInsets.zero,
+                        side: const BorderSide(color: MployaColors.border),
+                        shape: RoundedRectangleBorder(
+                          borderRadius:
+                              BorderRadius.circular(AppRadius.pill),
+                        ),
+                      ),
+                      child: Text(
+                        company.actionLabel,
+                        style: GoogleFonts.inter(
+                          fontSize: desktop ? 12.0 : 11.0,
+                          fontWeight: FontWeight.w600,
+                          color: MployaColors.textPrimary,
+                        ),
                       ),
                     ),
-                    child: Text(
-                      company.actionLabel,
-                      style: GoogleFonts.inter(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w500,
-                        color: MployaColors.textSecondary,
-                      ),
-                    ),
-                  )
-                : OutlinedButton(
-                    onPressed: () {
-                      final id = company.name.toLowerCase().replaceAll(' ', '-');
-                      context.push('/chat/match-$id');
-                    },
-                    style: OutlinedButton.styleFrom(
-                      padding: EdgeInsets.zero,
-                      side: const BorderSide(color: MployaColors.border),
-                      shape: RoundedRectangleBorder(
-                        borderRadius:
-                            BorderRadius.circular(AppRadius.pill),
-                      ),
-                    ),
-                    child: Text(
-                      company.actionLabel,
-                      style: GoogleFonts.inter(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: MployaColors.textPrimary,
-                      ),
-                    ),
-                  ),
-          ),
-        ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -939,100 +1052,127 @@ class _ProfessionalCard extends StatefulWidget {
 
 class _ProfessionalCardState extends State<_ProfessionalCard> {
   bool _connected = false;
+  bool _hovered = false;
 
   @override
   Widget build(BuildContext context) {
     final professional = widget.professional;
-    return Container(
-      width: 130,
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: MployaColors.surfaceVariant,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: MployaColors.borderLight),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          CircleAvatar(
-            radius: 24,
-            backgroundColor: professional.color,
-            child: Text(
-              professional.initial,
-              style: GoogleFonts.outfit(
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-                color: MployaColors.white,
+    final desktop = isDesktop(context);
+    final avatarRadius = desktop ? 28.0 : 24.0;
+    final nameFontSize = desktop ? 14.0 : 13.0;
+    final roleFontSize = desktop ? 12.0 : 11.0;
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      cursor: SystemMouseCursors.click,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        width: desktop ? null : 130,
+        padding: EdgeInsets.all(desktop ? AppSpacing.lg : AppSpacing.md),
+        decoration: BoxDecoration(
+          color: _hovered && desktop
+              ? MployaColors.orange.withValues(alpha: 0.04)
+              : MployaColors.surfaceVariant,
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          border: Border.all(
+            color: _hovered && desktop
+                ? MployaColors.orange.withValues(alpha: 0.3)
+                : MployaColors.borderLight,
+          ),
+          boxShadow: _hovered && desktop
+              ? [
+                  BoxShadow(
+                    color: MployaColors.orange.withValues(alpha: 0.08),
+                    blurRadius: 16,
+                    offset: const Offset(0, 4),
+                  ),
+                ]
+              : null,
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircleAvatar(
+              radius: avatarRadius,
+              backgroundColor: professional.color,
+              child: Text(
+                professional.initial,
+                style: GoogleFonts.outfit(
+                  fontSize: desktop ? 20.0 : 18.0,
+                  fontWeight: FontWeight.w700,
+                  color: MployaColors.white,
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            professional.name,
-            style: GoogleFonts.inter(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: MployaColors.textPrimary,
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              professional.name,
+              style: GoogleFonts.inter(
+                fontSize: nameFontSize,
+                fontWeight: FontWeight.w600,
+                color: MployaColors.textPrimary,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          const SizedBox(height: 2),
-          Text(
-            professional.role,
-            style: GoogleFonts.inter(
-              fontSize: 11,
-              color: MployaColors.textSecondary,
+            const SizedBox(height: 2),
+            Text(
+              professional.role,
+              style: GoogleFonts.inter(
+                fontSize: roleFontSize,
+                color: MployaColors.textSecondary,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          SizedBox(
-            width: double.infinity,
-            height: 30,
-            child: _connected
-                ? OutlinedButton(
-                    onPressed: () => setState(() => _connected = false),
-                    style: OutlinedButton.styleFrom(
-                      padding: EdgeInsets.zero,
-                      side: const BorderSide(color: MployaColors.teal),
-                      shape: RoundedRectangleBorder(
-                        borderRadius:
-                            BorderRadius.circular(AppRadius.pill),
+            const SizedBox(height: AppSpacing.sm),
+            SizedBox(
+              width: double.infinity,
+              height: desktop ? 34.0 : 30.0,
+              child: _connected
+                  ? OutlinedButton(
+                      onPressed: () => setState(() => _connected = false),
+                      style: OutlinedButton.styleFrom(
+                        padding: EdgeInsets.zero,
+                        side: const BorderSide(color: MployaColors.teal),
+                        shape: RoundedRectangleBorder(
+                          borderRadius:
+                              BorderRadius.circular(AppRadius.pill),
+                        ),
+                      ),
+                      child: Text(
+                        'Conectado ✓',
+                        style: GoogleFonts.inter(
+                          fontSize: desktop ? 12.0 : 11.0,
+                          fontWeight: FontWeight.w600,
+                          color: MployaColors.teal,
+                        ),
+                      ),
+                    )
+                  : ElevatedButton(
+                      onPressed: () => setState(() => _connected = true),
+                      style: ElevatedButton.styleFrom(
+                        padding: EdgeInsets.zero,
+                        backgroundColor: MployaColors.orange,
+                        shape: RoundedRectangleBorder(
+                          borderRadius:
+                              BorderRadius.circular(AppRadius.pill),
+                        ),
+                        elevation: 0,
+                      ),
+                      child: Text(
+                        'Conectar',
+                        style: GoogleFonts.inter(
+                          fontSize: desktop ? 12.0 : 11.0,
+                          fontWeight: FontWeight.w600,
+                          color: MployaColors.white,
+                        ),
                       ),
                     ),
-                    child: Text(
-                      'Conectado ✓',
-                      style: GoogleFonts.inter(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: MployaColors.teal,
-                      ),
-                    ),
-                  )
-                : ElevatedButton(
-                    onPressed: () => setState(() => _connected = true),
-                    style: ElevatedButton.styleFrom(
-                      padding: EdgeInsets.zero,
-                      backgroundColor: MployaColors.orange,
-                      shape: RoundedRectangleBorder(
-                        borderRadius:
-                            BorderRadius.circular(AppRadius.pill),
-                      ),
-                      elevation: 0,
-                    ),
-                    child: Text(
-                      'Conectar',
-                      style: GoogleFonts.inter(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: MployaColors.white,
-                      ),
-                    ),
-                  ),
-          ),
-        ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1040,77 +1180,111 @@ class _ProfessionalCardState extends State<_ProfessionalCard> {
 
 // ─── Talent Card ─────────────────────────────────────────────────────
 
-class _TalentCard extends StatelessWidget {
+class _TalentCard extends StatefulWidget {
   const _TalentCard({required this.talent});
   final _TopTalent talent;
 
   @override
+  State<_TalentCard> createState() => _TalentCardState();
+}
+
+class _TalentCardState extends State<_TalentCard> {
+  bool _hovered = false;
+
+  @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 140,
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: MployaColors.surfaceVariant,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: MployaColors.borderLight),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          CircleAvatar(
-            radius: 26,
-            backgroundColor: talent.color,
-            child: Text(
-              talent.initial,
-              style: GoogleFonts.outfit(
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
-                color: MployaColors.white,
-              ),
-            ),
+    final talent = widget.talent;
+    final desktop = isDesktop(context);
+    final avatarRadius = desktop ? 30.0 : 26.0;
+    final nameFontSize = desktop ? 14.0 : 13.0;
+    final roleFontSize = desktop ? 12.0 : 11.0;
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      cursor: SystemMouseCursors.click,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        width: desktop ? null : 140,
+        padding: EdgeInsets.all(desktop ? AppSpacing.lg : AppSpacing.md),
+        decoration: BoxDecoration(
+          color: _hovered && desktop
+              ? MployaColors.orange.withValues(alpha: 0.04)
+              : MployaColors.surfaceVariant,
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          border: Border.all(
+            color: _hovered && desktop
+                ? MployaColors.orange.withValues(alpha: 0.3)
+                : MployaColors.borderLight,
           ),
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            talent.name,
-            style: GoogleFonts.inter(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: MployaColors.textPrimary,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          const SizedBox(height: 2),
-          Text(
-            talent.role,
-            style: GoogleFonts.inter(
-              fontSize: 11,
-              color: MployaColors.textSecondary,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(
-                Icons.visibility_outlined,
-                size: 14,
-                color: MployaColors.orange,
-              ),
-              const SizedBox(width: 4),
-              Text(
-                '${talent.views} vistas',
-                style: GoogleFonts.inter(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: MployaColors.orange,
+          boxShadow: _hovered && desktop
+              ? [
+                  BoxShadow(
+                    color: MployaColors.orange.withValues(alpha: 0.08),
+                    blurRadius: 16,
+                    offset: const Offset(0, 4),
+                  ),
+                ]
+              : null,
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircleAvatar(
+              radius: avatarRadius,
+              backgroundColor: talent.color,
+              child: Text(
+                talent.initial,
+                style: GoogleFonts.outfit(
+                  fontSize: desktop ? 22.0 : 20.0,
+                  fontWeight: FontWeight.w700,
+                  color: MployaColors.white,
                 ),
               ),
-            ],
-          ),
-        ],
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              talent.name,
+              style: GoogleFonts.inter(
+                fontSize: nameFontSize,
+                fontWeight: FontWeight.w600,
+                color: MployaColors.textPrimary,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 2),
+            Text(
+              talent.role,
+              style: GoogleFonts.inter(
+                fontSize: roleFontSize,
+                color: MployaColors.textSecondary,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(
+                  Icons.visibility_outlined,
+                  size: 14,
+                  color: MployaColors.orange,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  '${talent.views} vistas',
+                  style: GoogleFonts.inter(
+                    fontSize: desktop ? 13.0 : 12.0,
+                    fontWeight: FontWeight.w600,
+                    color: MployaColors.orange,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
