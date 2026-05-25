@@ -75,23 +75,23 @@ class VideoModel {
 
   factory VideoModel.fromJson(Map<String, dynamic> json) {
     return VideoModel(
-      id: json['id'] as String,
-      userId: json['user_id'] as String,
-      url: json['url'] as String,
-      thumbnailUrl: json['thumbnail_url'] as String?,
-      duration: json['duration'] as int? ?? 0,
-      type: VideoType.fromString(json['type'] as String?),
-      title: json['title'] as String?,
-      description: json['description'] as String?,
-      score: json['score'] as int? ?? 0,
+      id: json['id']?.toString() ?? '',
+      userId: json['user_id']?.toString() ?? '',
+      url: json['url']?.toString() ?? '',
+      thumbnailUrl: json['thumbnail_url']?.toString(),
+      duration: (json['duration'] as num?)?.toInt() ?? 0,
+      type: VideoType.fromString(json['type']?.toString()),
+      title: json['title']?.toString(),
+      description: json['description']?.toString(),
+      score: (json['score'] as num?)?.toInt() ?? 0,
       hashtags: (json['hashtags'] as List<dynamic>?)
-              ?.map((e) => e as String)
+              ?.map((e) => e.toString())
               .toList() ??
           const [],
-      viewCount: json['view_count'] as int? ?? 0,
-      likeCount: json['like_count'] as int? ?? 0,
+      viewCount: (json['view_count'] as num?)?.toInt() ?? 0,
+      likeCount: (json['like_count'] as num?)?.toInt() ?? 0,
       createdAt: json['created_at'] != null
-          ? DateTime.parse(json['created_at'] as String)
+          ? DateTime.tryParse(json['created_at']?.toString() ?? '')
           : null,
     );
   }
@@ -164,4 +164,17 @@ class VideoModel {
     final secs = duration % 60;
     return '$mins:${secs.toString().padLeft(2, '0')}';
   }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is VideoModel &&
+          runtimeType == other.runtimeType &&
+          id == other.id;
+
+  @override
+  int get hashCode => id.hashCode;
+
+  @override
+  String toString() => 'VideoModel(id: $id, title: $title)';
 }

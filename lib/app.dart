@@ -7,9 +7,11 @@ library;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:mploya/config/routes.dart';
 import 'package:mploya/config/theme.dart';
+import 'package:mploya/core/providers/theme_provider.dart';
 
 /// Custom scroll behavior that enables drag scrolling with mouse on web.
 /// This makes PageView and other scrollables work with mouse drag,
@@ -29,18 +31,26 @@ class AppScrollBehavior extends MaterialScrollBehavior {
 /// ```dart
 /// runApp(const ProviderScope(child: App()));
 /// ```
-class App extends StatelessWidget {
+class App extends ConsumerWidget {
   const App({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final themeMode = ref.watch(themeModeProvider);
+
+    // Determinar el brillo actual para ajustar la barra de estado
+    final isDark = themeMode == ThemeMode.dark ||
+        (themeMode == ThemeMode.system &&
+            MediaQuery.platformBrightnessOf(context) == Brightness.dark);
+
     SystemChrome.setSystemUIOverlayStyle(
-      const SystemUiOverlayStyle(
+      SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
-        statusBarIconBrightness: Brightness.dark,
-        statusBarBrightness: Brightness.light,
+        statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+        statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
         systemNavigationBarColor: Colors.transparent,
-        systemNavigationBarIconBrightness: Brightness.dark,
+        systemNavigationBarIconBrightness:
+            isDark ? Brightness.light : Brightness.dark,
       ),
     );
 
@@ -54,7 +64,8 @@ class App extends StatelessWidget {
 
       // ── Tema ──
       theme: buildMployaTheme(),
-      themeMode: ThemeMode.light,
+      darkTheme: buildMployaDarkTheme(),
+      themeMode: themeMode,
 
       // ── Router ──
       routerConfig: router,

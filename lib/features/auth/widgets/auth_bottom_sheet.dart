@@ -101,12 +101,12 @@ class _AuthBottomSheetState extends ConsumerState<AuthBottomSheet>
       }
 
       if (!mounted) return;
-      Navigator.of(context).pop();
+      context.pop();
       _navigateToOnboarding();
     } catch (e) {
       if (!mounted) return;
       // ── MODO DEMO: Si Supabase falla, ir al formulario del rol ──
-      Navigator.of(context).pop();
+      context.pop();
       _navigateToOnboarding();
     }
   }
@@ -120,7 +120,7 @@ class _AuthBottomSheetState extends ConsumerState<AuthBottomSheet>
     try {
       await AuthService.instance.signInWithGoogle();
       if (!mounted) return;
-      Navigator.of(context).pop();
+      context.pop();
       _navigateToOnboarding();
     } catch (e) {
       if (!mounted) return;
@@ -140,7 +140,7 @@ class _AuthBottomSheetState extends ConsumerState<AuthBottomSheet>
     try {
       await AuthService.instance.signInWithApple();
       if (!mounted) return;
-      Navigator.of(context).pop();
+      context.pop();
       _navigateToOnboarding();
     } catch (e) {
       if (!mounted) return;

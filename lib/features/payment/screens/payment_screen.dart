@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'package:mploya/config/theme.dart';
+import 'package:mploya/core/services/stripe_service.dart';
+import 'package:mploya/core/services/supabase_service.dart';
 
 /// Datos del producto a pagar.
 class PaymentProduct {
@@ -72,17 +75,103 @@ class _PaymentScreenState extends State<PaymentScreen> {
       );
 
   Future<void> _handlePay() async {
-    if (!_formKey.currentState!.validate()) return;
+    // Si Stripe no está configurado, mostrar mensaje informativo.
+    if (!StripeService.instance.isConfigured) {
+      _showNotConfiguredMessage();
+      return;
+    }
 
+    // Procesar pago real con Stripe Payment Sheet.
+    await _handleStripePayment();
+  }
+
+  /// Procesa el pago usando Stripe Payment Sheet.
+  Future<void> _handleStripePayment() async {
     setState(() => _isProcessing = true);
 
-    // Simulate payment processing
-    await Future.delayed(const Duration(seconds: 2));
+    try {
+      // Obtener userId del usuario autenticado.
+      final userId = SupabaseService.instance.currentUserId;
+      if (userId == null) {
+        if (!mounted) return;
+        setState(() => _isProcessing = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Debés iniciar sesión para realizar un pago.'),
+            backgroundColor: Colors.red[700],
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppRadius.md),
+            ),
+          ),
+        );
+        return;
+      }
 
-    if (!mounted) return;
-    setState(() => _isProcessing = false);
+      // Convertir precio a centavos para Stripe.
+      final amountInCents = (_product.price * 100).round();
 
-    // Show success dialog
+      // Crear el Payment Sheet con el backend.
+      await StripeService.instance.createPaymentSheet(
+        amount: amountInCents,
+        userId: userId,
+      );
+
+      // Presentar el Payment Sheet al usuario.
+      final success = await StripeService.instance.presentPaymentSheet();
+
+      if (!mounted) return;
+      setState(() => _isProcessing = false);
+
+      if (success) {
+        _showSuccessDialog();
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isProcessing = false);
+
+      // Mostrar error al usuario.
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al procesar el pago: $e'),
+          backgroundColor: Colors.red[700],
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadius.md),
+          ),
+        ),
+      );
+    }
+  }
+
+  /// Muestra mensaje cuando Stripe no está configurado.
+  void _showNotConfiguredMessage() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.info_outline, color: Colors.white, size: 20),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Pagos próximamente. Estamos configurando la pasarela.',
+                style: GoogleFonts.inter(fontSize: 13),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: MployaColors.orange,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 3),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.md),
+        ),
+      ),
+    );
+  }
+
+  /// Muestra el diálogo de pago exitoso.
+  void _showSuccessDialog() {
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -131,7 +220,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
               child: ElevatedButton(
                 onPressed: () {
                   Navigator.of(ctx).pop();
-                  Navigator.of(context).pop();
+                  context.pop();
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: MployaColors.teal,
@@ -165,7 +254,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
         elevation: 0,
         scrolledUnderElevation: 0,
         leading: IconButton(
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: () => context.pop(),
           icon: const Icon(Icons.arrow_back_rounded, color: MployaColors.orange),
         ),
         title: Text(

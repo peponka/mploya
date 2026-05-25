@@ -83,15 +83,15 @@ class NotificationModel {
 
   factory NotificationModel.fromJson(Map<String, dynamic> json) {
     return NotificationModel(
-      id: json['id'] as String,
-      userId: json['user_id'] as String,
-      type: NotificationType.fromString(json['type'] as String?),
-      title: json['title'] as String,
-      body: json['body'] as String,
+      id: json['id']?.toString() ?? '',
+      userId: json['user_id']?.toString() ?? '',
+      type: NotificationType.fromString(json['type']?.toString()),
+      title: json['title']?.toString() ?? '',
+      body: json['body']?.toString() ?? '',
       isRead: json['is_read'] as bool? ?? false,
       data: (json['data'] as Map<String, dynamic>?) ?? const {},
       createdAt: json['created_at'] != null
-          ? DateTime.parse(json['created_at'] as String)
+          ? DateTime.tryParse(json['created_at']?.toString() ?? '')
           : null,
     );
   }
@@ -145,4 +145,17 @@ class NotificationModel {
     if (diff.inDays < 7) return 'Hace ${diff.inDays}d';
     return 'Hace ${diff.inDays ~/ 7}sem';
   }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is NotificationModel &&
+          runtimeType == other.runtimeType &&
+          id == other.id;
+
+  @override
+  int get hashCode => id.hashCode;
+
+  @override
+  String toString() => 'NotificationModel(id: $id, title: $title)';
 }

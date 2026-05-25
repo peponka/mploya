@@ -79,9 +79,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   void _showError(String message) {
+    ScaffoldMessenger.of(context).clearSnackBars();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(message),
+        content: Row(
+          children: [
+            const Icon(Icons.error_outline, color: Colors.white),
+            const SizedBox(width: 8),
+            Flexible(child: Text(message)),
+          ],
+        ),
         backgroundColor: Theme.of(context).colorScheme.error,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(
@@ -358,13 +365,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             // Google Sign-In button
             OutlinedButton.icon(
               onPressed: _isLoading ? null : _handleGoogleLogin,
-              icon: Image.network(
-                'https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg',
+              icon: Container(
                 width: 20,
                 height: 20,
-                errorBuilder: (context, error, stackTrace) => const Icon(
-                  Icons.g_mobiledata_rounded,
-                  size: 24,
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                ),
+                child: const Center(
+                  child: Text('G', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF4285F4))),
                 ),
               ),
               label: Text(

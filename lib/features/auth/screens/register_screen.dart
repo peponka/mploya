@@ -437,35 +437,90 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                 ),
                 const SizedBox(width: AppSpacing.sm),
                 Expanded(
-                  child: GestureDetector(
-                    onTap: () =>
-                        setState(() => _acceptedTerms = !_acceptedTerms),
-                    child: Text.rich(
-                      TextSpan(
-                        text: 'Acepto los ',
-                        style: GoogleFonts.inter(
-                          fontSize: 13,
-                          color: colorScheme.onSurface.withValues(alpha: 0.7),
+                  child: Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      GestureDetector(
+                        onTap: () =>
+                            setState(() => _acceptedTerms = !_acceptedTerms),
+                        child: Text(
+                          'Acepto los ',
+                          style: GoogleFonts.inter(
+                            fontSize: 13,
+                            color: colorScheme.onSurface.withValues(alpha: 0.7),
+                          ),
                         ),
-                        children: [
-                          TextSpan(
-                            text: 'Términos y Condiciones',
-                            style: TextStyle(
-                              color: colorScheme.primary,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const TextSpan(text: ' y la '),
-                          TextSpan(
-                            text: 'Política de Privacidad',
-                            style: TextStyle(
-                              color: colorScheme.primary,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
                       ),
-                    ),
+                      GestureDetector(
+                        onTap: () {
+                          ScaffoldMessenger.of(context).clearSnackBars();
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Row(
+                                children: [
+                                  const Icon(Icons.info_outline, color: Colors.white),
+                                  const SizedBox(width: 8),
+                                  const Text('Próximamente disponible'),
+                                ],
+                              ),
+                              behavior: SnackBarBehavior.floating,
+                              backgroundColor: const Color(0xFF6366F1),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                          );
+                        },
+                        child: Text(
+                          'Términos y Condiciones',
+                          style: GoogleFonts.inter(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: colorScheme.primary,
+                          ),
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: () =>
+                            setState(() => _acceptedTerms = !_acceptedTerms),
+                        child: Text(
+                          ' y la ',
+                          style: GoogleFonts.inter(
+                            fontSize: 13,
+                            color: colorScheme.onSurface.withValues(alpha: 0.7),
+                          ),
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: () {
+                          ScaffoldMessenger.of(context).clearSnackBars();
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Row(
+                                children: [
+                                  const Icon(Icons.info_outline, color: Colors.white),
+                                  const SizedBox(width: 8),
+                                  const Text('Próximamente disponible'),
+                                ],
+                              ),
+                              behavior: SnackBarBehavior.floating,
+                              backgroundColor: const Color(0xFF6366F1),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                          );
+                        },
+                        child: Text(
+                          'Política de Privacidad',
+                          style: GoogleFonts.inter(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: colorScheme.primary,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],

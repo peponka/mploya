@@ -6,9 +6,6 @@
 library;
 
 import 'dart:async';
-// ignore: avoid_web_libraries_in_flutter
-import 'dart:html' as html;
-import 'dart:ui_web' as ui_web;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -16,6 +13,8 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'package:mploya/config/theme.dart';
+import 'package:mploya/core/services/camera/camera_service.dart';
+import 'package:mploya/core/widgets/platform_video_player.dart';
 import 'package:mploya/features/messaging/models/video_reply_store.dart';
 
 // ─── Screen ────────────────────────────────────────────────────────
@@ -44,10 +43,7 @@ class _VideoReplyScreenState extends ConsumerState<VideoReplyScreen>
   // ─── Camera ──────────────────────────────────────────────────
   bool _cameraReady = false;
   bool _permissionDenied = false;
-  html.MediaStream? _mediaStream;
-  html.VideoElement? _videoElement;
-  html.MediaRecorder? _mediaRecorder;
-  final List<html.Blob> _recordedChunks = [];
+  late final CameraService _cameraService;
   String? _recordedBlobUrl;
 
   final String _cameraViewId =
@@ -57,6 +53,7 @@ class _VideoReplyScreenState extends ConsumerState<VideoReplyScreen>
   @override
   void initState() {
     super.initState();
+    _cameraService = CameraService();
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1000),
@@ -75,98 +72,29 @@ class _VideoReplyScreenState extends ConsumerState<VideoReplyScreen>
   // ─── Camera Init ─────────────────────────────────────────────
 
   Future<void> _initCamera() async {
-    try {
-      final stream = await html.window.navigator.mediaDevices!.getUserMedia({
-        'video': {
-          'facingMode': 'user',
-          'width': {'ideal': 720},
-          'height': {'ideal': 1280},
-        },
-        'audio': true,
-      });
+    await _cameraService.initialize();
 
-      _mediaStream = stream;
-
-      _videoElement = html.VideoElement()
-        ..srcObject = stream
-        ..autoplay = true
-        ..muted = true
-        ..setAttribute('playsinline', 'true')
-        ..style.width = '100%'
-        ..style.height = '100%'
-        ..style.objectFit = 'cover'
-        ..style.transform = 'scaleX(-1)'
-        ..style.background = '#000';
-
-      // ignore: undefined_prefixed_name
-      ui_web.platformViewRegistry.registerViewFactory(
-        _cameraViewId,
-        (int viewId) => _videoElement!,
-      );
-
-      if (mounted) {
+    if (mounted) {
+      if (_cameraService.isReady) {
         setState(() => _cameraReady = true);
-      }
-    } catch (e) {
-      if (mounted) {
+      } else {
         setState(() => _permissionDenied = true);
       }
     }
   }
 
   void _stopCamera() {
-    _mediaStream?.getTracks().forEach((track) => track.stop());
-    _mediaStream = null;
+    _cameraService.dispose();
   }
 
   // ─── Recording ───────────────────────────────────────────────
 
-  void _startRecording() {
-    if (_mediaStream == null) return;
+  void _startRecording() async {
+    if (!_cameraService.isReady) return;
 
-    _recordedChunks.clear();
     _recordedBlobUrl = null;
 
-    _mediaRecorder = html.MediaRecorder(_mediaStream!, {
-      'mimeType': 'video/webm;codecs=vp9,opus',
-    });
-
-    _mediaRecorder!.addEventListener('dataavailable', (event) {
-      final blobEvent = event as html.BlobEvent;
-      if (blobEvent.data != null && blobEvent.data!.size > 0) {
-        _recordedChunks.add(blobEvent.data!);
-      }
-    });
-
-    _mediaRecorder!.addEventListener('stop', (_) {
-      final blob = html.Blob(_recordedChunks, 'video/webm');
-      _recordedBlobUrl = html.Url.createObjectUrlFromBlob(blob);
-
-      // Create playback view
-      _playbackViewId =
-          'mploya-reply-play-${DateTime.now().millisecondsSinceEpoch}';
-      final playbackVideo = html.VideoElement()
-        ..src = _recordedBlobUrl!
-        ..autoplay = true
-        ..loop = true
-        ..muted = false
-        ..setAttribute('playsinline', 'true')
-        ..style.width = '100%'
-        ..style.height = '100%'
-        ..style.objectFit = 'cover'
-        ..style.transform = 'scaleX(-1)'
-        ..style.background = '#000';
-
-      // ignore: undefined_prefixed_name
-      ui_web.platformViewRegistry.registerViewFactory(
-        _playbackViewId!,
-        (int viewId) => playbackVideo,
-      );
-
-      if (mounted) setState(() {});
-    });
-
-    _mediaRecorder!.start(100);
+    await _cameraService.startRecording();
 
     setState(() {
       _state = _RecordingState.recording;
@@ -185,12 +113,19 @@ class _VideoReplyScreenState extends ConsumerState<VideoReplyScreen>
     });
   }
 
-  void _stopRecording() {
+  void _stopRecording() async {
     _timer?.cancel();
-    if (_mediaRecorder?.state == 'recording') {
-      _mediaRecorder!.stop();
+    final blobUrl = await _cameraService.stopRecording();
+    _recordedBlobUrl = blobUrl;
+
+    if (_recordedBlobUrl != null) {
+      _playbackViewId =
+          'mploya-reply-play-${DateTime.now().millisecondsSinceEpoch}';
     }
-    setState(() => _state = _RecordingState.preview);
+
+    if (mounted) {
+      setState(() => _state = _RecordingState.preview);
+    }
   }
 
   void _retake() {
@@ -292,7 +227,7 @@ class _VideoReplyScreenState extends ConsumerState<VideoReplyScreen>
             TextButton(
               onPressed: () {
                 Navigator.of(ctx).pop();
-                Navigator.of(context).pop();
+                context.pop();
               },
               child: Text(
                 'Volver al feed',
@@ -334,10 +269,15 @@ class _VideoReplyScreenState extends ConsumerState<VideoReplyScreen>
             if (_cameraReady &&
                 _state != _RecordingState.preview &&
                 _state != _RecordingState.sending)
-              HtmlElementView(viewType: _cameraViewId)
+              _cameraService.buildPreview(_cameraViewId)
             else if (_state == _RecordingState.preview &&
-                _playbackViewId != null)
-              HtmlElementView(viewType: _playbackViewId!)
+                _playbackViewId != null &&
+                _recordedBlobUrl != null)
+              PlatformVideoPlayer(
+                viewId: _playbackViewId!,
+                url: _recordedBlobUrl!,
+                mirror: true,
+              )
             else if (_permissionDenied)
               Center(
                 child: Column(
@@ -416,7 +356,7 @@ class _VideoReplyScreenState extends ConsumerState<VideoReplyScreen>
                           icon: Icons.close,
                           onTap: () {
                             _stopCamera();
-                            Navigator.of(context).pop();
+                            context.pop();
                           },
                         ),
                         const Spacer(),

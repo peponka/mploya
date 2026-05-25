@@ -6,9 +6,6 @@
 library;
 
 import 'dart:async';
-// ignore: avoid_web_libraries_in_flutter
-import 'dart:html' as html;
-import 'dart:ui_web' as ui_web;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -18,6 +15,8 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'package:mploya/config/theme.dart';
+import 'package:mploya/core/services/camera/camera_service.dart';
+import 'package:mploya/core/widgets/platform_video_player.dart';
 import 'package:mploya/features/feed/providers/feed_provider.dart';
 import 'package:mploya/features/profile/models/company_profile_store.dart';
 
@@ -55,19 +54,18 @@ class _VideoIntroScreenState extends ConsumerState<VideoIntroScreen>
   Animation<double>? _countdownScaleAnim;
   Animation<double>? _countdownFadeAnim;
 
-  html.MediaStream? _mediaStream;
-  html.VideoElement? _videoElement;
-  html.MediaRecorder? _mediaRecorder;
-  final List<html.Blob> _recordedChunks = [];
+  late final CameraService _cameraService;
   String? _recordedBlobUrl;
   
   // View IDs para la cámara y el playback
   final String _cameraViewId = 'mploya-cam-${DateTime.now().millisecondsSinceEpoch}';
   String? _playbackViewId;
+  bool _useFrontCamera = true;
 
   @override
   void initState() {
     super.initState();
+    _cameraService = CameraService();
     _countdownAnimController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 700),
@@ -93,48 +91,19 @@ class _VideoIntroScreenState extends ConsumerState<VideoIntroScreen>
   }
 
   Future<void> _initCamera() async {
-    try {
-      final stream = await html.window.navigator.mediaDevices!.getUserMedia({
-        'video': {
-          'facingMode': 'user',
-          'width': {'ideal': 720},
-          'height': {'ideal': 1280},
-        },
-        'audio': true,
-      });
+    await _cameraService.initialize();
 
-      _mediaStream = stream;
-
-      _videoElement = html.VideoElement()
-        ..srcObject = stream
-        ..autoplay = true
-        ..muted = true
-        ..setAttribute('playsinline', 'true')
-        ..style.width = '100%'
-        ..style.height = '100%'
-        ..style.objectFit = 'cover'
-        ..style.transform = 'scaleX(-1)'
-        ..style.background = '#000';
-
-      // ignore: undefined_prefixed_name
-      ui_web.platformViewRegistry.registerViewFactory(
-        _cameraViewId,
-        (int viewId) => _videoElement!,
-      );
-
-      if (mounted) {
+    if (mounted) {
+      if (_cameraService.isReady) {
         setState(() => _cameraReady = true);
-      }
-    } catch (e) {
-      if (mounted) {
+      } else {
         setState(() => _permissionDenied = true);
       }
     }
   }
 
   void _stopCamera() {
-    _mediaStream?.getTracks().forEach((track) => track.stop());
-    _mediaStream = null;
+    _cameraService.dispose();
   }
 
   /// Called when user taps record from the intro screen or camera view.
@@ -199,55 +168,11 @@ class _VideoIntroScreenState extends ConsumerState<VideoIntroScreen>
   }
 
   void _startRecording() {
-    if (_mediaStream == null) return;
+    if (!_cameraService.isReady) return;
     
-    _recordedChunks.clear();
     _recordedBlobUrl = null;
 
-    _mediaRecorder = html.MediaRecorder(_mediaStream!, {
-      'mimeType': 'video/webm;codecs=vp9,opus',
-    });
-
-    _mediaRecorder!.addEventListener('dataavailable', (event) {
-      final blobEvent = event as html.BlobEvent;
-      if (blobEvent.data != null && blobEvent.data!.size > 0) {
-        _recordedChunks.add(blobEvent.data!);
-      }
-    });
-
-    _mediaRecorder!.addEventListener('stop', (_) {
-      final blob = html.Blob(_recordedChunks, 'video/webm');
-      _recordedBlobUrl = html.Url.createObjectUrlFromBlob(blob);
-      
-      // Crear video de playback
-      _playbackViewId = 'mploya-playback-${DateTime.now().millisecondsSinceEpoch}';
-      final playbackVideo = html.VideoElement()
-        ..src = _recordedBlobUrl!
-        ..autoplay = true
-        ..loop = true
-        ..muted = false
-        ..setAttribute('playsinline', 'true')
-        ..style.width = '100%'
-        ..style.height = '100%'
-        ..style.objectFit = 'contain'
-        ..style.transform = 'scaleX(-1)'
-        ..style.borderRadius = '24px'
-        ..style.background = '#000';
-
-      // ignore: undefined_prefixed_name
-      ui_web.platformViewRegistry.registerViewFactory(
-        _playbackViewId!,
-        (int viewId) => playbackVideo,
-      );
-
-      if (mounted) {
-        setState(() {});
-        // Show post-recording dialog
-        _showPostRecordingDialog();
-      }
-    });
-
-    _mediaRecorder!.start(100); // chunks cada 100ms
+    _cameraService.startRecording();
 
     setState(() {
       _isRecording = true;
@@ -275,20 +200,30 @@ class _VideoIntroScreenState extends ConsumerState<VideoIntroScreen>
     });
   }
 
-  void _stopRecording() {
+  void _stopRecording() async {
     _timer?.cancel();
     _teleprompterTimer?.cancel();
-    _mediaRecorder?.stop();
+    
+    final blobUrl = await _cameraService.stopRecording();
+    _recordedBlobUrl = blobUrl;
+    
+    if (_recordedBlobUrl != null) {
+      _playbackViewId = 'mploya-playback-${DateTime.now().millisecondsSinceEpoch}';
+    }
+    
     setState(() {
       _isRecording = false;
       _hasRecorded = true;
     });
+    
+    if (_recordedBlobUrl != null) {
+      _showPostRecordingDialog();
+    }
   }
 
   void _retakeVideo() {
     _recordedBlobUrl = null;
     _playbackViewId = null;
-    _recordedChunks.clear();
     setState(() {
       _hasRecorded = false;
       _isRecording = false;
@@ -450,7 +385,7 @@ class _VideoIntroScreenState extends ConsumerState<VideoIntroScreen>
           children: [
             // ─── Camera preview fills entire screen ─────────────
             if (_cameraReady)
-              HtmlElementView(viewType: _cameraViewId)
+              _cameraService.buildPreview(_cameraViewId)
             else if (_permissionDenied)
               _buildPermissionDenied()
             else
@@ -552,17 +487,31 @@ class _VideoIntroScreenState extends ConsumerState<VideoIntroScreen>
                     const Spacer(),
                     // Flip camera icon
                     GestureDetector(
-                      onTap: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              'Cambiar cámara no disponible en web',
-                              style: GoogleFonts.inter(),
+                      onTap: () async {
+                        try {
+                          // Attempt to re-initialize with the opposite camera.
+                          _cameraService.dispose();
+                          _useFrontCamera = !_useFrontCamera;
+                          await _cameraService.initialize(
+                            frontCamera: _useFrontCamera,
+                          );
+                          if (mounted) setState(() {});
+                        } catch (e) {
+                          debugPrint('⚠️ Camera flip failed: $e');
+                          // Revert to the previous camera.
+                          _useFrontCamera = !_useFrontCamera;
+                          if (!mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                'Cambiar cámara no disponible en web',
+                                style: GoogleFonts.inter(),
+                              ),
+                              behavior: SnackBarBehavior.floating,
+                              duration: const Duration(seconds: 1),
                             ),
-                            behavior: SnackBarBehavior.floating,
-                            duration: const Duration(seconds: 1),
-                          ),
-                        );
+                          );
+                        }
                       },
                       child: Container(
                         width: 36,
@@ -1207,12 +1156,15 @@ class _VideoIntroScreenState extends ConsumerState<VideoIntroScreen>
           const SizedBox(height: AppSpacing.md),
 
           // Video playback preview (smaller)
-          Container(
-            height: 200,
-            width: double.infinity,
-            decoration: BoxDecoration(
-              color: Colors.black,
-              borderRadius: BorderRadius.circular(AppRadius.xxl),
+          Builder(
+            builder: (context) {
+              final cardHeight = MediaQuery.of(context).size.width * 0.5;
+              return Container(
+                height: cardHeight,
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: Colors.black,
+                  borderRadius: BorderRadius.circular(AppRadius.xxl),
               border: Border.all(
                 color: Colors.white.withValues(alpha: 0.1),
               ),
@@ -1221,8 +1173,14 @@ class _VideoIntroScreenState extends ConsumerState<VideoIntroScreen>
             child: Stack(
               fit: StackFit.expand,
               children: [
-                if (_playbackViewId != null)
-                  HtmlElementView(viewType: _playbackViewId!),
+                if (_playbackViewId != null && _recordedBlobUrl != null)
+                  PlatformVideoPlayer(
+                    viewId: _playbackViewId!,
+                    url: _recordedBlobUrl!,
+                    objectFit: 'contain',
+                    mirror: true,
+                    borderRadius: '24px',
+                  ),
                 // Duration badge
                 Positioned(
                   top: AppSpacing.sm,
@@ -1259,6 +1217,8 @@ class _VideoIntroScreenState extends ConsumerState<VideoIntroScreen>
                 ),
               ],
             ),
+          );
+            },
           ).animate().fadeIn(duration: 400.ms).scale(
                 begin: const Offset(0.95, 0.95),
                 end: const Offset(1, 1),

@@ -23,6 +23,18 @@ const String kAppDescription = 'Plataforma de empleo impulsada por IA';
 /// Paquete de la app en Android / bundle ID en iOS.
 const String kPackageName = 'com.mploya.ai';
 
+/// Modelo de Google Gemini AI utilizado por [GeminiService].
+const String kGeminiModel = 'gemini-1.5-flash';
+
+/// Identificador de merchant para Stripe (Apple Pay / Google Pay).
+const String kStripeMerchantIdentifier = 'merchant.com.mploya';
+
+/// Timeout en segundos para obtener la ubicación GPS.
+const int kLocationTimeoutSeconds = 10;
+
+/// Delay en milisegundos para esperar chunks pendientes al detener la grabación web.
+const int kCameraWebRecordingDelayMs = 200;
+
 // ─────────────────────────────────────────────
 // Tablas de Supabase
 // ─────────────────────────────────────────────
@@ -33,6 +45,7 @@ const String kPackageName = 'com.mploya.ai';
 /// en las consultas a la base de datos.
 abstract final class SupabaseTables {
   static const String users = 'users';
+  static const String profiles = 'profiles';
   static const String jobs = 'jobs';
   static const String applications = 'applications';
   static const String messages = 'messages';
@@ -40,6 +53,10 @@ abstract final class SupabaseTables {
   static const String notifications = 'notifications';
   static const String savedJobs = 'saved_jobs';
   static const String companies = 'companies';
+  static const String videos = 'videos';
+  static const String matches = 'matches';
+  static const String connections = 'connections';
+  static const String videoLikes = 'video_likes';
 }
 
 /// Nombres de los buckets de almacenamiento en Supabase Storage.
@@ -48,6 +65,9 @@ abstract final class SupabaseBuckets {
   static const String resumes = 'resumes';
   static const String companyLogos = 'company_logos';
   static const String chatAttachments = 'chat_attachments';
+  static const String videos = 'videos';
+  static const String thumbnails = 'thumbnails';
+  static const String stories = 'stories';
 }
 
 // ─────────────────────────────────────────────
@@ -135,8 +155,14 @@ abstract final class Validators {
   /// Tamaño máximo de imagen de avatar (2 MB).
   static const int maxAvatarFileSizeBytes = 2 * 1024 * 1024;
 
+  /// Tamaño máximo de archivo para uploads de Storage (50 MB).
+  static const int maxStorageFileSizeBytes = 50 * 1024 * 1024;
+
   /// Extensiones permitidas para CV.
   static const List<String> allowedResumeExtensions = ['pdf', 'doc', 'docx'];
+
+  /// Extensiones permitidas para uploads de Storage (imágenes y videos).
+  static const List<String> allowedStorageExtensions = ['jpg', 'png', 'mp4', 'webm'];
 }
 
 // ─────────────────────────────────────────────

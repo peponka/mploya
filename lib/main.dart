@@ -8,12 +8,21 @@
 /// - Orientación y estilos del sistema
 library;
 
+import 'dart:ui';
+
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:mploya/app.dart';
+import 'package:mploya/firebase_options.dart';
+import 'package:mploya/core/services/notification_service.dart';
+import 'package:mploya/core/services/stripe_service.dart';
 import 'package:mploya/core/services/supabase_service.dart';
 
 Future<void> main() async {
@@ -28,27 +37,39 @@ Future<void> main() async {
 
   // ── Firebase ──
   // Envuelto en try-catch para permitir desarrollo sin Firebase configurado.
+  // Nota: firebase_options.dart se genera con `flutterfire configure`.
   try {
-    // TODO: Descomentar cuando se configure Firebase.
-    // await Firebase.initializeApp(
-    //   options: DefaultFirebaseOptions.currentPlatform,
-    // );
-    //
-    // // Configurar Crashlytics solo en release.
-    // if (kReleaseMode) {
-    //   FlutterError.onError =
-    //       FirebaseCrashlytics.instance.recordFlutterFatalError;
-    //   PlatformDispatcher.instance.onError = (error, stack) {
-    //     FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
-    //     return true;
-    //   };
-    // }
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+
+    // Configurar Crashlytics solo en release.
+    if (kReleaseMode) {
+      FlutterError.onError =
+          FirebaseCrashlytics.instance.recordFlutterFatalError;
+      PlatformDispatcher.instance.onError = (error, stack) {
+        FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+        return true;
+      };
+    }
+
+    // Registrar handler de notificaciones en background.
+    FirebaseMessaging.onBackgroundMessage(
+      firebaseMessagingBackgroundHandler,
+    );
+
+    // Inicializar servicio de notificaciones push.
+    await NotificationService.instance.initialize();
 
     debugPrint('✅ Firebase inicializado correctamente.');
   } catch (e) {
     debugPrint('⚠️ Firebase no pudo inicializarse: $e');
     debugPrint('   La app continuará sin Firebase.');
   }
+
+  // ── Stripe ──
+  // Inicializar servicio de pagos (falla silenciosamente si no hay clave).
+  await StripeService.instance.initialize();
 
   // ── Orientación ──
   await SystemChrome.setPreferredOrientations([
@@ -95,7 +116,10 @@ Future<void> main() async {
   };
 
   // Captura errores de Flutter sin crashear.
+  // Chain with the previous handler (e.g. Crashlytics) instead of overwriting.
+  final previousErrorHandler = FlutterError.onError;
   FlutterError.onError = (FlutterErrorDetails details) {
+    previousErrorHandler?.call(details);
     debugPrint('⚠️ FlutterError: ${details.exception}');
     debugPrint('   ${details.stack}');
   };

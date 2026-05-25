@@ -790,20 +790,23 @@ class _CompanyProfileScreenState extends ConsumerState<CompanyProfileScreen> {
           const SizedBox(height: AppSpacing.md),
 
           // Dark video card
-          Container(
-            width: double.infinity,
-            height: 200,
-            decoration: BoxDecoration(
-              color: const Color(0xFF1A1A2E),
-              borderRadius: BorderRadius.circular(AppRadius.lg),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFF1A1A2E).withValues(alpha: 0.3),
-                  blurRadius: 16,
-                  offset: const Offset(0, 6),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final cardHeight = MediaQuery.of(context).size.width * 0.5;
+              return Container(
+                width: double.infinity,
+                height: cardHeight,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1A1A2E),
+                  borderRadius: BorderRadius.circular(AppRadius.lg),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF1A1A2E).withValues(alpha: 0.3),
+                      blurRadius: 16,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
                 ),
-              ],
-            ),
             child: Stack(
               children: [
                 // Center play button
@@ -906,6 +909,8 @@ class _CompanyProfileScreenState extends ConsumerState<CompanyProfileScreen> {
                 ),
               ],
             ),
+          );
+            },
           ),
         ],
       ),

@@ -191,7 +191,7 @@ class _HashtagDetailScreenState extends ConsumerState<HashtagDetailScreen>
                   children: [
                     IconButton(
                       icon: const Icon(Icons.arrow_back_ios, size: 20),
-                      onPressed: () => Navigator.of(context).pop(),
+                      onPressed: () => context.pop(),
                       color: MployaColors.textPrimary,
                     ),
                     const Spacer(),

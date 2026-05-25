@@ -2,96 +2,17 @@
 ///
 /// Gestiona la lista de videos tipo TikTok, acciones de feed
 /// (like, save, apply) y las stories del usuario.
+/// Conectado al backend real via [VideoService].
 library;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:mploya/core/models/video_model.dart';
+import 'package:mploya/core/services/video_service.dart';
 
-// ─── Mock Data ─────────────────────────────────────────────────────
-
-final List<VideoModel> _mockFeedVideos = [
-  VideoModel(
-    id: 'v1',
-    userId: 'u1',
-    url: 'https://example.com/video1.mp4',
-    thumbnailUrl: 'https://picsum.photos/400/700?random=1',
-    duration: 45,
-    type: VideoType.pitch,
-    title: 'Mi pitch como Analista Financiero',
-    description:
-        '5 años de experiencia en análisis financiero, modelos DCF y valuación de empresas.',
-    score: 85,
-    hashtags: ['finanzas', 'analista', 'excel'],
-    viewCount: 1240,
-    likeCount: 89,
-    createdAt: DateTime.now().subtract(const Duration(hours: 2)),
-    userName: 'María García',
-    userAvatarUrl: 'https://i.pravatar.cc/150?img=1',
-    userHeadline: 'Analista Financiero Sr.',
-    matchPercentage: 92,
-  ),
-  VideoModel(
-    id: 'v2',
-    userId: 'u2',
-    url: 'https://example.com/video2.mp4',
-    thumbnailUrl: 'https://picsum.photos/400/700?random=2',
-    duration: 58,
-    type: VideoType.pitch,
-    title: 'Flutter Developer con pasión por UX',
-    description:
-        'Desarrollo apps móviles con Flutter y Dart. +20 apps publicadas.',
-    score: 78,
-    hashtags: ['flutter', 'mobile', 'dart'],
-    viewCount: 2300,
-    likeCount: 156,
-    createdAt: DateTime.now().subtract(const Duration(hours: 5)),
-    userName: 'Carlos Mendoza',
-    userAvatarUrl: 'https://i.pravatar.cc/150?img=3',
-    userHeadline: 'Mobile Developer',
-    matchPercentage: 87,
-  ),
-  VideoModel(
-    id: 'v3',
-    userId: 'u3',
-    url: 'https://example.com/video3.mp4',
-    thumbnailUrl: 'https://picsum.photos/400/700?random=3',
-    duration: 40,
-    type: VideoType.pitch,
-    title: 'Product Manager con visión estratégica',
-    description:
-        'Lideré el lanzamiento de 3 productos fintech en LATAM. MBA + experiencia startup.',
-    score: 91,
-    hashtags: ['fintech', 'product', 'lider'],
-    viewCount: 890,
-    likeCount: 67,
-    createdAt: DateTime.now().subtract(const Duration(days: 1)),
-    userName: 'Ana Rodríguez',
-    userAvatarUrl: 'https://i.pravatar.cc/150?img=5',
-    userHeadline: 'Product Manager',
-    matchPercentage: 95,
-  ),
-  VideoModel(
-    id: 'v4',
-    userId: 'u4',
-    url: 'https://example.com/video4.mp4',
-    thumbnailUrl: 'https://picsum.photos/400/700?random=4',
-    duration: 55,
-    type: VideoType.pitch,
-    title: 'Ingeniero de datos & IA',
-    description:
-        'Pipelines de datos, ML models en producción, Python/Spark/AWS.',
-    score: 88,
-    hashtags: ['ia', 'data', 'python'],
-    viewCount: 3100,
-    likeCount: 234,
-    createdAt: DateTime.now().subtract(const Duration(days: 2)),
-    userName: 'Diego Fernández',
-    userAvatarUrl: 'https://i.pravatar.cc/150?img=8',
-    userHeadline: 'Data Engineer',
-    matchPercentage: 81,
-  ),
-];
+// ─── Mock Stories (efímeras, no se persisten) ──────────────────────
 
 final List<VideoModel> _mockStories = [
   VideoModel(
@@ -147,14 +68,50 @@ class FeedVideosNotifier extends StateNotifier<AsyncValue<List<VideoModel>>> {
     loadFeed();
   }
 
+  final VideoService _videoService = VideoService.instance;
+  int _currentOffset = 0;
+  static const _pageSize = 20;
+
+  /// Carga el feed de videos desde Supabase.
+  ///
+  /// Obtiene videos tipo pitch paginados con datos de perfil
+  /// del creador resueltos via join.
   Future<void> loadFeed() async {
     state = const AsyncValue.loading();
     try {
-      // Simulate network delay
-      await Future.delayed(const Duration(milliseconds: 800));
-      state = AsyncValue.data(List.from(_mockFeedVideos));
+      _currentOffset = 0;
+      final currentUserId = Supabase.instance.client.auth.currentUser?.id;
+      final videos = await _videoService.getFeedVideos(
+        limit: _pageSize,
+        offset: 0,
+        currentUserId: currentUserId,
+      );
+      state = AsyncValue.data(videos);
     } catch (e, st) {
       state = AsyncValue.error(e, st);
+    }
+  }
+
+  /// Carga más videos (paginación infinita).
+  Future<void> loadMore() async {
+    final currentVideos = state.valueOrNull ?? [];
+    try {
+      final nextOffset = _currentOffset + _pageSize;
+      final currentUserId = Supabase.instance.client.auth.currentUser?.id;
+      final moreVideos = await _videoService.getFeedVideos(
+        limit: _pageSize,
+        offset: nextOffset,
+        currentUserId: currentUserId,
+      );
+      if (moreVideos.isNotEmpty) {
+        _currentOffset = nextOffset;
+        state = AsyncValue.data([...currentVideos, ...moreVideos]);
+      }
+    } catch (e, st) {
+      // No perder los videos actuales si falla la paginación.
+      // Offset stays unchanged so the next retry fetches the same page.
+      state = AsyncValue.data(currentVideos);
+      debugPrint('Error cargando más videos: $e\n$st');
     }
   }
 
@@ -172,8 +129,17 @@ class FeedActionsNotifier extends StateNotifier<Map<String, dynamic>> {
   FeedActionsNotifier(this.ref) : super({});
 
   final Ref ref;
+  final VideoService _videoService = VideoService.instance;
 
+  /// Da o quita like a un video en Supabase.
+  ///
+  /// Actualiza el estado local de forma optimista y luego
+  /// sincroniza con el backend.
   Future<void> likeVideo(String videoId) async {
+    final currentUserId = Supabase.instance.client.auth.currentUser?.id;
+    if (currentUserId == null) return;
+
+    // Actualización optimista del UI
     final videos = ref.read(feedVideosProvider).valueOrNull ?? [];
     final updated = videos.map((v) {
       if (v.id == videoId) {
@@ -185,6 +151,20 @@ class FeedActionsNotifier extends StateNotifier<Map<String, dynamic>> {
       return v;
     }).toList();
     ref.read(feedVideosProvider.notifier).state = AsyncValue.data(updated);
+
+    // Sincronizar con el backend
+    try {
+      final video = videos.firstWhere((v) => v.id == videoId);
+      if (video.isLiked) {
+        await _videoService.unlikeVideo(videoId, currentUserId);
+      } else {
+        await _videoService.likeVideo(videoId, currentUserId);
+      }
+    } catch (e) {
+      // Revertir si falla la operación en el backend
+      ref.read(feedVideosProvider.notifier).state = AsyncValue.data(videos);
+      debugPrint('Error sincronizando like: $e');
+    }
   }
 
   Future<void> saveVideo(String videoId) async {
@@ -196,11 +176,49 @@ class FeedActionsNotifier extends StateNotifier<Map<String, dynamic>> {
       return v;
     }).toList();
     ref.read(feedVideosProvider.notifier).state = AsyncValue.data(updated);
+
+    // TODO: Persist saved state to backend via VideoService
+    // (e.g. _videoService.saveVideo / unsaveVideo).
+    try {
+      final video = videos.firstWhere((v) => v.id == videoId);
+      if (video.isSaved) {
+        // Was saved, now unsaving — call backend unsave when available.
+        debugPrint('📌 Video $videoId unsaved (local only, persist pending).');
+      } else {
+        // Was not saved, now saving — call backend save when available.
+        debugPrint('📌 Video $videoId saved (local only, persist pending).');
+      }
+    } catch (e) {
+      // Revert on failure
+      ref.read(feedVideosProvider.notifier).state = AsyncValue.data(videos);
+      debugPrint('Error persisting save state for video $videoId: $e');
+    }
   }
 
   Future<void> applyToVideo(String videoId) async {
-    // In production, this would create a match request
-    state = {...state, 'applied_$videoId': true};
+    try {
+      // Mark as applied locally (optimistic update)
+      state = {...state, 'applied_$videoId': true};
+      debugPrint('📋 Applied to video $videoId (local state updated).');
+
+      // TODO: Persist application to backend via MatchService
+      // await _matchService.applyToVideo(videoId, currentUserId);
+    } catch (e) {
+      // Revert on failure
+      final reverted = Map<String, dynamic>.from(state);
+      reverted.remove('applied_$videoId');
+      state = reverted;
+      debugPrint('Error applying to video $videoId: $e');
+    }
+  }
+
+  /// Registra una vista para un video.
+  Future<void> viewVideo(String videoId) async {
+    try {
+      await _videoService.incrementViewCount(videoId);
+    } catch (e) {
+      debugPrint('Error registering view for video $videoId: $e');
+    }
   }
 }
 
@@ -210,6 +228,8 @@ final feedActionsProvider =
 );
 
 // ─── Stories Provider ──────────────────────────────────────────────
+// Las stories son efímeras y no se persisten en Supabase por ahora.
+// Se mantienen como mock data.
 
 class StoriesNotifier extends StateNotifier<AsyncValue<List<VideoModel>>> {
   StoriesNotifier() : super(const AsyncValue.loading()) {
@@ -219,7 +239,7 @@ class StoriesNotifier extends StateNotifier<AsyncValue<List<VideoModel>>> {
   Future<void> loadStories() async {
     state = const AsyncValue.loading();
     try {
-      await Future.delayed(const Duration(milliseconds: 500));
+      // Load stories immediately from cached mock data (no artificial delay).
       state = AsyncValue.data(List.from(_mockStories));
     } catch (e, st) {
       state = AsyncValue.error(e, st);
@@ -254,3 +274,6 @@ final userStealthNameProvider = StateProvider<String>((ref) => '');
 
 /// Empresa referencia del formulario confidencial.
 final userCompanyProvider = StateProvider<String>((ref) => '');
+
+/// Path del video de historia publicada (null = sin historia).
+final storyPublishedProvider = StateProvider<String?>((ref) => null);

@@ -8,29 +8,37 @@ library;
 
 enum SkillLevel {
   beginner('beginner'),
-  medio('medio'),
-  avanzado('avanzado');
+  intermediate('intermediate'),
+  advanced('advanced'),
+  expert('expert');
 
   const SkillLevel(this.value);
   final String value;
 
   static SkillLevel fromString(String? value) {
-    return SkillLevel.values.firstWhere(
-      (e) => e.value == value,
-      orElse: () => SkillLevel.beginner,
-    );
-  }
-
-  String get displayName {
-    switch (this) {
-      case SkillLevel.beginner:
-        return 'Principiante';
-      case SkillLevel.medio:
-        return 'Medio';
-      case SkillLevel.avanzado:
-        return 'Avanzado';
+    // Support legacy values ('medio', 'avanzado') from existing data.
+    switch (value) {
+      case 'medio':
+        return SkillLevel.intermediate;
+      case 'avanzado':
+        return SkillLevel.advanced;
+      default:
+        return SkillLevel.values.firstWhere(
+          (e) => e.value == value,
+          orElse: () => SkillLevel.beginner,
+        );
     }
   }
+
+  String get label => switch (this) {
+        beginner => 'Principiante',
+        intermediate => 'Intermedio',
+        advanced => 'Avanzado',
+        expert => 'Experto',
+      };
+
+  /// Alias kept for backward compatibility.
+  String get displayName => label;
 }
 
 enum BadgeType {
@@ -96,12 +104,12 @@ class SkillModel {
 
   factory SkillModel.fromJson(Map<String, dynamic> json) {
     return SkillModel(
-      id: json['id'] as String,
-      name: json['name'] as String,
-      description: json['description'] as String?,
-      category: json['category'] as String?,
-      level: SkillLevel.fromString(json['level'] as String?),
-      badgeType: BadgeType.fromString(json['badge_type'] as String?),
+      id: json['id']?.toString() ?? '',
+      name: json['name']?.toString() ?? '',
+      description: json['description']?.toString(),
+      category: json['category']?.toString(),
+      level: SkillLevel.fromString(json['level']?.toString()),
+      badgeType: BadgeType.fromString(json['badge_type']?.toString()),
       isVerified: json['is_verified'] as bool? ?? false,
     );
   }
@@ -137,4 +145,17 @@ class SkillModel {
       isVerified: isVerified ?? this.isVerified,
     );
   }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is SkillModel &&
+          runtimeType == other.runtimeType &&
+          id == other.id;
+
+  @override
+  int get hashCode => id.hashCode;
+
+  @override
+  String toString() => 'SkillModel(id: $id, name: $name)';
 }

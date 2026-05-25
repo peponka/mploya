@@ -82,7 +82,7 @@ class _BoostScreenState extends State<BoostScreen> {
         backgroundColor: MployaColors.white,
         elevation: 0,
         leading: GestureDetector(
-          onTap: () => Navigator.of(context).pop(),
+          onTap: () => context.pop(),
           child: Padding(
             padding: const EdgeInsets.only(left: AppSpacing.sm),
             child: Row(

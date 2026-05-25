@@ -5,16 +5,18 @@
 library;
 
 import 'dart:async';
-// ignore: avoid_web_libraries_in_flutter
-import 'dart:html' as html;
-import 'dart:ui_web' as ui_web;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:image_picker/image_picker.dart';
 
 import 'package:mploya/config/theme.dart';
+import 'package:mploya/features/feed/providers/feed_provider.dart';
+import 'package:mploya/core/services/camera/camera_service.dart';
+import 'package:mploya/core/widgets/platform_video_player.dart';
 
 // ─── Screen ────────────────────────────────────────────────────────
 
@@ -31,14 +33,12 @@ class _NewStoryScreenState extends ConsumerState<NewStoryScreen> {
   static const _maxDuration = 30;
   bool _flashOn = false;
   Timer? _timer;
+  double _publishProgress = 0.0;
 
   // ─── Camera ──────────────────────────────────────────────────
   bool _cameraReady = false;
   bool _permissionDenied = false;
-  html.MediaStream? _mediaStream;
-  html.VideoElement? _videoElement;
-  html.MediaRecorder? _mediaRecorder;
-  final List<html.Blob> _recordedChunks = [];
+  late final CameraService _cameraService;
   String? _recordedBlobUrl;
 
   final String _cameraViewId =
@@ -48,6 +48,7 @@ class _NewStoryScreenState extends ConsumerState<NewStoryScreen> {
   @override
   void initState() {
     super.initState();
+    _cameraService = CameraService();
     _initCamera();
   }
 
@@ -59,98 +60,29 @@ class _NewStoryScreenState extends ConsumerState<NewStoryScreen> {
   }
 
   Future<void> _initCamera() async {
-    try {
-      final stream = await html.window.navigator.mediaDevices!.getUserMedia({
-        'video': {
-          'facingMode': 'user',
-          'width': {'ideal': 720},
-          'height': {'ideal': 1280},
-        },
-        'audio': true,
-      });
+    await _cameraService.initialize();
 
-      _mediaStream = stream;
-
-      _videoElement = html.VideoElement()
-        ..srcObject = stream
-        ..autoplay = true
-        ..muted = true
-        ..setAttribute('playsinline', 'true')
-        ..style.width = '100%'
-        ..style.height = '100%'
-        ..style.objectFit = 'cover'
-        ..style.transform = 'scaleX(-1)'
-        ..style.background = '#000';
-
-      // ignore: undefined_prefixed_name
-      ui_web.platformViewRegistry.registerViewFactory(
-        _cameraViewId,
-        (int viewId) => _videoElement!,
-      );
-
-      if (mounted) {
+    if (mounted) {
+      if (_cameraService.isReady) {
         setState(() => _cameraReady = true);
-      }
-    } catch (e) {
-      if (mounted) {
+      } else {
         setState(() => _permissionDenied = true);
       }
     }
   }
 
   void _stopCamera() {
-    _mediaStream?.getTracks().forEach((track) => track.stop());
-    _mediaStream = null;
+    _cameraService.dispose();
   }
 
   // ─── Recording ───────────────────────────────────────────────
 
-  void _startRecording() {
-    if (_mediaStream == null) return;
+  void _startRecording() async {
+    if (!_cameraService.isReady) return;
 
-    _recordedChunks.clear();
     _recordedBlobUrl = null;
 
-    _mediaRecorder = html.MediaRecorder(_mediaStream!, {
-      'mimeType': 'video/webm;codecs=vp9,opus',
-    });
-
-    _mediaRecorder!.addEventListener('dataavailable', (event) {
-      final blobEvent = event as html.BlobEvent;
-      if (blobEvent.data != null && blobEvent.data!.size > 0) {
-        _recordedChunks.add(blobEvent.data!);
-      }
-    });
-
-    _mediaRecorder!.addEventListener('stop', (_) {
-      final blob = html.Blob(_recordedChunks, 'video/webm');
-      _recordedBlobUrl = html.Url.createObjectUrlFromBlob(blob);
-
-      // Create playback view
-      _playbackViewId =
-          'mploya-story-play-${DateTime.now().millisecondsSinceEpoch}';
-      final playbackVideo = html.VideoElement()
-        ..src = _recordedBlobUrl!
-        ..autoplay = true
-        ..loop = true
-        ..muted = false
-        ..setAttribute('playsinline', 'true')
-        ..style.width = '100%'
-        ..style.height = '100%'
-        ..style.objectFit = 'cover'
-        ..style.transform = 'scaleX(-1)'
-        ..style.background = '#000';
-
-      // ignore: undefined_prefixed_name
-      ui_web.platformViewRegistry.registerViewFactory(
-        _playbackViewId!,
-        (int viewId) => playbackVideo,
-      );
-
-      if (mounted) setState(() {});
-    });
-
-    _mediaRecorder!.start(100);
+    await _cameraService.startRecording();
 
     setState(() {
       _state = _StoryRecordingState.recording;
@@ -169,16 +101,24 @@ class _NewStoryScreenState extends ConsumerState<NewStoryScreen> {
     });
   }
 
-  void _stopRecording() {
+  void _stopRecording() async {
     _timer?.cancel();
-    _mediaRecorder?.stop();
-    setState(() => _state = _StoryRecordingState.preview);
+    final blobUrl = await _cameraService.stopRecording();
+    _recordedBlobUrl = blobUrl;
+
+    if (_recordedBlobUrl != null) {
+      _playbackViewId =
+          'mploya-story-play-${DateTime.now().millisecondsSinceEpoch}';
+    }
+
+    if (mounted) {
+      setState(() => _state = _StoryRecordingState.preview);
+    }
   }
 
   void _retake() {
     _recordedBlobUrl = null;
     _playbackViewId = null;
-    _recordedChunks.clear();
     setState(() {
       _state = _StoryRecordingState.idle;
       _elapsedSeconds = 0;
@@ -186,17 +126,65 @@ class _NewStoryScreenState extends ConsumerState<NewStoryScreen> {
   }
 
   Future<void> _publish() async {
-    setState(() => _state = _StoryRecordingState.publishing);
-    await Future.delayed(const Duration(seconds: 2));
-    if (mounted) {
-      Navigator.of(context).pop();
+    setState(() {
+      _state = _StoryRecordingState.publishing;
+      _publishProgress = 0.0;
+    });
+
+    // Simulate upload progress in steps
+    const totalSteps = 20;
+    for (int i = 1; i <= totalSteps; i++) {
+      await Future.delayed(const Duration(milliseconds: 120));
+      if (!mounted) return;
+      setState(() => _publishProgress = i / totalSteps);
     }
+
+    // Small pause at 100%
+    await Future.delayed(const Duration(milliseconds: 300));
+    if (!mounted) return;
+
+    // Save story path so profile can play it
+    if (_recordedBlobUrl != null) {
+      ref.read(storyPublishedProvider.notifier).state = _recordedBlobUrl;
+    }
+
+    // Show success snackbar
+    ScaffoldMessenger.of(context).clearSnackBars();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.check_circle_rounded,
+                color: Colors.white, size: 20),
+            const SizedBox(width: 8),
+            Text(
+              '¡Historia publicada con éxito! 🎉',
+              style: GoogleFonts.inter(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: const Color(0xFF10B981),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+
+    context.pop();
   }
 
   String get _timerText {
-    final mins = _elapsedSeconds ~/ 60;
-    final secs = _elapsedSeconds % 60;
-    return '$mins:${secs.toString().padLeft(2, '0')} / 0:$_maxDuration';
+    final elapsedMins = _elapsedSeconds ~/ 60;
+    final elapsedSecs = _elapsedSeconds % 60;
+    final maxMins = _maxDuration ~/ 60;
+    final maxSecs = _maxDuration % 60;
+    final elapsed = '${elapsedMins.toString().padLeft(2, '0')}:${elapsedSecs.toString().padLeft(2, '0')}';
+    final total = '${maxMins.toString().padLeft(2, '0')}:${maxSecs.toString().padLeft(2, '0')}';
+    return '$elapsed / $total';
   }
 
   @override
@@ -209,10 +197,15 @@ class _NewStoryScreenState extends ConsumerState<NewStoryScreen> {
           children: [
             // ─── Camera preview / Playback / Placeholder ─────────
             if (_state == _StoryRecordingState.preview &&
-                _playbackViewId != null)
-              HtmlElementView(viewType: _playbackViewId!)
+                _playbackViewId != null &&
+                _recordedBlobUrl != null)
+              PlatformVideoPlayer(
+                viewId: _playbackViewId!,
+                url: _recordedBlobUrl!,
+                mirror: true,
+              )
             else if (_cameraReady)
-              HtmlElementView(viewType: _cameraViewId)
+              _cameraService.buildPreview(_cameraViewId)
             else if (_permissionDenied)
               _buildPermissionDenied()
             else
@@ -286,7 +279,7 @@ class _NewStoryScreenState extends ConsumerState<NewStoryScreen> {
                     GestureDetector(
                       onTap: () {
                         _stopCamera();
-                        Navigator.of(context).pop();
+                        context.pop();
                       },
                       child: Container(
                         width: 36,
@@ -315,7 +308,10 @@ class _NewStoryScreenState extends ConsumerState<NewStoryScreen> {
                     const Spacer(),
                     // Flash toggle
                     GestureDetector(
-                      onTap: () => setState(() => _flashOn = !_flashOn),
+                      onTap: () {
+                        setState(() => _flashOn = !_flashOn);
+                        _cameraService.setFlashMode(_flashOn);
+                      },
                       child: Container(
                         width: 36,
                         height: 36,
@@ -412,32 +408,111 @@ class _NewStoryScreenState extends ConsumerState<NewStoryScreen> {
 
             // ─── Publishing State ────────────────────────────────
             if (_state == _StoryRecordingState.publishing)
-              Center(
+              Positioned.fill(
                 child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 32,
-                    vertical: 24,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.7),
-                    borderRadius: BorderRadius.circular(AppRadius.xl),
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const CircularProgressIndicator(
-                        color: MployaColors.orange,
+                  color: Colors.black.withValues(alpha: 0.75),
+                  child: Center(
+                    child: Container(
+                      width: 280,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 32,
+                        vertical: 28,
                       ),
-                      const SizedBox(height: AppSpacing.md),
-                      Text(
-                        'Publicando historia...',
-                        style: GoogleFonts.inter(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1A1A2E),
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(
+                          color: MployaColors.orange.withValues(alpha: 0.3),
                         ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: MployaColors.orange.withValues(alpha: 0.15),
+                            blurRadius: 30,
+                            spreadRadius: 5,
+                          ),
+                        ],
                       ),
-                    ],
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // Upload icon with pulse
+                          Container(
+                            width: 56,
+                            height: 56,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: MployaColors.orange.withValues(alpha: 0.15),
+                            ),
+                            child: Icon(
+                              _publishProgress >= 1.0
+                                  ? Icons.check_rounded
+                                  : Icons.cloud_upload_rounded,
+                              color: MployaColors.orange,
+                              size: 28,
+                            ),
+                          )
+                              .animate(
+                                onPlay: (c) => c.repeat(reverse: true),
+                              )
+                              .scaleXY(
+                                begin: 1.0,
+                                end: 1.1,
+                                duration: 800.ms,
+                              ),
+                          const SizedBox(height: 20),
+                          // Stage label
+                          Text(
+                            _publishProgress < 0.3
+                                ? 'Preparando...'
+                                : _publishProgress < 0.8
+                                    ? 'Subiendo historia...'
+                                    : _publishProgress < 1.0
+                                        ? 'Casi listo...'
+                                        : '¡Listo!',
+                            style: GoogleFonts.outfit(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Publicando tu historia...',
+                            style: GoogleFonts.inter(
+                              fontSize: 13,
+                              color: Colors.white.withValues(alpha: 0.5),
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+                          // Progress bar
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(6),
+                            child: SizedBox(
+                              height: 8,
+                              child: LinearProgressIndicator(
+                                value: _publishProgress,
+                                backgroundColor:
+                                    Colors.white.withValues(alpha: 0.1),
+                                valueColor:
+                                    const AlwaysStoppedAnimation<Color>(
+                                  MployaColors.orange,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          // Percentage
+                          Text(
+                            '${(_publishProgress * 100).toInt()}%',
+                            style: GoogleFonts.inter(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: MployaColors.orange,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -551,8 +626,13 @@ class _NewStoryScreenState extends ConsumerState<NewStoryScreen> {
           children: [
             // Gallery picker
             GestureDetector(
-              onTap: () {
-                // Open gallery
+              onTap: () async {
+                final picker = ImagePicker();
+                final video = await picker.pickVideo(source: ImageSource.gallery);
+                if (video != null && mounted) {
+                  ref.read(storyPublishedProvider.notifier).state = video.path;
+                  context.pop();
+                }
               },
               child: Container(
                 width: 44,

@@ -29,6 +29,26 @@ class LandingScreen extends StatelessWidget {
   }
 
   void _onSocialLogin(BuildContext context, String provider) {
+    if (provider == 'apple') {
+      ScaffoldMessenger.of(context).clearSnackBars();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.info_outline, color: Colors.white),
+              const SizedBox(width: 8),
+              const Text('Próximamente disponible'),
+            ],
+          ),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: const Color(0xFF6366F1),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      );
+      return;
+    }
     // ── MODO DEMO: Ir directo al home ──
     context.go('/home');
   }

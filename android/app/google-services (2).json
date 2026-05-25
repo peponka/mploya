@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "350113222219",
+    "project_id": "mploya-app",
+    "storage_bucket": "mploya-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:350113222219:android:7b916486c52647454507ce",
+        "android_client_info": {
+          "package_name": "com.mploya.mploya"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBGK_jWEZcxpIxh8bECSa_XEmidNrpyEN0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

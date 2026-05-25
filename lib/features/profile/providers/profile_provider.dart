@@ -2,12 +2,16 @@
 ///
 /// Gestiona datos del perfil, tabs activos, estadísticas,
 /// items de portfolio, hashtags y porcentaje de completitud.
+/// Conectado al backend real via [VideoService] y [MatchService].
 library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:mploya/core/models/video_model.dart';
 import 'package:mploya/core/models/hashtag_model.dart';
+import 'package:mploya/core/services/video_service.dart';
+import 'package:mploya/core/services/match_service.dart';
+import 'package:mploya/features/auth/providers/auth_provider.dart';
 
 // ─── Profile Tab ───────────────────────────────────────────────────
 
@@ -46,100 +50,94 @@ class ProfileStats {
   final int matches;
 }
 
-final profileStatsProvider = Provider<ProfileStats>((ref) {
-  return const ProfileStats(
-    conexiones: 24,
-    vistas: 156,
-    matches: 12,
+/// Estadísticas reales del perfil, consultadas desde Supabase.
+///
+/// Lee conexiones desde `connections`, vistas totales de videos
+/// y cantidad de matches desde las tablas correspondientes.
+final profileStatsProvider = FutureProvider<ProfileStats>((ref) async {
+  final profile = ref.watch(currentProfileProvider);
+  if (profile == null) {
+    return const ProfileStats();
+  }
+
+  final userId = profile.id;
+  final videoService = VideoService.instance;
+  final matchService = MatchService.instance;
+
+  // Consultas paralelas para mejor rendimiento
+  final results = await Future.wait([
+    matchService.getConnectionCount(userId),
+    videoService.getTotalViewsByUser(userId),
+    matchService.getMatchCount(userId),
+  ]);
+
+  return ProfileStats(
+    conexiones: results[0],
+    vistas: results[1],
+    matches: results[2],
   );
 });
 
 // ─── Portfolio Items Provider ──────────────────────────────────────
 
-final List<VideoModel> _mockPortfolioItems = [
-  VideoModel(
-    id: 'p1',
-    userId: 'current_user',
-    url: 'https://example.com/portfolio1.mp4',
-    thumbnailUrl: 'https://picsum.photos/300/300?random=10',
-    duration: 28,
-    type: VideoType.portfolio,
-    title: 'Proyecto de Dashboard Financiero',
-    description:
-        'Dashboard interactivo con KPIs financieros en Power BI. Incluye modelos predictivos de flujo de caja.',
-    score: 82,
-    hashtags: ['powerbi', 'finanzas', 'dashboard'],
-    viewCount: 340,
-    likeCount: 28,
-    createdAt: DateTime.now().subtract(const Duration(days: 5)),
-  ),
-  VideoModel(
-    id: 'p2',
-    userId: 'current_user',
-    url: 'https://example.com/portfolio2.mp4',
-    thumbnailUrl: 'https://picsum.photos/300/300?random=11',
-    duration: 30,
-    type: VideoType.portfolio,
-    title: 'Modelo de Valuación DCF',
-    description:
-        'Modelo de valuación de empresas con flujos descontados en Excel avanzado.',
-    score: 90,
-    hashtags: ['excel', 'valuación', 'dcf'],
-    viewCount: 520,
-    likeCount: 45,
-    createdAt: DateTime.now().subtract(const Duration(days: 12)),
-  ),
-  VideoModel(
-    id: 'p3',
-    userId: 'current_user',
-    url: 'https://example.com/portfolio3.mp4',
-    thumbnailUrl: 'https://picsum.photos/300/300?random=12',
-    duration: 25,
-    type: VideoType.portfolio,
-    title: 'Análisis de Mercado LATAM',
-    description:
-        'Estudio de mercado fintech en Latinoamérica con proyecciones 2024-2026.',
-    score: 75,
-    hashtags: ['fintech', 'latam', 'mercado'],
-    viewCount: 210,
-    likeCount: 18,
-    createdAt: DateTime.now().subtract(const Duration(days: 20)),
-  ),
-];
-
 class PortfolioItemsNotifier
     extends StateNotifier<AsyncValue<List<VideoModel>>> {
-  PortfolioItemsNotifier() : super(const AsyncValue.loading()) {
+  PortfolioItemsNotifier(this._userId) : super(const AsyncValue.loading()) {
     loadPortfolio();
   }
 
+  final String? _userId;
+  final VideoService _videoService = VideoService.instance;
+
+  /// Carga los videos de portfolio del usuario desde Supabase.
   Future<void> loadPortfolio() async {
     state = const AsyncValue.loading();
     try {
-      await Future.delayed(const Duration(milliseconds: 500));
-      state = AsyncValue.data(List.from(_mockPortfolioItems));
+      if (_userId == null) {
+        state = const AsyncValue.data([]);
+        return;
+      }
+
+      final videos = await _videoService.getVideosByUser(_userId);
+      state = AsyncValue.data(videos);
     } catch (e, st) {
       state = AsyncValue.error(e, st);
     }
   }
 
+  /// Agrega un item al portfolio (actualización optimista).
   Future<void> addItem(VideoModel item) async {
     final current = state.valueOrNull ?? [];
     state = AsyncValue.data([item, ...current]);
   }
 
+  /// Elimina un item del portfolio.
+  ///
+  /// Elimina el video de Supabase y actualiza el estado local.
   Future<void> removeItem(String itemId) async {
     final current = state.valueOrNull ?? [];
-    state = AsyncValue.data(current.where((v) => v.id != itemId).toList());
+    try {
+      await _videoService.deleteVideo(itemId);
+      state = AsyncValue.data(current.where((v) => v.id != itemId).toList());
+    } catch (e) {
+      // Mantener el estado actual si falla
+      state = AsyncValue.data(current);
+      rethrow;
+    }
   }
 }
 
 final portfolioItemsProvider =
     StateNotifierProvider<PortfolioItemsNotifier, AsyncValue<List<VideoModel>>>(
-  (ref) => PortfolioItemsNotifier(),
+  (ref) {
+    final profile = ref.watch(currentProfileProvider);
+    return PortfolioItemsNotifier(profile?.id);
+  },
 );
 
 // ─── User Hashtags Provider ────────────────────────────────────────
+// Se mantiene como mock por ahora — los hashtags se gestionarán
+// cuando se implemente el sistema de hashtags completo.
 
 final List<HashtagModel> _mockUserHashtags = [
   const HashtagModel(
@@ -192,22 +190,71 @@ class ProfileProgress {
   final List<String> pendingItems;
 }
 
+/// Calcula el porcentaje de completitud del perfil basado
+/// en los datos reales del usuario desde auth provider.
 final profileProgressProvider = Provider<ProfileProgress>((ref) {
-  return const ProfileProgress(
-    percentage: 65,
-    completedItems: [
-      'Foto de perfil',
-      'Información básica',
-      'Ubicación',
-      'Habilidades',
-      'Experiencia',
-    ],
-    pendingItems: [
-      'Video pitch (60s)',
-      'Portfolio (al menos 1 video)',
-      'Skill Assessment',
-      'Educación',
-    ],
+  final profile = ref.watch(currentProfileProvider);
+  if (profile == null) {
+    return const ProfileProgress();
+  }
+
+  final completed = <String>[];
+  final pending = <String>[];
+
+  // Verificar cada campo del perfil
+  if (profile.avatarUrl != null && profile.avatarUrl!.isNotEmpty) {
+    completed.add('Foto de perfil');
+  } else {
+    pending.add('Foto de perfil');
+  }
+
+  if (profile.fullName != null && profile.fullName!.isNotEmpty) {
+    completed.add('Información básica');
+  } else {
+    pending.add('Información básica');
+  }
+
+  if (profile.location != null && profile.location!.isNotEmpty) {
+    completed.add('Ubicación');
+  } else {
+    pending.add('Ubicación');
+  }
+
+  if (profile.skills != null && profile.skills!.isNotEmpty) {
+    completed.add('Habilidades');
+  } else {
+    pending.add('Habilidades');
+  }
+
+  if (profile.experience != null && profile.experience!.isNotEmpty) {
+    completed.add('Experiencia');
+  } else {
+    pending.add('Experiencia');
+  }
+
+  if (profile.education != null && profile.education!.isNotEmpty) {
+    completed.add('Educación');
+  } else {
+    pending.add('Educación');
+  }
+
+  if (profile.bio != null && profile.bio!.isNotEmpty) {
+    completed.add('Biografía');
+  } else {
+    pending.add('Biografía');
+  }
+
+  // Items que requieren videos (siempre pendientes hasta verificar)
+  pending.add('Video pitch (60s)');
+  pending.add('Portfolio (al menos 1 video)');
+
+  final total = completed.length + pending.length;
+  final percentage = total > 0 ? ((completed.length / total) * 100).round() : 0;
+
+  return ProfileProgress(
+    percentage: percentage,
+    completedItems: completed,
+    pendingItems: pending,
   );
 });
 
@@ -236,16 +283,26 @@ class ProfileData {
   final String? aiPersonalityAnalysis;
 }
 
+/// Datos extendidos del perfil leídos desde el auth provider.
+///
+/// Convierte el [UserProfile] del auth provider a [ProfileData]
+/// para la pantalla de perfil.
 final currentProfileDataProvider = Provider<ProfileData>((ref) {
-  return const ProfileData(
-    name: 'Usuario Mploya',
-    headline: 'Profesional en búsqueda activa',
-    avatarUrl: 'https://i.pravatar.cc/150?img=32',
-    bio:
-        'Apasionado por las finanzas y la tecnología. Busco oportunidades en fintech donde pueda combinar mi experiencia en análisis financiero con mi interés por la innovación.',
-    location: 'CDMX, México',
-    isVerified: false,
-    aiPersonalityAnalysis:
-        'Perfil analítico con fuerte orientación a resultados. Demuestra liderazgo situacional y habilidades de comunicación efectiva. Potencial alto para roles de consultoría y análisis estratégico.',
+  final profile = ref.watch(currentProfileProvider);
+
+  if (profile == null) {
+    return const ProfileData(
+      name: 'Usuario Mploya',
+      headline: 'Profesional en búsqueda activa',
+    );
+  }
+
+  return ProfileData(
+    name: profile.displayName,
+    headline: profile.headline ?? 'Profesional en búsqueda activa',
+    avatarUrl: profile.avatarUrl,
+    bio: profile.bio,
+    location: profile.location,
+    isVerified: profile.isVerified,
   );
 });

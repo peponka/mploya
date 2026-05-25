@@ -91,14 +91,14 @@ class MatchModel {
 
   factory MatchModel.fromJson(Map<String, dynamic> json) {
     return MatchModel(
-      id: json['id'] as String,
-      userId: json['user_id'] as String,
-      targetUserId: json['target_user_id'] as String,
-      status: MatchStatus.fromString(json['status'] as String?),
-      type: MatchType.fromString(json['type'] as String?),
-      matchPercentage: json['match_percentage'] as int? ?? 0,
+      id: json['id']?.toString() ?? '',
+      userId: json['user_id']?.toString() ?? '',
+      targetUserId: json['target_user_id']?.toString() ?? '',
+      status: MatchStatus.fromString(json['status']?.toString()),
+      type: MatchType.fromString(json['type']?.toString()),
+      matchPercentage: (json['match_percentage'] as num?)?.toInt() ?? 0,
       createdAt: json['created_at'] != null
-          ? DateTime.parse(json['created_at'] as String)
+          ? DateTime.tryParse(json['created_at']?.toString() ?? '')
           : null,
     );
   }
@@ -146,4 +146,17 @@ class MatchModel {
       targetUserHashtags: targetUserHashtags ?? this.targetUserHashtags,
     );
   }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is MatchModel &&
+          runtimeType == other.runtimeType &&
+          id == other.id;
+
+  @override
+  int get hashCode => id.hashCode;
+
+  @override
+  String toString() => 'MatchModel(id: $id, userId: $userId, targetUserId: $targetUserId)';
 }

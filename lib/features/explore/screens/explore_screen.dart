@@ -6,6 +6,7 @@ library;
 
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -17,6 +18,7 @@ import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 
 import 'package:mploya/config/theme.dart';
+import 'package:mploya/core/services/location_service.dart';
 
 // ─── City Data ───────────────────────────────────────────────────────
 
@@ -142,14 +144,74 @@ class _CompanyMarker {
   final String type; // 'Empresa' | 'Startup'
 }
 
-// Companies near Buenos Aires (default city)
-const _mockCompanies = [
-  _CompanyMarker('Globant', 'Hiring Product Managers', LatLng(-34.5970, -58.3730), 'G', 'Empresa'),
-  _CompanyMarker('Mercado Libre', 'Busca Desarrolladores', LatLng(-34.6290, -58.3700), 'M', 'Empresa'),
-  _CompanyMarker('TiendaNube', 'UX Designer', LatLng(-34.5600, -58.4600), 'T', 'Startup'),
-  _CompanyMarker('Despegar', 'Data Engineer', LatLng(-34.6100, -58.3900), 'D', 'Empresa'),
-  _CompanyMarker('Auth0', 'Backend Engineer', LatLng(-34.5850, -58.4200), 'A', 'Startup'),
-  _CompanyMarker('Ualá', 'Mobile Developer', LatLng(-34.6200, -58.3650), 'U', 'Startup'),
+// Companies pool – a large set that gets shuffled/filtered per city
+const _allCompanies = [
+  // ── LATAM ──
+  _CompanyMarker('Globant',       'Hiring Product Managers', LatLng(0, 0), 'G', 'Empresa'),
+  _CompanyMarker('Mercado Libre', 'Busca Desarrolladores',   LatLng(0, 0), 'M', 'Empresa'),
+  _CompanyMarker('TiendaNube',    'UX Designer',             LatLng(0, 0), 'T', 'Startup'),
+  _CompanyMarker('Despegar',      'Data Engineer',           LatLng(0, 0), 'D', 'Empresa'),
+  _CompanyMarker('Auth0',         'Backend Engineer',        LatLng(0, 0), 'A', 'Startup'),
+  _CompanyMarker('Ualá',          'Mobile Developer',        LatLng(0, 0), 'U', 'Startup'),
+  // ── Tech global ──
+  _CompanyMarker('Rappi',         'Growth Analyst',          LatLng(0, 0), 'R', 'Startup'),
+  _CompanyMarker('Nubank',        'Frontend Engineer',       LatLng(0, 0), 'N', 'Startup'),
+  _CompanyMarker('Kavak',         'Ops Manager',             LatLng(0, 0), 'K', 'Empresa'),
+  _CompanyMarker('Cornershop',    'Android Developer',       LatLng(0, 0), 'C', 'Startup'),
+  _CompanyMarker('Crehana',       'Content Strategist',      LatLng(0, 0), 'C', 'Startup'),
+  _CompanyMarker('dLocal',        'DevOps Engineer',         LatLng(0, 0), 'D', 'Empresa'),
+  _CompanyMarker('Wizeline',      'Full Stack Developer',    LatLng(0, 0), 'W', 'Empresa'),
+  _CompanyMarker('Gorilla Logic', 'QA Automation',           LatLng(0, 0), 'G', 'Empresa'),
+  _CompanyMarker('Lemon Cash',    'Blockchain Developer',    LatLng(0, 0), 'L', 'Startup'),
+  _CompanyMarker('Vercel',        'Solutions Engineer',      LatLng(0, 0), 'V', 'Startup'),
+  _CompanyMarker('Mundi',         'Data Scientist',          LatLng(0, 0), 'M', 'Startup'),
+  _CompanyMarker('Clip',          'Product Designer',        LatLng(0, 0), 'C', 'Empresa'),
+  _CompanyMarker('Bitso',         'Crypto Engineer',         LatLng(0, 0), 'B', 'Startup'),
+  _CompanyMarker('Konfio',        'Risk Analyst',            LatLng(0, 0), 'K', 'Empresa'),
+];
+
+// ─── Global Hub Data (para vista "Todos") ────────────────────────────
+
+class _GlobalHub {
+  const _GlobalHub({
+    required this.city,
+    required this.country,
+    required this.latLng,
+    required this.jobCount,
+    required this.topCompany,
+    required this.color,
+  });
+  final String city;
+  final String country;
+  final LatLng latLng;
+  final int jobCount;
+  final String topCompany;
+  final Color color;
+}
+
+const _globalHubs = [
+  // ── Sudamérica ──
+  _GlobalHub(city: 'Buenos Aires', country: 'AR', latLng: LatLng(-34.60, -58.38), jobCount: 847, topCompany: 'Mercado Libre', color: Color(0xFFFF6B35)),
+  _GlobalHub(city: 'São Paulo', country: 'BR', latLng: LatLng(-23.55, -46.63), jobCount: 1230, topCompany: 'Nubank', color: Color(0xFF8B5CF6)),
+  _GlobalHub(city: 'Bogotá', country: 'CO', latLng: LatLng(4.71, -74.07), jobCount: 412, topCompany: 'Rappi', color: Color(0xFFFF6B35)),
+  _GlobalHub(city: 'Santiago', country: 'CL', latLng: LatLng(-33.45, -70.67), jobCount: 298, topCompany: 'Cornershop', color: Color(0xFF06B6D4)),
+  _GlobalHub(city: 'Lima', country: 'PE', latLng: LatLng(-12.05, -77.04), jobCount: 189, topCompany: 'Crehana', color: Color(0xFF06B6D4)),
+  _GlobalHub(city: 'Medellín', country: 'CO', latLng: LatLng(6.24, -75.58), jobCount: 267, topCompany: 'Globant', color: Color(0xFF10B981)),
+  _GlobalHub(city: 'Montevideo', country: 'UY', latLng: LatLng(-34.90, -56.16), jobCount: 134, topCompany: 'dLocal', color: Color(0xFF06B6D4)),
+  _GlobalHub(city: 'Asunción', country: 'PY', latLng: LatLng(-25.26, -57.58), jobCount: 56, topCompany: 'Penguin', color: Color(0xFF10B981)),
+  // ── Centroamérica & Caribe ──
+  _GlobalHub(city: 'México DF', country: 'MX', latLng: LatLng(19.43, -99.13), jobCount: 920, topCompany: 'Kavak', color: Color(0xFF8B5CF6)),
+  _GlobalHub(city: 'Guadalajara', country: 'MX', latLng: LatLng(20.66, -103.35), jobCount: 345, topCompany: 'Wizeline', color: Color(0xFFFF6B35)),
+  _GlobalHub(city: 'San José', country: 'CR', latLng: LatLng(9.93, -84.09), jobCount: 178, topCompany: 'Gorilla Logic', color: Color(0xFF10B981)),
+  // ── Norteamérica ──
+  _GlobalHub(city: 'New York', country: 'US', latLng: LatLng(40.71, -74.01), jobCount: 3420, topCompany: 'Google', color: Color(0xFFEF4444)),
+  _GlobalHub(city: 'San Francisco', country: 'US', latLng: LatLng(37.77, -122.42), jobCount: 2890, topCompany: 'Meta', color: Color(0xFFEF4444)),
+  _GlobalHub(city: 'Miami', country: 'US', latLng: LatLng(25.76, -80.19), jobCount: 780, topCompany: 'Stripe', color: Color(0xFF8B5CF6)),
+  _GlobalHub(city: 'Toronto', country: 'CA', latLng: LatLng(43.65, -79.38), jobCount: 560, topCompany: 'Shopify', color: Color(0xFFEF4444)),
+  // ── Europa (para dar escala global) ──
+  _GlobalHub(city: 'Londres', country: 'UK', latLng: LatLng(51.51, -0.13), jobCount: 2100, topCompany: 'DeepMind', color: Color(0xFFEF4444)),
+  _GlobalHub(city: 'Berlín', country: 'DE', latLng: LatLng(52.52, 13.41), jobCount: 890, topCompany: 'Zalando', color: Color(0xFF8B5CF6)),
+  _GlobalHub(city: 'Madrid', country: 'ES', latLng: LatLng(40.42, -3.70), jobCount: 430, topCompany: 'Cabify', color: Color(0xFFFF6B35)),
 ];
 
 class ExploreScreen extends ConsumerStatefulWidget {
@@ -162,17 +224,45 @@ class ExploreScreen extends ConsumerStatefulWidget {
 class _ExploreScreenState extends ConsumerState<ExploreScreen> {
   int _selectedChip = 1; // 'Ciudad' selected by default
   bool _isSaved = false;
-  _CityData _selectedCity = _cities[0]; // Asunción by default
+  bool _hasCitySelected = false;
+  final LocationService _locationService = LocationService();
+  bool _isLoadingLocation = false;
+  _CityData _selectedCity = _cities[0]; // fallback
   late final MapController _mapController;
   final DraggableScrollableController _sheetController =
       DraggableScrollableController();
 
-  bool _showGpsBanner = true;
+  // ── City-reactive companies ──
+  List<_CompanyMarker> _currentCompanies = [];
+
+  List<_CompanyMarker> _getCompaniesForCity(_CityData city) {
+    final seed = city.name.hashCode;
+    final rng = math.Random(seed);
+    // Shuffle the pool deterministically per city
+    final pool = List<_CompanyMarker>.from(_allCompanies);
+    pool.shuffle(rng);
+    // Pick 4-7 companies for this city
+    final count = 4 + rng.nextInt(4);
+    final selected = pool.take(count.clamp(1, pool.length)).toList();
+    // Assign positions scattered around the city center
+    return selected.map((c) {
+      final latOff = (rng.nextDouble() - 0.5) * 0.08;
+      final lngOff = (rng.nextDouble() - 0.5) * 0.10;
+      return _CompanyMarker(
+        c.name,
+        c.role,
+        LatLng(city.latLng.latitude + latOff, city.latLng.longitude + lngOff),
+        c.initial,
+        c.type,
+      );
+    }).toList();
+  }
 
   @override
   void initState() {
     super.initState();
     _mapController = MapController();
+    _currentCompanies = _getCompaniesForCity(_selectedCity);
   }
 
   @override
@@ -214,7 +304,11 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
       },
     ).then((city) {
       if (city != null) {
-        setState(() => _selectedCity = city);
+        setState(() {
+          _selectedCity = city;
+          _hasCitySelected = true;
+          _currentCompanies = _getCompaniesForCity(city);
+        });
         _mapController.move(city.latLng, 13.0);
       }
     });
@@ -231,86 +325,122 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // ── Search bar ──
-            Padding(
+            // ── Location pill + filter chips row ──
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.fromLTRB(
                 AppSpacing.md,
                 AppSpacing.md,
                 AppSpacing.md,
-                AppSpacing.sm,
-              ),
-              child: GestureDetector(
-                onTap: () {
-                  showSearch(
-                    context: context,
-                    delegate: _ExploreSearchDelegate(),
-                  );
-                },
-                child: Container(
-                  width: double.infinity,
-                  height: 48,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.md,
-                  ),
-                  decoration: BoxDecoration(
-                    color: MployaColors.surfaceVariant,
-                    borderRadius: BorderRadius.circular(AppRadius.pill),
-                    border: Border.all(color: MployaColors.borderLight),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.search,
-                        color: MployaColors.textTertiary,
-                        size: 22,
-                      ),
-                      const SizedBox(width: AppSpacing.sm),
-                      Expanded(
-                        child: Text(
-                          'Buscar personas, empresas, ciudades...',
-                          style: GoogleFonts.inter(
-                            fontSize: 14,
-                            color: MployaColors.textTertiary,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ).animate().fadeIn(duration: 400.ms),
-
-            // ── Filter chips row ──
-            Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.md,
+                0,
               ),
               child: Row(
                 children: [
-                  _FilterChip(
-                    label: '📍 Cerca',
-                    isSelected: _selectedChip == 0,
-                    onTap: () => setState(() => _selectedChip = 0),
+                  // Location pill (replaces Ciudad chip + GPS banner)
+                  GestureDetector(
+                    onTap: () {
+                      _onCiudadTap();
+                    },
+                    child: Container(
+                      height: 36,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                      ),
+                      decoration: BoxDecoration(
+                        color: _selectedChip == 1
+                            ? MployaColors.orange
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(AppRadius.pill),
+                        border: Border.all(
+                          color: _selectedChip == 1
+                              ? MployaColors.orange
+                              : MployaColors.border,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.location_on_rounded,
+                            size: 14,
+                            color: _selectedChip == 1
+                                ? MployaColors.white
+                                : MployaColors.textSecondary,
+                          ),
+                          const SizedBox(width: AppSpacing.xs),
+                          Text(
+                            _hasCitySelected ? _selectedCity.name : 'Elegir ciudad',
+                            style: GoogleFonts.inter(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: _selectedChip == 1
+                                  ? MployaColors.white
+                                  : MployaColors.textPrimary,
+                            ),
+                          ),
+                          const SizedBox(width: 2),
+                          Icon(
+                            Icons.keyboard_arrow_down_rounded,
+                            size: 16,
+                            color: _selectedChip == 1
+                                ? MployaColors.white.withValues(alpha: 0.8)
+                                : MployaColors.textTertiary,
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                   const SizedBox(width: AppSpacing.sm),
                   _FilterChip(
-                    label: '🏙 Ciudad',
-                    isSelected: _selectedChip == 1,
-                    onTap: _onCiudadTap,
+                    label: '📍 Cerca',
+                    isSelected: _selectedChip == 0,
+                    onTap: () {
+                      setState(() => _selectedChip = 0);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Row(
+                            children: [
+                              const Icon(Icons.gps_fixed,
+                                  color: MployaColors.white, size: 16),
+                              const SizedBox(width: AppSpacing.sm),
+                              Text(
+                                'Ubicación activada',
+                                style: GoogleFonts.inter(
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                          backgroundColor: MployaColors.teal,
+                          behavior: SnackBarBehavior.floating,
+                          shape: RoundedRectangleBorder(
+                            borderRadius:
+                                BorderRadius.circular(AppRadius.md),
+                          ),
+                        ),
+                      );
+                    },
                   ),
                   const SizedBox(width: AppSpacing.sm),
                   _FilterChip(
                     label: '🌍 Todos',
                     isSelected: _selectedChip == 2,
-                    onTap: () => setState(() => _selectedChip = 2),
+                    onTap: () {
+                      setState(() => _selectedChip = 2);
+                      // Zoom out a Sudamérica
+                      _mapController.move(
+                        const LatLng(-15.0, -60.0),
+                        3.5,
+                      );
+                    },
                   ),
                   const SizedBox(width: AppSpacing.sm),
                   // # button
                   GestureDetector(
                     onTap: () => context.push('/hashtags/trending'),
                     child: Container(
-                      width: 40,
-                      height: 40,
+                      width: 36,
+                      height: 36,
                       decoration: BoxDecoration(
                         color: MployaColors.orange,
                         borderRadius:
@@ -320,11 +450,126 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                         child: Text(
                           '#',
                           style: GoogleFonts.outfit(
-                            fontSize: 18,
+                            fontSize: 16,
                             fontWeight: FontWeight.w700,
                             color: MployaColors.white,
                           ),
                         ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  // GPS button — siempre vuelve a la ubicación "home"
+                  GestureDetector(
+                    onTap: () async {
+                      setState(() => _isLoadingLocation = true);
+                      final location = await _locationService.getCurrentLocation();
+                      if (!mounted) return;
+                      setState(() => _isLoadingLocation = false);
+                      
+                      if (location != null) {
+                        // Find nearest city from our list
+                        _CityData nearestCity = _cities[0];
+                        double minDist = double.infinity;
+                        for (final city in _cities) {
+                          final dist = _locationService.distanceTo(location, city.latLng);
+                          if (dist < minDist) {
+                            minDist = dist;
+                            nearestCity = city;
+                          }
+                        }
+                        setState(() {
+                          _selectedCity = nearestCity;
+                          _selectedChip = 0;
+                          _hasCitySelected = true;
+                          _currentCompanies = _getCompaniesForCity(nearestCity);
+                        });
+                        _mapController.move(location, 13.0);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Row(
+                              children: [
+                                const Icon(Icons.gps_fixed,
+                                    color: MployaColors.white, size: 16),
+                                const SizedBox(width: AppSpacing.sm),
+                                Text(
+                                  '📍 GPS · ${nearestCity.name} (${minDist.toStringAsFixed(1)} km)',
+                                  style: GoogleFonts.inter(
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            backgroundColor: MployaColors.teal,
+                            behavior: SnackBarBehavior.floating,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(AppRadius.md),
+                            ),
+                          ),
+                        );
+                      } else {
+                        // GPS failed - show error
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Row(
+                              children: [
+                                const Icon(Icons.gps_off,
+                                    color: MployaColors.white, size: 16),
+                                const SizedBox(width: AppSpacing.sm),
+                                Text(
+                                  'No se pudo obtener ubicación',
+                                  style: GoogleFonts.inter(
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            backgroundColor: Colors.redAccent,
+                            behavior: SnackBarBehavior.floating,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(AppRadius.md),
+                            ),
+                          ),
+                        );
+                      }
+                    },
+                    child: Container(
+                      height: 36,
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      decoration: BoxDecoration(
+                        color: MployaColors.surfaceVariant,
+                        borderRadius: BorderRadius.circular(AppRadius.pill),
+                        border: Border.all(
+                          color: MployaColors.border,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _isLoadingLocation
+                              ? const SizedBox(
+                                  width: 15,
+                                  height: 15,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: MployaColors.textSecondary,
+                                  ),
+                                )
+                              : const Icon(
+                                  Icons.gps_fixed_rounded,
+                                  size: 15,
+                                  color: MployaColors.textSecondary,
+                                ),
+                          const SizedBox(width: 4),
+                          Text(
+                            _isLoadingLocation ? '...' : 'GPS',
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: MployaColors.textSecondary,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -399,141 +644,189 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                           ),
                         ],
                       ),
-                      // Company markers on map
-                      MarkerLayer(
-                        markers: _mockCompanies.map((company) {
-                          return Marker(
-                            point: company.latLng,
-                            width: 44,
-                            height: 56,
-                            child: GestureDetector(
-                              onTap: () {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      '${company.name} · ${company.role}',
-                                      style: GoogleFonts.inter(),
-                                    ),
-                                    backgroundColor: MployaColors.orange,
-                                    behavior: SnackBarBehavior.floating,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(AppRadius.md),
-                                    ),
-                                  ),
-                                );
-                              },
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Container(
-                                    width: 40,
-                                    height: 40,
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFF6366F1),
-                                      borderRadius: BorderRadius.circular(AppRadius.md),
-                                      border: Border.all(
-                                        color: MployaColors.white,
-                                        width: 2,
-                                      ),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: const Color(0xFF6366F1)
-                                              .withValues(alpha: 0.4),
-                                          blurRadius: 6,
-                                          spreadRadius: 1,
+                      // Company / Hub markers on map
+                      if (_selectedChip == 2)
+                        // ── Vista "Todos": Hub markers globales ──
+                        MarkerLayer(
+                          markers: _globalHubs.map((hub) {
+                            // Tamaño proporcional al número de jobs
+                            final size = (32 + (hub.jobCount / 100).clamp(0, 28)).toDouble();
+                            final jobLabel = hub.jobCount >= 1000
+                                ? '${(hub.jobCount / 1000).toStringAsFixed(1)}k'
+                                : '${hub.jobCount}';
+                            return Marker(
+                              point: hub.latLng,
+                              width: 90,
+                              height: 70,
+                              child: GestureDetector(
+                                onTap: () {
+                                  // Zoom a la ciudad al tocar
+                                  _mapController.move(hub.latLng, 12.0);
+                                  setState(() => _selectedChip = 1);
+                                },
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    // Círculo con cantidad de jobs
+                                    Container(
+                                      width: size,
+                                      height: size,
+                                      decoration: BoxDecoration(
+                                        color: hub.color.withValues(alpha: 0.85),
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                          color: MployaColors.white,
+                                          width: 2.5,
                                         ),
-                                      ],
-                                    ),
-                                    child: const Center(
-                                      child: Icon(
-                                        Icons.business_rounded,
-                                        color: MployaColors.white,
-                                        size: 20,
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: hub.color.withValues(alpha: 0.4),
+                                            blurRadius: 10,
+                                            spreadRadius: 2,
+                                          ),
+                                        ],
                                       ),
-                                    ),
-                                  ),
-                                  Container(
-                                    margin: const EdgeInsets.only(top: 2),
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 4,
-                                      vertical: 1,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: MployaColors.white,
-                                      borderRadius: BorderRadius.circular(4),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Colors.black.withValues(alpha: 0.15),
-                                          blurRadius: 3,
-                                          offset: const Offset(0, 1),
+                                      child: Center(
+                                        child: Text(
+                                          jobLabel,
+                                          style: GoogleFonts.inter(
+                                            fontSize: size > 50 ? 13 : 10,
+                                            fontWeight: FontWeight.w800,
+                                            color: MployaColors.white,
+                                          ),
                                         ),
-                                      ],
-                                    ),
-                                    child: Text(
-                                      company.name,
-                                      style: GoogleFonts.inter(
-                                        fontSize: 8,
-                                        fontWeight: FontWeight.w600,
-                                        color: MployaColors.textPrimary,
                                       ),
-                                      overflow: TextOverflow.ellipsis,
                                     ),
-                                  ),
-                                ],
+                                    const SizedBox(height: 2),
+                                    // Label con nombre de ciudad
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 5,
+                                        vertical: 2,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: MployaColors.white,
+                                        borderRadius: BorderRadius.circular(4),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.black.withValues(alpha: 0.15),
+                                            blurRadius: 4,
+                                            offset: const Offset(0, 1),
+                                          ),
+                                        ],
+                                      ),
+                                      child: Text(
+                                        hub.city,
+                                        style: GoogleFonts.inter(
+                                          fontSize: 8,
+                                          fontWeight: FontWeight.w700,
+                                          color: MployaColors.textPrimary,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
-                            ),
-                          );
-                        }).toList(),
-                      ),
+                            );
+                          }).toList(),
+                        )
+                      else
+                        // ── Vista "Cerca" / "Ciudad": Markers locales ──
+                        MarkerLayer(
+                          markers: _currentCompanies.map((company) {
+                            return Marker(
+                              point: company.latLng,
+                              width: 44,
+                              height: 56,
+                              child: GestureDetector(
+                                onTap: () {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        '${company.name} · ${company.role}',
+                                        style: GoogleFonts.inter(),
+                                      ),
+                                      backgroundColor: MployaColors.orange,
+                                      behavior: SnackBarBehavior.floating,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(AppRadius.md),
+                                      ),
+                                    ),
+                                  );
+                                },
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Container(
+                                      width: 40,
+                                      height: 40,
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF6366F1),
+                                        borderRadius: BorderRadius.circular(AppRadius.md),
+                                        border: Border.all(
+                                          color: MployaColors.white,
+                                          width: 2,
+                                        ),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: const Color(0xFF6366F1)
+                                                .withValues(alpha: 0.4),
+                                            blurRadius: 6,
+                                            spreadRadius: 1,
+                                          ),
+                                        ],
+                                      ),
+                                      child: const Center(
+                                        child: Icon(
+                                          Icons.business_rounded,
+                                          color: MployaColors.white,
+                                          size: 20,
+                                        ),
+                                      ),
+                                    ),
+                                    Container(
+                                      margin: const EdgeInsets.only(top: 2),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 4,
+                                        vertical: 1,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: MployaColors.white,
+                                        borderRadius: BorderRadius.circular(4),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.black.withValues(alpha: 0.15),
+                                            blurRadius: 3,
+                                            offset: const Offset(0, 1),
+                                          ),
+                                        ],
+                                      ),
+                                      child: Text(
+                                        company.name,
+                                        style: GoogleFonts.inter(
+                                          fontSize: 8,
+                                          fontWeight: FontWeight.w600,
+                                          color: MployaColors.textPrimary,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
                     ],
                   ),
 
-                  // City label overlay
-                  Positioned(
-                    left: 0,
-                    right: 0,
-                    top: 0,
-                    bottom: 0,
-                    child: IgnorePointer(
-                      child: Center(
-                        child: Padding(
-                          padding: const EdgeInsets.only(top: 64),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 3,
-                            ),
-                            decoration: BoxDecoration(
-                              color: MployaColors.white,
-                              borderRadius:
-                                  BorderRadius.circular(AppRadius.xs),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black
-                                      .withValues(alpha: 0.1),
-                                  blurRadius: 4,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ],
-                            ),
-                            child: Text(
-                              _selectedCity.name,
-                              style: GoogleFonts.inter(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                color: MployaColors.textPrimary,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
+
 
                   // Map controls (right side)
                   Positioned(
-                    right: AppSpacing.md,
-                    bottom: 180,
+                    right: 12,
+                    bottom: 200,
                     child: Column(
                       children: [
                         _MapControlButton(
@@ -543,7 +836,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                                 _selectedCity.latLng, 13.0);
                           },
                         ),
-                        const SizedBox(height: AppSpacing.sm),
+                        const SizedBox(height: 6),
                         _MapControlButton(
                           icon: Icons.add,
                           onTap: () {
@@ -552,7 +845,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                                 _mapController.camera.center, zoom);
                           },
                         ),
-                        const SizedBox(height: AppSpacing.sm),
+                        const SizedBox(height: 6),
                         _MapControlButton(
                           icon: Icons.remove,
                           onTap: () {
@@ -565,133 +858,16 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                     ),
                   ),
 
-                  // ── GPS Banner ──
-                  if (_showGpsBanner)
-                    Positioned(
-                      left: AppSpacing.md,
-                      right: AppSpacing.md,
-                      bottom: 190,
-                      child: Container(
-                        padding: const EdgeInsets.all(AppSpacing.md),
-                        decoration: BoxDecoration(
-                          color: MployaColors.textPrimary.withValues(alpha: 0.92),
-                          borderRadius: BorderRadius.circular(AppRadius.xl),
-                        ),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Row(
-                              children: [
-                                const Icon(Icons.wifi_off_rounded,
-                                    color: MployaColors.white, size: 18),
-                                const SizedBox(width: AppSpacing.sm),
-                                Expanded(
-                                  child: Text(
-                                    'Sin GPS · Seleccioná tu ciudad',
-                                    style: GoogleFonts.inter(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w500,
-                                      color: MployaColors.white,
-                                    ),
-                                  ),
-                                ),
-                                GestureDetector(
-                                  onTap: () => setState(() => _showGpsBanner = false),
-                                  child: const Icon(Icons.close,
-                                      color: MployaColors.white, size: 18),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: AppSpacing.sm),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: GestureDetector(
-                                    onTap: _showCityPicker,
-                                    child: Container(
-                                      height: 40,
-                                      decoration: BoxDecoration(
-                                        color: MployaColors.orange,
-                                        borderRadius: BorderRadius.circular(AppRadius.pill),
-                                      ),
-                                      child: Center(
-                                        child: Text(
-                                          'Elegir Ciudad',
-                                          style: GoogleFonts.inter(
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.w600,
-                                            color: MployaColors.white,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: AppSpacing.sm),
-                                Expanded(
-                                  child: GestureDetector(
-                                    onTap: () {
-                                      setState(() => _showGpsBanner = false);
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(
-                                          content: Row(
-                                            children: [
-                                              const Icon(Icons.gps_fixed, color: MployaColors.white, size: 18),
-                                              const SizedBox(width: AppSpacing.sm),
-                                              Text(
-                                                'Ubicación activada · Buenos Aires',
-                                                style: GoogleFonts.inter(
-                                                  fontWeight: FontWeight.w500,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                          backgroundColor: MployaColors.teal,
-                                          behavior: SnackBarBehavior.floating,
-                                          shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(AppRadius.md),
-                                          ),
-                                        ),
-                                      );
-                                    },
-                                    child: Container(
-                                      height: 40,
-                                      decoration: BoxDecoration(
-                                        color: MployaColors.white.withValues(alpha: 0.15),
-                                        borderRadius: BorderRadius.circular(AppRadius.pill),
-                                        border: Border.all(
-                                          color: MployaColors.white.withValues(alpha: 0.3),
-                                        ),
-                                      ),
-                                      child: Center(
-                                        child: Text(
-                                          'Activar GPS',
-                                          style: GoogleFonts.inter(
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.w600,
-                                            color: MployaColors.white,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ).animate().fadeIn(duration: 300.ms).slideY(
-                            begin: 0.3, end: 0, duration: 300.ms),
-                    ),
+
 
                   // ── Draggable bottom sheet ──
                   DraggableScrollableSheet(
                     controller: _sheetController,
-                    initialChildSize: 0.25,
-                    minChildSize: 0.08,
-                    maxChildSize: 0.75,
+                    initialChildSize: 0.12,
+                    minChildSize: 0.06,
+                    maxChildSize: 0.85,
                     snap: true,
-                    snapSizes: const [0.08, 0.25, 0.5, 0.75],
+                    snapSizes: const [0.06, 0.12, 0.4, 0.85],
                     builder: (context, scrollController) {
                       return Container(
                         decoration: BoxDecoration(
@@ -736,12 +912,18 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                                 mainAxisAlignment:
                                     MainAxisAlignment.spaceBetween,
                                 children: [
-                                  Text(
-                                    'Cerca de ti · ${_mockCompanies.length}',
-                                    style: GoogleFonts.outfit(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.w700,
-                                      color: MployaColors.textPrimary,
+                                  AnimatedSwitcher(
+                                    duration: const Duration(milliseconds: 300),
+                                    child: Text(
+                                      _selectedChip == 2
+                                          ? '🌍 Hubs globales · ${_globalHubs.length}'
+                                          : 'Cerca de ti · ${_currentCompanies.length}',
+                                      key: ValueKey(_selectedChip),
+                                      style: GoogleFonts.outfit(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w700,
+                                        color: MployaColors.textPrimary,
+                                      ),
                                     ),
                                   ),
                                   GestureDetector(
@@ -774,114 +956,220 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
 
                             const SizedBox(height: AppSpacing.sm),
 
-                            // Company cards
-                            ..._mockCompanies.map((company) {
-                              return Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: AppSpacing.md,
-                                  vertical: AppSpacing.xs,
-                                ),
-                                child: Container(
-                                  padding: const EdgeInsets.all(AppSpacing.md),
-                                  decoration: BoxDecoration(
-                                    color: MployaColors.white,
-                                    borderRadius: BorderRadius.circular(
-                                        AppRadius.lg),
-                                    border: Border.all(
-                                        color:
-                                            MployaColors.borderLight),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.black.withValues(alpha: 0.04),
-                                        blurRadius: 8,
-                                        offset: const Offset(0, 2),
-                                      ),
-                                    ],
+                            // Content según el chip seleccionado
+                            if (_selectedChip == 2)
+                              // ── Vista "Todos": Lista de hubs globales ──
+                              ..._globalHubs.map((hub) {
+                                final jobLabel = hub.jobCount >= 1000
+                                    ? '${(hub.jobCount / 1000).toStringAsFixed(1)}k'
+                                    : '${hub.jobCount}';
+                                return Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: AppSpacing.md,
+                                    vertical: AppSpacing.xs,
                                   ),
-                                  child: Row(
-                                    children: [
-                                      // Company avatar
-                                      Container(
-                                        width: 48,
-                                        height: 48,
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFF6366F1).withValues(alpha: 0.1),
-                                          borderRadius: BorderRadius.circular(AppRadius.md),
-                                        ),
-                                        child: Center(
-                                          child: Text(
-                                            company.initial,
-                                            style: GoogleFonts.outfit(
-                                              fontSize: 20,
-                                              fontWeight: FontWeight.w700,
-                                              color: const Color(0xFF6366F1),
+                                  child: GestureDetector(
+                                    onTap: () {
+                                      _mapController.move(hub.latLng, 12.0);
+                                      setState(() => _selectedChip = 1);
+                                    },
+                                    child: Container(
+                                      padding: const EdgeInsets.all(AppSpacing.md),
+                                      decoration: BoxDecoration(
+                                        color: MployaColors.white,
+                                        borderRadius: BorderRadius.circular(AppRadius.lg),
+                                        border: Border.all(color: MployaColors.borderLight),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.black.withValues(alpha: 0.04),
+                                            blurRadius: 8,
+                                            offset: const Offset(0, 2),
+                                          ),
+                                        ],
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          // Job count badge
+                                          Container(
+                                            width: 48,
+                                            height: 48,
+                                            decoration: BoxDecoration(
+                                              color: hub.color.withValues(alpha: 0.12),
+                                              borderRadius: BorderRadius.circular(AppRadius.md),
+                                            ),
+                                            child: Center(
+                                              child: Text(
+                                                jobLabel,
+                                                style: GoogleFonts.outfit(
+                                                  fontSize: 16,
+                                                  fontWeight: FontWeight.w800,
+                                                  color: hub.color,
+                                                ),
+                                              ),
                                             ),
                                           ),
-                                        ),
-                                      ),
-                                      const SizedBox(width: AppSpacing.md),
-                                      // Company info
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Row(
+                                          const SizedBox(width: AppSpacing.md),
+                                          // City info
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
                                               children: [
-                                                Text(
-                                                  company.name,
-                                                  style: GoogleFonts.inter(
-                                                    fontSize: 15,
-                                                    fontWeight: FontWeight.w600,
-                                                    color: MployaColors.textPrimary,
-                                                  ),
-                                                ),
-                                                const SizedBox(width: 6),
-                                                Container(
-                                                  padding: const EdgeInsets.symmetric(
-                                                    horizontal: 6,
-                                                    vertical: 2,
-                                                  ),
-                                                  decoration: BoxDecoration(
-                                                    color: company.type == 'Startup'
-                                                        ? MployaColors.teal.withValues(alpha: 0.1)
-                                                        : MployaColors.blue.withValues(alpha: 0.1),
-                                                    borderRadius: BorderRadius.circular(4),
-                                                  ),
-                                                  child: Text(
-                                                    company.type,
-                                                    style: GoogleFonts.inter(
-                                                      fontSize: 10,
-                                                      fontWeight: FontWeight.w600,
-                                                      color: company.type == 'Startup'
-                                                          ? MployaColors.teal
-                                                          : MployaColors.blue,
+                                                Row(
+                                                  children: [
+                                                    Text(
+                                                      hub.city,
+                                                      style: GoogleFonts.inter(
+                                                        fontSize: 15,
+                                                        fontWeight: FontWeight.w600,
+                                                        color: MployaColors.textPrimary,
+                                                      ),
                                                     ),
+                                                    const SizedBox(width: 6),
+                                                    Text(
+                                                      hub.country,
+                                                      style: GoogleFonts.inter(
+                                                        fontSize: 11,
+                                                        fontWeight: FontWeight.w500,
+                                                        color: MployaColors.textTertiary,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                                const SizedBox(height: 2),
+                                                Text(
+                                                  '🏢 ${hub.topCompany} + ${hub.jobCount - 1} más',
+                                                  style: GoogleFonts.inter(
+                                                    fontSize: 12,
+                                                    color: MployaColors.textSecondary,
                                                   ),
                                                 ),
                                               ],
                                             ),
-                                            const SizedBox(height: 2),
-                                            Text(
-                                              company.role,
-                                              style: GoogleFonts.inter(
-                                                fontSize: 13,
-                                                color: MployaColors.textSecondary,
+                                          ),
+                                          // Arrow
+                                          Icon(
+                                            Icons.chevron_right_rounded,
+                                            color: MployaColors.textTertiary,
+                                            size: 22,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              })
+                            else
+                              // ── Vista "Cerca" / "Ciudad": Cards locales ──
+                              ..._currentCompanies.map((company) {
+                                return Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: AppSpacing.md,
+                                    vertical: AppSpacing.xs,
+                                  ),
+                                  child: GestureDetector(
+                                    onTap: () => _showCompanyDetail(context, company),
+                                    child: Container(
+                                    padding: const EdgeInsets.all(AppSpacing.md),
+                                    decoration: BoxDecoration(
+                                      color: MployaColors.white,
+                                      borderRadius: BorderRadius.circular(
+                                          AppRadius.lg),
+                                      border: Border.all(
+                                          color:
+                                              MployaColors.borderLight),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withValues(alpha: 0.04),
+                                          blurRadius: 8,
+                                          offset: const Offset(0, 2),
+                                        ),
+                                      ],
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        // Company avatar
+                                        Container(
+                                          width: 48,
+                                          height: 48,
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFF6366F1).withValues(alpha: 0.1),
+                                            borderRadius: BorderRadius.circular(AppRadius.md),
+                                          ),
+                                          child: Center(
+                                            child: Text(
+                                              company.initial,
+                                              style: GoogleFonts.outfit(
+                                                fontSize: 20,
+                                                fontWeight: FontWeight.w700,
+                                                color: const Color(0xFF6366F1),
                                               ),
                                             ),
-                                          ],
+                                          ),
                                         ),
-                                      ),
-                                      // Arrow
-                                      Icon(
-                                        Icons.chevron_right_rounded,
-                                        color: MployaColors.textTertiary,
-                                        size: 22,
-                                      ),
-                                    ],
+                                        const SizedBox(width: AppSpacing.md),
+                                        // Company info
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Row(
+                                                children: [
+                                                  Text(
+                                                    company.name,
+                                                    style: GoogleFonts.inter(
+                                                      fontSize: 15,
+                                                      fontWeight: FontWeight.w600,
+                                                      color: MployaColors.textPrimary,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 6),
+                                                  Container(
+                                                    padding: const EdgeInsets.symmetric(
+                                                      horizontal: 6,
+                                                      vertical: 2,
+                                                    ),
+                                                    decoration: BoxDecoration(
+                                                      color: company.type == 'Startup'
+                                                          ? MployaColors.teal.withValues(alpha: 0.1)
+                                                          : MployaColors.blue.withValues(alpha: 0.1),
+                                                      borderRadius: BorderRadius.circular(4),
+                                                    ),
+                                                    child: Text(
+                                                      company.type,
+                                                      style: GoogleFonts.inter(
+                                                        fontSize: 10,
+                                                        fontWeight: FontWeight.w600,
+                                                        color: company.type == 'Startup'
+                                                            ? MployaColors.teal
+                                                            : MployaColors.blue,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                              const SizedBox(height: 2),
+                                              Text(
+                                                company.role,
+                                                style: GoogleFonts.inter(
+                                                  fontSize: 13,
+                                                  color: MployaColors.textSecondary,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        // Arrow
+                                        Icon(
+                                          Icons.chevron_right_rounded,
+                                          color: MployaColors.textTertiary,
+                                          size: 22,
+                                        ),
+                                      ],
+                                    ),
                                   ),
-                                ),
-                              );
-                            }),
+                                  ),
+                                );
+                              }),
                             const SizedBox(height: AppSpacing.xl),
                           ],
                         ),
@@ -891,6 +1179,146 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                 ],
               ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showCompanyDetail(BuildContext context, _CompanyMarker company) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.all(24),
+        decoration: const BoxDecoration(
+          color: MployaColors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Handle bar
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: MployaColors.borderLight,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 24),
+            // Company avatar large
+            Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(
+                color: const Color(0xFF6366F1).withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(AppRadius.lg),
+              ),
+              child: Center(
+                child: Text(
+                  company.initial,
+                  style: GoogleFonts.outfit(
+                    fontSize: 32,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF6366F1),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            // Company name + type badge
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  company.name,
+                  style: GoogleFonts.outfit(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                    color: MployaColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: company.type == 'Startup'
+                        ? MployaColors.teal.withValues(alpha: 0.1)
+                        : MployaColors.blue.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    company.type,
+                    style: GoogleFonts.inter(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: company.type == 'Startup'
+                          ? MployaColors.teal
+                          : MployaColors.blue,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            // Role
+            Text(
+              company.role,
+              style: GoogleFonts.inter(
+                fontSize: 15,
+                color: MployaColors.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 24),
+            // CTA Button
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  ScaffoldMessenger.of(context).clearSnackBars();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Row(
+                        children: [
+                          const Icon(Icons.check_circle_outline, color: Colors.white),
+                          const SizedBox(width: 8),
+                          Text('Postulación a ${company.name} enviada'),
+                        ],
+                      ),
+                      behavior: SnackBarBehavior.floating,
+                      backgroundColor: const Color(0xFF10B981),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF6366F1),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppRadius.pill),
+                  ),
+                  elevation: 0,
+                ),
+                child: Text(
+                  'Postularse',
+                  style: GoogleFonts.inter(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+            SizedBox(height: MediaQuery.of(ctx).padding.bottom + 8),
           ],
         ),
       ),
@@ -959,20 +1387,20 @@ class _MapControlButton extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: 40,
-        height: 40,
+        width: 36,
+        height: 36,
         decoration: BoxDecoration(
-          color: MployaColors.white,
+          color: MployaColors.white.withValues(alpha: 0.85),
           borderRadius: BorderRadius.circular(AppRadius.sm),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.1),
-              blurRadius: 4,
-              offset: const Offset(0, 2),
+              color: Colors.black.withValues(alpha: 0.08),
+              blurRadius: 3,
+              offset: const Offset(0, 1),
             ),
           ],
         ),
-        child: Icon(icon, color: MployaColors.textPrimary, size: 20),
+        child: Icon(icon, color: MployaColors.textSecondary, size: 18),
       ),
     );
   }
@@ -981,7 +1409,9 @@ class _MapControlButton extends StatelessWidget {
 // ─── Search Delegate ─────────────────────────────────────────────────
 
 class _ExploreSearchDelegate extends SearchDelegate<String> {
-  _ExploreSearchDelegate() : super(searchFieldLabel: 'Buscar personas, empresas...');
+  _ExploreSearchDelegate({required this.companies}) : super(searchFieldLabel: 'Buscar personas, empresas...');
+
+  final List<_CompanyMarker> companies;
 
   static const _suggestions = [
     'Desarrollador Flutter',
@@ -1014,11 +1444,75 @@ class _ExploreSearchDelegate extends SearchDelegate<String> {
 
   @override
   Widget buildResults(BuildContext context) {
-    return Center(
-      child: Text(
-        'Resultados para "$query"',
-        style: GoogleFonts.inter(fontSize: 16, color: MployaColors.textSecondary),
-      ),
+    final q = query.toLowerCase();
+    final matchingCities = _cities
+        .where((c) => c.name.toLowerCase().contains(q) || c.country.toLowerCase().contains(q))
+        .toList();
+    final matchingCompanies = companies
+        .where((c) => c.name.toLowerCase().contains(q) || c.role.toLowerCase().contains(q))
+        .toList();
+
+    if (matchingCities.isEmpty && matchingCompanies.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.search_off_rounded, size: 48, color: MployaColors.textTertiary),
+            const SizedBox(height: 12),
+            Text(
+              'No se encontraron resultados para "$query"',
+              style: GoogleFonts.inter(fontSize: 15, color: MployaColors.textSecondary),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      );
+    }
+
+    return ListView(
+      children: [
+        if (matchingCompanies.isNotEmpty) ...[
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: Text(
+              'Empresas',
+              style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w700, color: MployaColors.textPrimary),
+            ),
+          ),
+          ...matchingCompanies.map((company) => ListTile(
+            leading: CircleAvatar(
+              backgroundColor: const Color(0xFF6366F1).withValues(alpha: 0.1),
+              child: Text(company.initial, style: GoogleFonts.outfit(fontWeight: FontWeight.w700, color: const Color(0xFF6366F1))),
+            ),
+            title: Text(company.name, style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+            subtitle: Text(company.role, style: GoogleFonts.inter(fontSize: 13, color: MployaColors.textSecondary)),
+            trailing: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: company.type == 'Startup' ? MployaColors.teal.withValues(alpha: 0.1) : MployaColors.blue.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(company.type, style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w600, color: company.type == 'Startup' ? MployaColors.teal : MployaColors.blue)),
+            ),
+            onTap: () { close(context, company.name); },
+          )),
+        ],
+        if (matchingCities.isNotEmpty) ...[
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: Text(
+              'Ciudades',
+              style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w700, color: MployaColors.textPrimary),
+            ),
+          ),
+          ...matchingCities.take(20).map((city) => ListTile(
+            leading: const Icon(Icons.location_city_rounded, color: MployaColors.orange),
+            title: Text(city.name, style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+            subtitle: Text(city.country, style: GoogleFonts.inter(fontSize: 13, color: MployaColors.textSecondary)),
+            onTap: () { close(context, city.name); },
+          )),
+        ],
+      ],
     );
   }
 
@@ -1064,6 +1558,7 @@ class _CitySearchSheetState extends State<_CitySearchSheet> {
   List<_CityData> _results = [];
   bool _isLoading = false;
   bool _hasSearched = false;
+  DateTime? _lastGeocodingCall;
 
   @override
   void initState() {
@@ -1098,6 +1593,16 @@ class _CitySearchSheetState extends State<_CitySearchSheet> {
   }
 
   Future<void> _searchNominatim(String query) async {
+    // Nominatim usage policy: max 1 request per second
+    final now = DateTime.now();
+    if (_lastGeocodingCall != null &&
+        now.difference(_lastGeocodingCall!).inMilliseconds < 1000) {
+      await Future<void>.delayed(
+        Duration(milliseconds: 1000 - now.difference(_lastGeocodingCall!).inMilliseconds),
+      );
+    }
+    _lastGeocodingCall = DateTime.now();
+
     try {
       final uri = Uri.parse(
         'https://nominatim.openstreetmap.org/search'

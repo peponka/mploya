@@ -231,7 +231,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
         return convState.conversations.firstWhere(
           (c) => c.id == widget.conversationId,
         );
-      } catch (_) {
+      } catch (e) {
+        debugPrint('Error finding conversation: $e');
         return null;
       }
     }
@@ -760,7 +761,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
           child: FilledButton.icon(
             onPressed: () {
               final name = _findConversation()?.participantName ?? 'Entrevista Mploya';
-              context.push('/video-call/lobby?title=Entrevista con $name');
+              context.push('/video-call/lobby?title=${Uri.encodeComponent('Entrevista con $name')}');
             },
             style: FilledButton.styleFrom(
               backgroundColor: MployaColors.orange,

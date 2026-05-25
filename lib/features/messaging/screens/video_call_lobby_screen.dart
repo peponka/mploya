@@ -1,17 +1,21 @@
-/// Pantalla de lobby para videollamada (estilo Jitsi Meet) en mploya.
+/// Pantalla de lobby para videollamada (estilo Google Meet) en mploya.
 ///
-/// Muestra preview de cámara, controles de audio/video, y estado
-/// de espera para unirse a una entrevista.
+/// Video fullscreen con controles superpuestos, estado de espera
+/// y botón de anfitrión.
 library;
 
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
-// ignore: avoid_web_libraries_in_flutter
-import 'dart:html' as html;
-import 'dart:ui_web' as ui_web;
+import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import 'package:url_launcher/url_launcher.dart';
+
+import 'package:mploya/config/env.dart';
 import 'package:mploya/config/theme.dart';
+import 'package:mploya/core/services/camera/camera_service.dart';
 
 // ─── Screen ────────────────────────────────────────────────────────
 
@@ -37,8 +41,8 @@ class _VideoCallLobbyScreenState extends ConsumerState<VideoCallLobbyScreen> {
   // ─── Camera state ──────────────────────────────────────────────
   bool _cameraReady = false;
   bool _permissionDenied = false;
-  html.MediaStream? _mediaStream;
-  html.VideoElement? _videoElement;
+  bool _cameraTimedOut = false;
+  late final CameraService _cameraService;
 
   final String _cameraViewId =
       'mploya-lobby-cam-${DateTime.now().millisecondsSinceEpoch}';
@@ -46,6 +50,7 @@ class _VideoCallLobbyScreenState extends ConsumerState<VideoCallLobbyScreen> {
   @override
   void initState() {
     super.initState();
+    _cameraService = CameraService();
     _initCamera();
   }
 
@@ -57,64 +62,50 @@ class _VideoCallLobbyScreenState extends ConsumerState<VideoCallLobbyScreen> {
 
   Future<void> _initCamera() async {
     try {
-      final stream = await html.window.navigator.mediaDevices!.getUserMedia({
-        'video': {
-          'facingMode': 'user',
-          'width': {'ideal': 720},
-          'height': {'ideal': 1280},
+      final result = await _cameraService.initialize().timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          if (mounted) {
+            setState(() => _cameraTimedOut = true);
+          }
         },
-        'audio': true,
-      });
-
-      _mediaStream = stream;
-
-      _videoElement = html.VideoElement()
-        ..srcObject = stream
-        ..autoplay = true
-        ..muted = true
-        ..setAttribute('playsinline', 'true')
-        ..style.width = '100%'
-        ..style.height = '100%'
-        ..style.objectFit = 'cover'
-        ..style.transform = 'scaleX(-1)'
-        ..style.borderRadius = '16px'
-        ..style.background = '#2A2A2A';
-
-      // ignore: undefined_prefixed_name
-      ui_web.platformViewRegistry.registerViewFactory(
-        _cameraViewId,
-        (int viewId) => _videoElement!,
       );
 
-      if (mounted) {
-        setState(() => _cameraReady = true);
+      if (mounted && !_cameraTimedOut) {
+        if (_cameraService.isReady) {
+          setState(() => _cameraReady = true);
+        } else {
+          setState(() => _permissionDenied = true);
+        }
       }
     } catch (e) {
       if (mounted) {
-        setState(() => _permissionDenied = true);
+        setState(() => _cameraTimedOut = true);
       }
     }
   }
 
+  void _retryCamera() {
+    setState(() {
+      _cameraTimedOut = false;
+      _cameraReady = false;
+      _permissionDenied = false;
+    });
+    _initCamera();
+  }
+
   void _stopCamera() {
-    _mediaStream?.getTracks().forEach((track) => track.stop());
-    _mediaStream = null;
+    _cameraService.dispose();
   }
 
   void _toggleMic() {
     setState(() => _isMicOn = !_isMicOn);
-    // Toggle audio tracks on the stream
-    _mediaStream?.getAudioTracks().forEach((track) {
-      track.enabled = _isMicOn;
-    });
+    _cameraService.setAudioEnabled(_isMicOn);
   }
 
   void _toggleVideo() {
     setState(() => _isVideoOn = !_isVideoOn);
-    // Toggle video tracks on the stream
-    _mediaStream?.getVideoTracks().forEach((track) {
-      track.enabled = _isVideoOn;
-    });
+    _cameraService.setVideoEnabled(_isVideoOn);
   }
 
   void _toggleAudio() {
@@ -125,257 +116,346 @@ class _VideoCallLobbyScreenState extends ConsumerState<VideoCallLobbyScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      body: SafeArea(
-        child: Column(
-          children: [
-            // ─── Header ────────────────────────────────────────────
-            Padding(
-              padding: const EdgeInsets.all(AppSpacing.md),
-              child: Row(
-                children: [
-                  GestureDetector(
-                    onTap: () {
-                      _stopCamera();
-                      Navigator.of(context).pop();
-                    },
-                    child: const Icon(
-                      Icons.close,
-                      color: Colors.white,
-                      size: 28,
-                    ),
-                  ),
-                  const Spacer(),
-                  Text(
-                    'Lobby',
-                    style: GoogleFonts.outfit(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
-                    ),
-                  ),
-                  const Spacer(),
-                  const SizedBox(width: 28), // Balance for close button
-                ],
-              ),
-            ),
-
-            // ─── Meeting Title Banner (Blue) ───────────────────────
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          // ─── FULLSCREEN Camera / Placeholder ──────────────────
+          if (_isVideoOn && _cameraReady)
+            SizedBox.expand(
+              child: _cameraService.buildPreview(_cameraViewId),
+            )
+          else if (_isVideoOn && _cameraTimedOut)
+            _buildCameraTimeout()
+          else if (_isVideoOn && !_cameraReady && !_permissionDenied)
+            _buildLoadingCamera()
+          else if (_isVideoOn && _permissionDenied)
+            _buildPermissionDenied()
+          else
+            // Video OFF: dark bg with avatar
             Container(
-              width: double.infinity,
-              margin: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.lg,
-                vertical: AppSpacing.md,
-              ),
-              decoration: BoxDecoration(
-                color: const Color(0xFF1E88E5),
-                borderRadius: BorderRadius.circular(AppRadius.md),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.videocam, color: Colors.white, size: 20),
-                  const SizedBox(width: AppSpacing.sm),
-                  Text(
-                    widget.meetingTitle,
-                    style: GoogleFonts.inter(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
+              color: const Color(0xFF1A1A2E),
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CircleAvatar(
+                      radius: 48,
+                      backgroundColor: Colors.white.withValues(alpha: 0.1),
+                      child: Text(
+                        'U',
+                        style: GoogleFonts.outfit(
+                          fontSize: 36,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white60,
+                        ),
+                      ),
                     ),
-                  ),
-                ],
+                    const SizedBox(height: AppSpacing.md),
+                    Text(
+                      'Cámara apagada',
+                      style: GoogleFonts.inter(
+                        fontSize: 14,
+                        color: Colors.white54,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
 
-            const SizedBox(height: AppSpacing.lg),
-
-            // ─── Camera Preview ────────────────────────────────────
-            Expanded(
-              child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF2A2A2A),
-                  borderRadius: BorderRadius.circular(AppRadius.lg),
+          // ─── Top gradient ──────────────────────────────────────
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            height: 160,
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.black.withValues(alpha: 0.7),
+                    Colors.transparent,
+                  ],
                 ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(AppRadius.lg),
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      // Camera feed or placeholder
-                      if (_isVideoOn && _cameraReady)
-                        HtmlElementView(viewType: _cameraViewId)
-                      else if (_isVideoOn && !_cameraReady && !_permissionDenied)
-                        _buildLoadingCamera()
-                      else if (_isVideoOn && _permissionDenied)
-                        _buildPermissionDenied()
-                      else
-                        // Video OFF: show avatar placeholder
-                        Center(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              CircleAvatar(
-                                radius: 40,
-                                backgroundColor: const Color(0xFF3A3A3A),
-                                child: Text(
-                                  'U',
-                                  style: GoogleFonts.outfit(
-                                    fontSize: 32,
-                                    fontWeight: FontWeight.w700,
-                                    color: Colors.white60,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(height: AppSpacing.md),
-                              Text(
-                                'Cámara apagada',
-                                style: GoogleFonts.inter(
-                                  fontSize: 14,
-                                  color: Colors.white54,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
+              ),
+            ),
+          ),
 
-                      // Name overlay at bottom
-                      if (_isVideoOn && _cameraReady)
-                        Positioned(
-                          bottom: AppSpacing.md,
-                          left: AppSpacing.md,
+          // ─── Bottom gradient ───────────────────────────────────
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            height: 320,
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.bottomCenter,
+                  end: Alignment.topCenter,
+                  colors: [
+                    Colors.black.withValues(alpha: 0.85),
+                    Colors.black.withValues(alpha: 0.4),
+                    Colors.transparent,
+                  ],
+                  stops: const [0.0, 0.5, 1.0],
+                ),
+              ),
+            ),
+          ),
+
+          // ─── Header: Close + Meeting pill ─────────────────────
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: SafeArea(
+              bottom: false,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.md,
+                  vertical: AppSpacing.sm,
+                ),
+                child: Row(
+                  children: [
+                    // Close button
+                    GestureDetector(
+                      onTap: () {
+                        _stopCamera();
+                        context.pop();
+                      },
+                      child: Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.4),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.close,
+                          color: Colors.white,
+                          size: 22,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    // Meeting title pill
+                    Flexible(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(AppRadius.pill),
+                        child: BackdropFilter(
+                          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                           child: Container(
                             padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 4,
+                              horizontal: 14,
+                              vertical: 8,
                             ),
                             decoration: BoxDecoration(
-                              color: Colors.black54,
+                              color: Colors.white.withValues(alpha: 0.15),
                               borderRadius:
-                                  BorderRadius.circular(AppRadius.sm),
-                            ),
-                            child: Text(
-                              'Tú',
-                              style: GoogleFonts.inter(
-                                fontSize: 13,
-                                color: Colors.white,
+                                  BorderRadius.circular(AppRadius.pill),
+                              border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.2),
                               ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.videocam_rounded,
+                                    color: Colors.white, size: 16),
+                                const SizedBox(width: 6),
+                                Flexible(
+                                  child: Text(
+                                    widget.meetingTitle,
+                                    style: GoogleFonts.inter(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.white,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                    maxLines: 1,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ),
-                    ],
-                  ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
+          ),
 
-            const SizedBox(height: AppSpacing.lg),
-
-            // ─── 3 Control Buttons in dark circles ─────────────────
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                _ControlButton(
-                  icon: _isMicOn ? Icons.mic : Icons.mic_off,
-                  isActive: _isMicOn,
-                  onTap: _toggleMic,
+          // ─── "Tú" name tag on camera ──────────────────────────
+          if (_isVideoOn && _cameraReady)
+            Positioned(
+              left: AppSpacing.lg,
+              bottom: MediaQuery.of(context).size.height * 0.35,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
                 ),
-                const SizedBox(width: AppSpacing.lg),
-                _ControlButton(
-                  icon: _isVideoOn ? Icons.videocam : Icons.videocam_off,
-                  isActive: _isVideoOn,
-                  onTap: _toggleVideo,
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.5),
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
                 ),
-                const SizedBox(width: AppSpacing.lg),
-                _ControlButton(
-                  icon: _isAudioOn ? Icons.headphones : Icons.headphones_battery,
-                  isActive: _isAudioOn,
-                  onTap: _toggleAudio,
-                ),
-              ],
-            ),
-
-            const SizedBox(height: AppSpacing.xl),
-
-            // ─── Waiting Status with white spinner ─────────────────
-            if (_isWaiting) ...[
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.md),
-                  Text(
-                    'Pidiendo entrar a la reunión...',
-                    style: GoogleFonts.inter(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w500,
-                      color: Colors.white,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
                 child: Text(
-                  'Podrás entrar tan pronto te acepten tu solicitud.',
+                  'Tú',
                   style: GoogleFonts.inter(
                     fontSize: 13,
-                    color: Colors.white54,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ),
-            ],
-
-            const SizedBox(height: AppSpacing.lg),
-
-            // ─── Blue 'Soy el anfitrión' Button ───────────────────
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-              child: SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: ElevatedButton(
-                  onPressed: () {
-                    setState(() => _isWaiting = false);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Entrando como anfitrión...'),
-                        backgroundColor: Color(0xFF1E88E5),
-                      ),
-                    );
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF1E88E5),
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(AppRadius.pill),
-                    ),
-                  ),
-                  child: Text(
-                    'Soy el anfitrión',
-                    style: GoogleFonts.inter(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
+                    color: Colors.white,
                   ),
                 ),
               ),
             ),
 
-            const SizedBox(height: AppSpacing.lg),
-          ],
-        ),
+          // ─── Bottom controls area ─────────────────────────────
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.lg,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // ── 3 Control Buttons ──
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        _ControlButton(
+                          icon: _isMicOn ? Icons.mic : Icons.mic_off,
+                          isActive: _isMicOn,
+                          onTap: _toggleMic,
+                        ),
+                        const SizedBox(width: 24),
+                        _ControlButton(
+                          icon: _isVideoOn
+                              ? Icons.videocam
+                              : Icons.videocam_off,
+                          isActive: _isVideoOn,
+                          onTap: _toggleVideo,
+                        ),
+                        const SizedBox(width: 24),
+                        _ControlButton(
+                          icon: _isAudioOn
+                              ? Icons.headphones
+                              : Icons.headphones_battery,
+                          isActive: _isAudioOn,
+                          onTap: _toggleAudio,
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 24),
+
+                    // ── Waiting status ──
+                    if (_isWaiting) ...[
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color:
+                                  Colors.white.withValues(alpha: 0.8),
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.sm),
+                          Text(
+                            'Pidiendo entrar a la reunión...',
+                            style: GoogleFonts.inter(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.white.withValues(alpha: 0.9),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Podrás entrar tan pronto te acepten tu solicitud.',
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          color: Colors.white.withValues(alpha: 0.5),
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+
+                    // ── "Soy el anfitrión" button ──
+                    SizedBox(
+                      width: double.infinity,
+                      height: 50,
+                      child: ElevatedButton(
+                        onPressed: () async {
+                          setState(() => _isWaiting = false);
+
+                          // Build Jitsi room URL
+                          final room = widget.meetingTitle
+                              .replaceAll(' ', '-')
+                              .replaceAll(RegExp(r'[^a-zA-Z0-9\-]'), '');
+                          final jitsiUrl = Uri.parse(
+                            '${Env.jitsiServerUrl}/$room'
+                            '#config.startWithAudioMuted=${!_isMicOn}'
+                            '&config.startWithVideoMuted=${!_isVideoOn}',
+                          );
+
+                          if (await canLaunchUrl(jitsiUrl)) {
+                            _stopCamera();
+                            await launchUrl(
+                              jitsiUrl,
+                              mode: LaunchMode.externalApplication,
+                            );
+                          } else {
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'No se pudo abrir la videollamada'),
+                                  backgroundColor: Colors.red,
+                                ),
+                              );
+                            }
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor:
+                              const Color(0xFF1E88E5),
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius:
+                                BorderRadius.circular(AppRadius.pill),
+                          ),
+                        ),
+                        child: Text(
+                          'Soy el anfitrión',
+                          style: GoogleFonts.inter(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -383,60 +463,132 @@ class _VideoCallLobbyScreenState extends ConsumerState<VideoCallLobbyScreen> {
   // ─── Helper widgets ──────────────────────────────────────────────
 
   Widget _buildLoadingCamera() {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const SizedBox(
-            width: 36,
-            height: 36,
-            child: CircularProgressIndicator(
-              color: Colors.white,
-              strokeWidth: 2.5,
+    return Container(
+      color: const Color(0xFF1A1A2E),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(
+              width: 36,
+              height: 36,
+              child: CircularProgressIndicator(
+                color: Colors.white,
+                strokeWidth: 2.5,
+              ),
             ),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          Text(
-            'Activando cámara...',
-            style: GoogleFonts.inter(
-              fontSize: 14,
-              color: Colors.white.withValues(alpha: 0.6),
+            const SizedBox(height: AppSpacing.md),
+            Text(
+              'Activando cámara...',
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                color: Colors.white.withValues(alpha: 0.6),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildPermissionDenied() {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.videocam_off_rounded,
-            size: 48,
-            color: Colors.white.withValues(alpha: 0.4),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          Text(
-            'Permiso de cámara denegado',
-            style: GoogleFonts.inter(
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
-              color: Colors.white,
+    return Container(
+      color: const Color(0xFF1A1A2E),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.videocam_off_rounded,
+              size: 48,
+              color: Colors.white.withValues(alpha: 0.4),
             ),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            'Habilitá la cámara en los\najustes del navegador',
-            style: GoogleFonts.inter(
-              fontSize: 13,
-              color: Colors.white.withValues(alpha: 0.5),
+            const SizedBox(height: AppSpacing.md),
+            Text(
+              'Permiso de cámara denegado',
+              style: GoogleFonts.inter(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: Colors.white,
+              ),
             ),
-            textAlign: TextAlign.center,
-          ),
-        ],
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              'Habilitá la cámara en los\najustes del navegador',
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                color: Colors.white.withValues(alpha: 0.5),
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCameraTimeout() {
+    return Container(
+      color: const Color(0xFF1A1A2E),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.timer_off_rounded,
+              size: 48,
+              color: Colors.white.withValues(alpha: 0.4),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Text(
+              'La cámara tardó demasiado',
+              style: GoogleFonts.inter(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: Colors.white,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              'No se pudo inicializar la cámara\nen el tiempo esperado',
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                color: Colors.white.withValues(alpha: 0.5),
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            GestureDetector(
+              onTap: _retryCamera,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1E88E5),
+                  borderRadius: BorderRadius.circular(AppRadius.pill),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.refresh_rounded,
+                        color: Colors.white, size: 18),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Reintentar',
+                      style: GoogleFonts.inter(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -460,18 +612,24 @@ class _ControlButton extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: 56,
-        height: 56,
+        width: 52,
+        height: 52,
         decoration: BoxDecoration(
           color: isActive
-              ? const Color(0xFF3A3A3A)
-              : MployaColors.red.withValues(alpha: 0.3),
+              ? Colors.white.withValues(alpha: 0.2)
+              : MployaColors.red.withValues(alpha: 0.8),
           shape: BoxShape.circle,
+          border: Border.all(
+            color: isActive
+                ? Colors.white.withValues(alpha: 0.3)
+                : Colors.transparent,
+            width: 1,
+          ),
         ),
         child: Icon(
           icon,
-          color: isActive ? Colors.white : MployaColors.red,
-          size: 26,
+          color: Colors.white,
+          size: 24,
         ),
       ),
     );

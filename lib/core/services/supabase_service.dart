@@ -81,18 +81,20 @@ class SupabaseService {
   /// o cuando la sesión expira.
   Stream<AuthState> get authStateChanges => auth.onAuthStateChange;
 
-  /// ID del usuario actual. Lanza si no hay sesión.
-  String get currentUserId {
-    final user = currentUser;
-    if (user == null) {
-      throw StateError('No hay usuario autenticado.');
-    }
-    return user.id;
-  }
+  /// ID del usuario actual. Retorna `null` si no hay sesión.
+  String? get currentUserId => currentUser?.id;
 
   /// Cierra la sesión actual del usuario.
+  ///
+  /// Envuelto en try-catch para manejar errores de red o sesión
+  /// expirada sin crashear la app.
   Future<void> signOut() async {
-    await auth.signOut();
-    debugPrint('🔓 Sesión cerrada.');
+    try {
+      await auth.signOut();
+      debugPrint('🔓 Sesión cerrada.');
+    } catch (e, st) {
+      debugPrint('⚠️ Error al cerrar sesión: $e\n$st');
+      rethrow;
+    }
   }
 }

@@ -3,9 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
-// ignore: avoid_web_libraries_in_flutter
-import 'dart:html' as html;
-import 'dart:ui_web' as ui_web;
+import 'package:mploya/core/widgets/platform_video_player.dart';
 
 import 'package:mploya/config/theme.dart';
 import 'package:mploya/features/messaging/models/message_model.dart';
@@ -338,23 +336,6 @@ class MessageBubble extends StatelessWidget {
   /// Opens a fullscreen video player dialog for the recorded video reply.
   void _showVideoPlayer(BuildContext context, String blobUrl) {
     final viewId = 'chat-video-player-${DateTime.now().millisecondsSinceEpoch}';
-    final videoEl = html.VideoElement()
-      ..src = blobUrl
-      ..autoplay = true
-      ..loop = true
-      ..muted = false
-      ..controls = true
-      ..setAttribute('playsinline', 'true')
-      ..style.width = '100%'
-      ..style.height = '100%'
-      ..style.objectFit = 'contain'
-      ..style.background = '#000';
-
-    // ignore: undefined_prefixed_name
-    ui_web.platformViewRegistry.registerViewFactory(
-      viewId,
-      (int id) => videoEl,
-    );
 
     showDialog(
       context: context,
@@ -371,15 +352,20 @@ class MessageBubble extends StatelessWidget {
             height: MediaQuery.of(ctx).size.height * 0.6,
             child: Stack(
               children: [
-                HtmlElementView(viewType: viewId),
+                PlatformVideoPlayer(
+                  viewId: viewId,
+                  url: blobUrl,
+                  objectFit: 'contain',
+                  loop: true,
+                  autoplay: true,
+                  controls: true,
+                  background: '#000',
+                ),
                 Positioned(
                   top: 8,
                   right: 8,
                   child: GestureDetector(
-                    onTap: () {
-                      videoEl.pause();
-                      Navigator.of(ctx).pop();
-                    },
+                    onTap: () => Navigator.of(ctx).pop(),
                     child: Container(
                       width: 36,
                       height: 36,

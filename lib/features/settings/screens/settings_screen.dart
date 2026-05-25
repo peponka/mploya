@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'package:mploya/config/theme.dart';
+import 'package:mploya/core/providers/theme_provider.dart';
 import 'package:mploya/features/auth/providers/auth_provider.dart';
 
 /// Settings screen with account, notifications, and app preferences.
@@ -22,7 +23,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   bool _messageAlerts = false;
 
   // ─── Appearance state ───────────────────────────────────────────
-  String _selectedTheme = 'Sistema';
   String _selectedLanguage = 'Español';
 
   // ─── Dialogs ────────────────────────────────────────────────────
@@ -238,13 +238,27 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
   }
 
+  // Mapeo de etiquetas a ThemeMode
+  static const _themeLabelToMode = {
+    'Sistema': ThemeMode.system,
+    'Claro': ThemeMode.light,
+    'Oscuro': ThemeMode.dark,
+  };
+
+  static const _themeModeToLabel = {
+    ThemeMode.system: 'Sistema',
+    ThemeMode.light: 'Claro',
+    ThemeMode.dark: 'Oscuro',
+  };
+
   void _showThemeSelector() {
     final colorScheme = Theme.of(context).colorScheme;
+    final currentMode = ref.read(themeModeProvider);
     const options = ['Sistema', 'Claro', 'Oscuro'];
     showDialog(
       context: context,
       builder: (ctx) {
-        String tempTheme = _selectedTheme;
+        String tempTheme = _themeModeToLabel[currentMode] ?? 'Sistema';
         return StatefulBuilder(
           builder: (ctx, setDialogState) => AlertDialog(
             title: Text(
@@ -276,7 +290,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ),
               FilledButton(
                 onPressed: () {
-                  setState(() => _selectedTheme = tempTheme);
+                  final mode = _themeLabelToMode[tempTheme] ?? ThemeMode.system;
+                  ref.read(themeModeProvider.notifier).setMode(mode);
                   Navigator.pop(ctx);
                 },
                 child: const Text('Aplicar'),
@@ -446,7 +461,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   icon: Icons.dark_mode_outlined,
                   title: 'Tema',
                   trailing: Text(
-                    _selectedTheme,
+                    _themeModeToLabel[ref.watch(themeModeProvider)] ?? 'Sistema',
                     style: GoogleFonts.inter(
                       fontSize: 14,
                       color: colorScheme.onSurfaceVariant,

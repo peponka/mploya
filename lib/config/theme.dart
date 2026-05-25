@@ -6,6 +6,7 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 // ─── Colores de la marca ─────────────────────────────────────────────
@@ -385,6 +386,7 @@ class MployaButton extends StatelessWidget {
     this.icon,
     this.isLoading = false,
     this.expanded = true,
+    this.showArrow = true,
     super.key,
   });
 
@@ -393,6 +395,9 @@ class MployaButton extends StatelessWidget {
   final IconData? icon;
   final bool isLoading;
   final bool expanded;
+
+  /// Whether to append a `→` arrow after the label. Defaults to `true`.
+  final bool showArrow;
 
   @override
   Widget build(BuildContext context) {
@@ -434,15 +439,17 @@ class MployaButton extends StatelessWidget {
                           color: Colors.white,
                         ),
                       ),
-                      const SizedBox(width: AppSpacing.xs),
-                      const Text(
-                        '→',
-                        style: TextStyle(
-                          fontSize: 18,
-                          color: Colors.white,
-                          fontWeight: FontWeight.w300,
+                      if (showArrow) ...[
+                        const SizedBox(width: AppSpacing.xs),
+                        const Text(
+                          '→',
+                          style: TextStyle(
+                            fontSize: 18,
+                            color: Colors.white,
+                            fontWeight: FontWeight.w300,
+                          ),
                         ),
-                      ),
+                      ],
                     ],
                   ),
           ),
@@ -537,23 +544,12 @@ class MployaLogo extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         // Ícono del logo
-        Container(
-          width: size,
-          height: size,
-          decoration: BoxDecoration(
-            gradient: MployaColors.orangeGradientVertical,
-            borderRadius: BorderRadius.circular(size * 0.25),
-          ),
-          child: Center(
-            child: Text(
-              'm',
-              style: GoogleFonts.outfit(
-                fontSize: size * 0.5,
-                fontWeight: FontWeight.w800,
-                color: Colors.white,
-                height: 1.1,
-              ),
-            ),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(size * 0.22),
+          child: SvgPicture.asset(
+            'assets/icons/mploya_logo.svg',
+            width: size,
+            height: size,
           ),
         ),
         const SizedBox(height: AppSpacing.md),
@@ -644,4 +640,318 @@ class EmptyStateWidget extends StatelessWidget {
       ),
     );
   }
+}
+
+// ─── Colores oscuros de la marca ─────────────────────────────────────
+
+/// Colores para el tema oscuro de mploya.ai
+abstract final class MployaDarkColors {
+  // Primario - Naranja (mismos que el tema claro para consistencia de marca)
+  static const orange = Color(0xFFF97316);
+  static const orangeDark = Color(0xFFEA580C);
+  static const orangeLight = Color(0xFFFB923C);
+  static const orangeSurface = Color(0xFF2D1B0E);
+
+  // Fondo
+  static const background = Color(0xFF121212);
+  static const surface = Color(0xFF1E1E1E);
+  static const surfaceVariant = Color(0xFF2C2C2C);
+
+  // Texto
+  static const textPrimary = Color(0xFFF5F5F5);
+  static const textSecondary = Color(0xFFA0A0A0);
+  static const textTertiary = Color(0xFF707070);
+  static const textOnOrange = Color(0xFFFFFFFF);
+
+  // Bordes
+  static const border = Color(0xFF333333);
+  static const borderLight = Color(0xFF2A2A2A);
+  static const borderFocus = Color(0xFFF97316);
+
+  // Acentos (mismos que el tema claro)
+  static const teal = Color(0xFF10B981);
+  static const tealLight = Color(0xFF064E3B);
+  static const red = Color(0xFFEF4444);
+  static const redLight = Color(0xFF7F1D1D);
+  static const blue = Color(0xFF3B82F6);
+
+  // Social
+  static const google = Color(0xFF4285F4);
+  static const apple = Color(0xFFFFFFFF);
+
+  // Gradientes
+  static const orangeGradient = LinearGradient(
+    colors: [Color(0xFFFB923C), Color(0xFFF97316), Color(0xFFEA580C)],
+    begin: Alignment.centerLeft,
+    end: Alignment.centerRight,
+  );
+
+  static const orangeGradientVertical = LinearGradient(
+    colors: [Color(0xFFFB923C), Color(0xFFF97316)],
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+  );
+
+  static const subtleGradient = LinearGradient(
+    colors: [Color(0xFF1E1E1E), Color(0xFF121212)],
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+  );
+}
+
+// ─── Tema oscuro ─────────────────────────────────────────────────────
+
+ThemeData buildMployaDarkTheme() {
+  final textTheme = GoogleFonts.interTextTheme(
+    ThemeData.dark().textTheme,
+  );
+
+  return ThemeData(
+    useMaterial3: true,
+    brightness: Brightness.dark,
+
+    // Colores
+    colorScheme: const ColorScheme.dark(
+      primary: MployaDarkColors.orange,
+      onPrimary: MployaDarkColors.textOnOrange,
+      primaryContainer: MployaDarkColors.orangeSurface,
+      onPrimaryContainer: MployaDarkColors.orangeLight,
+      secondary: MployaDarkColors.teal,
+      onSecondary: Colors.white,
+      surface: MployaDarkColors.surface,
+      onSurface: MployaDarkColors.textPrimary,
+      onSurfaceVariant: MployaDarkColors.textSecondary,
+      outline: MployaDarkColors.border,
+      outlineVariant: MployaDarkColors.borderLight,
+      error: MployaDarkColors.red,
+      onError: Colors.white,
+    ),
+
+    scaffoldBackgroundColor: MployaDarkColors.background,
+
+    // AppBar
+    appBarTheme: AppBarTheme(
+      backgroundColor: MployaDarkColors.background,
+      foregroundColor: MployaDarkColors.textPrimary,
+      elevation: 0,
+      scrolledUnderElevation: 0.5,
+      centerTitle: true,
+      systemOverlayStyle: SystemUiOverlayStyle.light,
+      titleTextStyle: GoogleFonts.outfit(
+        fontSize: 18,
+        fontWeight: FontWeight.w600,
+        color: MployaDarkColors.textPrimary,
+      ),
+    ),
+
+    // Texto
+    textTheme: textTheme.copyWith(
+      displayLarge: GoogleFonts.outfit(
+        fontSize: 32,
+        fontWeight: FontWeight.w700,
+        color: MployaDarkColors.textPrimary,
+      ),
+      displayMedium: GoogleFonts.outfit(
+        fontSize: 28,
+        fontWeight: FontWeight.w700,
+        color: MployaDarkColors.textPrimary,
+      ),
+      headlineLarge: GoogleFonts.outfit(
+        fontSize: 24,
+        fontWeight: FontWeight.w700,
+        color: MployaDarkColors.textPrimary,
+      ),
+      headlineMedium: GoogleFonts.outfit(
+        fontSize: 20,
+        fontWeight: FontWeight.w600,
+        color: MployaDarkColors.textPrimary,
+      ),
+      titleLarge: GoogleFonts.inter(
+        fontSize: 18,
+        fontWeight: FontWeight.w600,
+        color: MployaDarkColors.textPrimary,
+      ),
+      titleMedium: GoogleFonts.inter(
+        fontSize: 16,
+        fontWeight: FontWeight.w500,
+        color: MployaDarkColors.textPrimary,
+      ),
+      bodyLarge: GoogleFonts.inter(
+        fontSize: 16,
+        fontWeight: FontWeight.w400,
+        color: MployaDarkColors.textPrimary,
+      ),
+      bodyMedium: GoogleFonts.inter(
+        fontSize: 14,
+        fontWeight: FontWeight.w400,
+        color: MployaDarkColors.textSecondary,
+      ),
+      bodySmall: GoogleFonts.inter(
+        fontSize: 12,
+        fontWeight: FontWeight.w400,
+        color: MployaDarkColors.textTertiary,
+      ),
+      labelLarge: GoogleFonts.inter(
+        fontSize: 16,
+        fontWeight: FontWeight.w600,
+        color: MployaDarkColors.textOnOrange,
+      ),
+    ),
+
+    // Inputs
+    inputDecorationTheme: InputDecorationTheme(
+      filled: false,
+      contentPadding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.md,
+      ),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+        borderSide: const BorderSide(color: MployaDarkColors.border),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+        borderSide: const BorderSide(color: MployaDarkColors.border),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+        borderSide: const BorderSide(
+          color: MployaDarkColors.orange,
+          width: 1.5,
+        ),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+        borderSide: const BorderSide(color: MployaDarkColors.red),
+      ),
+      hintStyle: GoogleFonts.inter(
+        fontSize: 15,
+        color: MployaDarkColors.textTertiary,
+      ),
+      labelStyle: GoogleFonts.inter(
+        fontSize: 15,
+        color: MployaDarkColors.textSecondary,
+      ),
+    ),
+
+    // Botones
+    elevatedButtonTheme: ElevatedButtonThemeData(
+      style: ElevatedButton.styleFrom(
+        backgroundColor: MployaDarkColors.orange,
+        foregroundColor: MployaDarkColors.textOnOrange,
+        elevation: 0,
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.xl,
+          vertical: AppSpacing.md,
+        ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.pill),
+        ),
+        textStyle: GoogleFonts.inter(
+          fontSize: 16,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    ),
+
+    outlinedButtonTheme: OutlinedButtonThemeData(
+      style: OutlinedButton.styleFrom(
+        foregroundColor: MployaDarkColors.textPrimary,
+        side: const BorderSide(color: MployaDarkColors.border),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.xl,
+          vertical: AppSpacing.md,
+        ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.pill),
+        ),
+        textStyle: GoogleFonts.inter(
+          fontSize: 16,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    ),
+
+    textButtonTheme: TextButtonThemeData(
+      style: TextButton.styleFrom(
+        foregroundColor: MployaDarkColors.orange,
+        textStyle: GoogleFonts.inter(
+          fontSize: 14,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+    ),
+
+    filledButtonTheme: FilledButtonThemeData(
+      style: FilledButton.styleFrom(
+        backgroundColor: MployaDarkColors.orange,
+        foregroundColor: MployaDarkColors.textOnOrange,
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.xl,
+          vertical: AppSpacing.md,
+        ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.pill),
+        ),
+        textStyle: GoogleFonts.inter(
+          fontSize: 16,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    ),
+
+    // Bottom Sheet
+    bottomSheetTheme: const BottomSheetThemeData(
+      backgroundColor: MployaDarkColors.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(AppRadius.xxl),
+        ),
+      ),
+      showDragHandle: true,
+      dragHandleColor: MployaDarkColors.border,
+    ),
+
+    // Card
+    cardTheme: CardThemeData(
+      color: MployaDarkColors.surface,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        side: const BorderSide(color: MployaDarkColors.borderLight),
+      ),
+    ),
+
+    // Divider
+    dividerTheme: const DividerThemeData(
+      color: MployaDarkColors.borderLight,
+      thickness: 1,
+      space: 0,
+    ),
+
+    // BottomNavigationBar
+    bottomNavigationBarTheme: BottomNavigationBarThemeData(
+      backgroundColor: MployaDarkColors.surface,
+      selectedItemColor: MployaDarkColors.orange,
+      unselectedItemColor: MployaDarkColors.textTertiary,
+      type: BottomNavigationBarType.fixed,
+      elevation: 8,
+      selectedLabelStyle: GoogleFonts.inter(
+        fontSize: 11,
+        fontWeight: FontWeight.w600,
+      ),
+      unselectedLabelStyle: GoogleFonts.inter(
+        fontSize: 11,
+        fontWeight: FontWeight.w400,
+      ),
+    ),
+
+    // Dialog
+    dialogTheme: DialogThemeData(
+      backgroundColor: MployaDarkColors.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppRadius.xxl),
+      ),
+    ),
+  );
 }

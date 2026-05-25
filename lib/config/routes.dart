@@ -126,9 +126,33 @@ abstract final class RoutePaths {
   static const hashtagsEdit = '/hashtags/edit';
 }
 
+// ─── Navigator Key ───────────────────────────────────────────────────
+
+/// Global navigator key for navigation from outside the widget tree
+/// (e.g., notification taps).
+final rootNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'root');
+
+// ─── Page Transition Helper ──────────────────────────────────────────
+
+/// Builds a [CustomTransitionPage] with a fade transition for GoRouter routes.
+CustomTransitionPage<void> buildPageWithFadeTransition({
+  required BuildContext context,
+  required GoRouterState state,
+  required Widget child,
+}) {
+  return CustomTransitionPage<void>(
+    key: state.pageKey,
+    child: child,
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      return FadeTransition(opacity: animation, child: child);
+    },
+  );
+}
+
 // ─── Router ──────────────────────────────────────────────────────────
 
 final router = GoRouter(
+  navigatorKey: rootNavigatorKey,
   initialLocation: RoutePaths.splash,
   debugLogDiagnostics: false,
   redirect: (context, state) {
@@ -151,14 +175,21 @@ final router = GoRouter(
       return RoutePaths.home;
     }
 
-    // Allow public routes, onboarding, and /home (for demo)
-    // Only block if user manually navigates to a deep route without auth
+    // Allow public routes, onboarding, and /home (for demo).
+    // Block protected routes when not authenticated.
     if (!isLoggedIn && !isPublicRoute && !isOnboardingRoute && path != RoutePaths.home) {
-      // Allow most routes for demo — only block edit/settings without login
-      final isProtectedRoute = [
-        RoutePaths.editProfile,
-        RoutePaths.settings,
-      ].contains(path);
+      // Routes that require authentication:
+      const protectedPrefixes = [
+        '/profile/edit',
+        '/settings',
+        '/payment',
+        '/chat',
+        '/video-call',
+        '/tools',
+        '/video/reply',
+      ];
+      final isProtectedRoute =
+          protectedPrefixes.any((prefix) => path.startsWith(prefix));
       if (isProtectedRoute) return RoutePaths.landing;
     }
 
@@ -247,42 +278,60 @@ final router = GoRouter(
     // ─── Tools ───────────────────────────────────────────────────
     GoRoute(
       path: RoutePaths.skillAssessment,
-      builder: (context, state) => const SkillAssessmentScreen(),
+      pageBuilder: (context, state) => buildPageWithFadeTransition(
+        context: context, state: state, child: const SkillAssessmentScreen(),
+      ),
     ),
     GoRoute(
       path: RoutePaths.aiResume,
-      builder: (context, state) => const AiResumeScreen(),
+      pageBuilder: (context, state) => buildPageWithFadeTransition(
+        context: context, state: state, child: const AiResumeScreen(),
+      ),
     ),
     GoRoute(
       path: RoutePaths.interviewPrep,
-      builder: (context, state) => const InterviewPrepScreen(),
+      pageBuilder: (context, state) => buildPageWithFadeTransition(
+        context: context, state: state, child: const InterviewPrepScreen(),
+      ),
     ),
     GoRoute(
       path: RoutePaths.pitchChallenge,
-      builder: (context, state) => const PitchChallengeScreen(),
+      pageBuilder: (context, state) => buildPageWithFadeTransition(
+        context: context, state: state, child: const PitchChallengeScreen(),
+      ),
     ),
     GoRoute(
       path: RoutePaths.boost,
-      builder: (context, state) => const BoostScreen(),
+      pageBuilder: (context, state) => buildPageWithFadeTransition(
+        context: context, state: state, child: const BoostScreen(),
+      ),
     ),
     GoRoute(
       path: RoutePaths.analytics,
-      builder: (context, state) => const AnalyticsScreen(),
+      pageBuilder: (context, state) => buildPageWithFadeTransition(
+        context: context, state: state, child: const AnalyticsScreen(),
+      ),
     ),
     GoRoute(
       path: RoutePaths.vistas,
-      builder: (context, state) => const ProfileViewsScreen(),
+      pageBuilder: (context, state) => buildPageWithFadeTransition(
+        context: context, state: state, child: const ProfileViewsScreen(),
+      ),
     ),
     GoRoute(
       path: RoutePaths.invite,
-      builder: (context, state) => const InviteFriendsScreen(),
+      pageBuilder: (context, state) => buildPageWithFadeTransition(
+        context: context, state: state, child: const InviteFriendsScreen(),
+      ),
     ),
 
     // ─── Payment ─────────────────────────────────────────────────
     GoRoute(
       path: RoutePaths.payment,
-      builder: (context, state) => PaymentScreen(
-        product: state.extra as PaymentProduct?,
+      pageBuilder: (context, state) => buildPageWithFadeTransition(
+        context: context,
+        state: state,
+        child: PaymentScreen(product: state.extra as PaymentProduct?),
       ),
     ),
 
@@ -309,9 +358,13 @@ final router = GoRouter(
     // ─── Messaging ───────────────────────────────────────────────
     GoRoute(
       path: RoutePaths.chatConversation,
-      builder: (context, state) {
+      pageBuilder: (context, state) {
         final conversationId = state.pathParameters['conversationId'] ?? '';
-        return ChatScreen(conversationId: conversationId);
+        return buildPageWithFadeTransition(
+          context: context,
+          state: state,
+          child: ChatScreen(conversationId: conversationId),
+        );
       },
     ),
     GoRoute(
@@ -329,46 +382,87 @@ final router = GoRouter(
     // ─── Profile ─────────────────────────────────────────────────
     GoRoute(
       path: RoutePaths.editProfile,
-      builder: (context, state) => const EditProfileScreen(),
+      pageBuilder: (context, state) => buildPageWithFadeTransition(
+        context: context, state: state, child: const EditProfileScreen(),
+      ),
     ),
 
     // User Profile (other user)
     GoRoute(
       path: RoutePaths.userProfile,
-      builder: (context, state) {
+      pageBuilder: (context, state) {
         final userId = state.uri.queryParameters['id'];
-        return UserProfileScreen(userId: userId);
+        return buildPageWithFadeTransition(
+          context: context,
+          state: state,
+          child: UserProfileScreen(userId: userId),
+        );
       },
     ),
 
     // Reviews
     GoRoute(
       path: RoutePaths.reviews,
-      builder: (context, state) {
+      pageBuilder: (context, state) {
         final name = state.uri.queryParameters['company'] ?? 'Empresa';
-        return ReviewsScreen(userName: name);
+        return buildPageWithFadeTransition(
+          context: context,
+          state: state,
+          child: ReviewsScreen(userName: name),
+        );
       },
     ),
 
     // ─── Map ──────────────────────────────────────────────────────
     GoRoute(
       path: RoutePaths.mapStandalone,
-      builder: (context, state) => const MapScreen(),
+      pageBuilder: (context, state) => buildPageWithFadeTransition(
+        context: context, state: state, child: const MapScreen(),
+      ),
     ),
 
     // ─── Settings ─────────────────────────────────────────────────
     GoRoute(
       path: RoutePaths.settings,
-      builder: (context, state) => const SettingsScreen(),
+      pageBuilder: (context, state) => buildPageWithFadeTransition(
+        context: context, state: state, child: const SettingsScreen(),
+      ),
     ),
 
     // ─── Profile Analysis (placeholder) ──────────────────────────
     GoRoute(
       path: RoutePaths.profileAnalysis,
-      builder: (context, state) => Scaffold(
-        appBar: AppBar(title: const Text('Análisis de Perfil')),
-        body: const Center(
-          child: Text('Análisis detallado de tu perfil — Próximamente'),
+      pageBuilder: (context, state) => buildPageWithFadeTransition(
+        context: context,
+        state: state,
+        child: Scaffold(
+          appBar: AppBar(
+            leading: BackButton(onPressed: () => context.pop()),
+            title: const Text('Análisis de Perfil'),
+          ),
+          body: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.analytics_outlined, size: 64, color: Colors.orange.shade300),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Análisis de Perfil',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'El análisis detallado de tu perfil estará disponible pronto. '
+                    'Aquí podrás ver métricas de visibilidad, engagement y recomendaciones personalizadas.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 14, color: Colors.grey),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
     ),
@@ -376,10 +470,37 @@ final router = GoRouter(
     // ─── Hashtags Edit (placeholder) ─────────────────────────────
     GoRoute(
       path: RoutePaths.hashtagsEdit,
-      builder: (context, state) => Scaffold(
-        appBar: AppBar(title: const Text('Editar Hashtags')),
-        body: const Center(
-          child: Text('Editar tus hashtags — Próximamente'),
+      pageBuilder: (context, state) => buildPageWithFadeTransition(
+        context: context,
+        state: state,
+        child: Scaffold(
+          appBar: AppBar(
+            leading: BackButton(onPressed: () => context.pop()),
+            title: const Text('Editar Hashtags'),
+          ),
+          body: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.tag_rounded, size: 64, color: Colors.orange.shade300),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Editar Hashtags',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'La edición de hashtags estará disponible pronto. '
+                    'Podrás agregar, eliminar y reordenar tus hashtags profesionales.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 14, color: Colors.grey),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
     ),

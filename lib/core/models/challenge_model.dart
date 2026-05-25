@@ -8,7 +8,11 @@ library;
 // ─── Enum de tipo de challenge ─────────────────────────────────────
 
 enum ChallengeType {
-  weekly('weekly');
+  weekly('weekly'),
+  video('video'),
+  quiz('quiz'),
+  presentation('presentation'),
+  teamwork('teamwork');
 
   const ChallengeType(this.value);
   final String value;
@@ -48,14 +52,14 @@ class ChallengeModel {
 
   factory ChallengeModel.fromJson(Map<String, dynamic> json) {
     return ChallengeModel(
-      id: json['id'] as String,
-      title: json['title'] as String,
-      description: json['description'] as String?,
-      type: ChallengeType.fromString(json['type'] as String?),
-      maxDuration: json['max_duration'] as int? ?? 60,
-      participantCount: json['participant_count'] as int? ?? 0,
+      id: json['id']?.toString() ?? '',
+      title: json['title']?.toString() ?? '',
+      description: json['description']?.toString(),
+      type: ChallengeType.fromString(json['type']?.toString()),
+      maxDuration: (json['max_duration'] as num?)?.toInt() ?? 60,
+      participantCount: (json['participant_count'] as num?)?.toInt() ?? 0,
       endsAt: json['ends_at'] != null
-          ? DateTime.parse(json['ends_at'] as String)
+          ? DateTime.tryParse(json['ends_at']?.toString() ?? '')
           : null,
       userParticipated: json['user_participated'] as bool? ?? false,
     );
@@ -111,4 +115,17 @@ class ChallengeModel {
     if (endsAt == null) return true;
     return endsAt!.isAfter(DateTime.now());
   }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ChallengeModel &&
+          runtimeType == other.runtimeType &&
+          id == other.id;
+
+  @override
+  int get hashCode => id.hashCode;
+
+  @override
+  String toString() => 'ChallengeModel(id: $id, title: $title)';
 }

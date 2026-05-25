@@ -1,107 +1,17 @@
 /// Providers de Riverpod para el sistema de matches/conexiones.
 ///
 /// Gestiona matches agrupados por status, acciones de conexión,
-/// y filtro activo.
+/// y filtro activo. Conectado al backend real via [MatchService].
 library;
 
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:mploya/core/models/match_model.dart';
-
-// ─── Mock Data ─────────────────────────────────────────────────────
-
-final List<MatchModel> _mockMatches = [
-  MatchModel(
-    id: 'm1',
-    userId: 'current_user',
-    targetUserId: 'u1',
-    status: MatchStatus.active,
-    type: MatchType.candidate,
-    matchPercentage: 92,
-    createdAt: DateTime.now().subtract(const Duration(hours: 2)),
-    targetUserName: 'María García',
-    targetUserAvatarUrl: 'https://i.pravatar.cc/150?img=1',
-    targetUserHeadline: 'Analista Financiero Sr.',
-    targetUserLocation: 'CDMX, México',
-    targetUserIsVerified: true,
-    targetUserHashtags: ['finanzas', 'excel', 'analista'],
-  ),
-  MatchModel(
-    id: 'm2',
-    userId: 'current_user',
-    targetUserId: 'u2',
-    status: MatchStatus.active,
-    type: MatchType.candidate,
-    matchPercentage: 87,
-    createdAt: DateTime.now().subtract(const Duration(hours: 5)),
-    targetUserName: 'Carlos Mendoza',
-    targetUserAvatarUrl: 'https://i.pravatar.cc/150?img=3',
-    targetUserHeadline: 'Mobile Developer',
-    targetUserLocation: 'Guadalajara, México',
-    targetUserIsVerified: true,
-    targetUserHashtags: ['flutter', 'mobile', 'dart'],
-  ),
-  MatchModel(
-    id: 'm3',
-    userId: 'current_user',
-    targetUserId: 'u3',
-    status: MatchStatus.connected,
-    type: MatchType.company,
-    matchPercentage: 95,
-    createdAt: DateTime.now().subtract(const Duration(days: 1)),
-    targetUserName: 'Ana Rodríguez',
-    targetUserAvatarUrl: 'https://i.pravatar.cc/150?img=5',
-    targetUserHeadline: 'Product Manager',
-    targetUserLocation: 'Monterrey, México',
-    targetUserIsVerified: true,
-    targetUserHashtags: ['fintech', 'product', 'lider'],
-  ),
-  MatchModel(
-    id: 'm4',
-    userId: 'current_user',
-    targetUserId: 'u4',
-    status: MatchStatus.connected,
-    type: MatchType.candidate,
-    matchPercentage: 81,
-    createdAt: DateTime.now().subtract(const Duration(days: 3)),
-    targetUserName: 'Diego Fernández',
-    targetUserAvatarUrl: 'https://i.pravatar.cc/150?img=8',
-    targetUserHeadline: 'Data Engineer',
-    targetUserLocation: 'Buenos Aires, Argentina',
-    targetUserIsVerified: false,
-    targetUserHashtags: ['ia', 'data', 'python'],
-  ),
-  MatchModel(
-    id: 'm5',
-    userId: 'current_user',
-    targetUserId: 'u5',
-    status: MatchStatus.pending,
-    type: MatchType.candidate,
-    matchPercentage: 78,
-    createdAt: DateTime.now().subtract(const Duration(hours: 8)),
-    targetUserName: 'Laura Pérez',
-    targetUserAvatarUrl: 'https://i.pravatar.cc/150?img=10',
-    targetUserHeadline: 'UX Designer',
-    targetUserLocation: 'Bogotá, Colombia',
-    targetUserIsVerified: false,
-    targetUserHashtags: ['ux', 'diseño', 'figma'],
-  ),
-  MatchModel(
-    id: 'm6',
-    userId: 'current_user',
-    targetUserId: 'u6',
-    status: MatchStatus.pending,
-    type: MatchType.company,
-    matchPercentage: 74,
-    createdAt: DateTime.now().subtract(const Duration(days: 2)),
-    targetUserName: 'TechStartup MX',
-    targetUserAvatarUrl: 'https://i.pravatar.cc/150?img=12',
-    targetUserHeadline: 'Startup de FinTech',
-    targetUserLocation: 'CDMX, México',
-    targetUserIsVerified: true,
-    targetUserHashtags: ['fintech', 'startup', 'cripto'],
-  ),
-];
+import 'package:mploya/core/services/match_service.dart';
 
 // ─── Match Filter ──────────────────────────────────────────────────
 
@@ -141,20 +51,59 @@ final matchFilterProvider = StateProvider<MatchFilter>(
 
 class MatchesNotifier extends StateNotifier<AsyncValue<List<MatchModel>>> {
   MatchesNotifier() : super(const AsyncValue.loading()) {
-    loadMatches();
+    _init();
   }
 
+  final MatchService _matchService = MatchService.instance;
+  StreamSubscription<List<MatchModel>>? _streamSubscription;
+
+  /// Inicializa la carga de matches y la suscripción en tiempo real.
+  void _init() {
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (userId == null) {
+      state = const AsyncValue.data([]);
+      return;
+    }
+
+    // Suscribirse al stream en tiempo real
+    _streamSubscription = _matchService.matchesStream(userId).listen(
+      (matches) {
+        if (mounted) {
+          state = AsyncValue.data(matches);
+        }
+      },
+      onError: (Object e, StackTrace st) {
+        debugPrint('Error en stream de matches: $e\n$st');
+        if (mounted) {
+          state = AsyncValue.error(e, st);
+        }
+      },
+    );
+  }
+
+  /// Recarga los matches desde Supabase.
   Future<void> loadMatches() async {
     state = const AsyncValue.loading();
     try {
-      await Future.delayed(const Duration(milliseconds: 600));
-      state = AsyncValue.data(List.from(_mockMatches));
+      final userId = Supabase.instance.client.auth.currentUser?.id;
+      if (userId == null) {
+        state = const AsyncValue.data([]);
+        return;
+      }
+      final matches = await _matchService.getMatches(userId);
+      state = AsyncValue.data(matches);
     } catch (e, st) {
       state = AsyncValue.error(e, st);
     }
   }
 
   Future<void> refresh() async => loadMatches();
+
+  @override
+  void dispose() {
+    _streamSubscription?.cancel();
+    super.dispose();
+  }
 }
 
 final matchesProvider =
@@ -162,7 +111,7 @@ final matchesProvider =
   (ref) => MatchesNotifier(),
 );
 
-/// Filtered matches by current filter tab
+/// Matches filtrados por la tab activa.
 final filteredMatchesProvider = Provider<List<MatchModel>>((ref) {
   final filter = ref.watch(matchFilterProvider);
   final matches = ref.watch(matchesProvider).valueOrNull ?? [];
@@ -171,7 +120,7 @@ final filteredMatchesProvider = Provider<List<MatchModel>>((ref) {
       .toList();
 });
 
-/// Match counts per status
+/// Conteo de matches por status.
 final matchCountsProvider = Provider<Map<MatchFilter, int>>((ref) {
   final matches = ref.watch(matchesProvider).valueOrNull ?? [];
   return {
@@ -190,36 +139,44 @@ class MatchActionsNotifier extends StateNotifier<AsyncValue<void>> {
   MatchActionsNotifier(this.ref) : super(const AsyncValue.data(null));
 
   final Ref ref;
+  final MatchService _matchService = MatchService.instance;
 
+  /// Conectar con un match (cambia status a connected y crea conexión).
   Future<void> connectWith(String matchId) async {
     state = const AsyncValue.loading();
     try {
-      await Future.delayed(const Duration(milliseconds: 500));
-      final matches = ref.read(matchesProvider).valueOrNull ?? [];
-      final updated = matches.map((m) {
-        if (m.id == matchId) {
-          return m.copyWith(status: MatchStatus.connected);
-        }
-        return m;
-      }).toList();
-      ref.read(matchesProvider.notifier).state = AsyncValue.data(updated);
+      await _matchService.connectWith(matchId);
+
+      // Actualizar estado local de forma optimista
+      _updateMatchStatus(matchId, MatchStatus.connected);
       state = const AsyncValue.data(null);
     } catch (e, st) {
       state = AsyncValue.error(e, st);
     }
   }
 
+  /// Aceptar un match pendiente (cambia status a active).
   Future<void> acceptMatch(String matchId) async {
     state = const AsyncValue.loading();
     try {
-      await Future.delayed(const Duration(milliseconds: 500));
+      await _matchService.acceptMatch(matchId);
+
+      _updateMatchStatus(matchId, MatchStatus.active);
+      state = const AsyncValue.data(null);
+    } catch (e, st) {
+      state = AsyncValue.error(e, st);
+    }
+  }
+
+  /// Rechazar un match (lo elimina de la lista local).
+  Future<void> rejectMatch(String matchId) async {
+    state = const AsyncValue.loading();
+    try {
+      await _matchService.rejectMatch(matchId);
+
+      // Eliminar de la lista local
       final matches = ref.read(matchesProvider).valueOrNull ?? [];
-      final updated = matches.map((m) {
-        if (m.id == matchId) {
-          return m.copyWith(status: MatchStatus.active);
-        }
-        return m;
-      }).toList();
+      final updated = matches.where((m) => m.id != matchId).toList();
       ref.read(matchesProvider.notifier).state = AsyncValue.data(updated);
       state = const AsyncValue.data(null);
     } catch (e, st) {
@@ -227,18 +184,16 @@ class MatchActionsNotifier extends StateNotifier<AsyncValue<void>> {
     }
   }
 
-  Future<void> rejectMatch(String matchId) async {
-    state = const AsyncValue.loading();
-    try {
-      await Future.delayed(const Duration(milliseconds: 500));
-      final matches = ref.read(matchesProvider).valueOrNull ?? [];
-      final updated =
-          matches.where((m) => m.id != matchId).toList();
-      ref.read(matchesProvider.notifier).state = AsyncValue.data(updated);
-      state = const AsyncValue.data(null);
-    } catch (e, st) {
-      state = AsyncValue.error(e, st);
-    }
+  /// Helper para actualizar el status de un match localmente.
+  void _updateMatchStatus(String matchId, MatchStatus newStatus) {
+    final matches = ref.read(matchesProvider).valueOrNull ?? [];
+    final updated = matches.map((m) {
+      if (m.id == matchId) {
+        return m.copyWith(status: newStatus);
+      }
+      return m;
+    }).toList();
+    ref.read(matchesProvider.notifier).state = AsyncValue.data(updated);
   }
 }
 

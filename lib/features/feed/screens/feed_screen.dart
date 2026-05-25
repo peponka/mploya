@@ -16,12 +16,11 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:share_plus/share_plus.dart';
-// ignore: avoid_web_libraries_in_flutter
-import 'dart:html' as html; // Needed for HtmlElementView video playback
-import 'dart:ui_web' as ui_web;
+import 'package:mploya/core/widgets/platform_video_player.dart';
 
 import 'package:mploya/config/theme.dart';
 import 'package:mploya/features/profile/models/company_profile_store.dart';
+import 'package:mploya/core/models/video_model.dart';
 import 'package:mploya/features/feed/providers/feed_provider.dart';
 import 'package:mploya/features/payment/screens/payment_screen.dart';
 
@@ -38,6 +37,7 @@ class _FeedItem {
     required this.initial,
     required this.bgColor,
     required this.headlineText,
+    this.userId = '',
     this.likeCount = 0,
     this.commentCount = 0,
     this.shareCount = 0,
@@ -54,6 +54,7 @@ class _FeedItem {
   final String initial;
   final Color bgColor;
   final String headlineText;
+  final String userId;
   final int likeCount;
   final int commentCount;
   final int shareCount;
@@ -245,10 +246,58 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
   int _currentPage = 0;
   String? _userVideoViewId;
 
+  // ── Map VideoModel → _FeedItem ──
+  static const _avatarColors = [
+    Color(0xFF8B5CF6), Color(0xFF10B981), Color(0xFFF97316),
+    Color(0xFF3B82F6), Color(0xFFEC4899), Color(0xFFEAB308),
+    Color(0xFF06B6D4), Color(0xFFEF4444),
+  ];
+  static const _bgColors = [
+    Color(0xFF1E1B4B), Color(0xFF0F172A), Color(0xFF18181B),
+    Color(0xFF1C1917), Color(0xFF0C0A09), Color(0xFF1A1A2E),
+    Color(0xFF111827), Color(0xFF1A0F2E),
+  ];
+
+  _FeedItem _mapVideoModelToFeedItem(VideoModel video, int index) {
+    final colorIdx = index % _avatarColors.length;
+    final initial = (video.userName != null && video.userName!.isNotEmpty)
+        ? video.userName![0].toUpperCase()
+        : '?';
+    return _FeedItem(
+      name: video.userName ?? 'Usuario',
+      role: video.title ?? video.description ?? 'profesional',
+      company: '',
+      matchPercent: video.matchPercentage ?? (70 + (index * 7) % 30),
+      hashtags: video.hashtags.isNotEmpty
+          ? video.hashtags.map((h) => h.startsWith('#') ? h : '#$h').toList()
+          : ['#pitch'],
+      avatarColor: _avatarColors[colorIdx],
+      initial: initial,
+      bgColor: _bgColors[colorIdx],
+      headlineText: (video.userHeadline ?? video.title ?? 'VIDEO PITCH').toUpperCase(),
+      userId: video.userId,
+      likeCount: video.likeCount,
+      commentCount: 0,
+      shareCount: 0,
+    );
+  }
+
   List<_FeedItem> get _feedItems {
+    // 1) Try real provider data from Supabase
+    final asyncVideos = ref.watch(feedVideosProvider);
+    final providerItems = asyncVideos.whenOrNull<List<_FeedItem>>(
+      data: (videos) {
+        if (videos.isEmpty) return null; // fall through to mock
+        return videos.asMap().entries.map((e) => _mapVideoModelToFeedItem(e.value, e.key)).toList();
+      },
+    );
+
+    // 2) Base feed: provider data or mock fallback
+    final baseFeed = providerItems ?? _mockFeed;
+
+    // 3) Prepend user's published video card if available
     final blobUrl = ref.watch(videoPublishedProvider);
     if (blobUrl != null) {
-      // Read user's form data from providers
       final userHashtags = ref.watch(userHashtagsProvider);
       final userTitle = ref.watch(userStealthTitleProvider);
       final userCompany = ref.watch(userCompanyProvider);
@@ -271,9 +320,9 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
         isStealth: true,
         stealthTitle: userTitle.isNotEmpty ? userTitle : 'Tu Pitch Confidencial',
       );
-      return [dynamicUserItem, ..._mockFeed];
+      return [dynamicUserItem, ...baseFeed];
     }
-    return _mockFeed;
+    return baseFeed.toList();
   }
 
   String? get _userVideoBlobUrl => ref.watch(videoPublishedProvider);
@@ -281,24 +330,12 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
   void _ensureUserVideoView(String blobUrl) {
     if (_userVideoViewId != null) return;
     _userVideoViewId = 'feed-user-video-${DateTime.now().millisecondsSinceEpoch}';
-    final videoEl = html.VideoElement()
-      ..src = blobUrl
-      ..autoplay = true
-      ..loop = true
-      ..muted = false
-      ..setAttribute('playsinline', 'true')
-      ..style.width = '100%'
-      ..style.height = '100%'
-      ..style.objectFit = 'cover'
-      ..style.transform = 'scaleX(-1) scale(1.3)'
-      ..style.filter = 'blur(30px)'
-      ..style.background = '#1E1033';
-    // ignore: undefined_prefixed_name
-    ui_web.platformViewRegistry.registerViewFactory(
-      _userVideoViewId!,
-      (int viewId) => videoEl,
-    );
+    // El widget PlatformVideoPlayer se construirá en el build
+    // Solo marcamos el viewId como inicializado
   }
+
+  /// Referencia al blob URL del usuario para construir el PlatformVideoPlayer.
+  String? get _userBlobUrlCached => _userVideoBlobUrl;
 
   @override
   void dispose() {
@@ -329,6 +366,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
                   return _FeedCard(
                     item: items[index],
                     videoViewId: _userVideoViewId,
+                    videoBlobUrl: blobUrl,
                   );
                 }
                 return _FeedCard(item: items[index]);
@@ -346,11 +384,9 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
                     colors: [
-                      Colors.black.withValues(alpha: 0.7),
-                      Colors.black.withValues(alpha: 0.3),
+                      Colors.black.withValues(alpha: 0.5),
                       Colors.transparent,
                     ],
-                    stops: const [0.0, 0.6, 1.0],
                   ),
                 ),
                 child: SafeArea(
@@ -358,92 +394,79 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
                   child: Padding(
                     padding: const EdgeInsets.symmetric(
                       horizontal: AppSpacing.md,
-                      vertical: AppSpacing.sm,
+                      vertical: AppSpacing.xs,
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
+                    child: Row(
                       children: [
-                        // ── Logo + notification bell ──
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              'MPLOYA',
-                              style: GoogleFonts.outfit(
-                                fontSize: 22,
-                                fontWeight: FontWeight.w800,
-                                color: MployaColors.white,
-                                letterSpacing: 1,
-                              ),
+                        // ── Record story button ──
+                        GestureDetector(
+                          onTap: () => context.push('/video/new-story'),
+                          child: Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              gradient: MployaColors.orangeGradient,
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: MployaColors.orange.withValues(alpha: 0.4),
+                                  blurRadius: 12,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
                             ),
-                            GestureDetector(
-                              onTap: () {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('Sin notificaciones nuevas'),
-                                    behavior: SnackBarBehavior.floating,
-                                    duration: Duration(seconds: 1),
-                                  ),
-                                );
-                              },
-                              child: Container(
+                            child: const Icon(
+                              Icons.videocam_rounded,
+                              color: MployaColors.white,
+                              size: 20,
+                            ),
+                          ),
+                        ),
+                        const Spacer(),
+                        // ── Notification bell with badge ──
+                        GestureDetector(
+                          onTap: () => _showNotificationsSheet(context),
+                          child: Stack(
+                            clipBehavior: Clip.none,
+                            children: [
+                              Container(
                                 width: 40,
                                 height: 40,
                                 decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.1),
+                                  color: Colors.white.withValues(alpha: 0.12),
                                   shape: BoxShape.circle,
                                 ),
                                 child: const Icon(
                                   Icons.notifications_outlined,
                                   color: MployaColors.white,
-                                  size: 24,
+                                  size: 22,
                                 ),
                               ),
-                            ),
-                          ],
-                        ).animate().fadeIn(duration: 400.ms),
-
-                        const SizedBox(height: AppSpacing.md),
-
-                        // ── Stories bar ──
-                        _buildStoriesBar(context),
-
-                        const SizedBox(height: AppSpacing.sm),
-
-                        // ── Match pill ──
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 8,
-                            ),
-                            decoration: BoxDecoration(
-                              gradient: MployaColors.orangeGradient,
-                              borderRadius:
-                                  BorderRadius.circular(AppRadius.pill),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(
-                                  Icons.bolt,
-                                  color: MployaColors.white,
-                                  size: 16,
-                                ),
-                                const SizedBox(width: 2),
-                                Text(
-                                  '${_feedItems[_currentPage].matchPercent}% match',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w700,
-                                    color: MployaColors.white,
+                              // Badge count
+                              Positioned(
+                                top: -2,
+                                right: -2,
+                                child: Container(
+                                  width: 18,
+                                  height: 18,
+                                  decoration: const BoxDecoration(
+                                    color: MployaColors.orange,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      '3',
+                                      style: GoogleFonts.inter(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w700,
+                                        color: MployaColors.white,
+                                      ),
+                                    ),
                                   ),
                                 ),
-                              ],
-                            ),
-                          ).animate().fadeIn(delay: 250.ms, duration: 400.ms),
+                              ),
+                            ],
+                          ),
                         ),
                       ],
                     ),
@@ -457,107 +480,62 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
     );
   }
 
-  /// Builds the horizontal scrollable Stories bar with "+" button and avatar circles
-  Widget _buildStoriesBar(BuildContext context) {
-    return SizedBox(
-      height: 76,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: _storyUsers.length + 1, // +1 for the add button
-        separatorBuilder: (_, _) => const SizedBox(width: AppSpacing.sm),
-        itemBuilder: (context, index) {
-          if (index == 0) {
-            // ── "Add Story" button ──
-            return _buildAddStoryButton(context);
-          }
-          final story = _storyUsers[index - 1];
-          return _buildStoryCircle(story);
-        },
+  // ── Notifications Bottom Sheet ──
+  void _showNotificationsSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1C1C1E),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-    ).animate().fadeIn(delay: 150.ms, duration: 400.ms);
-  }
-
-  Widget _buildAddStoryButton(BuildContext context) {
-    return GestureDetector(
-      onTap: () => context.push('/video/new-story'),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 52,
-            height: 52,
-            decoration: BoxDecoration(
-              gradient: MployaColors.orangeGradient,
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: MployaColors.orange.withValues(alpha: 0.35),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.3),
+                  borderRadius: BorderRadius.circular(2),
                 ),
-              ],
+              ),
             ),
-            child: const Icon(
-              Icons.add,
-              color: MployaColors.white,
-              size: 26,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            'Tu historia',
-            style: GoogleFonts.inter(
-              fontSize: 10,
-              fontWeight: FontWeight.w500,
-              color: Colors.white.withValues(alpha: 0.8),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStoryCircle(_StoryUser story) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 52,
-          height: 52,
-          padding: const EdgeInsets.all(2.5),
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.all(
-              color: story.hasUnread
-                  ? MployaColors.orange
-                  : Colors.white.withValues(alpha: 0.2),
-              width: story.hasUnread ? 2.5 : 1.5,
-            ),
-          ),
-          child: CircleAvatar(
-            backgroundColor: story.color,
-            child: Text(
-              story.initial,
+            const SizedBox(height: AppSpacing.lg),
+            Text(
+              'Notificaciones',
               style: GoogleFonts.outfit(
-                fontSize: 18,
+                fontSize: 20,
                 fontWeight: FontWeight.w700,
                 color: MployaColors.white,
               ),
             ),
-          ),
+            const SizedBox(height: AppSpacing.lg),
+            _NotifTile(
+              icon: Icons.visibility_rounded,
+              iconColor: MployaColors.teal,
+              title: 'TechCorp vio tu historia',
+              subtitle: 'Hace 12 min',
+            ),
+            _NotifTile(
+              icon: Icons.visibility_rounded,
+              iconColor: MployaColors.teal,
+              title: 'Globant vio tu historia',
+              subtitle: 'Hace 1 hora',
+            ),
+            _NotifTile(
+              icon: Icons.thumb_up_rounded,
+              iconColor: MployaColors.orange,
+              title: 'MercadoLibre le gustó tu pitch',
+              subtitle: 'Hace 3 horas',
+            ),
+            const SizedBox(height: AppSpacing.md),
+          ],
         ),
-        const SizedBox(height: AppSpacing.xs),
-        Text(
-          story.initial.toLowerCase(),
-          style: GoogleFonts.inter(
-            fontSize: 10,
-            fontWeight: FontWeight.w500,
-            color: story.hasUnread
-                ? MployaColors.white
-                : Colors.white.withValues(alpha: 0.5),
-          ),
-        ),
-      ],
+      ),
     );
   }
 }
@@ -565,9 +543,10 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
 // ─── Feed Card ───────────────────────────────────────────────────────
 
 class _FeedCard extends StatefulWidget {
-  const _FeedCard({required this.item, this.videoViewId});
+  const _FeedCard({required this.item, this.videoViewId, this.videoBlobUrl});
   final _FeedItem item;
   final String? videoViewId;
+  final String? videoBlobUrl;
 
   @override
   State<_FeedCard> createState() => _FeedCardState();
@@ -928,8 +907,15 @@ class _FeedCardState extends State<_FeedCard> with TickerProviderStateMixin {
         fit: StackFit.expand,
         children: [
           // ── Real video playing behind blur (if available) ──
-          if (widget.videoViewId != null)
-            HtmlElementView(viewType: widget.videoViewId!)
+          if (widget.videoViewId != null && widget.videoBlobUrl != null)
+            PlatformVideoPlayer(
+              viewId: widget.videoViewId!,
+              url: widget.videoBlobUrl!,
+              transform: 'scaleX(-1) scale(1.3)',
+              filter: 'blur(30px)',
+              background: '#1E1033',
+              muted: true,
+            )
           else
             Center(
               child: Icon(
@@ -1204,7 +1190,7 @@ class _FeedCardState extends State<_FeedCard> with TickerProviderStateMixin {
                 Text(
                   item.headlineText,
                   style: GoogleFonts.outfit(
-                    fontSize: 20,
+                    fontSize: 15,
                     fontWeight: FontWeight.w800,
                     color: MployaColors.white,
                     height: 1.2,
@@ -1455,8 +1441,12 @@ class _FeedCardState extends State<_FeedCard> with TickerProviderStateMixin {
         fit: StackFit.expand,
         children: [
           // ── Video playback or placeholder ──
-          if (widget.videoViewId != null)
-            HtmlElementView(viewType: widget.videoViewId!)
+          if (widget.videoViewId != null && widget.videoBlobUrl != null)
+            PlatformVideoPlayer(
+              viewId: '${widget.videoViewId!}-normal',
+              url: widget.videoBlobUrl!,
+              mirror: true,
+            )
           else
             Center(
               child: Icon(
@@ -1497,7 +1487,7 @@ class _FeedCardState extends State<_FeedCard> with TickerProviderStateMixin {
               children: [
                 // Avatar with verified dot
                 GestureDetector(
-                  onTap: () => context.push('/profile/user'),
+                  onTap: () => context.push('/profile/user?id=${Uri.encodeComponent(widget.item.userId)}'),
                   child: Stack(
                     clipBehavior: Clip.none,
                     children: [
@@ -1605,7 +1595,7 @@ class _FeedCardState extends State<_FeedCard> with TickerProviderStateMixin {
                 Text(
                   item.headlineText,
                   style: GoogleFonts.outfit(
-                    fontSize: 20,
+                    fontSize: 15,
                     fontWeight: FontWeight.w800,
                     color: MployaColors.white,
                     height: 1.2,
@@ -2088,12 +2078,72 @@ class _ShareOption extends StatelessWidget {
         style: GoogleFonts.inter(
           fontSize: 15,
           fontWeight: FontWeight.w500,
-          color: textColor,
-        ),
-      ),
-      onTap: onTap,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
+           color: textColor,
+         ),
+       ),
+       onTap: onTap,
+       shape: RoundedRectangleBorder(
+         borderRadius: BorderRadius.circular(12),
+       ),
+     );
+   }
+ }
+
+// ─── Notification Tile ─────────────────────────────────────────────
+
+class _NotifTile extends StatelessWidget {
+  const _NotifTile({
+    required this.icon,
+    required this.iconColor,
+    required this.title,
+    required this.subtitle,
+  });
+
+  final IconData icon;
+  final Color iconColor;
+  final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Row(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: iconColor.withValues(alpha: 0.15),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: iconColor, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    color: Colors.white.withValues(alpha: 0.5),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
