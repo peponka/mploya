@@ -1,0 +1,899 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mploya — La red profesional en video | Video-Pitch gratuito</title>
+    <meta name="description" content="Mostrá tu verdadero talento en 60 segundos. Mploya es la red profesional 100% gratuita que conecta talento con empresas a través de video-pitches con IA.">
+    <meta name="keywords" content="mploya, video pitch, red profesional, empleo, trabajo, CV en video, networking, talento, reclutamiento, headhunter, Argentina, LATAM">
+    <meta name="author" content="Mploya">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://mploya.ai/">
+    <meta name="theme-color" content="#00B37E">
+    
+    <!-- Open Graph / Facebook -->
+    <meta property="og:title" content="Mploya — Tu Video-Pitch Profesional">
+    <meta property="og:description" content="100% Gratis. Sin avisos. Sin CVs aburridos. Grabá tu video-pitch en 60 segundos y conectá con empresas.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://mploya.ai/">
+    <meta property="og:image" content="https://mploya.ai/img/og_cover.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:locale" content="es_AR">
+    <meta property="og:site_name" content="Mploya">
+    
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Mploya — La red profesional en video">
+    <meta name="twitter:description" content="Grabá tu video-pitch en 60 seg. 100% gratis. Sin CVs aburridos.">
+    <meta name="twitter:image" content="https://mploya.ai/img/og_cover.png">
+    
+    <!-- Structured Data: SoftwareApplication -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "Mploya",
+      "operatingSystem": "iOS, Android",
+      "applicationCategory": "BusinessApplication",
+      "description": "Red profesional en video que conecta talento con empresas a través de video-pitches con inteligencia artificial.",
+      "url": "https://mploya.ai",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD",
+        "description": "100% Gratis para candidatos"
+      },
+      "aggregateRating": {
+        "@type": "AggregateRating",
+        "ratingValue": "4.8",
+        "ratingCount": "120"
+      }
+    }
+    </script>
+    
+    <!-- Structured Data: Organization -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      "name": "Mploya",
+      "url": "https://mploya.ai",
+      "logo": "https://mploya.ai/img/app_icon.png",
+      "sameAs": [
+        "https://www.linkedin.com/company/mploya",
+        "https://www.instagram.com/mploya.ai"
+      ],
+      "contactPoint": {
+        "@type": "ContactPoint",
+        "contactType": "customer service",
+        "email": "hello@mploya.ai"
+      }
+    }
+    </script>
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" sizes="32x32" href="img/app_icon.png">
+    <link rel="apple-touch-icon" href="img/app_icon.png">
+
+    <style>
+        :root {
+            /* Tonal Colors - Light Theme based on Stitch Specs */
+            --primary: #006c4b;
+            --primary_container: #00b37e;
+            --on_primary_container: #003d28;
+            
+            --background: #fcf8f8;
+            --surface: #ffffff;
+            --surface_container_low: #f6f3f2;
+            --surface_container: #f0edec;
+            
+            --on_surface: #1c1b1b;
+            --on_surface_variant: #3c4a42;
+            
+            --outline_variant: rgba(187, 202, 192, 0.4);
+            
+            --font-main: 'Inter', sans-serif;
+            
+            /* Spacing Scale */
+            --space-2: 0.5rem;
+            --space-4: 1rem;
+            --space-8: 2rem;
+            --space-12: 3rem;
+            --space-16: 4rem;
+            --space-24: 6rem;
+            --space-32: 8rem;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        body {
+            font-family: var(--font-main);
+            background-color: var(--background);
+            color: var(--on_surface);
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+
+        /* Nav */
+        header {
+            position: fixed;
+            top: 0;
+            width: 100%;
+            padding: var(--space-4) var(--space-8);
+            background-color: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            z-index: 100;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-weight: 800;
+            font-size: 1.75rem;
+            color: var(--on_surface);
+            text-decoration: none;
+            letter-spacing: -0.04em;
+        }
+
+        .logo-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            object-fit: contain;
+        }
+
+        .nav-actions {
+            display: flex;
+            gap: 1.5rem;
+            align-items: center;
+        }
+
+        .nav-actions a {
+            text-decoration: none;
+            color: var(--on_surface_variant);
+            font-weight: 500;
+            font-size: 0.95rem;
+            transition: color 0.15s ease;
+        }
+
+        .nav-actions a:hover {
+            color: var(--on_surface);
+        }
+
+        /* Buttons */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 0.875rem 1.5rem;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            text-decoration: none;
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+            font-size: 1rem;
+        }
+
+        .btn-primary {
+            background-color: var(--primary_container);
+            color: white;
+            box-shadow: 0 4px 14px rgba(0, 179, 126, 0.25);
+        }
+
+        .btn-primary:hover {
+            background-color: var(--primary);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(0, 179, 126, 0.35);
+        }
+        
+        .btn-secondary {
+            background-color: var(--primary);
+            color: white;
+            box-shadow: 0 4px 14px rgba(0, 108, 75, 0.2);
+        }
+        
+        .btn-secondary:hover {
+            background-color: #005a3f;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(0, 108, 75, 0.3);
+        }
+
+        .btn-nav {
+            padding: 0.5rem 1.25rem;
+            font-size: 0.9rem;
+        }
+
+        /* Container */
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 var(--space-8);
+        }
+
+        /* Minimalist Hero Section */
+        .hero {
+            padding-top: calc(var(--space-32) + var(--space-12));
+            padding-bottom: var(--space-24);
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--space-16);
+            align-items: center;
+        }
+
+        .hero-content {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-8);
+            align-items: flex-start;
+        }
+
+        .badge {
+            background: rgba(0, 179, 126, 0.1);
+            color: var(--primary);
+            padding: 6px 16px;
+            border-radius: 64px;
+            font-size: 0.85rem;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            text-transform: uppercase;
+        }
+
+        h1 {
+            font-size: 4.5rem;
+            font-weight: 900;
+            line-height: 1.05;
+            letter-spacing: -0.05em;
+            color: var(--on_surface);
+        }
+        
+        h1 span {
+            background: linear-gradient(135deg, var(--primary), var(--primary_container));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .hero-subtitle {
+            font-size: 1.25rem;
+            line-height: 1.6;
+            color: var(--on_surface_variant);
+            max-width: 480px;
+        }
+
+        .hero-cta {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .mockup-container {
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .mockup-container img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 40px;
+            box-shadow: 0 30px 80px rgba(28, 27, 27, 0.08); /* Long Ambient shadow */
+            transform: rotate(-2deg);
+            transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        
+        .mockup-container:hover img {
+            transform: rotate(0deg) translateY(-10px);
+        }
+
+        /* Features Strategy - Pure Tonal Layering */
+        .features-section {
+            background-color: var(--surface_container_low);
+            padding: var(--space-24) 0;
+        }
+        
+        .section-header {
+            max-width: 700px;
+            margin-bottom: var(--space-16);
+        }
+
+        .section-label {
+            display: inline-block;
+            font-size: 0.85rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--primary);
+            margin-bottom: 1rem;
+        }
+
+        h2 {
+            font-size: 3.5rem;
+            font-weight: 800;
+            letter-spacing: -0.04em;
+            line-height: 1.1;
+            margin-bottom: 1.5rem;
+        }
+
+        .section-desc {
+            font-size: 1.2rem;
+            color: var(--on_surface_variant);
+        }
+
+        /* 3-column Grid for comprehensive features */
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: var(--space-8);
+        }
+
+        .feature-card {
+            background-color: var(--surface);
+            padding: var(--space-8);
+            border-radius: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        
+        .feature-card:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 20px 40px rgba(28, 27, 27, 0.04);
+        }
+
+        .icon-wrapper {
+            background-color: var(--background);
+            width: 56px;
+            height: 56px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            color: var(--primary_container);
+            margin-bottom: 0.5rem;
+        }
+
+        h3 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+        }
+
+        p {
+            font-size: 1rem;
+            color: var(--on_surface_variant);
+            line-height: 1.6;
+        }
+        
+        /* Two Column Focus Feature */
+        .focus-feature {
+            padding: var(--space-24) 0;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--space-16);
+            align-items: center;
+        }
+        
+        .focus-feature.reverse {
+            grid-template-columns: 1fr 1fr;
+            direction: rtl;
+        }
+        
+        .focus-feature.reverse > * {
+            direction: ltr;
+        }
+        
+        .feature-img-wrapper img {
+            max-width: 100%;
+            border-radius: 20px;
+            box-shadow: 0 40px 80px rgba(28, 27, 27, 0.1);
+        }
+
+        /* Free CTA Section */
+        .cta-section {
+            padding: var(--space-24) 0;
+            text-align: center;
+            background-color: var(--surface);
+        }
+
+        .cta-box {
+            background: linear-gradient(135deg, var(--background), var(--surface_container_low));
+            border: 1px solid var(--outline_variant);
+            padding: var(--space-16) var(--space-8);
+            border-radius: 2rem;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        /* Footer */
+        footer {
+            padding: var(--space-12) var(--space-8);
+            background-color: var(--background);
+            border-top: 1px solid var(--outline_variant);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: var(--on_surface_variant);
+        }
+        
+        .footer-links {
+            display: flex;
+            gap: 2rem;
+        }
+        
+        .footer-links a {
+            color: var(--on_surface_variant);
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 0.9rem;
+        }
+
+        /* Mobile Adapters */
+        @media (max-width: 960px) {
+            h1 { font-size: 3.5rem; }
+            h2 { font-size: 2.5rem; }
+            .hero, .focus-feature {
+                grid-template-columns: 1fr;
+                gap: var(--space-12);
+                text-align: center;
+            }
+            .hero-content {
+                align-items: center;
+            }
+            .hero-cta { justify-content: center; }
+            .nav-actions { display: none; }
+            .focus-feature.reverse { direction: ltr; }
+        }
+
+        @media (max-width: 600px) {
+            h1 { font-size: 2.5rem; }
+            .hero { padding-top: 120px; }
+            .hero-cta, .cta-box .hero-cta { flex-direction: column; width: 100%; }
+            .btn { width: 100%; }
+            footer { flex-direction: column; gap: 2rem; text-align: center; }
+            .footer-links { flex-direction: column; gap: 1rem; }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <a href="#" class="logo">
+            <img src="img/ICON.svg" alt="Mploya" class="logo-icon" style="width: 48px; height: 48px; border-radius: 12px;">
+            <img src="img/MPLOYA LOGO.svg" alt="mploya.ai" style="height: 28px; display: none;" class="logo-text-svg">
+            <span>mploya<span style="color: var(--primary_container)">.ai</span></span>
+        </a>
+        <div class="nav-actions">
+            <a href="#funciones">Funciones</a>
+            <a href="#gratis">Precio</a>
+            <a href="#gratis" class="btn btn-primary btn-nav">Descargar App</a>
+        </div>
+    </header>
+
+    <div class="container">
+        <!-- Hero -->
+        <section class="hero">
+            <div class="hero-content">
+                <div class="badge">100% Gratis • Sin Anuncios</div>
+                <h1>Tu talento en <br><span>60 segundos.</span></h1>
+                <p class="hero-subtitle">
+                    Conectá con empresas a través de video-pitches de 60 segundos. Sin CVs. Sin filtros. Destacate por quién sos.
+                </p>
+                <div class="hero-cta" style="align-items: center;">
+                    <a href="#gratis" style="transition: transform 0.2s ease; display: inline-block;" onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform='translateY(0)'">
+                        <img src="https://tools.applemediaservices.com/api/badges/download-on-the-app-store/black/es-mx?size=250x83" alt="Descargar en App Store" style="height: 48px;">
+                    </a>
+                    <a href="#gratis" style="transition: transform 0.2s ease; display: inline-block;" onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform='translateY(0)'">
+                        <img src="https://play.google.com/intl/en_us/badges/static/images/badges/es_badge_web_generic.png" alt="Disponible en Google Play" style="height: 70px; margin: -11px 0;">
+                    </a>
+                </div>
+                <!-- Social Proof -->
+                <div style="display: flex; align-items: center; gap: 16px; margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid var(--outline_variant);">
+                    <div style="display: flex;">
+                        <div style="width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, #00B37E, #00D4AA); border: 2px solid white; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; color: white; font-weight: 700;">MG</div>
+                        <div style="width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, #006c4b, #00B37E); border: 2px solid white; margin-left: -8px; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; color: white; font-weight: 700;">JR</div>
+                        <div style="width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, #00D4AA, #00B37E); border: 2px solid white; margin-left: -8px; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; color: white; font-weight: 700;">LP</div>
+                        <div style="width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, #008F6B, #00D4AA); border: 2px solid white; margin-left: -8px; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; color: white; font-weight: 700;">+</div>
+                    </div>
+                    <div>
+                        <span style="font-weight: 700; font-size: 0.95rem; color: var(--on_surface);">+500 profesionales</span>
+                        <span style="font-size: 0.85rem; color: var(--on_surface_variant);"> ya crearon su perfil</span>
+                    </div>
+                </div>
+            </div>
+            <div class="mockup-container">
+                <!-- Usamos una de las imagenes realistas subidas a /img/ -->
+                <img src="img/app_explore.png" alt="Mploya App Interfaz" />
+            </div>
+        </section>
+    </div>
+
+    <!-- Tonal Shift to Low Surface -->
+    <section class="features-section" id="funciones">
+        <div class="container">
+            <div class="section-header">
+                <span class="section-label">Todo Incluido</span>
+                <h2>Networking Profesional,<br>sin muros de pago.</h2>
+                <p class="section-desc">
+                    Diseñamos Mploya para potenciar conexiones reales. Sin límites de visualización, sin suscripciones obligatorias para poder chatear, todo diseñado con extrema calidad y 100% gratuito para candidatos reales.
+                </p>
+            </div>
+
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="icon-wrapper">🎬</div>
+                    <h3>Video Pitch de 60s</h3>
+                    <p>Subí tu video corto contando tu experiencia. Los reclutadores ven cientos de CVs en texto, pero la energía y personalidad se transmiten en video.</p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="icon-wrapper">🤝</div>
+                    <h3>Nexus Matching</h3>
+                    <p>Un deslizado rápido. Perfiles recomendados para vos, deslizás para conectar, y si hay interés mutuo: ¡Match! Así de directo.</p>
+                </div>
+
+                <div class="feature-card">
+                    <div class="icon-wrapper">🔐</div>
+                    <h3>Modo Stealth Privado</h3>
+                    <p>¿Estás trabajando actualmente? Podés usar Mploya en modo confidencial. Las empresas no verán tu nombre ni empresa actual hasta que vos lo permitas.</p>
+                </div>
+
+                <div class="feature-card">
+                    <div class="icon-wrapper">💬</div>
+                    <h3>Chat & Videollamadas</h3>
+                    <p>Cuando hacés match, el chat se abre al instante. Con indicadores de escritura en tiempo real y llamadas Jitsi integradas dentro de la app sin límite de tiempo.</p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="icon-wrapper">🗺️</div>
+                    <h3>Mapa Radar PostGIS</h3>
+                    <p>Buscá talento o empresas literal a tu alrededor. Nuestro mapa interactivo en tiempo real te permite descubrir oportunidades en tu ciudad exacta.</p>
+                </div>
+
+                <div class="feature-card">
+                    <div class="icon-wrapper">📊</div>
+                    <h3>Analytics Gratis</h3>
+                    <p>¿Cuántas empresas te vieron esta semana? El engagement te llega en tu panel estadístico sin cobrarte ni un centavo.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Content Focus 1: Video Pitch -->
+    <section class="container" style="padding-top: var(--space-24)">
+        <div class="focus-feature">
+            <div>
+                <span class="section-label">El Escenario es Tuyo</span>
+                <h2>Más que un CV. Una experiencia inmersiva.</h2>
+                <p style="font-size: 1.125rem; margin-top: 1rem; margin-bottom: 2rem;">
+                    Al abrir Mploya, el feed de video se expande en pantalla completa creando un entorno audiovisual inmersivo. Acá podés navegar pitches profesionales, conectar mediante interacciones instantáneas, y descubrir las historias recientes (stories) de reclutadores y candidatos cerca tuyo. Tu expertise queda destacado en primer plano con tags e insignias de industria.
+                </p>
+                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                    <span class="badge" style="background: var(--surface_container_low); color: var(--on_surface);">Conexión Directa</span>
+                    <span class="badge" style="background: var(--surface_container_low); color: var(--on_surface);">Stories</span>
+                    <span class="badge" style="background: var(--surface_container_low); color: var(--on_surface);">Tags de Rol</span>
+                </div>
+            </div>
+            <div class="feature-img-wrapper" style="text-align: right;">
+                <img src="img/app_feed.png" alt="Video Pitch Inmersivo Mploya" />
+            </div>
+        </div>
+    </section>
+
+    <!-- Content Focus 2: Chat -->
+    <section class="container" style="padding-top: var(--space-24)">
+        <div class="focus-feature reverse">
+            <div class="feature-img-wrapper">
+                <img src="img/app_chat.png" alt="Chat Interfaz Mploya" />
+            </div>
+            <div>
+                <span class="section-label">Contacto Real</span>
+                <h2>Conversaciones más rápidas, contrataciones más rápidas.</h2>
+                <p style="font-size: 1.125rem; margin-top: 1rem; margin-bottom: 2rem;">
+                    Olvidate de los correos electrónicos perdidos y los tiempos de respuesta eternos. El chat integrado te permite enviar documentos, coordinar entrevistas en vivo mediante videollamadas Jitsi y mantener el contacto desde tu teléfono con una interfaz que se siente nativa, rápida y premium. Todo en vivo.
+                </p>
+                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                    <span class="badge" style="background: var(--surface_container_low); color: var(--on_surface);">Sin límite de mensajes</span>
+                    <span class="badge" style="background: var(--surface_container_low); color: var(--on_surface);">Encriptado</span>
+                    <span class="badge" style="background: var(--surface_container_low); color: var(--on_surface);">Jitsi Integrado</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Content Focus 3: IA + Matching -->
+    <section class="container" style="padding-top: var(--space-24)">
+        <div class="focus-feature">
+            <div>
+                <span class="section-label">Inteligencia Artificial</span>
+                <h2>Matching Score: tu próximo trabajo, calculado por IA.</h2>
+                <p style="font-size: 1.125rem; margin-top: 1rem; margin-bottom: 1.5rem;">
+                    Nuestro motor de inteligencia artificial analiza tu perfil, video-pitch, hashtags de expertise y preferencias para calcular un <strong>porcentaje de compatibilidad en tiempo real</strong> con cada empresa. No más buscar a ciegas: Mploya te muestra exactamente qué oportunidades coinciden con vos.
+                </p>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 1.5rem;">
+                    <div style="background: var(--surface_container_low); padding: 16px; border-radius: 16px;">
+                        <div style="font-size: 1.5rem; margin-bottom: 6px;">🧠</div>
+                        <strong style="font-size: 0.95rem;">Análisis de Video</strong>
+                        <p style="font-size: 0.85rem; color: var(--on_surface_variant); margin-top: 4px;">La IA evalúa tu comunicación, energía y habilidades blandas directamente desde tu pitch.</p>
+                    </div>
+                    <div style="background: var(--surface_container_low); padding: 16px; border-radius: 16px;">
+                        <div style="font-size: 1.5rem; margin-bottom: 6px;">🎯</div>
+                        <strong style="font-size: 0.95rem;">Match Score %</strong>
+                        <p style="font-size: 0.85rem; color: var(--on_surface_variant); margin-top: 4px;">Cada perfil muestra un porcentaje de compatibilidad calculado en base a rol, skills e industria.</p>
+                    </div>
+                    <div style="background: var(--surface_container_low); padding: 16px; border-radius: 16px;">
+                        <div style="font-size: 1.5rem; margin-bottom: 6px;">⚡</div>
+                        <strong style="font-size: 0.95rem;">Nexus Bidireccional</strong>
+                        <p style="font-size: 0.85rem; color: var(--on_surface_variant); margin-top: 4px;">El match solo se activa si ambas partes muestran interés. Sin spam, sin rechazos visibles.</p>
+                    </div>
+                    <div style="background: var(--surface_container_low); padding: 16px; border-radius: 16px;">
+                        <div style="font-size: 1.5rem; margin-bottom: 6px;">📈</div>
+                        <strong style="font-size: 0.95rem;">Recomendaciones Smart</strong>
+                        <p style="font-size: 0.85rem; color: var(--on_surface_variant); margin-top: 4px;">El feed se adapta a tu actividad. Cuanto más usás Mploya, mejores perfiles te recomienda.</p>
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                    <span class="badge" style="background: var(--primary_container); color: white;">Powered by AI</span>
+                    <span class="badge" style="background: var(--surface_container_low); color: var(--on_surface);">92% Precisión</span>
+                    <span class="badge" style="background: var(--surface_container_low); color: var(--on_surface);">Tiempo Real</span>
+                </div>
+            </div>
+            <div class="feature-img-wrapper" style="text-align: right;">
+                <img src="img/app_matching.png" alt="Mploya AI Matching Score" />
+            </div>
+        </div>
+    </section>
+
+    <!-- Detailed Advantages List -->
+    <section class="container" style="padding: var(--space-24) 0;">
+        <div style="background-color: var(--surface); padding: var(--space-12) var(--space-16); border-radius: 2rem; border: 1px solid var(--outline_variant); box-shadow: 0 12px 32px rgba(28,27,27,0.02);">
+            <div style="text-align: center; margin-bottom: var(--space-12);">
+                <span class="section-label">Ventajas Competitivas</span>
+                <h2 style="font-size: 2.5rem; margin-bottom: 0.5rem;">Las 7 Razones para usar Mploya</h2>
+                <p style="font-size: 1.125rem; color: var(--on_surface_variant); max-width: 600px; margin: 0 auto;">Todo lo que necesitás para potenciar tu vida profesional en una sola app, rápida, intuitiva y al alcance de tu bolsillo (gratis).</p>
+            </div>
+            
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 2rem;">
+                <div style="display: flex; gap: 16px;">
+                    <div style="color: var(--primary_container); font-size: 1.5rem; font-weight: 900;">✓</div>
+                    <div>
+                        <strong style="display: block; font-size: 1.125rem; font-weight: 700; color: var(--on_surface);">Reclutamiento Audiovisual (60s)</strong>
+                        <p style="font-size: 0.95rem; color: var(--on_surface_variant); margin-top: 4px; line-height: 1.5;">Demostrá tus habilidades blandas, pasión y capacidad de comunicación instantáneamente, logrando una conexión humana imposible en un CV de papel.</p>
+                    </div>
+                </div>
+                
+                <div style="display: flex; gap: 16px;">
+                    <div style="color: var(--primary_container); font-size: 1.5rem; font-weight: 900;">✓</div>
+                    <div>
+                        <strong style="display: block; font-size: 1.125rem; font-weight: 700; color: var(--on_surface);">Geolocalización Real (Radar Exclusivo)</strong>
+                        <p style="font-size: 0.95rem; color: var(--on_surface_variant); margin-top: 4px; line-height: 1.5;">Buscá tu próxima oportunidad usando nuestro mapa de talento con tecnología PostGIS. Identificá oficinas, empresas o candidatos literalmente a la vuelta de la esquina.</p>
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 16px;">
+                    <div style="color: var(--primary_container); font-size: 1.5rem; font-weight: 900;">✓</div>
+                    <div>
+                        <strong style="display: block; font-size: 1.125rem; font-weight: 700; color: var(--on_surface);">Filtro por Rol ("Ley de Cruce")</strong>
+                        <p style="font-size: 0.95rem; color: var(--on_surface_variant); margin-top: 4px; line-height: 1.5;">Limpiamos el ruido y el ego del networking tradicional. Si sos candidato, solo interactuás con perfiles de empresas. Directo al grano para que nadie pierda tiempo.</p>
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 16px;">
+                    <div style="color: var(--primary_container); font-size: 1.5rem; font-weight: 900;">✓</div>
+                    <div>
+                        <strong style="display: block; font-size: 1.125rem; font-weight: 700; color: var(--on_surface);">Chat Activo + Videollamadas Jitsi</strong>
+                        <p style="font-size: 0.95rem; color: var(--on_surface_variant); margin-top: 4px; line-height: 1.5;">Convertí un match en una entrevista sin mandarte links. Mensajes privados, intercambio de adjuntos en nube y videollamadas, todo con un clic dentro del mismo chat.</p>
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 16px;">
+                    <div style="color: var(--primary_container); font-size: 1.5rem; font-weight: 900;">✓</div>
+                    <div>
+                        <strong style="display: block; font-size: 1.125rem; font-weight: 700; color: var(--on_surface);">Búsqueda Confidencial (Modo Stealth)</strong>
+                        <p style="font-size: 0.95rem; color: var(--on_surface_variant); margin-top: 4px; line-height: 1.5;">Ideado para posiciones en curso. Participá de procesos de búsqueda manteniendo tu historial laboral oculto hasta que apruebes a una empresa en particular.</p>
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 16px;">
+                    <div style="color: var(--primary_container); font-size: 1.5rem; font-weight: 900;">✓</div>
+                    <div>
+                        <strong style="display: block; font-size: 1.125rem; font-weight: 700; color: var(--on_surface);">Sistema Inteligente de Tags</strong>
+                        <p style="font-size: 0.95rem; color: var(--on_surface_variant); margin-top: 4px; line-height: 1.5;">Destacá tu expertise con insignias ágiles (#Desarrollo, #Java, #UX). El algoritmo asegura que los reclutadores encuentren los keywords que necesitás proyectar.</p>
+                    </div>
+                </div>
+                
+                <div style="display: flex; gap: 16px;">
+                    <div style="color: var(--primary_container); font-size: 1.5rem; font-weight: 900;">✓</div>
+                    <div>
+                        <strong style="display: block; font-size: 1.125rem; font-weight: 700; color: var(--on_surface);">Perfiles Flexibles y Duales</strong>
+                        <p style="font-size: 0.95rem; color: var(--on_surface_variant); margin-top: 4px; line-height: 1.5;">¿Buscando trabajo pero también tenés un emprendimiento? Alterná en milisegundos entre tu modo cuenta personal y tu modo administrador de empresa. Tu hub total.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Pricing Section -->
+    <section class="container" style="padding: var(--space-24) 0;" id="gratis">
+        <div style="text-align: center; margin-bottom: var(--space-12);">
+            <span class="section-label">Precio</span>
+            <h2 style="font-size: 2.5rem; margin-bottom: 0.5rem;">Simple. Transparente. Sin letra chica.</h2>
+            <p style="font-size: 1.125rem; color: var(--on_surface_variant); max-width: 550px; margin: 0 auto;">Mploya es gratis para candidatos. Las empresas acceden a herramientas premium con 30 días para probar sin compromiso.</p>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; max-width: 820px; margin: 0 auto;">
+            <!-- Plan Candidatos -->
+            <div style="background: var(--surface); border: 2px solid var(--primary_container); border-radius: 1.5rem; padding: 2.5rem 2rem; position: relative; box-shadow: 0 8px 32px rgba(0,179,126,0.08);">
+                <div style="position: absolute; top: -14px; left: 50%; transform: translateX(-50%); background: var(--primary_container); color: white; padding: 4px 16px; border-radius: 20px; font-size: 0.8rem; font-weight: 700;">RECOMENDADO</div>
+                <div style="text-align: center;">
+                    <div style="font-size: 2.5rem; margin-bottom: 4px;">👤</div>
+                    <h3 style="font-size: 1.25rem; font-weight: 800; margin-bottom: 4px;">Candidatos</h3>
+                    <div style="font-size: 2.75rem; font-weight: 900; color: var(--primary_container); margin: 0.75rem 0;">$0</div>
+                    <p style="font-size: 0.9rem; color: var(--on_surface_variant); margin-bottom: 1.5rem;">Gratis para siempre</p>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 10px;">
+                    <div style="display: flex; align-items: center; gap: 8px; font-size: 0.95rem;">
+                        <span style="color: var(--primary_container); font-weight: 700;">✓</span> Video-pitch de 60 segundos
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px; font-size: 0.95rem;">
+                        <span style="color: var(--primary_container); font-weight: 700;">✓</span> Chat y videollamadas ilimitadas
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px; font-size: 0.95rem;">
+                        <span style="color: var(--primary_container); font-weight: 700;">✓</span> Matching con empresas
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px; font-size: 0.95rem;">
+                        <span style="color: var(--primary_container); font-weight: 700;">✓</span> Mapa Radar interactivo
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px; font-size: 0.95rem;">
+                        <span style="color: var(--primary_container); font-weight: 700;">✓</span> Analytics de perfil
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px; font-size: 0.95rem;">
+                        <span style="color: var(--primary_container); font-weight: 700;">✓</span> Modo Stealth confidencial
+                    </div>
+                </div>
+            </div>
+
+            <!-- Plan Empresas -->
+            <div style="background: var(--surface); border: 1px solid var(--outline_variant); border-radius: 1.5rem; padding: 2.5rem 2rem; box-shadow: 0 4px 16px rgba(28,27,27,0.03);">
+                <div style="text-align: center;">
+                    <div style="font-size: 2.5rem; margin-bottom: 4px;">🏢</div>
+                    <h3 style="font-size: 1.25rem; font-weight: 800; margin-bottom: 4px;">Empresas</h3>
+                    <div style="font-size: 2.75rem; font-weight: 900; color: var(--on_surface); margin: 0.75rem 0;">30 días</div>
+                    <p style="font-size: 0.9rem; color: var(--on_surface_variant); margin-bottom: 1.5rem;">Free trial • Sin tarjeta</p>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 10px;">
+                    <div style="display: flex; align-items: center; gap: 8px; font-size: 0.95rem;">
+                        <span style="color: var(--primary_container); font-weight: 700;">✓</span> ATS integrado (pipeline visual)
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px; font-size: 0.95rem;">
+                        <span style="color: var(--primary_container); font-weight: 700;">✓</span> Ver datos completos de candidatos
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px; font-size: 0.95rem;">
+                        <span style="color: var(--primary_container); font-weight: 700;">✓</span> Publicar ofertas laborales
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px; font-size: 0.95rem;">
+                        <span style="color: var(--primary_container); font-weight: 700;">✓</span> Chat directo con talento
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px; font-size: 0.95rem;">
+                        <span style="color: var(--primary_container); font-weight: 700;">✓</span> Filtros avanzados por skill
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px; font-size: 0.95rem;">
+                        <span style="color: var(--primary_container); font-weight: 700;">✓</span> Analytics de engagement
+                    </div>
+                </div>
+                <div style="margin-top: 1.5rem; text-align: center;">
+                    <span style="font-size: 0.85rem; color: var(--on_surface_variant);">Desde <strong style="color: var(--on_surface);">$99/mes</strong> después del trial</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Bottom CTA -->
+    <section class="cta-section">
+        <div class="container">
+            <div class="cta-box">
+                <h2>No pierdas más tiempo puliendo ese PDF.</h2>
+                <p style="font-size: 1.125rem; color: var(--on_surface_variant); margin: 1.5rem auto 2.5rem; max-width: 500px;">
+                    Te garantizamos una experiencia 100% gratuita para perfiles personales, sin trucos. Solo descargate Mploya, grabá tu video, y abrile las puertas al trabajo de tu vida.
+                </p>
+                <div class="hero-cta" style="justify-content: center; align-items: center;">
+                    <a href="#" style="transition: transform 0.2s ease; display: inline-block;" onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform='translateY(0)'">
+                        <img src="https://tools.applemediaservices.com/api/badges/download-on-the-app-store/black/es-mx?size=250x83" alt="Descargar en App Store" style="height: 52px;">
+                    </a>
+                    <a href="#" style="transition: transform 0.2s ease; display: inline-block;" onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform='translateY(0)'">
+                        <img src="https://play.google.com/intl/en_us/badges/static/images/badges/es_badge_web_generic.png" alt="Disponible en Google Play" style="height: 76px; margin: -12px 0;">
+                    </a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <footer class="container">
+        <div style="display: flex; align-items: center; gap: 8px;">
+            <img src="img/ICON.svg" alt="Mploya" style="width: 24px; height: 24px; border-radius: 6px;">
+            <span><span style="font-weight: 700; color: var(--on_surface)">mploya.ai</span> © 2026. Todos los derechos reservados.</span>
+        </div>
+        <div class="footer-links">
+            <a href="../privacy.html">Política de Privacidad</a>
+            <a href="../terms.html">Términos y Condiciones</a>
+            <a href="mailto:hello@mploya.ai">Contacto</a>
+        </div>
+    </footer>
+
+    <script>
+        // ── Deep Link Redirect Logic ──────────────────────────────────────────
+        // Si el usuario llega a /p/{userId} o /j/{jobId} desde el browser
+        // (porque Universal Links / App Links no abrieron la app),
+        // intentamos abrir la app vía custom scheme. Si falla, redirigimos a
+        // la store correspondiente.
+        (function() {
+            const path = window.location.pathname;
+            
+            // Detectar si es un deep link de perfil o vacante
+            const profileMatch = path.match(/^\/p\/([a-zA-Z0-9\-]+)/);
+            const jobMatch = path.match(/^\/j\/([a-zA-Z0-9\-]+)/);
+            
+            if (profileMatch || jobMatch) {
+                const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+                const isAndroid = /Android/.test(navigator.userAgent);
+                
+                // Construir URL del custom scheme para fallback
+                const customSchemeUrl = 'io.supabase.mploya://' + path.substring(1);
+                
+                // URLs de las stores
+                const appStoreUrl = 'https://apps.apple.com/app/mploya/id0000000000'; // TODO: reemplazar con ID real
+                const playStoreUrl = 'https://play.google.com/store/apps/details?id=com.mploya.ai';
+                
+                // Intentar abrir la app vía custom scheme
+                const start = Date.now();
+                window.location.href = customSchemeUrl;
+                
+                // Si después de 1.5s aún estamos en la página, la app no está instalada
+                setTimeout(function() {
+                    if (Date.now() - start < 2000) {
+                        // El usuario sigue en la página → redirigir a store
+                        if (isIOS) {
+                            window.location.href = appStoreUrl;
+                        } else if (isAndroid) {
+                            window.location.href = playStoreUrl;
+                        }
+                        // En desktop: se queda en la landing page normalmente
+                    }
+                }, 1500);
+            }
+        })();
+
+        // Smooth scroll para links internos
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function(e) {
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    e.preventDefault();
+                    target.scrollIntoView({ behavior: 'smooth' });
+                }
+            });
+        });
+    </script>
+</body>
+</html>

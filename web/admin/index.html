@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mploya Admin Panel</title>
+  <meta name="description" content="Panel de administración de Mploya — Gestión de usuarios, vacantes, pagos y analytics.">
+  <meta name="robots" content="noindex, nofollow">
+  <link rel="icon" href="../favicon.png">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="admin.css">
+</head>
+<body>
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <!-- LOGIN GATE                                                         -->
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <div id="login-screen" class="login-screen">
+    <div class="login-card">
+      <div class="login-logo">
+        <div class="logo-badge">
+          <img src="mploya_icon.png" alt="Mploya" width="72" height="72" style="border-radius:20px">
+        </div>
+        <h1 class="login-title">mploya<span class="accent">.ai</span></h1>
+        <p class="login-subtitle">Panel de Administración</p>
+      </div>
+      <form id="login-form">
+        <div class="form-field">
+          <label for="login-email">Email</label>
+          <input type="email" id="login-email" placeholder="admin@mploya.ai" required autocomplete="email">
+        </div>
+        <div class="form-field">
+          <label for="login-password">Contraseña</label>
+          <input type="password" id="login-password" placeholder="••••••••" required autocomplete="current-password">
+        </div>
+        <button type="submit" id="login-btn" class="btn-primary btn-lg">
+          <span id="login-btn-text">Acceder al Panel</span>
+          <span id="login-spinner" class="spinner hidden"></span>
+        </button>
+        <p id="login-error" class="form-error hidden"></p>
+      </form>
+      <p class="login-footer">Acceso restringido · Solo administradores autorizados</p>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <!-- MAIN ADMIN PANEL                                                   -->
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <div id="admin-panel" class="admin-layout hidden">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <img src="mploya_icon.png" alt="Mploya" width="36" height="36" style="border-radius:8px;flex-shrink:0">
+        <span class="brand-text">mploya<span class="accent">.ai</span></span>
+      </div>
+
+      <div class="sidebar-section">
+        <p class="sidebar-label">Principal</p>
+        <nav>
+          <button class="nav-btn active" data-tab="dashboard" onclick="switchTab('dashboard')">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+            Dashboard
+          </button>
+          <button class="nav-btn" data-tab="users" onclick="switchTab('users')">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            Usuarios
+          </button>
+          <button class="nav-btn" data-tab="jobs" onclick="switchTab('jobs')">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>
+            Vacantes
+          </button>
+          <button class="nav-btn" data-tab="payments" onclick="switchTab('payments')">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+            Pagos
+            <span class="nav-badge">$</span>
+          </button>
+        </nav>
+      </div>
+
+      <div class="sidebar-section">
+        <p class="sidebar-label">Gestión</p>
+        <nav>
+          <button class="nav-btn" data-tab="verifications" onclick="switchTab('verifications')">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            Verificaciones
+          </button>
+          <button class="nav-btn" data-tab="challenges" onclick="switchTab('challenges')">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            Challenges
+          </button>
+          <button class="nav-btn" data-tab="ghost" onclick="switchTab('ghost')">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2C6.48 2 2 6.48 2 12v8l2-2 2 2 2-2 2 2 2-2 2 2 2-2 2 2v-8c0-5.52-4.48-10-10-10z"/><circle cx="8" cy="11" r="1" fill="currentColor"/><circle cx="16" cy="11" r="1" fill="currentColor"/></svg>
+            Ghost Apply
+          </button>
+        </nav>
+      </div>
+
+      <div class="sidebar-section">
+        <p class="sidebar-label">Sistema</p>
+        <nav>
+          <button class="nav-btn" data-tab="moderation" onclick="switchTab('moderation')">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            Moderación
+          </button>
+          <button class="nav-btn" data-tab="analytics" onclick="switchTab('analytics')">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+            Analytics
+          </button>
+          <button class="nav-btn" data-tab="config" onclick="switchTab('config')">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            Configuración
+          </button>
+        </nav>
+      </div>
+
+      <div class="sidebar-user">
+        <div class="user-pill">
+          <div class="user-avatar" id="admin-avatar">J</div>
+          <div class="user-meta">
+            <p class="user-name" id="admin-name">Admin</p>
+            <p class="user-role">Super Admin</p>
+          </div>
+        </div>
+        <button class="btn-logout" onclick="logout()" title="Cerrar sesión">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <main class="main">
+      <header class="topbar">
+        <div>
+          <h1 id="page-title" class="topbar-title">Dashboard</h1>
+          <p id="page-subtitle" class="topbar-sub">Resumen general de la plataforma</p>
+        </div>
+        <div class="topbar-right">
+          <span class="live-dot"></span>
+          <span class="topbar-time" id="header-time"></span>
+        </div>
+      </header>
+
+      <div class="content">
+
+        <!-- ────────── DASHBOARD ────────── -->
+        <section id="tab-dashboard" class="tab active">
+          <div class="kpi-row">
+            <div class="kpi-card"><div class="kpi-icon bg-green"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></div><div><p class="kpi-value" id="stat-users">—</p><p class="kpi-label">Usuarios Totales</p></div></div>
+            <div class="kpi-card"><div class="kpi-icon bg-blue"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg></div><div><p class="kpi-value" id="stat-jobs">—</p><p class="kpi-label">Vacantes Activas</p></div></div>
+            <div class="kpi-card"><div class="kpi-icon bg-amber"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></div><div><p class="kpi-value" id="stat-premium">—</p><p class="kpi-label">Suscriptores Premium</p></div></div>
+            <div class="kpi-card"><div class="kpi-icon bg-indigo"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg></div><div><p class="kpi-value" id="stat-revenue">$0</p><p class="kpi-label">Revenue Estimado</p></div></div>
+            <div class="kpi-card"><div class="kpi-icon bg-purple"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div><div><p class="kpi-value" id="stat-messages">—</p><p class="kpi-label">Mensajes (24h)</p></div></div>
+            <div class="kpi-card"><div class="kpi-icon bg-rose"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M12 2C6.48 2 2 6.48 2 12v8l2-2 2 2 2-2 2 2 2-2 2 2 2-2 2 2v-8c0-5.52-4.48-10-10-10z"/></svg></div><div><p class="kpi-value" id="stat-ghost">—</p><p class="kpi-label">Ghost Applications</p></div></div>
+          </div>
+          <div class="grid-2">
+            <div class="card"><div class="card-header"><h3>Últimos Registros</h3></div><div class="card-body" id="recent-users"><div class="skeleton"></div></div></div>
+            <div class="card"><div class="card-header"><h3>Pagos Recientes</h3></div><div class="card-body" id="recent-payments"><div class="skeleton"></div></div></div>
+          </div>
+        </section>
+
+        <!-- ────────── USERS ────────── -->
+        <section id="tab-users" class="tab">
+          <div class="toolbar">
+            <input type="text" id="user-search" class="input-search" placeholder="Buscar por nombre, email o headline..." oninput="searchUsers()">
+            <div class="toolbar-filters">
+              <select id="user-type-filter" class="select" onchange="filterUsers()"><option value="">Todos los tipos</option><option value="abierto">Abierto</option><option value="confidencial">Confidencial</option><option value="empresa">Empresa</option></select>
+              <select id="user-premium-filter" class="select" onchange="filterUsers()"><option value="">Premium: Todos</option><option value="true">Solo Premium</option><option value="false">Solo Free</option></select>
+            </div>
+          </div>
+          <div class="card"><table class="table" id="users-table"><thead><tr><th>Usuario</th><th>Tipo</th><th>Plan</th><th>Tags</th><th>Registrado</th><th>Acciones</th></tr></thead><tbody id="users-tbody"></tbody></table></div>
+          <div class="pagination" id="users-pagination"></div>
+        </section>
+
+        <!-- ────────── JOBS ────────── -->
+        <section id="tab-jobs" class="tab">
+          <div class="toolbar"><input type="text" id="job-search" class="input-search" placeholder="Buscar vacantes..." oninput="searchJobs()"></div>
+          <div class="card"><table class="table"><thead><tr><th>Título</th><th>Empresa</th><th>Ubicación</th><th>Modalidad</th><th>Estado</th><th>Creada</th><th>Acciones</th></tr></thead><tbody id="jobs-tbody"></tbody></table></div>
+        </section>
+
+        <!-- ────────── PAYMENTS ────────── -->
+        <section id="tab-payments" class="tab">
+          <div class="kpi-row">
+            <div class="kpi-card"><div class="kpi-icon bg-green"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div><div><p class="kpi-value" id="pay-revenue">$0</p><p class="kpi-label">Revenue Mensual</p></div></div>
+            <div class="kpi-card"><div class="kpi-icon bg-indigo"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></div><div><p class="kpi-value" id="pay-active">0</p><p class="kpi-label">Suscriptores Activos</p></div></div>
+            <div class="kpi-card"><div class="kpi-icon bg-amber"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div><div><p class="kpi-value" id="pay-trial">0</p><p class="kpi-label">En Trial</p></div></div>
+            <div class="kpi-card"><div class="kpi-icon bg-rose"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/></svg></div><div><p class="kpi-value" id="pay-churn">0%</p><p class="kpi-label">Churn Rate</p></div></div>
+          </div>
+          <div class="toolbar">
+            <div class="toolbar-filters">
+              <select id="pay-status-filter" class="select" onchange="filterPayments()">
+                <option value="">Todos los estados</option>
+                <option value="active">✅ Activos</option>
+                <option value="trial">⏳ Trial</option>
+                <option value="expired">❌ Expirados</option>
+                <option value="cancelled">🚫 Cancelados</option>
+              </select>
+            </div>
+            <button class="btn-primary btn-sm" onclick="exportPayments()">📥 Exportar CSV</button>
+          </div>
+          <div class="card"><table class="table"><thead><tr><th>Usuario</th><th>Plan</th><th>Estado</th><th>Desde</th><th>Expira</th><th>Método</th><th>Acciones</th></tr></thead><tbody id="payments-tbody"></tbody></table></div>
+        </section>
+
+        <!-- ────────── VERIFICATIONS ────────── -->
+        <section id="tab-verifications" class="tab">
+          <div class="chip-bar">
+            <button class="chip active" onclick="filterVerifications('all', this)">Todas</button>
+            <button class="chip" onclick="filterVerifications('pending', this)">⏳ Pendientes</button>
+            <button class="chip" onclick="filterVerifications('approved', this)">✅ Aprobadas</button>
+            <button class="chip" onclick="filterVerifications('rejected', this)">❌ Rechazadas</button>
+          </div>
+          <div class="card-grid" id="verifications-grid"></div>
+        </section>
+
+        <!-- ────────── CHALLENGES ────────── -->
+        <section id="tab-challenges" class="tab">
+          <div class="toolbar"><h3 class="toolbar-title">Pitch Challenges</h3><button class="btn-primary btn-sm" onclick="showCreateChallenge()">+ Nuevo Challenge</button></div>
+          <div class="card-grid" id="challenges-grid"></div>
+          <div id="challenge-modal" class="modal hidden"><div class="modal-box"><h3>Crear Nuevo Challenge</h3><form id="challenge-form" onsubmit="createChallenge(event)"><div class="form-field"><label>Título</label><input type="text" id="ch-title" required placeholder="Ej: Presentarte en 30 segundos"></div><div class="form-field"><label>Descripción</label><textarea id="ch-desc" rows="3" placeholder="Instrucciones del reto..."></textarea></div><div class="form-row"><div class="form-field"><label>Emoji</label><input type="text" id="ch-emoji" value="🎯" maxlength="4"></div><div class="form-field"><label>Duración (seg)</label><input type="number" id="ch-duration" value="30" min="10" max="120"></div></div><div class="form-row"><div class="form-field"><label>Inicia</label><input type="datetime-local" id="ch-start" required></div><div class="form-field"><label>Termina</label><input type="datetime-local" id="ch-end" required></div></div><div class="modal-footer"><button type="button" class="btn-ghost" onclick="closeModal('challenge-modal')">Cancelar</button><button type="submit" class="btn-primary">Crear Challenge</button></div></form></div></div>
+        </section>
+
+        <!-- ────────── GHOST ────────── -->
+        <section id="tab-ghost" class="tab">
+          <div class="card"><table class="table"><thead><tr><th>Candidato (ID)</th><th>Headline Ciego</th><th>Match %</th><th>Estado</th><th>Desbloqueado</th><th>Fecha</th></tr></thead><tbody id="ghost-tbody"></tbody></table></div>
+        </section>
+
+        <!-- ────────── MODERATION ────────── -->
+        <section id="tab-moderation" class="tab">
+          <div class="grid-2">
+            <div class="card"><div class="card-header"><h3>🚩 Reportes de Contenido</h3></div><div class="card-body" id="reports-list"><div class="skeleton"></div></div></div>
+            <div class="card"><div class="card-header"><h3>🚫 Usuarios Bloqueados</h3></div><div class="card-body" id="blocked-list"><div class="skeleton"></div></div></div>
+          </div>
+        </section>
+
+        <!-- ────────── ANALYTICS ────────── -->
+        <section id="tab-analytics" class="tab">
+          <div class="kpi-row">
+            <div class="kpi-card"><div class="kpi-icon bg-indigo"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></div><div><p class="kpi-value" id="stat-dau">—</p><p class="kpi-label">Activos (24h)</p></div></div>
+            <div class="kpi-card"><div class="kpi-icon bg-blue"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg></div><div><p class="kpi-value" id="stat-videos">—</p><p class="kpi-label">Videos Subidos</p></div></div>
+            <div class="kpi-card"><div class="kpi-icon bg-purple"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div><div><p class="kpi-value" id="stat-applications">—</p><p class="kpi-label">Aplicaciones</p></div></div>
+            <div class="kpi-card"><div class="kpi-icon bg-green"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div><div><p class="kpi-value" id="stat-verified">—</p><p class="kpi-label">Empresas Verificadas</p></div></div>
+          </div>
+          <div class="card"><div class="card-header"><h3>📊 Registros por Día (14 días)</h3></div><div id="chart-registrations" class="chart"></div></div>
+        </section>
+
+        <!-- ────────── CONFIG ────────── -->
+        <section id="tab-config" class="tab">
+          <div class="card" style="max-width:600px">
+            <div class="card-header"><h3>⚙️ Configuración del Panel</h3></div>
+            <div class="card-body">
+              <div class="form-field"><label>Emails de administradores</label><textarea id="cfg-emails" rows="3" style="font-family:monospace;font-size:13px" readonly></textarea><p class="form-hint">Editá el archivo admin.js para cambiar los admins</p></div>
+              <div class="form-field"><label>Código secreto de acceso</label><input type="text" id="cfg-secret" readonly><p class="form-hint">Cambiá ADMIN_SECRET en admin.js</p></div>
+              <div class="form-field"><label>Supabase Project</label><input type="text" value="qclipzefqndcefwwixdy" readonly style="color:#2ECC71;font-weight:700"></div>
+              <div class="form-field"><label>Versión del Panel</label><input type="text" value="v2.0.0 — Abril 2026" readonly></div>
+            </div>
+          </div>
+        </section>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- User Detail Modal -->
+  <div id="user-modal" class="modal hidden"><div class="modal-box modal-lg"><div class="modal-head"><h3 id="user-modal-name">Detalle de Usuario</h3><button class="btn-icon" onclick="closeModal('user-modal')">✕</button></div><div id="user-modal-body"></div><div class="modal-footer" id="user-modal-actions"></div></div></div>
+
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <!-- AI COPILOT CHAT                                                    -->
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <div id="copilot-fab" class="copilot-fab" onclick="toggleCopilot()" title="Mploya AI Copilot">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
+      <path d="M12 2a4 4 0 0 1 4 4v1a4 4 0 0 1-8 0V6a4 4 0 0 1 4-4z"/>
+      <path d="M6 10h12a2 2 0 0 1 2 2v1a8 8 0 0 1-16 0v-1a2 2 0 0 1 2-2z"/>
+      <circle cx="9" cy="14" r="1" fill="white"/>
+      <circle cx="15" cy="14" r="1" fill="white"/>
+      <path d="M9 18h6" stroke-linecap="round"/>
+    </svg>
+    <span class="copilot-badge">IA</span>
+  </div>
+
+  <div id="copilot-panel" class="copilot-panel hidden">
+    <div class="copilot-header">
+      <div class="copilot-header-left">
+        <img src="mploya_icon.png" alt="" width="28" height="28" style="border-radius:7px">
+        <div>
+          <div class="copilot-title">Mploya Copilot</div>
+          <div class="copilot-status"><span class="copilot-dot"></span>Gemini AI · En línea</div>
+        </div>
+      </div>
+      <button class="btn-icon" onclick="toggleCopilot()" style="color:var(--text-3)">✕</button>
+    </div>
+
+    <div class="copilot-messages" id="copilot-messages">
+      <div class="copilot-msg copilot-msg-ai">
+        <div class="copilot-msg-avatar">🤖</div>
+        <div class="copilot-msg-bubble">
+          ¡Hola! Soy el copilot de <strong>Mploya</strong>. Puedo analizar tus datos de la plataforma, generar reportes y darte insights en tiempo real.<br><br>
+          <em>¿En qué te puedo ayudar?</em>
+        </div>
+      </div>
+    </div>
+
+    <div class="copilot-suggestions" id="copilot-suggestions">
+      <button class="copilot-chip" onclick="askCopilot('Dame un resumen ejecutivo de la plataforma')">📊 Resumen ejecutivo</button>
+      <button class="copilot-chip" onclick="askCopilot('¿Cuáles son los usuarios más activos?')">👥 Top usuarios</button>
+      <button class="copilot-chip" onclick="askCopilot('¿Qué tendencias ves en los registros?')">📈 Tendencias</button>
+      <button class="copilot-chip" onclick="askCopilot('¿Hay alguna anomalía o alerta?')">🚨 Alertas</button>
+    </div>
+
+    <div class="copilot-input-bar">
+      <input type="text" id="copilot-input" class="copilot-input" placeholder="Preguntale algo a la IA..." onkeydown="if(event.key==='Enter')sendCopilot()">
+      <button class="copilot-send" onclick="sendCopilot()" id="copilot-send-btn">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase-js.min.js"></script>
+  <script>document.getElementById('login-form').addEventListener('submit', function(e){e.preventDefault();});</script>
+  <script src="admin.js"></script>
+</body>
+</html>

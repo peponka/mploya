@@ -1,0 +1,14 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.mploya.ai",
+      "sha256_cert_fingerprints": [
+        "BE:95:ED:C2:94:14:39:57:A1:31:1B:C7:89:F0:8B:50:F3:B5:3D:F5:47:69:E0:FF:CC:EF:EA:DC:65:8B:C0:3F"
+      ]
+    }
+  }
+]
