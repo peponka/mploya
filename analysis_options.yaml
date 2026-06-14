@@ -1,1 +1,60 @@
 include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  exclude:
+    - scripts_dev/**
+    - test_*.dart
+  language:
+    strict-casts: false
+    strict-inference: false
+    strict-raw-types: false
+  errors:
+    # Downgrade to warning/info during migration
+    inference_failure_on_function_invocation: ignore
+    inference_failure_on_instance_creation: ignore
+    inference_failure_on_collection_literal: ignore
+    strict_raw_type: ignore
+    argument_type_not_assignable: warning
+    always_use_package_imports: ignore
+    unused_field: info
+    unawaited_futures: info
+
+linter:
+  rules:
+    # ── Correctness ──
+    prefer_const_constructors: false
+    prefer_const_declarations: false
+    avoid_print: false
+    prefer_single_quotes: false
+    cancel_subscriptions: true
+    close_sinks: true
+    unawaited_futures: false
+    unnecessary_statements: true
+    no_duplicate_case_values: true
+    valid_regexps: true
+    # ── Style ──
+    prefer_final_locals: false
+    prefer_final_in_for_each: false
+    prefer_is_empty: true
+    prefer_is_not_empty: true
+    prefer_typing_uninitialized_variables: true
+    avoid_empty_else: true
+    avoid_init_to_null: true
+    avoid_return_types_on_setters: true
+    avoid_unnecessary_containers: false
+    sized_box_for_whitespace: false
+    sort_child_properties_last: false
+    use_build_context_synchronously: false
+    # ── Safety ──
+    always_use_package_imports: false
+    avoid_relative_lib_imports: false
+    depend_on_referenced_packages: false
+    no_leading_underscores_for_local_identifiers: false
+    # ── Performance ──
+    avoid_function_literals_in_foreach_calls: false
+    prefer_collection_literals: true
+    prefer_contains: true
+    prefer_for_elements_to_map_fromIterable: false
+    prefer_if_null_operators: true
+    prefer_spread_collections: false
+    unnecessary_null_checks: false

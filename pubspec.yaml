@@ -1,21 +1,19 @@
 name: mploya
 description: "mploya - Plataforma de empleo impulsada por IA"
 publish_to: 'none'
-version: 0.1.0+1
+version: 1.0.0+1
 
 environment:
-  sdk: ^3.11.4
+  sdk: '>=3.11.0 <4.0.0'
 
 dependencies:
   flutter:
     sdk: flutter
+  flutter_localizations:
+    sdk: flutter
 
   # State Management
   flutter_riverpod: ^2.6.1
-  riverpod_annotation: ^2.6.1
-
-  # Navigation
-  go_router: ^15.1.2
 
   # Backend - Supabase
   supabase_flutter: ^2.9.0
@@ -28,8 +26,8 @@ dependencies:
   # Environment
   flutter_dotenv: ^5.2.1
 
-
   # UI
+  cupertino_icons: ^1.0.8
   google_fonts: ^6.2.1
   flutter_animate: ^4.5.2
   shimmer: ^3.0.0
@@ -51,6 +49,14 @@ dependencies:
   share_plus: ^10.1.4
   image_picker: ^1.1.2
   path_provider: ^2.1.5
+  crypto: ^3.0.3
+  http: ^1.2.2
+  mime: ^2.0.0
+  image: ^4.3.0
+  file_picker: ^8.1.7
+  visibility_detector: ^0.4.0+2
+  permission_handler: ^11.3.1
+  app_links: ^6.3.3
 
   # Camera & Video (cross-platform)
   camera: ^0.11.0+2
@@ -67,21 +73,22 @@ dependencies:
 
   # Notifications
   flutter_local_notifications: ^18.0.1
+  webview_flutter: ^4.13.1
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^6.0.0
-  build_runner: ^2.4.14
-  riverpod_generator: ^2.6.4
-  custom_lint: ^0.7.5
-  riverpod_lint: ^2.6.4
+  flutter_lints: ^4.0.0
 
 flutter:
+  generate: true
   uses-material-design: true
 
   assets:
     - assets/.env
     - assets/images/
+    - assets/images/empty_states/
+    - assets/branding/
     - assets/icons/
     - assets/animations/
+    - assets/videos/

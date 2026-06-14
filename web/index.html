@@ -37,6 +37,31 @@
 
   <title>mploya.ai — Empleo en video</title>
   <link rel="manifest" href="manifest.json">
+
+  <style>
+    /* El plugin de video usa un <video> HTML real que el ClipRRect de Flutter
+       no recorta en web. Lo redondeamos por CSS para el feed estilo TikTok web. */
+    video {
+      border-radius: 16px;
+      /* El <video> HTML captura el click antes que Flutter; lo desactivamos
+         para que el tap llegue a la capa de gestos (play/pausa estilo TikTok). */
+      pointer-events: none;
+    }
+    /* El platform-view del video también se "come" el click: lo dejamos pasar a
+       Flutter. La videollamada (Jitsi) usa <iframe>, que sí debe seguir clickeable. */
+    flt-platform-view,
+    flt-platform-view-slot {
+      pointer-events: none;
+    }
+    iframe {
+      pointer-events: auto;
+    }
+    /* Fallback: si el <video> va dentro de un platform view, redondeamos el host. */
+    flt-platform-view {
+      border-radius: 16px;
+      overflow: hidden;
+    }
+  </style>
 </head>
 <body>
   <!--
@@ -47,6 +72,15 @@
     For more details:
     * https://docs.flutter.dev/platform-integration/web/initialization
   -->
+  <!-- Jitsi close handler: auto-navigate back when call ends -->
+  <script>
+    window.addEventListener('message', function(e) {
+      if (e.data === 'jitsi-close') {
+        window.location.hash = '#/home';
+      }
+    });
+  </script>
+
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>
