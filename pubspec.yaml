@@ -26,6 +26,9 @@ dependencies:
   # Environment
   flutter_dotenv: ^5.2.1
 
+  # Charts
+  fl_chart: ^0.69.0
+
   # UI
   cupertino_icons: ^1.0.8
   google_fonts: ^6.2.1
