@@ -27,7 +27,8 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
   final _supabase = Supabase.instance.client;
   bool _isLoading = true;
   List<Map<String, dynamic>> _jobs = [];
-  String _selectedFilter = 'Todos';
+  String _selectedFilter = 'Para Ti';
+  Map<String, int> _matchScores = {};
   final Set<String> _appliedJobIds = {};
 
   @override
@@ -44,7 +45,6 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
           .select('*, users!jobs_company_id_fkey(name, avatar_url)')
           .eq('is_active', true);
 
-      // Apply filter
       if (_selectedFilter == 'Remoto') {
         query = query.eq('modality', 'remote');
       } else if (_selectedFilter == 'Presencial') {
@@ -54,9 +54,15 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
       }
 
       final res = await query.order('created_at', ascending: false).limit(50);
+      var jobs = List<Map<String, dynamic>>.from(res);
+
+      if (_selectedFilter == 'Para Ti') {
+        jobs = await _rankJobsForUser(jobs);
+      }
+
       if (mounted) {
         setState(() {
-          _jobs = List<Map<String, dynamic>>.from(res);
+          _jobs = jobs;
           _isLoading = false;
         });
       }
@@ -76,6 +82,53 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
         if (mounted) setState(() => _isLoading = false);
       }
     }
+  }
+
+  Future<List<Map<String, dynamic>>> _rankJobsForUser(List<Map<String, dynamic>> jobs) async {
+    final uid = _supabase.auth.currentUser?.id;
+    if (uid == null) return jobs;
+
+    try {
+      final userData = await _supabase
+          .from('users')
+          .select('tags, skills')
+          .eq('id', uid)
+          .maybeSingle();
+
+      final userTags = List<String>.from(userData?['tags'] ?? []);
+      final userSkills = List<String>.from(userData?['skills'] ?? []);
+
+      if (userTags.isEmpty && userSkills.isEmpty) return jobs;
+
+      final scores = <String, int>{};
+      for (final job in jobs) {
+        final jobId = job['id']?.toString() ?? '';
+        final jobTags = List<String>.from(job['tags'] ?? []);
+        final jobTitle = job['title']?.toString().toLowerCase() ?? '';
+
+        int score = 0;
+        for (final t in userTags) {
+          if (jobTags.any((jt) => jt.toLowerCase() == t.toLowerCase())) score += 20;
+          if (jobTitle.contains(t.toLowerCase())) score += 10;
+        }
+        for (final s in userSkills) {
+          if (jobTags.any((jt) => jt.toLowerCase() == s.toLowerCase())) score += 15;
+        }
+        scores[jobId] = score.clamp(0, 100);
+      }
+
+      if (mounted) setState(() => _matchScores = scores);
+
+      jobs.sort((a, b) {
+        final sa = scores[a['id']?.toString() ?? ''] ?? 0;
+        final sb = scores[b['id']?.toString() ?? ''] ?? 0;
+        return sb.compareTo(sa);
+      });
+    } catch (e) {
+      debugPrint('Error ranking jobs: $e');
+    }
+
+    return jobs;
   }
 
   void _applyToJob(String jobId, String jobTitle) async {
@@ -295,7 +348,7 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
                           child: ListView(
                             scrollDirection: Axis.horizontal,
                             padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                            children: ['Todos', 'Remoto', 'Presencial', 'C-Level']
+                            children: ['Para Ti', 'Todos', 'Remoto', 'Presencial', 'C-Level']
                                 .map((f) => Padding(
                                       padding: const EdgeInsets.only(right: 8),
                                       child: GestureDetector(
@@ -345,11 +398,14 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
                           delegate: SliverChildBuilderDelegate(
                             (context, index) {
                               final job = _jobs[index];
+                              final jobId = job['id']?.toString() ?? '';
+                              final matchScore = _matchScores[jobId];
                               return _JobListCard(
                                 job: job,
-                                isApplied: _appliedJobIds.contains(job['id']?.toString()),
+                                isApplied: _appliedJobIds.contains(jobId),
+                                matchScore: matchScore != null && matchScore > 0 ? matchScore : null,
                                 onApply: () => _applyToJob(
-                                  job['id'].toString(),
+                                  jobId,
                                   job['title']?.toString() ?? 'Vacante',
                                 ),
                               );
@@ -507,11 +563,13 @@ class _JobListCard extends StatefulWidget {
   final Map<String, dynamic> job;
   final bool isApplied;
   final VoidCallback onApply;
+  final int? matchScore;
 
   const _JobListCard({
     required this.job,
     required this.isApplied,
     required this.onApply,
+    this.matchScore,
   });
 
   @override
@@ -672,6 +730,39 @@ class _JobListCardState extends State<_JobListCard> {
             ],
           ),
           const SizedBox(height: 16),
+
+          // Match score badge (only when "Para Ti" filter is active)
+          if (widget.matchScore != null && widget.matchScore! > 0) ...[
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF5F3DC4), Color(0xFFAE3EC9)],
+                    ),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text('⚡', style: TextStyle(fontSize: 12)),
+                      const SizedBox(width: 4),
+                      Text(
+                        '${widget.matchScore}% match',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+          ],
 
           // Salary + Date
           Row(
