@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../theme/app_theme.dart';
 import '../models/models.dart';
+import '../services/chat_service.dart';
+import 'agora_call_screen.dart';
 
 class ChatInmailScreen extends StatefulWidget {
   final NexUser? targetUser;
@@ -43,6 +45,31 @@ class _ChatInmailScreenState extends State<ChatInmailScreen> {
   void dispose() {
     _msgController.dispose();
     super.dispose();
+  }
+
+  void _startVideoCall(BuildContext context) async {
+    final myId = _supabase.auth.currentUser?.id;
+    final otherId = widget.targetUser?.id;
+    if (myId == null || otherId == null) return;
+
+    // Notificar en el chat que se inició videollamada
+    await ChatService.instance.sendTextMessage(
+      receiverId: otherId,
+      text: '📹 Videollamada iniciada — únete desde la app',
+    );
+
+    if (!context.mounted) return;
+    final channelName = '${[myId, otherId]..sort()}'.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '').substring(0, 32);
+    Navigator.push(
+      context,
+      CupertinoPageRoute(
+        builder: (_) => AgoraCallScreen(
+          channelName: channelName,
+          displayName: _supabase.auth.currentUser?.userMetadata?['full_name']?.toString() ?? 'Usuario',
+          otherName: widget.targetUser?.name ?? 'Talento',
+        ),
+      ),
+    );
   }
 
   Future<void> _sendMessage() async {
@@ -85,6 +112,11 @@ class _ChatInmailScreenState extends State<ChatInmailScreen> {
             Text(authorName, style: TextStyle(color: context.textPrimary)),
             const Text('Respuesta garantizada al 85%', style: TextStyle(color: MployaTheme.brandAccent, fontSize: 10, fontWeight: FontWeight.bold)),
           ],
+        ),
+        trailing: CupertinoButton(
+          padding: EdgeInsets.zero,
+          onPressed: () => _startVideoCall(context),
+          child: const Icon(CupertinoIcons.video_camera_solid, color: MployaTheme.brandAccent, size: 26),
         ),
       ),
       child: SafeArea(

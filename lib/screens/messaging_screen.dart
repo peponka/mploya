@@ -5,8 +5,6 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../services/jitsi_stub_mobile.dart'
-    if (dart.library.html) '../services/jitsi_stub_web.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:video_player/video_player.dart';
@@ -17,6 +15,7 @@ import '../services/chat_service.dart';
 import '../services/content_moderation_service.dart';
 import '../utils/time_utils.dart';
 import '../navigation/main_navigation.dart';
+import 'agora_call_screen.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MessagingScreen — inbox & matches reales (Premium "No-Line" Theme)
@@ -1038,113 +1037,30 @@ class ChatDetailScreenState extends State<ChatDetailScreen> {
       debugPrint('⚠️ Jitsi call notification failed: $e');
     }
 
-    // ── 4. Abrir Jitsi ──
-    try {
-      // Web or desktop → Open in browser
-      if (kIsWeb || !(defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS)) {
-        final jitsiUrl = Uri.parse('https://meet.jit.si/$roomId');
-        if (await canLaunchUrl(jitsiUrl)) {
-          await launchUrl(jitsiUrl, mode: LaunchMode.externalApplication);
-        }
-        return;
+    // ── 4. Abrir Jitsi embebido ──
+    if (!mounted) return;
+
+    if (kIsWeb) {
+      // Web → abrir en navegador (no hay WebView nativo)
+      final jitsiUrl = Uri.parse('https://meet.jit.si/$roomId');
+      if (await canLaunchUrl(jitsiUrl)) {
+        await launchUrl(jitsiUrl, mode: LaunchMode.externalApplication);
       }
-
-      // Mobile (Android/iOS) → Use native SDK with lifecycle listeners
-      final jitsiMeet = JitsiMeet();
-      
-      // Listeners para manejar el ciclo de vida de la llamada
-      final listeners = JitsiMeetEventListener(
-        conferenceJoined: (url) {
-          debugPrint('✅ Jitsi: conference joined → $url');
-        },
-        conferenceTerminated: (url, error) {
-          debugPrint('📞 Jitsi: conference ended → returning to chat');
-          // Forzar que la app vuelva al foreground cuando termina la llamada
-          if (mounted) {
-            // Pequeño delay para que Jitsi termine de limpiar su Activity
-            Future.delayed(const Duration(milliseconds: 500), () {
-              if (mounted) setState(() {}); // Refresh chat screen
-            });
-          }
-        },
-        conferenceWillJoin: (url) {
-          debugPrint('🔄 Jitsi: conference will join → $url');
-        },
-        participantLeft: (participantId) {
-          debugPrint('👋 Jitsi: participant left → $participantId');
-        },
-      );
-
-      final options = JitsiMeetConferenceOptions(
-        room: roomId,
-        serverURL: 'https://meet.jit.si',
-        userInfo: JitsiMeetUserInfo(
-          displayName: myName,
-          avatar: myAvatar,
-        ),
-        featureFlags: {
-          'welcomepage.enabled': false,
-          'prejoinpage.enabled': false,
-          'lobby-mode.enabled': false,
-          'chat.enabled': true,
-          'invite.enabled': false,
-          'recording.enabled': false,
-          'live-streaming.enabled': false,
-          'pip.enabled': true,
-          'toolbox.enabled': true,
-          'filmstrip.enabled': true,
-          'video-share.enabled': false,
-          'android.screensharing.enabled': false,
-          'unsaferoomwarning.enabled': false,
-          'security-options.enabled': false,
-          // Crítico: desactivar call-integration para que no use TelecomManager
-          // Sin esto, Android trata la llamada como nativa y al colgar sale de la app
-          'call-integration.enabled': false,
-        },
-        configOverrides: {
-          'subject': 'Entrevista Mploya',
-          'startWithAudioMuted': false,
-          'startWithVideoMuted': false,
-          'disableDeepLinking': true,
-          'enableClosePage': false,
-          'p2p.enabled': true,
-        },
-      );
-
-      await jitsiMeet.join(options, listeners);
-    } catch (e, st) {
-      debugPrint('⚠️ Jitsi join error: $e\n$st');
-      if (mounted) {
-        showCupertinoDialog(
-          context: context,
-          builder: (ctx) => CupertinoAlertDialog(
-            title: const Text('Error de Videollamada'),
-            content: Text(
-              'No se pudo iniciar la videollamada. '
-              'Verificá tu conexión e intentá de nuevo.\n\n'
-              'Podés unirte desde el navegador:\nhttps://meet.jit.si/$roomId',
-            ),
-            actions: [
-              CupertinoDialogAction(
-                child: const Text('Abrir en Navegador'),
-                onPressed: () async {
-                  Navigator.pop(ctx);
-                  final url = Uri.parse('https://meet.jit.si/$roomId');
-                  if (await canLaunchUrl(url)) {
-                    await launchUrl(url, mode: LaunchMode.externalApplication);
-                  }
-                },
-              ),
-              CupertinoDialogAction(
-                isDestructiveAction: true,
-                child: const Text('Cerrar'),
-                onPressed: () => Navigator.pop(ctx),
-              ),
-            ],
-          ),
-        );
-      }
+      return;
     }
+
+    // Mobile → Agora nativo, sin PIN, sin login
+    if (!mounted) return;
+    Navigator.push(
+      context,
+      CupertinoPageRoute(
+        builder: (_) => AgoraCallScreen(
+          channelName: roomId,
+          displayName: myName,
+          otherName: widget.otherUser.name,
+        ),
+      ),
+    );
   }
 
   // ── Mostrar opciones de adjuntar archivo ──

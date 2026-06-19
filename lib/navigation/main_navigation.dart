@@ -12,9 +12,12 @@ import '../screens/explore_screen.dart';
 import '../screens/notifications_screen.dart';
 import '../screens/profile_screen.dart';
 import '../screens/ats_dashboard_screen.dart';
+import '../screens/jobs_screen.dart';
+import '../screens/messages_screen.dart';
 import '../services/revenuecat_service.dart';
 import '../services/connectivity_service.dart';
 import '../services/video_preload_manager.dart';
+import '../services/coach_mark_service.dart';
 
 final ValueNotifier<int> currentMainTabNotifier = ValueNotifier<int>(0);
 
@@ -29,10 +32,12 @@ class _MainNavigationState extends State<MainNavigation> {
   int _currentIndex = 0;
   int _unreadNotifications = 0;
   int _pendingConnections = 0;
+  int _unreadMessages = 0;
   String _accountType = 'candidato';
 
   StreamSubscription<List<Map<String, dynamic>>>? _notifSub;
   StreamSubscription<List<Map<String, dynamic>>>? _connSub;
+  StreamSubscription<List<Map<String, dynamic>>>? _msgSub;
 
   @override
   void initState() {
@@ -44,6 +49,10 @@ class _MainNavigationState extends State<MainNavigation> {
     if (uid != null) {
       RevenueCatService.instance.initialize(uid);
     }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) CoachMarkService.showNavTour(context);
+    });
   }
 
   // Screens estáticos (nunca se reconstruyen)
@@ -53,13 +62,16 @@ class _MainNavigationState extends State<MainNavigation> {
   static const _atsDashboard = AtsDashboardScreen();
   static const _notifications = NotificationsScreen();
   static const _profile = ProfileScreen();
+  static const _messages = MessagesScreen();
 
   List<Widget> get _screens => [
-        _homeFeed,
-        _explore,
-        (_accountType == 'empresa' || _accountType == 'headhunter') ? _atsDashboard : _network,
-        _notifications,
-        _profile,
+        _homeFeed,           // 0
+        _explore,            // 1
+        (_accountType == 'empresa' || _accountType == 'headhunter') ? _atsDashboard : _network, // 2
+        _notifications,      // 3
+        _profile,            // 4
+        _messages,           // 5
+        const JobsScreen(),  // 6 (web sidebar only)
       ];
 
   Future<void> _fetchAccountType() async {
@@ -133,12 +145,30 @@ class _MainNavigationState extends State<MainNavigation> {
           onError: (e) =>
               debugPrint('⚠️ connections stream error (non-fatal): $e'),
         );
+
+    _msgSub = Supabase.instance.client
+        .from('messages')
+        .stream(primaryKey: ['id'])
+        .listen(
+          (rows) {
+            if (!mounted) return;
+            setState(() {
+              _unreadMessages = rows
+                  .where((r) =>
+                      r['receiver_id'] == uid && r['is_read'] == false)
+                  .length;
+            });
+          },
+          onError: (e) =>
+              debugPrint('⚠️ messages stream error (non-fatal): $e'),
+        );
   }
 
   @override
   void dispose() {
     _notifSub?.cancel();
     _connSub?.cancel();
+    _msgSub?.cancel();
     super.dispose();
   }
 
@@ -167,6 +197,7 @@ class _MainNavigationState extends State<MainNavigation> {
         screens: _screens,
         unreadNotifications: _unreadNotifications,
         pendingConnections: _pendingConnections,
+        unreadMessages: _unreadMessages,
         accountType: _accountType,
       );
     }
@@ -198,6 +229,7 @@ class _MainNavigationState extends State<MainNavigation> {
               onTap: _onTabTap,
               unreadNotifications: _unreadNotifications,
               pendingConnections: _pendingConnections,
+              unreadMessages: _unreadMessages,
             ),
           ),
         ],
@@ -216,6 +248,7 @@ class _WebLayout extends StatelessWidget {
   final List<Widget> screens;
   final int unreadNotifications;
   final int pendingConnections;
+  final int unreadMessages;
   final String accountType;
 
   const _WebLayout({
@@ -224,6 +257,7 @@ class _WebLayout extends StatelessWidget {
     required this.screens,
     required this.unreadNotifications,
     required this.pendingConnections,
+    required this.unreadMessages,
     required this.accountType,
   });
 
@@ -337,54 +371,90 @@ class _WebLayout extends StatelessWidget {
                 child: ListView(
                   padding: const EdgeInsets.symmetric(vertical: 8),
                   children: [
-                    _SidebarItem(
-                      icon: CupertinoIcons.play_rectangle_fill,
-                      inactiveIcon: CupertinoIcons.play_rectangle,
-                      label: 'Para ti',
-                      isActive: currentIndex == 0,
-                      isExpanded: isExpanded,
-                      badgeCount: 0,
-                      onTap: () => onTap(0),
+                    Container(
+                      key: cmNavFeedKey,
+                      child: _SidebarItem(
+                        icon: CupertinoIcons.play_rectangle_fill,
+                        inactiveIcon: CupertinoIcons.play_rectangle,
+                        label: 'Para ti',
+                        isActive: currentIndex == 0,
+                        isExpanded: isExpanded,
+                        badgeCount: 0,
+                        onTap: () => onTap(0),
+                      ),
+                    ),
+                    Container(
+                      key: cmNavExploreKey,
+                      child: _SidebarItem(
+                        icon: CupertinoIcons.compass_fill,
+                        inactiveIcon: CupertinoIcons.compass,
+                        label: 'Explorar',
+                        isActive: currentIndex == 1,
+                        isExpanded: isExpanded,
+                        badgeCount: 0,
+                        onTap: () => onTap(1),
+                      ),
+                    ),
+                    Container(
+                      key: cmNavMatchKey,
+                      child: _SidebarItem(
+                        icon: (accountType == 'empresa' || accountType == 'headhunter')
+                            ? CupertinoIcons.briefcase_fill
+                            : CupertinoIcons.bolt_fill,
+                        inactiveIcon: (accountType == 'empresa' || accountType == 'headhunter')
+                            ? CupertinoIcons.briefcase
+                            : CupertinoIcons.bolt,
+                        label: (accountType == 'empresa' || accountType == 'headhunter') ? 'Candidatos' : 'Matches',
+                        isActive: currentIndex == 2,
+                        isExpanded: isExpanded,
+                        badgeCount: pendingConnections,
+                        onTap: () => onTap(2),
+                      ),
+                    ),
+                    Container(
+                      key: cmNavAlertsKey,
+                      child: _SidebarItem(
+                        icon: CupertinoIcons.bell_fill,
+                        inactiveIcon: CupertinoIcons.bell,
+                        label: 'Alertas',
+                        isActive: currentIndex == 3,
+                        isExpanded: isExpanded,
+                        badgeCount: unreadNotifications,
+                        onTap: () => onTap(3),
+                      ),
+                    ),
+                    Container(
+                      key: cmNavProfileKey,
+                      child: _SidebarItem(
+                        icon: CupertinoIcons.person_fill,
+                        inactiveIcon: CupertinoIcons.person,
+                        label: 'Perfil',
+                        isActive: currentIndex == 4,
+                        isExpanded: isExpanded,
+                        badgeCount: 0,
+                        onTap: () => onTap(4),
+                      ),
                     ),
                     _SidebarItem(
-                      icon: CupertinoIcons.compass_fill,
-                      inactiveIcon: CupertinoIcons.compass,
-                      label: 'Explorar',
-                      isActive: currentIndex == 1,
+                      icon: CupertinoIcons.chat_bubble_2_fill,
+                      inactiveIcon: CupertinoIcons.chat_bubble_2,
+                      label: 'Mensajes',
+                      isActive: currentIndex == 5,
                       isExpanded: isExpanded,
-                      badgeCount: 0,
-                      onTap: () => onTap(1),
+                      badgeCount: unreadMessages,
+                      onTap: () => onTap(5),
                     ),
-                    _SidebarItem(
-                      icon: (accountType == 'empresa' || accountType == 'headhunter')
-                          ? CupertinoIcons.briefcase_fill
-                          : CupertinoIcons.bolt_fill,
-                      inactiveIcon: (accountType == 'empresa' || accountType == 'headhunter')
-                          ? CupertinoIcons.briefcase
-                          : CupertinoIcons.bolt,
-                      label: (accountType == 'empresa' || accountType == 'headhunter') ? 'Candidatos' : 'Matches',
-                      isActive: currentIndex == 2,
-                      isExpanded: isExpanded,
-                      badgeCount: pendingConnections,
-                      onTap: () => onTap(2),
-                    ),
-                    _SidebarItem(
-                      icon: CupertinoIcons.bell_fill,
-                      inactiveIcon: CupertinoIcons.bell,
-                      label: 'Alertas',
-                      isActive: currentIndex == 3,
-                      isExpanded: isExpanded,
-                      badgeCount: unreadNotifications,
-                      onTap: () => onTap(3),
-                    ),
-                    _SidebarItem(
-                      icon: CupertinoIcons.person_fill,
-                      inactiveIcon: CupertinoIcons.person,
-                      label: 'Perfil',
-                      isActive: currentIndex == 4,
-                      isExpanded: isExpanded,
-                      badgeCount: 0,
-                      onTap: () => onTap(4),
+                    Container(
+                      key: cmNavJobsKey,
+                      child: _SidebarItem(
+                        icon: CupertinoIcons.briefcase_fill,
+                        inactiveIcon: CupertinoIcons.briefcase,
+                        label: 'Vacantes',
+                        isActive: currentIndex == 6,
+                        isExpanded: isExpanded,
+                        badgeCount: 0,
+                        onTap: () => onTap(6),
+                      ),
                     ),
                   ],
                 ),
@@ -607,12 +677,14 @@ class _CustomTabBar extends StatelessWidget {
   final ValueChanged<int> onTap;
   final int unreadNotifications;
   final int pendingConnections;
+  final int unreadMessages;
 
   const _CustomTabBar({
     required this.currentIndex,
     required this.onTap,
     required this.unreadNotifications,
     required this.pendingConnections,
+    required this.unreadMessages,
   });
 
   @override
@@ -632,42 +704,65 @@ class _CustomTabBar extends StatelessWidget {
       padding: EdgeInsets.only(bottom: bottomPadding),
       child: Row(
         children: [
-          _TabItem(
-            icon: CupertinoIcons.play_rectangle_fill,
-            inactiveIcon: CupertinoIcons.play_rectangle,
-            label: 'Feed',
-            isActive: currentIndex == 0,
-            onTap: () => onTap(0),
+          Container(
+            key: cmNavFeedKey,
+            child: _TabItem(
+              icon: CupertinoIcons.play_rectangle_fill,
+              inactiveIcon: CupertinoIcons.play_rectangle,
+              label: 'Feed',
+              isActive: currentIndex == 0,
+              onTap: () => onTap(0),
+            ),
+          ),
+          Container(
+            key: cmNavExploreKey,
+            child: _TabItem(
+              icon: CupertinoIcons.compass_fill,
+              inactiveIcon: CupertinoIcons.compass,
+              label: 'Explorar',
+              isActive: currentIndex == 1,
+              onTap: () => onTap(1),
+            ),
+          ),
+          Container(
+            key: cmNavMatchKey,
+            child: _TabItem(
+              icon: CupertinoIcons.bolt_fill,
+              inactiveIcon: CupertinoIcons.bolt,
+              label: 'Matches',
+              badgeCount: pendingConnections,
+              isActive: currentIndex == 2,
+              onTap: () => onTap(2),
+            ),
+          ),
+          Container(
+            key: cmNavAlertsKey,
+            child: _TabItem(
+              icon: CupertinoIcons.bell_fill,
+              inactiveIcon: CupertinoIcons.bell,
+              label: 'Alertas',
+              badgeCount: unreadNotifications,
+              isActive: currentIndex == 3,
+              onTap: () => onTap(3),
+            ),
+          ),
+          Container(
+            key: cmNavProfileKey,
+            child: _TabItem(
+              icon: CupertinoIcons.person_fill,
+              inactiveIcon: CupertinoIcons.person,
+              label: 'Perfil',
+              isActive: currentIndex == 4,
+              onTap: () => onTap(4),
+            ),
           ),
           _TabItem(
-            icon: CupertinoIcons.compass_fill,
-            inactiveIcon: CupertinoIcons.compass,
-            label: 'Explorar',
-            isActive: currentIndex == 1,
-            onTap: () => onTap(1),
-          ),
-          _TabItem(
-            icon: CupertinoIcons.bolt_fill,
-            inactiveIcon: CupertinoIcons.bolt,
-            label: 'Matches',
-            badgeCount: pendingConnections,
-            isActive: currentIndex == 2,
-            onTap: () => onTap(2),
-          ),
-          _TabItem(
-            icon: CupertinoIcons.bell_fill,
-            inactiveIcon: CupertinoIcons.bell,
-            label: 'Alertas',
-            badgeCount: unreadNotifications,
-            isActive: currentIndex == 3,
-            onTap: () => onTap(3),
-          ),
-          _TabItem(
-            icon: CupertinoIcons.person_fill,
-            inactiveIcon: CupertinoIcons.person,
-            label: 'Perfil',
-            isActive: currentIndex == 4,
-            onTap: () => onTap(4),
+            icon: CupertinoIcons.chat_bubble_2_fill,
+            inactiveIcon: CupertinoIcons.chat_bubble_2,
+            label: 'Mensajes',
+            badgeCount: unreadMessages,
+            isActive: currentIndex == 5,
+            onTap: () => onTap(5),
           ),
         ],
       ),
