@@ -809,11 +809,11 @@ class ChatDetailScreenState extends State<ChatDetailScreen> {
     try {
       final row = await Supabase.instance.client
           .from('users')
-          .select('full_name')
+          .select('name')
           .eq('id', _currentUserId!)
           .maybeSingle();
       if (row != null && mounted) {
-        setState(() => _myDisplayName = row['full_name']?.toString() ?? 'Usuario');
+        setState(() => _myDisplayName = row['name']?.toString() ?? 'Usuario');
       }
     } catch (_) {}
   }
@@ -1020,11 +1020,11 @@ class ChatDetailScreenState extends State<ChatDetailScreen> {
     try {
       final row = await Supabase.instance.client
           .from('users')
-          .select('full_name, avatar_url')
+          .select('name, avatar_url')
           .eq('id', _currentUserId!)
           .maybeSingle();
       if (row != null) {
-        myName = row['full_name']?.toString() ?? myName;
+        myName = row['name']?.toString() ?? myName;
         myAvatar = row['avatar_url']?.toString();
       }
     } catch (e) {
