@@ -18,6 +18,7 @@ import '../services/claude_ai_service.dart';
 import '../services/video_preload_manager.dart';
 import '../services/company_verification_service.dart';
 import 'profile_viewers_screen.dart';
+import 'admin_dashboard_screen.dart';
 import 'candidate_profile_form_screen.dart';
 import 'company_profile_form_screen.dart';
 import 'stealth_profile_form_screen.dart';
@@ -60,6 +61,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String _connectionStatus = 'none';
   bool _isLoadingConnection = false;
   int _selectedProfileTab = 0; // 0=Sobre mí, 1=Portfolio, 2=Herramientas
+  bool _isAdmin = false;
 
   @override
   void initState() {
@@ -76,8 +78,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
             .select()
             .eq('id', uid)
             .maybeSingle();
+        _checkAdmin(uid);
       }
     }
+  }
+
+  Future<void> _checkAdmin(String uid) async {
+    try {
+      final row = await Supabase.instance.client
+          .from('users').select('is_admin').eq('id', uid).maybeSingle();
+      if (mounted && row?['is_admin'] == true) setState(() => _isAdmin = true);
+    } catch (_) {}
   }
 
   Future<void> _fetchConnectionStatus(String otherId) async {
@@ -645,6 +656,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     onTap: () => showGenerarBioSheet(context, profile),
                     accent: true,
                   ),
+                  if (_isAdmin) ...[
+                    const SizedBox(width: 10),
+                    _actionPill(
+                      icon: CupertinoIcons.shield_fill,
+                      label: 'Admin',
+                      onTap: () => Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const AdminDashboardScreen())),
+                      color: const Color(0xFF6366F1),
+                    ),
+                  ],
                 ],
               ),
             const SizedBox(height: 20),
@@ -773,23 +793,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   // ── Action Pill Helper ──
-  Widget _actionPill({required IconData icon, required String label, required VoidCallback onTap, bool accent = false}) {
+  Widget _actionPill({required IconData icon, required String label, required VoidCallback onTap, bool accent = false, Color? color}) {
+    final c = color ?? (accent ? MployaTheme.brandAccent : null);
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
         decoration: BoxDecoration(
-          color: accent
-              ? MployaTheme.brandAccent.withValues(alpha: 0.08)
+          color: c != null
+              ? c.withValues(alpha: 0.08)
               : (context.isDark ? NexTheme.darkSurface : const Color(0xFFF2F2F7)),
           borderRadius: BorderRadius.circular(MployaTheme.radiusPill),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 14, color: accent ? MployaTheme.brandAccent : context.textPrimary),
+            Icon(icon, size: 14, color: c ?? context.textPrimary),
             const SizedBox(width: 6),
-            Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: accent ? MployaTheme.brandAccent : context.textPrimary)),
+            Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: c ?? context.textPrimary)),
           ],
         ),
       ),
