@@ -223,6 +223,8 @@ class _OverviewTabState extends State<_OverviewTab> {
   String? _error;
   final Map<String, int> _kpis = {};
   List<FlSpot> _growthSpots = [];
+  List<MapEntry<String, int>> _topSkills = [];
+  List<MapEntry<String, int>> _topCities = [];
 
   @override
   void initState() {
@@ -295,6 +297,37 @@ class _OverviewTabState extends State<_OverviewTab> {
         _growthSpots = List.generate(31, (i) => FlSpot(i.toDouble(), (byDay[i] ?? 0).toDouble()));
       } catch (_) { _growthSpots = []; }
 
+      // Top skills
+      try {
+        final rows = await _sb.from('users').select('tags').not('tags', 'is', null);
+        final Map<String, int> counts = {};
+        for (final row in rows as List) {
+          final tags = row['tags'];
+          if (tags is List) {
+            for (final t in tags) {
+              final tag = t.toString().toLowerCase().trim();
+              if (tag.isNotEmpty) counts[tag] = (counts[tag] ?? 0) + 1;
+            }
+          }
+        }
+        final sorted = counts.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+        _topSkills = sorted.take(8).toList();
+      } catch (_) { _topSkills = []; }
+
+      // Top ciudades
+      try {
+        final rows = await _sb.from('users').select('city').not('city', 'is', null);
+        final Map<String, int> counts = {};
+        for (final row in rows as List) {
+          final city = row['city']?.toString().trim() ?? '';
+          if (city.isEmpty) continue;
+          final key = city.split(',').first.trim();
+          if (key.isNotEmpty) counts[key] = (counts[key] ?? 0) + 1;
+        }
+        final sorted = counts.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+        _topCities = sorted.take(6).toList();
+      } catch (_) { _topCities = []; }
+
       setState(() => _loading = false);
     } catch (e) {
       setState(() { _loading = false; _error = '$e'; });
@@ -366,6 +399,76 @@ class _OverviewTabState extends State<_OverviewTab> {
                   : _GrowthLineChart(spots: _growthSpots),
             ),
           ),
+          const SizedBox(height: 16),
+
+          // Top Skills e infografía de ciudades lado a lado
+          LayoutBuilder(builder: (context, c) {
+            final wide = c.maxWidth > 620;
+            final skills = _ChartCard(
+              title: 'Top habilidades',
+              child: _topSkills.isEmpty
+                  ? Text('Sin datos', style: TextStyle(color: context.textTertiary, fontSize: 13))
+                  : Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: _topSkills.map((e) {
+                        final maxVal = _topSkills.first.value;
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Row(children: [
+                            SizedBox(width: 90, child: Text('#${e.key}', style: TextStyle(fontSize: 12, color: context.textSecondary), overflow: TextOverflow.ellipsis)),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: LayoutBuilder(builder: (ctx, bc) => Stack(children: [
+                                Container(height: 6, decoration: BoxDecoration(color: const Color(0xFFFF6B35).withValues(alpha: 0.12), borderRadius: BorderRadius.circular(3))),
+                                Container(height: 6, width: bc.maxWidth * (e.value / maxVal), decoration: BoxDecoration(color: const Color(0xFFFF6B35), borderRadius: BorderRadius.circular(3))),
+                              ])),
+                            ),
+                            const SizedBox(width: 8),
+                            Text('${e.value}', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: context.textPrimary)),
+                          ]),
+                        );
+                      }).toList(),
+                    ),
+            );
+            final cities = _ChartCard(
+              title: 'Usuarios por ciudad',
+              child: _topCities.isEmpty
+                  ? Text('Sin datos', style: TextStyle(color: context.textTertiary, fontSize: 13))
+                  : Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: _topCities.asMap().entries.map((entry) {
+                        final i = entry.key;
+                        final e = entry.value;
+                        final colors = [const Color(0xFF3B82F6), const Color(0xFF22C55E), const Color(0xFF6366F1), const Color(0xFFF59E0B), const Color(0xFFEC4899), const Color(0xFF14B8A6)];
+                        final color = colors[i % colors.length];
+                        final maxVal = _topCities.first.value;
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: Row(children: [
+                            Container(width: 8, height: 8, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+                            const SizedBox(width: 8),
+                            SizedBox(width: 80, child: Text(e.key, style: TextStyle(fontSize: 12, color: context.textSecondary), overflow: TextOverflow.ellipsis)),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: LayoutBuilder(builder: (ctx, bc) => Stack(children: [
+                                Container(height: 6, decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(3))),
+                                Container(height: 6, width: bc.maxWidth * (e.value / maxVal), decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(3))),
+                              ])),
+                            ),
+                            const SizedBox(width: 8),
+                            Text('${e.value}', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: context.textPrimary)),
+                          ]),
+                        );
+                      }).toList(),
+                    ),
+            );
+            if (wide) {
+              return IntrinsicHeight(child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                Expanded(child: skills), const SizedBox(width: 16), Expanded(child: cities),
+              ]));
+            }
+            return Column(children: [skills, const SizedBox(height: 16), cities]);
+          }),
           const SizedBox(height: 24),
         ],
       ),

@@ -312,31 +312,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
             SliverToBoxAdapter(
               child: Container(
                 color: context.isDark ? NexTheme.darkBg : CupertinoColors.white,
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                child: Row(
-                  children: [
-                    _ProfileTabButton(
-                      icon: CupertinoIcons.person_fill,
-                      label: 'Sobre mí',
-                      isSelected: _selectedProfileTab == 0,
-                      onTap: () => setState(() => _selectedProfileTab = 0),
-                    ),
-                    const SizedBox(width: 8),
-                    _ProfileTabButton(
-                      icon: CupertinoIcons.play_rectangle_fill,
-                      label: 'Portfolio',
-                      isSelected: _selectedProfileTab == 1,
-                      onTap: () => setState(() => _selectedProfileTab = 1),
-                    ),
-                    const SizedBox(width: 8),
-                    _ProfileTabButton(
-                      icon: CupertinoIcons.sparkles,
-                      label: 'Herramientas',
-                      isSelected: _selectedProfileTab == 2,
-                      badge: '✨',
-                      onTap: () => setState(() => _selectedProfileTab = 2),
-                    ),
-                  ],
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: context.isDark ? NexTheme.darkSurface : const Color(0xFFF2F2F7),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      _SegTab(label: 'Sobre mí', isSelected: _selectedProfileTab == 0, onTap: () => setState(() => _selectedProfileTab = 0)),
+                      _SegTab(label: 'Portfolio', isSelected: _selectedProfileTab == 1, onTap: () => setState(() => _selectedProfileTab = 1)),
+                      _SegTab(label: 'Herramientas', isSelected: _selectedProfileTab == 2, onTap: () => setState(() => _selectedProfileTab = 2)),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -645,7 +634,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       } else if (profile.accountType == 'confidencial' || profile.accountType == 'stealth') {
                         Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const StealthProfileFormScreen()));
                       } else {
-                        Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const CandidateProfileFormScreen()));
+                        Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const CandidateProfileFormScreen(isEditing: true)));
                       }
                     },
                   ),
@@ -670,11 +659,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 child: Row(
                   children: [
-                    Expanded(child: _statColumn('${profile.connections}', 'Conexiones', context)),
+                    Expanded(child: _statColumn(profile.connections == 0 ? '—' : '${profile.connections}', 'Conexiones', context)),
                     Container(width: 0.5, height: 32, color: context.dividerColor),
-                    Expanded(child: _statColumn('${profile.profileViews}', 'Vistas', context)),
+                    Expanded(child: _statColumn(profile.profileViews == 0 ? '—' : '${profile.profileViews}', 'Vistas', context)),
                     Container(width: 0.5, height: 32, color: context.dividerColor),
-                    Expanded(child: _statColumn('${profile.matchPercentage.round()}', 'Matches', context)),
+                    Expanded(child: _statColumn(profile.matchPercentage == 0 ? '—' : '${profile.matchPercentage.round()}', 'Matches', context)),
                   ],
                 ),
               ),
@@ -810,9 +799,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
   // ── Stat Column Helper ──────────────────────────────────────────────────────
 
   Widget _statColumn(String value, String label, BuildContext context) {
+    final isEmpty = value == '—';
     return Column(
       children: [
-        Text(value, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: context.textPrimary, letterSpacing: -0.5)),
+        Text(value, style: TextStyle(
+          fontSize: isEmpty ? 22 : 20,
+          fontWeight: FontWeight.w800,
+          color: isEmpty ? context.textTertiary : context.textPrimary,
+          letterSpacing: -0.5,
+        )),
         const SizedBox(height: 2),
         Text(label, style: TextStyle(fontSize: 12, color: context.textSecondary, fontWeight: FontWeight.w500)),
       ],
@@ -1004,13 +999,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
             children: [
               Text(
                 'Video-Pitch',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: context.textPrimary),
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: context.textPrimary, letterSpacing: -0.3),
               ),
               GestureDetector(
                 onTap: () => Navigator.of(context).push(
                   CupertinoPageRoute(builder: (_) => const OnboardingPitchScreen(isCompany: false)),
                 ),
-                child: Text('Grabar nuevo', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: context.textSecondary)),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: MployaTheme.brandAccent.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(CupertinoIcons.video_camera, size: 13, color: MployaTheme.brandAccent),
+                      const SizedBox(width: 5),
+                      Text('Grabar nuevo', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: MployaTheme.brandAccent)),
+                    ],
+                  ),
+                ),
               ),
             ],
           ),
@@ -1651,6 +1660,54 @@ class _InteractiveHashtagPillState extends State<_InteractiveHashtagPill>
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Profile Tab Button — Custom tab with icon + label + optional badge
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ── Segmented Tab (iOS segmented control style) ───────────────────────────────
+
+class _SegTab extends StatelessWidget {
+  final String label;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _SegTab({required this.label, required this.isSelected, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: () {
+          HapticFeedback.selectionClick();
+          onTap();
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? (context.isDark ? NexTheme.darkCard : CupertinoColors.white)
+                : CupertinoColors.transparent,
+            borderRadius: BorderRadius.circular(9),
+            boxShadow: isSelected
+                ? [BoxShadow(color: const Color(0x1A000000), blurRadius: 6, offset: const Offset(0, 1))]
+                : null,
+          ),
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+              color: isSelected ? context.textPrimary : context.textSecondary,
+              letterSpacing: -0.1,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _ProfileTabButton extends StatelessWidget {

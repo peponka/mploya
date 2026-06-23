@@ -6,7 +6,8 @@ import '../widgets/unsaved_changes_guard.dart';
 import '../widgets/web_centered.dart';
 
 class CandidateProfileFormScreen extends StatefulWidget {
-  const CandidateProfileFormScreen({super.key});
+  final bool isEditing;
+  const CandidateProfileFormScreen({super.key, this.isEditing = false});
 
   @override
   State<CandidateProfileFormScreen> createState() => _CandidateProfileFormScreenState();
@@ -20,6 +21,45 @@ class _CandidateProfileFormScreenState extends State<CandidateProfileFormScreen>
   final _ciudadController = TextEditingController();
 
   bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.isEditing) _loadExistingData();
+  }
+
+  Future<void> _loadExistingData() async {
+    setState(() => _isLoading = true);
+    try {
+      final uid = Supabase.instance.client.auth.currentUser?.id;
+      if (uid == null) return;
+      final row = await Supabase.instance.client
+          .from('users')
+          .select('name, headline, tags, city')
+          .eq('id', uid)
+          .maybeSingle();
+      if (row != null && mounted) {
+        _nombreController.text = row['name']?.toString() ?? '';
+        _headlineController.text = row['headline']?.toString() ?? '';
+        final tags = row['tags'];
+        if (tags is List) {
+          _hashtagsController.text = tags.map((t) => '#$t').join(', ');
+        }
+        final city = row['city']?.toString() ?? '';
+        if (city.contains(',')) {
+          final parts = city.split(',');
+          _ciudadController.text = parts[0].trim();
+          _paisController.text = parts.sublist(1).join(',').trim();
+        } else {
+          _ciudadController.text = city;
+        }
+      }
+    } catch (e) {
+      debugPrint('Error cargando perfil: $e');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
 
   // Diccionario de ciudades conocidas → coordenadas para el mapa
   static const Map<String, List<double>> _knownCities = {
@@ -105,15 +145,19 @@ class _CandidateProfileFormScreenState extends State<CandidateProfileFormScreen>
           'headline': headline,
           'city': '$ciudad, $pais',
           'tags': cleanTags.isNotEmpty ? cleanTags : null,
-          'onboarding_step': 2,
+          if (!widget.isEditing) 'onboarding_step': 2,
           if (coords != null) 'latitude': coords[0],
           if (coords != null) 'longitude': coords[1],
         }).eq('id', uid);
 
         if (!mounted) return;
-        Navigator.of(context).pushReplacement(
-          CupertinoPageRoute(builder: (_) => const OnboardingPitchScreen(isCompany: false)),
-        );
+        if (widget.isEditing) {
+          Navigator.of(context).pop();
+        } else {
+          Navigator.of(context).pushReplacement(
+            CupertinoPageRoute(builder: (_) => const OnboardingPitchScreen(isCompany: false)),
+          );
+        }
       } else {
         debugPrint('⚠️ uid es null — no se guardó el perfil');
         if (mounted) setState(() => _isLoading = false);
