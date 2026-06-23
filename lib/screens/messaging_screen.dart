@@ -783,6 +783,7 @@ class ChatDetailScreenState extends State<ChatDetailScreen> {
   bool _otherIsTyping = false;
   RealtimeChannel? _typingChannel;
   DateTime? _lastTypingEvent;
+  String _myDisplayName = 'Usuario';
 
   final _messagesStream = Supabase.instance.client
       .from('messages')
@@ -800,6 +801,21 @@ class ChatDetailScreenState extends State<ChatDetailScreen> {
     super.initState();
     _setupTypingChannel();
     _controller.addListener(_onTextChanged);
+    _loadMyName();
+  }
+
+  Future<void> _loadMyName() async {
+    if (_currentUserId == null) return;
+    try {
+      final row = await Supabase.instance.client
+          .from('users')
+          .select('full_name')
+          .eq('id', _currentUserId!)
+          .maybeSingle();
+      if (row != null && mounted) {
+        setState(() => _myDisplayName = row['full_name']?.toString() ?? 'Usuario');
+      }
+    } catch (_) {}
   }
 
   void _setupTypingChannel() {
@@ -1019,22 +1035,22 @@ class ChatDetailScreenState extends State<ChatDetailScreen> {
     try {
       await ChatService.instance.sendTextMessage(
         receiverId: _otherId,
-        text: '📹 $myName ha iniciado una videollamada.\n\n🔗 Toca aquí para unirte → https://meet.jit.si/$roomId',
+        text: '📹 CALL:$roomId\n$myName te está llamando.',
       );
     } catch (e) {
-      debugPrint('⚠️ Jitsi auto-message send failed: $e');
+      debugPrint('⚠️ Call auto-message send failed: $e');
     }
 
-    // ── 3. Crear notificación push para el otro usuario ──
+    // ── 3. Push FCM al receptor ──
     try {
-      await Supabase.instance.client.rpc('create_system_notification', params: {
-        'p_user_id': _otherId,
-        'p_type': 'call',
-        'p_description': '📹 $myName te está llamando. Toca para unirte a la entrevista.',
-        'p_actor_id': _currentUserId,
+      await Supabase.instance.client.functions.invoke('send-fcm', body: {
+        'target_user_id': _otherId,
+        'title': '📹 Videollamada entrante',
+        'body': '$myName te está llamando. Abrí el chat para unirte.',
+        'data': {'type': 'call', 'channel_name': roomId, 'caller_name': myName},
       });
     } catch (e) {
-      debugPrint('⚠️ Jitsi call notification failed: $e');
+      debugPrint('⚠️ FCM call notify failed: $e');
     }
 
     // ── 4. Abrir Jitsi embebido ──
@@ -1287,6 +1303,18 @@ class ChatDetailScreenState extends State<ChatDetailScreen> {
                         fileType: msg['file_type']?.toString(),
                         fileSizeBytes: msg['file_size_bytes'] as int?,
                         isRead: msg['is_read'] == true,
+                        onJoinCall: (channelName) {
+                          Navigator.push(
+                            context,
+                            CupertinoPageRoute(
+                              builder: (_) => AgoraCallScreen(
+                                channelName: channelName,
+                                displayName: _myDisplayName,
+                                otherName: widget.otherUser.name,
+                              ),
+                            ),
+                          );
+                        },
                       );
                     },
                   );
@@ -1592,6 +1620,7 @@ class _MessageBubble extends StatelessWidget {
   final String? fileType;
   final int? fileSizeBytes;
   final bool isRead;
+  final Function(String channelName)? onJoinCall;
 
   const _MessageBubble({
     required this.text,
@@ -1602,10 +1631,14 @@ class _MessageBubble extends StatelessWidget {
     this.fileType,
     this.fileSizeBytes,
     this.isRead = false,
+    this.onJoinCall,
   });
 
   bool get _hasFile => fileUrl != null && fileUrl!.isNotEmpty;
   bool get _isImage => fileType == 'image';
+  bool get _isCallMessage => text.startsWith('📹 CALL:');
+  String get _callChannel => text.split('\n').first.replaceFirst('📹 CALL:', '').trim();
+  String get _callCallerName => text.contains('\n') ? text.split('\n').last.replaceAll(' te está llamando.', '').trim() : '';
   bool get _isVideoReply => text.contains('Video Reply') && text.contains('https://');
   String get _extractVideoUrl {
     final lines = text.split('\n');
@@ -1739,26 +1772,32 @@ class _MessageBubble extends StatelessWidget {
                           ),
                         ),
 
-                      // ── Texto del mensaje (con detección de Video Reply) ──
+                      // ── Texto del mensaje (con detección de Video Reply y Llamada) ──
                       if (text.isNotEmpty)
-                        _isVideoReply
-                            ? _VideoReplyBubble(
-                                videoUrl: _extractVideoUrl,
+                        _isCallMessage
+                            ? _CallMessageBubble(
+                                callerName: _callCallerName,
                                 isMe: isMe,
+                                onJoin: onJoinCall != null ? () => onJoinCall!(_callChannel) : null,
                               )
-                            : Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                                child: Text(
-                                  text,
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    color: isMe ? CupertinoColors.white : context.textPrimary,
-                                    fontFamily: '.SF Pro Text',
-                                    height: 1.35,
-                                    letterSpacing: -0.2,
+                            : _isVideoReply
+                                ? _VideoReplyBubble(
+                                    videoUrl: _extractVideoUrl,
+                                    isMe: isMe,
+                                  )
+                                : Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                    child: Text(
+                                      text,
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        color: isMe ? CupertinoColors.white : context.textPrimary,
+                                        fontFamily: '.SF Pro Text',
+                                        height: 1.35,
+                                        letterSpacing: -0.2,
+                                      ),
+                                    ),
                                   ),
-                                ),
-                              ),
                     ],
                   ),
                 ),
@@ -1806,6 +1845,80 @@ class _MessageBubble extends StatelessWidget {
 }
 
 // ── Video Reply Bubble ──
+// ── Call Message Bubble ──
+class _CallMessageBubble extends StatelessWidget {
+  final String callerName;
+  final bool isMe;
+  final VoidCallback? onJoin;
+
+  const _CallMessageBubble({required this.callerName, required this.isMe, this.onJoin});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: isMe ? 0.2 : 0.0),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(CupertinoIcons.video_camera_solid, size: 22,
+                    color: isMe ? Colors.white : const Color(0xFF34C759)),
+              ),
+              const SizedBox(width: 10),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Videollamada',
+                      style: TextStyle(
+                        fontSize: 15, fontWeight: FontWeight.w600,
+                        color: isMe ? Colors.white : context.textPrimary,
+                      )),
+                  if (callerName.isNotEmpty)
+                    Text(callerName,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: isMe ? Colors.white70 : context.textSecondary,
+                        )),
+                ],
+              ),
+            ],
+          ),
+          if (onJoin != null) ...[
+            const SizedBox(height: 10),
+            GestureDetector(
+              onTap: onJoin,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 9),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF34C759),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(CupertinoIcons.video_camera_solid, size: 16, color: Colors.white),
+                    SizedBox(width: 6),
+                    Text('Unirse', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white)),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 class _VideoReplyBubble extends StatelessWidget {
   final String videoUrl;
   final bool isMe;
