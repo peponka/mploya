@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../theme/app_theme.dart';
 import '../models/models.dart';
-import '../services/chat_service.dart';
 import 'agora_call_screen.dart';
 
 class ChatInmailScreen extends StatefulWidget {
@@ -52,21 +51,60 @@ class _ChatInmailScreenState extends State<ChatInmailScreen> {
     final otherId = widget.targetUser?.id;
     if (myId == null || otherId == null) return;
 
-    // Notificar en el chat que se inició videollamada
-    await ChatService.instance.sendTextMessage(
-      receiverId: otherId,
-      text: '📹 Videollamada iniciada — únete desde la app',
-    );
+    final channelName = '${[myId, otherId]..sort()}'.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '').substring(0, 32);
+
+    String myName = 'Usuario';
+    try {
+      final row = await _supabase.from('users').select('name').eq('id', myId).maybeSingle();
+      myName = row?['name']?.toString() ?? _supabase.auth.currentUser?.userMetadata?['full_name']?.toString() ?? 'Usuario';
+    } catch (_) {}
+
+    try {
+      await _supabase.from('messages').insert({
+        'sender_id': myId,
+        'receiver_id': otherId,
+        'text': '📹 CALL:$channelName\n$myName te está llamando.',
+        'is_read': false,
+      });
+    } catch (e) {
+      debugPrint('Call message insert error: $e');
+    }
+
+    try {
+      await _supabase.functions.invoke('send-fcm', body: {
+        'target_user_id': otherId,
+        'title': '📹 Videollamada entrante',
+        'body': '$myName te está llamando. Abrí el chat para unirte.',
+        'data': {'type': 'call', 'channel_name': channelName, 'caller_name': myName},
+      });
+    } catch (e) {
+      debugPrint('FCM call notify error: $e');
+    }
 
     if (!context.mounted) return;
-    final channelName = '${[myId, otherId]..sort()}'.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '').substring(0, 32);
+    Navigator.push(
+      context,
+      CupertinoPageRoute(
+        builder: (_) => AgoraCallScreen(
+          channelName: channelName,
+          displayName: myName,
+          otherName: widget.targetUser?.name ?? 'Talento',
+        ),
+      ),
+    );
+  }
+
+  void _joinCall(String callerId) {
+    final myId = _supabase.auth.currentUser?.id;
+    if (myId == null || callerId.isEmpty) return;
+    final channelName = '${[myId, callerId]..sort()}'.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '').substring(0, 32);
     Navigator.push(
       context,
       CupertinoPageRoute(
         builder: (_) => AgoraCallScreen(
           channelName: channelName,
           displayName: _supabase.auth.currentUser?.userMetadata?['full_name']?.toString() ?? 'Usuario',
-          otherName: widget.targetUser?.name ?? 'Talento',
+          otherName: widget.targetUser?.name ?? 'Llamada',
         ),
       ),
     );
@@ -150,7 +188,7 @@ class _ChatInmailScreenState extends State<ChatInmailScreen> {
                       }
                       final m = msgs[index - 1];
                       final isMe = m['sender_id'] == myId;
-                      return _buildMessageBubble(m['text']?.toString() ?? m['content']?.toString() ?? '', isMe: isMe);
+                      return _buildMessageBubble(m, isMe: isMe);
                     },
                   );
                 },
@@ -163,7 +201,64 @@ class _ChatInmailScreenState extends State<ChatInmailScreen> {
     );
   }
 
-  Widget _buildMessageBubble(String text, {required bool isMe}) {
+  Widget _buildMessageBubble(Map<String, dynamic> m, {required bool isMe}) {
+    final text = m['text']?.toString() ?? m['content']?.toString() ?? '';
+    final isCallMsg = text.startsWith('📹 CALL:');
+
+    if (isCallMsg) {
+      final channelName = text.split('\n').first.replaceFirst('📹 CALL:', '').trim();
+      final callerName = text.contains('\n') ? text.split('\n').last.replaceAll(' te está llamando.', '').trim() : '';
+      return Align(
+        alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: isMe ? MployaTheme.brandAccent : CupertinoColors.systemGrey6.resolveFrom(context),
+            borderRadius: BorderRadius.circular(16).copyWith(
+              bottomRight: isMe ? const Radius.circular(0) : null,
+              bottomLeft: !isMe ? const Radius.circular(0) : null,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(CupertinoIcons.video_camera_solid, size: 20, color: isMe ? Colors.white : const Color(0xFF34C759)),
+                const SizedBox(width: 8),
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('Videollamada', style: TextStyle(color: isMe ? Colors.white : context.textPrimary, fontSize: 15, fontWeight: FontWeight.w600)),
+                  if (callerName.isNotEmpty)
+                    Text(callerName, style: TextStyle(color: isMe ? Colors.white70 : context.textSecondary, fontSize: 12)),
+                ]),
+              ]),
+              const SizedBox(height: 10),
+              GestureDetector(
+                onTap: () {
+                  final myId = _supabase.auth.currentUser?.id;
+                  if (myId == null) return;
+                  final myName = _supabase.auth.currentUser?.userMetadata?['full_name']?.toString() ?? 'Usuario';
+                  Navigator.push(context, CupertinoPageRoute(
+                    builder: (_) => AgoraCallScreen(channelName: channelName, displayName: myName, otherName: widget.targetUser?.name ?? 'Llamada'),
+                  ));
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 9),
+                  decoration: BoxDecoration(color: const Color(0xFF34C759), borderRadius: BorderRadius.circular(20)),
+                  child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                    Icon(CupertinoIcons.video_camera_solid, size: 16, color: Colors.white),
+                    SizedBox(width: 6),
+                    Text('Unirse', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white)),
+                  ]),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Align(
       alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
