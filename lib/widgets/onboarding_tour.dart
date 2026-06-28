@@ -2,6 +2,7 @@ import 'dart:math';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../theme/app_theme.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -20,10 +21,15 @@ class OnboardingTourOverlay extends StatefulWidget {
 
   const OnboardingTourOverlay({super.key, required this.onComplete});
 
+  static String _key(String? uid) => 'onboarding_tour_seen_${uid ?? 'anon'}';
+
   /// Muestra el tour solo la primera vez. Retorna true si se mostró.
   static Future<bool> showIfNeeded(BuildContext context) async {
+    final uid = Supabase.instance.client.auth.currentUser?.id;
     final prefs = await SharedPreferences.getInstance();
-    final seen = prefs.getBool('onboarding_tour_seen') ?? false;
+    // Fallback: clave vieja (usuarios que ya vieron el tour antes de este fix)
+    final seen = prefs.getBool('onboarding_tour_seen') == true ||
+        prefs.getBool(_key(uid)) == true;
     if (seen) return false;
 
     if (!context.mounted) return false;
@@ -33,7 +39,7 @@ class OnboardingTourOverlay extends StatefulWidget {
       barrierDismissible: false,
       builder: (ctx) => OnboardingTourOverlay(
         onComplete: () {
-          prefs.setBool('onboarding_tour_seen', true);
+          prefs.setBool(_key(uid), true);
           prefs.remove('onboarding_tour_step'); // Clean up
           Navigator.of(ctx).pop();
         },

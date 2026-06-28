@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../navigation/main_navigation.dart';
 import '../l10n/app_strings.dart';
 
@@ -14,16 +15,20 @@ class OnboardingTourScreen extends StatefulWidget {
 
   const OnboardingTourScreen({super.key, this.accountType});
 
-  static const String _prefKey = 'onboarding_tour_seen';
+  static String _prefKey(String? uid) => 'onboarding_tour_seen_${uid ?? 'anon'}';
 
   static Future<bool> hasSeenTour() async {
+    final uid = Supabase.instance.client.auth.currentUser?.id;
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool(_prefKey) ?? false;
+    // Fallback: también chequear la clave vieja para usuarios que ya vieron el tour
+    if (prefs.getBool('onboarding_tour_seen') == true) return true;
+    return prefs.getBool(_prefKey(uid)) ?? false;
   }
 
   static Future<void> markTourSeen() async {
+    final uid = Supabase.instance.client.auth.currentUser?.id;
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_prefKey, true);
+    await prefs.setBool(_prefKey(uid), true);
   }
 
   @override
