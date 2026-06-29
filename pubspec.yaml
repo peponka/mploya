@@ -95,7 +95,6 @@ flutter:
   uses-material-design: true
 
   assets:
-    - assets/.env
     - assets/images/
     - assets/images/empty_states/
     - assets/branding/

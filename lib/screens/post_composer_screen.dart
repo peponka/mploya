@@ -115,11 +115,11 @@ class _PostComposerScreenState extends State<PostComposerScreen> {
                   ),
                 ),
                 const Spacer(),
-                // Clock/schedule button
+                // Clock/schedule button (pendiente implementar programación)
                 CupertinoButton(
                   padding: const EdgeInsets.all(10),
                   minimumSize: Size.zero,
-                  onPressed: () {},
+                  onPressed: null,
                   child: Icon(
                     CupertinoIcons.clock,
                     size: 22,

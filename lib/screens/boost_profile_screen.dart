@@ -253,7 +253,7 @@ class _BoostProfileScreenState extends ConsumerState<BoostProfileScreen> {
     final bool isCompany = widget.isCompany;
     final List<Map<String, dynamic>> options = [
       {
-        'title': 'Local Boost',
+        'title': 'Boost Local',
         'price': isCompany ? r'$3.99' : r'$2.99',
         'duration': '1 Semana',
         'desc': isCompany
@@ -263,7 +263,7 @@ class _BoostProfileScreenState extends ConsumerState<BoostProfileScreen> {
         'icon': CupertinoIcons.location_solid,
       },
       {
-        'title': 'Remote Boost',
+        'title': 'Boost Remoto',
         'price': isCompany ? r'$6.99' : r'$4.99',
         'duration': '2 Semanas',
         'desc': isCompany
