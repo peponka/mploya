@@ -1,11 +1,12 @@
 import 'dart:convert';
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:permission_handler/permission_handler.dart';
 
-const _appId = '9e5d4dd01ed0449ba2990b3b7f580f0d';
+const _appId = String.fromEnvironment('AGORA_APP_ID');
 const _tokenUrl = 'https://qclipzefqndcefwwixdy.supabase.co/functions/v1/agora-token';
 
 class AgoraCallScreen extends StatefulWidget {
@@ -39,9 +40,14 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
   }
 
   Future<String> _fetchToken() async {
+    final session = Supabase.instance.client.auth.currentSession;
+    final jwt = session?.accessToken ?? '';
     final resp = await http.post(
       Uri.parse(_tokenUrl),
-      headers: {'Content-Type': 'application/json'},
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $jwt',
+      },
       body: jsonEncode({'channelName': widget.channelName, 'uid': 0}),
     ).timeout(const Duration(seconds: 10));
     if (resp.statusCode != 200) throw Exception('Token ${resp.statusCode}: ${resp.body}');

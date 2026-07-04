@@ -186,7 +186,7 @@ class _ConversationTileState extends State<_ConversationTile> {
 
     return CupertinoButton(
       padding: EdgeInsets.zero,
-      onPressed: () => Navigator.push(
+      onPressed: _partner == null ? null : () => Navigator.push(
         context,
         CupertinoPageRoute(
           builder: (_) => ChatInmailScreen(targetUser: _partner),

@@ -34,6 +34,7 @@ class _MainNavigationState extends State<MainNavigation> {
   int _pendingConnections = 0;
   int _unreadMessages = 0;
   String _accountType = 'candidato';
+  int _fetchAccountTypeRetries = 0;
 
   StreamSubscription<List<Map<String, dynamic>>>? _notifSub;
   StreamSubscription<List<Map<String, dynamic>>>? _connSub;
@@ -104,8 +105,9 @@ class _MainNavigationState extends State<MainNavigation> {
       }
     } catch (e) {
       debugPrint('⚠️ fetchAccountType failed: $e');
-      if (mounted) {
-        Future.delayed(const Duration(seconds: 3), _fetchAccountType);
+      if (mounted && _fetchAccountTypeRetries < 3) {
+        _fetchAccountTypeRetries++;
+        Future.delayed(Duration(seconds: 3 * _fetchAccountTypeRetries), _fetchAccountType);
       }
     }
   }

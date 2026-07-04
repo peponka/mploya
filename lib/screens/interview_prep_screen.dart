@@ -32,7 +32,7 @@ class _InterviewPrepScreenState extends State<InterviewPrepScreen> {
   Widget build(BuildContext context) {
     return CupertinoPageScaffold(
       backgroundColor: const Color(0xFFF2F2F7),
-      navigationBar: CupertinoNavigationBar(middle: Text('Interview Prep'), previousPageTitle: 'Atrás'),
+      navigationBar: CupertinoNavigationBar(middle: Text('Prep. Entrevistas'), previousPageTitle: 'Atrás'),
       child: _loading
           ? const Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
               CupertinoActivityIndicator(radius: 16), SizedBox(height: 16),
@@ -49,7 +49,7 @@ class _InterviewPrepScreenState extends State<InterviewPrepScreen> {
                       child: const Icon(CupertinoIcons.lightbulb_fill, color: Color(0xFFFFD700), size: 24)),
                     const SizedBox(width: 14),
                     Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      const Text('Interview Prep', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Colors.white)),
+                      const Text('Prep. Entrevistas', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Colors.white)),
                       Text(widget.jobTitle, style: const TextStyle(fontSize: 14, color: Colors.white70)),
                     ])),
                   ]),

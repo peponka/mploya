@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:ui';
 import 'dart:math';
+import 'explore_demo_data.dart' as demo;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
@@ -20,7 +21,6 @@ import '../services/search_service.dart';
 import '../widgets/search_overlay.dart';
 import 'profile_screen.dart';
 import 'saved_jobs_screen.dart';
-import 'explore_demo_data.dart' as demo;
 
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // SQL REQUERIDO â€” Ejecuta esta función en Supabase SQL Editor una sola vez.
@@ -562,34 +562,6 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
     } catch (e) {
       debugPrint('Error al cargar pines del mapa: $e');
     }
-
-    // â”€â”€ Simulación demo â”€â”€
-    int added = 0;
-    for (int i = 0; i < demo.simCandidates.length; i++) {
-      final s = demo.simCandidates[i];
-      final String simType = s['type'] as String;
-      final bool simIsCompany = simType == 'empresa';
-      if (iAmCompany && simIsCompany) continue;
-      if (!iAmCompany && !simIsCompany) continue;
-
-      final double simLat = s['lat'] as double;
-      final double simLng = s['lng'] as double;
-      final double dist = demo.haversineKm(pos.latitude, pos.longitude, simLat, simLng);
-      if (dist > radius) continue;
-
-      final rng = Random(i * 7);
-      results.add(_UserPinData(
-        id: 'sim_$i',
-        name: s['name'] as String,
-        headline: s['headline'] as String,
-        videoUrl: (s['video'] as bool) ? 'https://example.com/pitch.mp4' : null,
-        point: LatLng(simLat + (rng.nextDouble() - 0.5) * 0.02, simLng + (rng.nextDouble() - 0.5) * 0.02),
-        distanceKm: dist,
-        accountType: simType,
-      ));
-      added++;
-    }
-    debugPrint('Mapa: ${results.length} pines ($added simulados, radio ${radius}km)');
 
     return results;
   }

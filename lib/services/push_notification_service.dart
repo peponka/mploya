@@ -74,7 +74,7 @@ class PushNotificationService {
   Future<void> _getAndSaveToken() async {
     try {
       _fcmToken = await _messaging.getToken();
-      debugPrint('📱 FCM Token: $_fcmToken');
+      debugPrint('📱 FCM Token obtenido');
       await _persistToken(_fcmToken);
     } catch (e) {
       debugPrint('Error obteniendo FCM token: $e');

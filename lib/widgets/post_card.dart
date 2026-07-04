@@ -253,7 +253,7 @@ class _CardHeader extends StatelessWidget {
           CupertinoButton(
             padding: const EdgeInsets.all(8),
             minimumSize: Size.zero,
-            onPressed: () {},
+            onPressed: null,
             child: Icon(CupertinoIcons.ellipsis,
                 size: 20, color: context.textTertiary),
           ),

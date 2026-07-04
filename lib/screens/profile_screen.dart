@@ -1388,7 +1388,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             children: [
               Expanded(
                 child: _SpotlightCardCompact(
-                  title: 'Interview Prep',
+                  title: 'Prep. Entrevistas',
                   icon: CupertinoIcons.lightbulb_fill,
                   gradient: const [Color(0xFF2563EB), Color(0xFF3B82F6)],
                   onTap: () => Navigator.of(context).push(CupertinoPageRoute(
