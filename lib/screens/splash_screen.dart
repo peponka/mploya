@@ -19,6 +19,7 @@ import '../screens/company_profile_form_screen.dart';
 import '../screens/headhunter_profile_form_screen.dart';
 import '../screens/forgot_password_screen.dart';
 import '../services/video_preload_manager.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // NOTA SQL — Ejecuta esto en Supabase SQL Editor para que el trigger cree
@@ -63,9 +64,21 @@ class _SplashScreenState extends State<SplashScreen>
   late Animation<double> _contentOpacity;
   StreamSubscription<AuthState>? _authSubscription;
 
+  // true mientras Supabase procesa el ?code= del callback OAuth
+  bool _processingOAuth = false;
+
   @override
   void initState() {
     super.initState();
+
+    // Detectar callback OAuth en web (?code= en la URL) — mostrar spinner
+    if (kIsWeb) {
+      final uri = Uri.base;
+      if (uri.queryParameters.containsKey('code') ||
+          uri.queryParameters.containsKey('access_token')) {
+        _processingOAuth = true;
+      }
+    }
 
     // ── Animaciones ──
     _logoController = AnimationController(
@@ -96,7 +109,7 @@ class _SplashScreenState extends State<SplashScreen>
 
     _logoController.forward().then((_) {
       Future.delayed(const Duration(milliseconds: 200), () {
-        if (mounted) _contentController.forward();
+        if (mounted && !_processingOAuth) _contentController.forward();
       });
     });
 
@@ -105,6 +118,9 @@ class _SplashScreenState extends State<SplashScreen>
         AuthService.instance.authStateStream.listen((data) async {
       if (!mounted || _hasNavigated) return;
       if ((data.event == AuthChangeEvent.signedIn || data.event == AuthChangeEvent.initialSession) && data.session != null) {
+        if (mounted && _processingOAuth) {
+          setState(() => _processingOAuth = false);
+        }
         // El trigger on_auth_user_created crea la fila en public.users.
         // upsertUserProfile solo actúa de red de seguridad sin escribir name.
         try {
@@ -237,6 +253,33 @@ class _SplashScreenState extends State<SplashScreen>
       if (!mounted) return;
 
       if (step == 0) {
+        // Si el usuario vino de Google/Apple OAuth y ya eligió rol antes del redirect, aplicarlo directo
+        final prefs = await SharedPreferences.getInstance();
+        final pendingRole = prefs.getString('pending_oauth_account_type');
+        if (pendingRole != null) {
+          await prefs.remove('pending_oauth_account_type');
+          try {
+            await Supabase.instance.client.from('users').update({
+              'account_type': pendingRole,
+              'onboarding_step': 1,
+            }).eq('id', user.id);
+          } catch (e) {
+            debugPrint('Error applying pending OAuth role: $e');
+          }
+          if (!mounted) return;
+          final Widget form;
+          if (pendingRole == 'headhunter') {
+            form = const HeadhunterProfileFormScreen();
+          } else if (pendingRole == 'empresa') {
+            form = const CompanyProfileFormScreen();
+          } else if (pendingRole == 'confidencial') {
+            form = const StealthProfileFormScreen();
+          } else {
+            form = const CandidateProfileFormScreen();
+          }
+          Navigator.of(context).pushReplacement(CupertinoPageRoute(builder: (_) => form));
+          return;
+        }
         Navigator.of(context).pushReplacement(
           CupertinoPageRoute(builder: (_) => const RoleSelectionScreen()),
         );
@@ -273,7 +316,12 @@ class _SplashScreenState extends State<SplashScreen>
       }
 
       // step >= 3: onboarding completo → check if tour was seen
-      final hasSeenTour = await OnboardingTourScreen.hasSeenTour();
+      // Cuentas creadas hace más de 7 días nunca muestran el tour (reinstala / usuario existente)
+      final createdAt = DateTime.tryParse(user.createdAt);
+      final isNewAccount = createdAt == null ||
+          DateTime.now().difference(createdAt).inDays <= 7;
+      final hasSeenTour =
+          !isNewAccount || await OnboardingTourScreen.hasSeenTour(user.id);
       if (!mounted) return;
 
       if (!hasSeenTour) {
@@ -326,6 +374,29 @@ class _SplashScreenState extends State<SplashScreen>
 
   @override
   Widget build(BuildContext context) {
+    // Mientras se procesa el callback OAuth mostrar spinner — no el formulario
+    if (_processingOAuth) {
+      return const CupertinoPageScaffold(
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CupertinoActivityIndicator(radius: 18),
+              SizedBox(height: 16),
+              Text(
+                'Verificando sesión...',
+                style: TextStyle(
+                  fontSize: 15,
+                  color: Color(0xFF8E8E93),
+                  decoration: TextDecoration.none,
+                  fontFamily: '.SF Pro Text',
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
     final isWideWeb = kIsWeb && MediaQuery.of(context).size.width > 700;
     return CupertinoPageScaffold(
       child: isWideWeb ? _buildWebLayout(context) : _buildMobileLayout(context),
@@ -647,6 +718,8 @@ class _SplashScreenState extends State<SplashScreen>
                                 color: Colors.white,
                                 borderRadius: BorderRadius.circular(14),
                                 onPressed: () async {
+                                  final prefs = await SharedPreferences.getInstance();
+                                  await prefs.setString('pending_oauth_account_type', _selectedRole);
                                   try {
                                     final error = await AuthService.instance.signInWithGoogle();
                                     if (!context.mounted) return;
@@ -904,6 +977,8 @@ class _AuthBottomSheetState extends State<_AuthBottomSheet> {
 
   Future<void> _submitGoogle() async {
     setState(() => _loading = true);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('pending_oauth_account_type', widget.accountType);
     final error = await AuthService.instance.signInWithGoogle();
     if (!mounted) return;
     setState(() => _loading = false);

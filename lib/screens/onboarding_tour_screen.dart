@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../navigation/main_navigation.dart';
 import '../l10n/app_strings.dart';
 
@@ -16,14 +17,19 @@ class OnboardingTourScreen extends StatefulWidget {
 
   static const String _prefKey = 'onboarding_tour_seen';
 
-  static Future<bool> hasSeenTour() async {
+  static Future<bool> hasSeenTour([String? uid]) async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool(_prefKey) ?? false;
+    // Chequear key legacy (sin uid) para backward compat
+    if (prefs.getBool(_prefKey) == true) return true;
+    // Chequear key por usuario
+    if (uid != null) return prefs.getBool('${_prefKey}_$uid') ?? false;
+    return false;
   }
 
-  static Future<void> markTourSeen() async {
+  static Future<void> markTourSeen([String? uid]) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_prefKey, true);
+    if (uid != null) await prefs.setBool('${_prefKey}_$uid', true);
   }
 
   @override
@@ -199,7 +205,8 @@ class _OnboardingTourScreenState extends State<OnboardingTourScreen>
   }
 
   void _finish() async {
-    await OnboardingTourScreen.markTourSeen();
+    final uid = Supabase.instance.client.auth.currentUser?.id;
+    await OnboardingTourScreen.markTourSeen(uid);
     if (!mounted) return;
     Navigator.of(context).pushReplacement(
       CupertinoPageRoute(builder: (_) => const MainNavigation()),

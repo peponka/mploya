@@ -24,6 +24,7 @@ import '../services/error_handler.dart';
 import '../services/video_preload_manager.dart';
 import '../services/claude_ai_service.dart';
 import '../services/hashtag_match_service.dart';
+import '../services/coach_mark_service.dart';
 import 'reel_card_moderation.dart';
 import 'reel_card_comments.dart';
 import 'reel_card_helpers.dart';
@@ -42,7 +43,10 @@ class TikTokReelCard extends ConsumerStatefulWidget {
   /// derecha, fuera del video, sobre fondo blanco.
   final bool webMode;
 
-  const TikTokReelCard({super.key, required this.post, this.webMode = false});
+  /// Primer card del feed: attach GlobalKeys para el coach mark tour.
+  final bool isFirstCard;
+
+  const TikTokReelCard({super.key, required this.post, this.webMode = false, this.isFirstCard = false});
 
   @override
   ConsumerState<TikTokReelCard> createState() => _TikTokReelCardState();
@@ -242,9 +246,15 @@ class _TikTokReelCardState extends ConsumerState<TikTokReelCard>
     }
     if (!_isInitialized || _controller == null) return;
     if (fraction > 0.6) {
-      if (!_controller!.value.isPlaying) _controller!.play();
+      if (!_controller!.value.isPlaying) {
+        if (kIsWeb) _controller!.setVolume(1.0);
+        _controller!.play();
+      }
     } else if (fraction < 0.2) {
-      if (_controller!.value.isPlaying) _controller!.pause();
+      if (_controller!.value.isPlaying) {
+        _controller!.pause();
+        if (kIsWeb) _controller!.setVolume(0);
+      }
     }
   }
 
@@ -252,7 +262,13 @@ class _TikTokReelCardState extends ConsumerState<TikTokReelCard>
     if (!_isInitialized || _controller == null) return;
     HapticFeedback.selectionClick();
     setState(() {
-      if (_controller!.value.isPlaying) { _controller!.pause(); } else { _controller!.play(); }
+      if (_controller!.value.isPlaying) {
+        _controller!.pause();
+        if (kIsWeb) _controller!.setVolume(0);
+      } else {
+        if (kIsWeb) _controller!.setVolume(1.0);
+        _controller!.play();
+      }
     });
   }
 
@@ -691,6 +707,7 @@ class _TikTokReelCardState extends ConsumerState<TikTokReelCard>
               right: 8,
               bottom: 120,
               child: ClipRRect(
+                key: widget.isFirstCard ? cmFeedActionsKey : null,
                 borderRadius: BorderRadius.circular(NexTheme.radiusXL),
                 child: BackdropFilter(
                   filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
@@ -716,6 +733,7 @@ class _TikTokReelCardState extends ConsumerState<TikTokReelCard>
               top: 100,
               right: 14,
               child: GestureDetector(
+                key: widget.isFirstCard ? cmFeedMatchBadgeKey : null,
                 onTap: () => _showMatchDetails(context, author, matchScore),
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
@@ -864,6 +882,7 @@ class _TikTokReelCardState extends ConsumerState<TikTokReelCard>
                 ),
                 const SizedBox(width: 14),
                 Padding(
+                  key: widget.isFirstCard ? cmFeedActionsKey : null,
                   padding: const EdgeInsets.only(bottom: 28),
                   child: actionsBar,
                 ),

@@ -837,6 +837,34 @@ class _UsersTabState extends State<_UsersTab> {
     }
   }
 
+  Future<void> _deleteUser(Map<String, dynamic> u) async {
+    try {
+      await _sb.from('users').delete().eq('id', u['id']);
+      setState(() => _rows.remove(u));
+      _snack('Usuario eliminado');
+    } catch (e) {
+      _snack('No se pudo eliminar: $e');
+    }
+  }
+
+  void _confirmDelete(Map<String, dynamic> u) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Eliminar usuario'),
+        content: Text('¿Eliminar a ${u['name'] ?? u['email'] ?? 'este usuario'}? Esta acción no se puede deshacer.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
+          FilledButton(
+            onPressed: () { Navigator.pop(context); _deleteUser(u); },
+            style: FilledButton.styleFrom(backgroundColor: MployaTheme.danger),
+            child: const Text('Eliminar'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _snack(String m) {
     if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
   }
@@ -889,6 +917,7 @@ class _UsersTabState extends State<_UsersTab> {
                   DataColumn(label: Text('Email')),
                   DataColumn(label: Text('Tipo')),
                   DataColumn(label: Text('Video')),
+                  DataColumn(label: Text('Premium')),
                   DataColumn(label: Text('Verificado')),
                   DataColumn(label: Text('Acciones')),
                 ],
@@ -907,14 +936,29 @@ class _UsersTabState extends State<_UsersTab> {
                             : context.textTertiary,
                         size: 18,
                       )),
+                      DataCell(Icon(
+                        u['is_premium'] == true ? Icons.star : Icons.star_border,
+                        color: u['is_premium'] == true ? const Color(0xFFF59E0B) : context.textTertiary,
+                        size: 18,
+                      )),
                       DataCell(Switch(
                         value: u['is_verified'] == true,
                         activeColor: MployaTheme.brandAccent,
                         onChanged: (_) => _toggleVerified(u),
                       )),
-                      DataCell(TextButton(
-                        onPressed: () => _toggleVerified(u),
-                        child: Text(u['is_verified'] == true ? 'Quitar verif.' : 'Verificar'),
+                      DataCell(Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          TextButton(
+                            onPressed: () => _toggleVerified(u),
+                            child: Text(u['is_verified'] == true ? 'Quitar verif.' : 'Verificar'),
+                          ),
+                          IconButton(
+                            tooltip: 'Eliminar usuario',
+                            onPressed: () => _confirmDelete(u),
+                            icon: const Icon(Icons.delete_outline, color: MployaTheme.danger, size: 20),
+                          ),
+                        ],
                       )),
                     ]),
                 ],
@@ -940,6 +984,7 @@ class _JobsTabState extends State<_JobsTab> {
   bool _loading = true;
   String? _error;
   List<Map<String, dynamic>> _rows = [];
+  String _search = '';
 
   @override
   void initState() {
@@ -974,22 +1019,46 @@ class _JobsTabState extends State<_JobsTab> {
   Widget build(BuildContext context) {
     if (_loading) return const Center(child: CircularProgressIndicator());
     if (_error != null) return _ErrorState(message: _error!, onRetry: _load);
-    if (_rows.isEmpty) return const _EmptyState(message: 'No hay ofertas');
+
+    final filtered = _rows.where((j) {
+      if (_search.isEmpty) return true;
+      final s = _search.toLowerCase();
+      return (j['title'] ?? '').toString().toLowerCase().contains(s) ||
+          (j['company_name'] ?? '').toString().toLowerCase().contains(s);
+    }).toList();
 
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Row(children: [
-        Text('Ofertas (${_rows.length})',
+        Text('Ofertas (${filtered.length})',
             style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: context.textPrimary)),
+        const SizedBox(width: 12),
+        Text('(${_rows.length} total)', style: TextStyle(color: context.textTertiary)),
         const Spacer(),
+        SizedBox(
+          width: 280,
+          child: TextField(
+            onChanged: (v) => setState(() => _search = v),
+            decoration: InputDecoration(
+              hintText: 'Buscar…',
+              prefixIcon: const Icon(Icons.search, size: 20),
+              isDense: true,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
         IconButton(onPressed: _load, icon: const Icon(Icons.refresh)),
       ]),
       const SizedBox(height: 16),
+      if (filtered.isEmpty)
+        const Expanded(child: _EmptyState(message: 'Sin resultados'))
+      else
       Expanded(
         child: ListView.separated(
-          itemCount: _rows.length,
+          itemCount: filtered.length,
           separatorBuilder: (_, __) => const SizedBox(height: 8),
           itemBuilder: (_, i) {
-            final j = _rows[i];
+            final j = filtered[i];
             return _Card(child: Row(children: [
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(j['title']?.toString() ?? 'Sin título',
@@ -1050,6 +1119,15 @@ class _BoostsTabState extends State<_BoostsTab> {
     }
   }
 
+  Future<void> _revokeBoost(Map<String, dynamic> u) async {
+    try {
+      await _sb.from('users').update({'boost_ends_at': null}).eq('id', u['id']);
+      setState(() => _rows.remove(u));
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('No se pudo revocar: $e')));
+    }
+  }
+
   String _fmtDate(dynamic val) {
     if (val == null) return '—';
     try {
@@ -1085,6 +1163,7 @@ class _BoostsTabState extends State<_BoostsTab> {
                   DataColumn(label: Text('Tipo')),
                   DataColumn(label: Text('Vence')),
                   DataColumn(label: Text('Días restantes')),
+                  DataColumn(label: Text('Acciones')),
                 ],
                 rows: [
                   for (final u in _rows)
@@ -1094,6 +1173,11 @@ class _BoostsTabState extends State<_BoostsTab> {
                       DataCell(Text(u['account_type']?.toString() ?? '—')),
                       DataCell(Text(_fmtDate(u['boost_ends_at']))),
                       DataCell(_DaysChip(boostEndsAt: u['boost_ends_at']?.toString())),
+                      DataCell(TextButton(
+                        onPressed: () => _revokeBoost(u),
+                        style: TextButton.styleFrom(foregroundColor: MployaTheme.danger),
+                        child: const Text('Revocar'),
+                      )),
                     ]),
                 ],
               ),
@@ -1143,6 +1227,7 @@ class _ReportsTabState extends State<_ReportsTab> {
   bool _loading = true;
   String? _error;
   List<Map<String, dynamic>> _rows = [];
+  final Map<String, String> _userNames = {};
 
   @override
   void initState() {
@@ -1158,7 +1243,19 @@ class _ReportsTabState extends State<_ReportsTab> {
           .select('id, reported_id, reporter_id, reason, status, created_at')
           .order('created_at', ascending: false)
           .limit(200);
-      setState(() { _rows = List<Map<String, dynamic>>.from(data); _loading = false; });
+      _rows = List<Map<String, dynamic>>.from(data);
+      final ids = <String>{};
+      for (final r in _rows) {
+        if (r['reported_id'] != null) ids.add(r['reported_id'] as String);
+        if (r['reporter_id'] != null) ids.add(r['reporter_id'] as String);
+      }
+      if (ids.isNotEmpty) {
+        final users = await _sb.from('users').select('id, name').inFilter('id', ids.toList());
+        for (final u in (users as List)) {
+          _userNames[u['id'] as String] = u['name']?.toString() ?? u['id'] as String;
+        }
+      }
+      setState(() => _loading = false);
     } catch (e) {
       setState(() {
         _loading = false;
@@ -1202,7 +1299,7 @@ class _ReportsTabState extends State<_ReportsTab> {
                 Text('Motivo: ${r['reason'] ?? '—'}',
                     style: TextStyle(fontWeight: FontWeight.w700, color: context.textPrimary)),
                 const SizedBox(height: 2),
-                Text('Reportado: ${r['reported_id'] ?? '—'}  ·  Estado: ${r['status'] ?? '—'}',
+                Text('Reportado: ${_userNames[r['reported_id']] ?? r['reported_id'] ?? '—'}  ·  Reportó: ${_userNames[r['reporter_id']] ?? r['reporter_id'] ?? '—'}  ·  Estado: ${r['status'] ?? '—'}',
                     style: TextStyle(fontSize: 12, color: context.textSecondary)),
               ])),
               if (!resolved)

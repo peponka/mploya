@@ -84,7 +84,7 @@ class _ProfilePersonalitySectionState extends State<ProfilePersonalitySection> {
     if (!_loaded) return const SizedBox.shrink();
 
     return Container(
-      color: CupertinoColors.white,
+      color: context.isDark ? NexTheme.darkBg : CupertinoColors.white,
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -224,38 +224,54 @@ class _ProfilePersonalitySectionState extends State<ProfilePersonalitySection> {
               ),
             ),
           ] else if (widget.isOwnProfile) ...[
-            // ── CTA to run analysis ──
+            // ── CTA compacta (no full-width) ──
             GestureDetector(
               onTap: _loading ? null : _runAnalysis,
               child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 14),
+                padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  gradient: const LinearGradient(colors: [Color(0xFF6C3FC8), Color(0xFF9B6FE8)]),
+                  color: const Color(0xFFF4F0FF),
                   borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFF6C3FC8).withValues(alpha: 0.15)),
                 ),
-                child: Center(
-                  child: _loading
-                      ? const CupertinoActivityIndicator(color: Colors.white)
-                      : const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(CupertinoIcons.wand_stars, color: Colors.white, size: 18),
-                            SizedBox(width: 8),
-                            Text(
-                              'Analizar mi Personalidad',
-                              style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700),
-                            ),
-                          ],
+                child: Row(
+                  children: [
+                    Container(
+                      width: 40, height: 40,
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(colors: [Color(0xFF6C3FC8), Color(0xFF9B6FE8)]),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(CupertinoIcons.wand_stars, color: Colors.white, size: 18),
+                    ),
+                    const SizedBox(width: 12),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Analizar Personalidad IA',
+                            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF1C1C1E))),
+                          Text('Detecta tus soft skills desde tu video-pitch',
+                            style: TextStyle(fontSize: 11, color: Color(0xFF8E8E93)), maxLines: 1, overflow: TextOverflow.ellipsis),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    if (_loading)
+                      const CupertinoActivityIndicator()
+                    else
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(colors: [Color(0xFF6C3FC8), Color(0xFF9B6FE8)]),
+                          borderRadius: BorderRadius.circular(8),
                         ),
+                        child: const Text('Analizar',
+                          style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700)),
+                      ),
+                  ],
                 ),
               ),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'La IA analizará tu video-pitch para detectar tus fortalezas en comunicación, liderazgo, energía y más.',
-              style: TextStyle(fontSize: 12, color: Color(0xFF8E8E93)),
-              textAlign: TextAlign.center,
             ),
           ],
         ],

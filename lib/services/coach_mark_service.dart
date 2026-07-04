@@ -51,6 +51,7 @@ class CoachMarkService {
 
   // ── Nav Tour (sidebar web / tab bar mobile) ───────────────────────────────
   static Future<void> showNavTour(BuildContext context) async {
+    if (kIsWeb) return; // Coach marks only on native app
     if (await _done(_navKey)) return;
     if (!context.mounted) return;
     await _mark(_navKey);
@@ -91,6 +92,7 @@ class CoachMarkService {
 
   // ── Feed Tour (match badge + acciones + botones header mobile) ────────────
   static Future<void> showFeedTour(BuildContext context) async {
+    if (kIsWeb) return; // Coach marks only on native app
     if (await _done(_feedKey)) return;
     if (!context.mounted) return;
     await _mark(_feedKey);

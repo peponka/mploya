@@ -145,9 +145,14 @@ class AuthService {
   /// Inicia sesión con Google (OAuth). Abre el navegador/WebView del sistema.
   Future<String?> signInWithGoogle() async {
     try {
+      // En web usamos la URL actual del navegador (funciona en local y en producción).
+      // En Android/iOS el scheme io.supabase.mploya captura el callback via intent-filter.
+      final redirectTo = kIsWeb
+          ? '${Uri.base.origin}/app/'
+          : 'io.supabase.mploya://login-callback';
       await _client.auth.signInWithOAuth(
         OAuthProvider.google,
-        redirectTo: 'io.supabase.mploya://login-callback',
+        redirectTo: redirectTo,
       );
       return null;
     } on AuthException catch (e) {

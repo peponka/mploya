@@ -30,6 +30,7 @@ import '../services/revenuecat_service.dart';
 import 'pitch_challenge_screen.dart';
 import '../widgets/mploya_toast.dart';
 import '../widgets/feature_hint.dart';
+import '../services/coach_mark_service.dart';
 
 class HomeFeedScreen extends ConsumerStatefulWidget {
   const HomeFeedScreen({super.key});
@@ -67,6 +68,7 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
         VideoPreloadManager.instance.resumeCurrent();
       }
       ref.read(feedProvider.notifier).loadInitial();
+      if (mounted) CoachMarkService.showFeedTour(context);
     });
     final uid = Supabase.instance.client.auth.currentUser?.id;
     if (uid != null) {
@@ -380,7 +382,7 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
                                 child: CupertinoActivityIndicator(color: Colors.white, radius: 14),
                               );
                             }
-                            final card = TikTokReelCard(post: _userToPost(rows[index]), webMode: webMode);
+                            final card = TikTokReelCard(post: _userToPost(rows[index]), webMode: webMode, isFirstCard: index == 0);
                             // Show gesture hint only on the very first card
                             if (index == 0) {
                               return FeatureHints.doubleTapInterest(child: card);
@@ -464,6 +466,7 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
                               children: [
                                 // ── Empleos / Vacantes ──
                                 CupertinoButton(
+                                  key: cmFeedJobsBtnKey,
                                   padding: EdgeInsets.zero,
                                   minimumSize: Size.zero,
                                   onPressed: () {
@@ -484,6 +487,7 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
                                 const SizedBox(width: 18),
                                 // ── Mensajes (con contador de no leídos) ──
                                 CupertinoButton(
+                                  key: cmFeedMsgBtnKey,
                                   padding: EdgeInsets.zero,
                                   minimumSize: Size.zero,
                                   onPressed: () {
@@ -497,6 +501,7 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
                                 const SizedBox(width: 18),
                                 // ── Bell ──
                                 CupertinoButton(
+                                  key: cmFeedBellBtnKey,
                                   padding: EdgeInsets.zero,
                                   minimumSize: Size.zero,
                                   onPressed: () {
