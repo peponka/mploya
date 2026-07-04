@@ -86,7 +86,7 @@ class _PremiumPaywallScreenState extends State<PremiumPaywallScreen> {
       return [
         const _FeatureConfig(
           icon: CupertinoIcons.lock_open_fill,
-          title: 'Revelar perfiles Stealth',
+          title: 'Revelar perfiles confidenciales',
           subtitle: 'Desbloquea la identidad completa del talento confidencial.',
         ),
         const _FeatureConfig(
@@ -259,7 +259,7 @@ class _PremiumPaywallScreenState extends State<PremiumPaywallScreen> {
                         const SizedBox(height: 16),
                         Text(
                           isB2B
-                              ? 'Desbloquea identidades Stealth. Contrata talento Top Tier y ahorrá meses de reclutamiento.'
+                              ? 'Desbloquea identidades confidenciales. Contrata talento Top Tier y ahorrá meses de reclutamiento.'
                               : 'Desbloquea el algoritmo de IA, visualiza quién vio tu perfil y multiplicá tus matches un 400%.',
                           style: TextStyle(
                             fontSize: 16,
@@ -404,7 +404,7 @@ class _PremiumPaywallScreenState extends State<PremiumPaywallScreen> {
 
   Widget _buildFallbackTierCard() {
     return _buildTierCard(
-      title: _accountType == 'empresa' ? 'Acceso Stealth B2B' : 'Mploya Premium',
+      title: _accountType == 'empresa' ? 'Acceso Confidencial B2B' : 'Mploya Premium',
       price: _accountType == 'empresa' ? r'$99' : r'$14.99',
       period: '/mes',
       description: _accountType == 'empresa'

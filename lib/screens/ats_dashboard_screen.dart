@@ -24,7 +24,7 @@ class AtsDashboardScreen extends StatefulWidget {
 class _AtsDashboardScreenState extends State<AtsDashboardScreen> {
   int _tokensDisponibles = 0;
   String _filtroActivo = 'Pendientes';
-  final List<String> _filtros = ['Pendientes', 'Contactos', 'Stealth 🔒'];
+  final List<String> _filtros = ['Pendientes', 'Contactos', 'Confidencial 🔒'];
   
   late Future<List<Map<String, dynamic>>> _stealthCatalogFuture;
 
@@ -118,7 +118,7 @@ class _AtsDashboardScreenState extends State<AtsDashboardScreen> {
     showCupertinoDialog(
       context: context,
       builder: (ctx) => CupertinoAlertDialog(
-        title: const Text('Desbloquear Perfil Stealth'),
+        title: const Text('Desbloquear Perfil Confidencial'),
         content: Text('Este candidato confidencial está protegido. Utiliza 1 Crédito de tu Plan Mensual para revelar su identidad, video y CV completo.\n\nCréditos de este mes: $_tokensDisponibles'),
         actions: [
           CupertinoDialogAction(
@@ -654,7 +654,7 @@ class _AtsDashboardScreenState extends State<AtsDashboardScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('Descubrimiento Stealth', style: TextStyle(color: context.textPrimary, fontSize: 18, fontWeight: FontWeight.bold)),
+                Text('Descubrimiento Confidencial', style: TextStyle(color: context.textPrimary, fontSize: 18, fontWeight: FontWeight.bold)),
                 const Icon(CupertinoIcons.lock_shield_fill, color: MployaTheme.brandAccent, size: 20),
               ],
             ),
@@ -673,7 +673,7 @@ class _AtsDashboardScreenState extends State<AtsDashboardScreen> {
               return SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.all(32),
-                  child: Text('No hay perfiles Stealth disponibles.', textAlign: TextAlign.center, style: TextStyle(color: context.textTertiary)),
+                  child: Text('No hay perfiles confidenciales disponibles.', textAlign: TextAlign.center, style: TextStyle(color: context.textTertiary)),
                 ),
               );
             }
@@ -736,7 +736,7 @@ class _AtsDashboardScreenState extends State<AtsDashboardScreen> {
                               final candidate = NexUser(id: u['candidate_id']?.toString() ?? '', name: u['real_name']?.toString() ?? 'Candidato', headline: u['headline']?.toString() ?? '');
                               Navigator.of(context).push(CupertinoPageRoute(builder: (_) => ProfileScreen(user: candidate)));
                             } else {
-                              _unlockProfile(NexUser(id: u['candidate_id']?.toString() ?? '', name: u['real_name']?.toString() ?? 'Candidato Stealth', headline: u['headline']?.toString() ?? ''));
+                              _unlockProfile(NexUser(id: u['candidate_id']?.toString() ?? '', name: u['real_name']?.toString() ?? 'Candidato Confidencial', headline: u['headline']?.toString() ?? ''));
                             }
                           },
                           child: Container(

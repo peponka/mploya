@@ -137,7 +137,7 @@ class _AtsKanbanScreenState extends State<AtsKanbanScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      user.isConfidential ? '${user.name.split(' ').first} (Stealth)' : user.name,
+                      user.isConfidential ? '${user.name.split(' ').first} (Confidencial)' : user.name,
                       style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16, color: context.textPrimary, letterSpacing: -0.3),
                       maxLines: 1, overflow: TextOverflow.ellipsis,
                     ),

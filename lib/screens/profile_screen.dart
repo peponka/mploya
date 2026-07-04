@@ -1376,7 +1376,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           const SizedBox(height: 16),
           // ── 3 Spotlight Cards ──
           _SpotlightCard(
-            title: 'Skill Assessment',
+            title: 'Validá tus skills',
             subtitle: 'Evaluá tus habilidades con IA y obtené un certificado verificable',
             icon: CupertinoIcons.checkmark_seal_fill,
             gradient: const [Color(0xFF059669), Color(0xFF10B981)],
@@ -1445,7 +1445,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 // precio se ajusta según sea empresa (un poco más) o candidato.
                 _QuickActionChip(
                   icon: CupertinoIcons.rocket_fill,
-                  label: 'Boost',
+                  label: 'Impulsar',
                   color: MployaTheme.brandAccent,
                   onTap: () => Navigator.of(context).push(
                     CupertinoPageRoute(builder: (_) => BoostProfileScreen(isCompany: isCompany)),

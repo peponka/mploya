@@ -124,7 +124,7 @@ class _OnboardingTourOverlayState extends State<OnboardingTourOverlay>
       emoji: '🔒',
       title: 'Modo Confidencial',
       description:
-          'Protegé tu identidad activando el modo Stealth. Las empresas ven tu pitch y skills, pero tu nombre queda oculto hasta hacer match.',
+          'Protegé tu identidad activando el Modo Confidencial. Las empresas ven tu pitch y skills, pero tu nombre queda oculto hasta hacer match.',
       gradient: [Color(0xFFB8860B), Color(0xFFDAA520)],
       tip: 'Perfecto si estás en búsqueda activa sin que se entere tu empresa actual',
     ),

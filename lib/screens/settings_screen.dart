@@ -213,7 +213,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   _SettingsToggle(
                     icon: CupertinoIcons.eye_slash_fill,
                     iconBg: const Color(0xFF5F3DC4),
-                    title: 'Blind Hiring Mode',
+                    title: 'Contratación a ciegas',
                     value: _blindHiring,
                     onChanged: (v) {
                       setState(() => _blindHiring = v);
