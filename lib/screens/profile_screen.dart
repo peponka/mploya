@@ -46,6 +46,7 @@ import '../services/share_service.dart';
 import 'camera_screen.dart';
 import 'onboarding_pitch_screen.dart';
 import 'settings_screen.dart';
+import 'mis_herramientas_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   final NexUser? user;
@@ -318,6 +319,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
           // ── Name + Headline + Badges ──
           _buildNameSection(context, profile, isOwnProfile),
 
+          // ── Acceso a "Mis herramientas" (pantalla privada del usuario) ──
+          if (isOwnProfile)
+            SliverToBoxAdapter(child: _buildToolsEntry(context, profile)),
+
           // ── Tab Selector (only for own profile) ──
           if (isOwnProfile)
             SliverToBoxAdapter(
@@ -334,7 +339,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     children: [
                       _SegTab(label: 'Sobre mí', isSelected: _selectedProfileTab == 0, onTap: () => setState(() => _selectedProfileTab = 0)),
                       _SegTab(label: 'Portfolio', isSelected: _selectedProfileTab == 1, onTap: () => setState(() => _selectedProfileTab = 1)),
-                      _SegTab(label: 'Herramientas', isSelected: _selectedProfileTab == 2, onTap: () => setState(() => _selectedProfileTab = 2)),
                     ],
                   ),
                 ),
@@ -407,34 +411,65 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           ],
 
-          // ════════════════════════════════════════════════════════════════════
-          // TAB 2: HERRAMIENTAS — IA, Crecimiento, Cuenta (own profile only)
-          // ════════════════════════════════════════════════════════════════════
-          if (isOwnProfile && _selectedProfileTab == 2) ...[
-            // ── PROGRESO — Clean completion bar ──
-            SliverToBoxAdapter(
-              child: ProfileCompletionBar(profile: profile),
-            ),
-
-            // ── AI SPOTLIGHT CARDS — Feature discovery ──
-            SliverToBoxAdapter(
-              child: _buildAISpotlightCards(context, profile),
-            ),
-
-            // ── QUICK ACTIONS — Crecimiento horizontal ──
-            SliverToBoxAdapter(
-              child: _buildQuickActions(context, profile),
-            ),
-
-            // ── CUENTA — Settings compacto ──
-            SliverToBoxAdapter(
-              child: _buildAccountSection(context, profile),
-            ),
-          ],
+          // Las herramientas privadas (IA, crecimiento, cuenta) ahora viven en
+          // MisHerramientasScreen, accesible desde el botón "Mis herramientas".
 
           // ── Bottom nav spacer ──
           const SliverToBoxAdapter(child: SizedBox(height: 100)),
         ],
+      ),
+    );
+  }
+
+  // ── Entrada a "Mis herramientas" (pantalla privada del usuario) ───────────
+  Widget _buildToolsEntry(BuildContext context, NexUser profile) {
+    return Container(
+      color: context.isDark ? NexTheme.darkBg : CupertinoColors.white,
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 4),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => Navigator.of(context).push(
+          CupertinoPageRoute(builder: (_) => MisHerramientasScreen(profile: profile)),
+        ),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            color: context.isDark ? NexTheme.darkSurface : const Color(0xFFF7F8FA),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: context.isDark ? const Color(0xFF222222) : const Color(0xFFEDEFF2)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(colors: [Color(0xFFF97316), Color(0xFFEA580C)]),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(CupertinoIcons.square_grid_2x2_fill, size: 19, color: CupertinoColors.white),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Mis herramientas',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: context.textPrimary, letterSpacing: -0.2),
+                    ),
+                    const SizedBox(height: 1),
+                    Text(
+                      'Impulsar, estadísticas, entrevistas, cuenta y más',
+                      style: TextStyle(fontSize: 12.5, color: context.textSecondary),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(CupertinoIcons.chevron_right, size: 16, color: context.textTertiary),
+            ],
+          ),
+        ),
       ),
     );
   }
