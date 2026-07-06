@@ -1053,19 +1053,11 @@ class ChatDetailScreenState extends State<ChatDetailScreen> {
       debugPrint('⚠️ FCM call notify failed: $e');
     }
 
-    // ── 4. Abrir Jitsi embebido ──
-    if (!mounted) return;
-
-    if (kIsWeb) {
-      // Web → abrir en navegador (no hay WebView nativo)
-      final jitsiUrl = Uri.parse('https://meet.jit.si/$roomId');
-      if (await canLaunchUrl(jitsiUrl)) {
-        await launchUrl(jitsiUrl, mode: LaunchMode.externalApplication);
-      }
-      return;
-    }
-
-    // Mobile → Agora nativo, sin PIN, sin login
+    // ── 4. Abrir la videollamada dentro de la app ──
+    // Una sola ruta para web y móvil: AgoraCallScreen resuelve la llamada según
+    // plataforma (móvil = Agora nativo; web = Jitsi embebido en iframe). Antes
+    // en web abría meet.jit.si en otra pestaña (no embebido); ahora queda dentro
+    // de Mploya, igual que el botón "Unirse".
     if (!mounted) return;
     Navigator.push(
       context,

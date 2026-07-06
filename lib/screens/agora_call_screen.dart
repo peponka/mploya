@@ -1,10 +1,14 @@
 import 'dart:convert';
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:permission_handler/permission_handler.dart';
+// En web usa el iframe de Jitsi embebido; en móvil el stub (no se usa).
+import '../widgets/jitsi_web_view_stub.dart'
+    if (dart.library.html) '../widgets/jitsi_web_view.dart';
 
 const _appId = String.fromEnvironment('AGORA_APP_ID');
 const _tokenUrl = 'https://qclipzefqndcefwwixdy.supabase.co/functions/v1/agora-token';
@@ -36,7 +40,9 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
   @override
   void initState() {
     super.initState();
-    _init();
+    // En web NO inicializamos Agora (no soporta web de forma fiable): la llamada
+    // se resuelve con el iframe de Jitsi embebido que se renderiza en build().
+    if (!kIsWeb) _init();
   }
 
   // Devuelve token + appId. El appId lo manda el servidor (es público, no
@@ -125,8 +131,42 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
     _engine?.muteLocalVideoStream(_videoOff);
   }
 
+  // ── Web: videollamada Jitsi embebida dentro de la app ──
+  Widget _buildWebJitsi(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: SafeArea(
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              child: Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(CupertinoIcons.back, color: Colors.white),
+                    onPressed: () => Navigator.of(context).maybePop(),
+                  ),
+                  Expanded(
+                    child: Text(
+                      'Videollamada con ${widget.otherName}',
+                      style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(child: buildJitsiWebView(widget.channelName)),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (kIsWeb) return _buildWebJitsi(context);
     return Scaffold(
       backgroundColor: Colors.black,
       body: Stack(
