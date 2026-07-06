@@ -18,7 +18,6 @@ import '../services/claude_ai_service.dart';
 import '../services/video_preload_manager.dart';
 import '../services/company_verification_service.dart';
 import 'profile_viewers_screen.dart';
-import 'admin_dashboard_screen.dart';
 import 'candidate_profile_form_screen.dart';
 import 'company_profile_form_screen.dart';
 import 'stealth_profile_form_screen.dart';
@@ -47,6 +46,7 @@ import 'camera_screen.dart';
 import 'onboarding_pitch_screen.dart';
 import 'settings_screen.dart';
 import 'mis_herramientas_screen.dart';
+import '../widgets/mploya_ui.dart';
 
 class ProfileScreen extends StatefulWidget {
   final NexUser? user;
@@ -319,6 +319,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
           // ── Name + Headline + Badges ──
           _buildNameSection(context, profile, isOwnProfile),
 
+          // ── Progreso de perfil (motivador prominente estilo JobToday) ──
+          if (isOwnProfile)
+            SliverToBoxAdapter(
+              child: Container(
+                color: context.isDark ? NexTheme.darkBg : CupertinoColors.white,
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+                child: MployaProgressCard(
+                  profile: profile,
+                  onTap: () => _openEditProfile(context, profile),
+                ),
+              ),
+            ),
+
           // ── Acceso a "Mis herramientas" (pantalla privada del usuario) ──
           if (isOwnProfile)
             SliverToBoxAdapter(child: _buildToolsEntry(context, profile)),
@@ -414,11 +427,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
           // Las herramientas privadas (IA, crecimiento, cuenta) ahora viven en
           // MisHerramientasScreen, accesible desde el botón "Mis herramientas".
 
-          // ── Bottom nav spacer ──
-          const SliverToBoxAdapter(child: SizedBox(height: 100)),
+          // ── Bottom nav spacer ── (140, no 100: en algunos Android la tab
+          // bar + inset del gesto de navegación supera los 100px y tapaba la
+          // última fila de hashtags)
+          const SliverToBoxAdapter(child: SizedBox(height: 140)),
         ],
       ),
     );
+  }
+
+  // ── Abrir el formulario de edición según el tipo de cuenta ────────────────
+  void _openEditProfile(BuildContext context, NexUser profile) {
+    if (profile.accountType == 'empresa' || profile.accountType == 'headhunter') {
+      Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const CompanyProfileFormScreen()));
+    } else if (profile.accountType == 'confidencial' || profile.accountType == 'stealth') {
+      Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const StealthProfileFormScreen()));
+    } else {
+      Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const CandidateProfileFormScreen(isEditing: true)));
+    }
   }
 
   // ── Entrada a "Mis herramientas" (pantalla privada del usuario) ───────────
@@ -429,7 +455,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: () => Navigator.of(context).push(
-          CupertinoPageRoute(builder: (_) => MisHerramientasScreen(profile: profile)),
+          CupertinoPageRoute(builder: (_) => MisHerramientasScreen(profile: profile, isAdmin: _isAdmin)),
         ),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -674,32 +700,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   _actionPill(
                     icon: CupertinoIcons.pencil,
                     label: 'Editar perfil',
-                    onTap: () {
-                      if (profile.accountType == 'empresa' || profile.accountType == 'headhunter') {
-                        Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const CompanyProfileFormScreen()));
-                      } else if (profile.accountType == 'confidencial' || profile.accountType == 'stealth') {
-                        Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const StealthProfileFormScreen()));
-                      } else {
-                        Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const CandidateProfileFormScreen(isEditing: true)));
-                      }
-                    },
+                    onTap: () => _openEditProfile(context, profile),
                   ),
                   const SizedBox(width: 10),
+                  // Violeta = "esto lo hace la IA" (misma regla de color que
+                  // Personalidad IA más abajo). El acceso a Admin se movió a
+                  // "Mis herramientas" para no sumar un tercer color acá.
                   _actionPill(
                     icon: CupertinoIcons.sparkles,
                     label: 'Bio con IA',
                     onTap: () => showGenerarBioSheet(context, profile),
-                    accent: true,
+                    color: MployaTheme.aiAccent,
                   ),
-                  if (_isAdmin) ...[
-                    const SizedBox(width: 10),
-                    _actionPill(
-                      icon: CupertinoIcons.shield_fill,
-                      label: 'Admin',
-                      onTap: () => Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const AdminDashboardScreen())),
-                      color: const Color(0xFF6366F1),
-                    ),
-                  ],
                 ],
               ),
             const SizedBox(height: 20),
@@ -828,8 +840,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   // ── Action Pill Helper ──
-  Widget _actionPill({required IconData icon, required String label, required VoidCallback onTap, bool accent = false, Color? color}) {
-    final c = color ?? (accent ? MployaTheme.brandAccent : null);
+  Widget _actionPill({required IconData icon, required String label, required VoidCallback onTap, Color? color}) {
+    final c = color;
     return GestureDetector(
       onTap: onTap,
       child: Container(

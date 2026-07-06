@@ -429,7 +429,7 @@ class _MessagingScreenState extends State<MessagingScreen> {
             CupertinoButton(
               color: MployaTheme.brandAccent,
               borderRadius: BorderRadius.circular(20),
-              child: const Text('Ir al Feed', style: TextStyle(fontWeight: FontWeight.w700)),
+              child: const Text('Ir al Feed', style: TextStyle(fontWeight: FontWeight.w700, color: CupertinoColors.white)),
               onPressed: () {
                 // Navegar al tab Feed (index 0)
                 currentMainTabNotifier.value = 0;

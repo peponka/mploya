@@ -13,7 +13,7 @@ import '../screens/notifications_screen.dart';
 import '../screens/profile_screen.dart';
 import '../screens/ats_dashboard_screen.dart';
 import '../screens/jobs_screen.dart';
-import '../screens/messages_screen.dart';
+import '../screens/messaging_screen.dart';
 import '../services/revenuecat_service.dart';
 import '../services/connectivity_service.dart';
 import '../services/video_preload_manager.dart';
@@ -63,7 +63,12 @@ class _MainNavigationState extends State<MainNavigation> {
   static const _atsDashboard = AtsDashboardScreen();
   static const _notifications = NotificationsScreen();
   static const _profile = ProfileScreen();
-  static const _messages = MessagesScreen();
+  // Unificado en un solo sistema de chat (antes había dos pantallas de
+  // mensajería distintas y no relacionadas: "Mensajes" acá vs "Inbox" desde
+  // el ícono de sobre del Feed). Nos quedamos con MessagingScreen (Inbox),
+  // la más completa: rompehielos con IA, indicador de "escribiendo...",
+  // videollamada.
+  static const _messages = MessagingScreen();
 
   List<Widget> get _screens => [
         _homeFeed,           // 0
@@ -205,33 +210,35 @@ class _MainNavigationState extends State<MainNavigation> {
     }
 
     // Mobile layout (tab bar inferior)
+    // El OfflineBanner vive en el flujo normal (Column), no flotando encima
+    // del contenido: así empuja la pantalla hacia abajo en vez de taparle
+    // el título (antes se superponía a "Notificaciones", "Perfil", etc.).
     return Container(
       color: CupertinoColors.systemBackground,
-      child: Stack(
+      child: Column(
         children: [
-          IndexedStack(
-            index: _currentIndex,
-            children: _screens,
-          ),
-          const Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: SafeArea(
-              bottom: false,
-              child: OfflineBanner(),
-            ),
-          ),
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: _CustomTabBar(
-              currentIndex: _currentIndex,
-              onTap: _onTabTap,
-              unreadNotifications: _unreadNotifications,
-              pendingConnections: _pendingConnections,
-              unreadMessages: _unreadMessages,
+          const SafeArea(bottom: false, child: OfflineBanner()),
+          Expanded(
+            child: Stack(
+              children: [
+                IndexedStack(
+                  index: _currentIndex,
+                  children: _screens,
+                ),
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: _CustomTabBar(
+                    currentIndex: _currentIndex,
+                    onTap: _onTabTap,
+                    unreadNotifications: _unreadNotifications,
+                    pendingConnections: _pendingConnections,
+                    unreadMessages: _unreadMessages,
+                    accountType: _accountType,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -473,10 +480,13 @@ class _WebLayout extends StatelessWidget {
         ),
 
         // ── CENTER CONTENT ───────────────────────────────────────────────
+        // El OfflineBanner va en el flujo normal (Column) para empujar el
+        // contenido hacia abajo en vez de superponerse y tapar títulos.
         Expanded(
-          child: Stack(
+          child: Column(
             children: [
-              Positioned.fill(
+              const OfflineBanner(),
+              Expanded(
                 child: IndexedStack(
                   index: currentIndex,
                   children: [
@@ -488,13 +498,6 @@ class _WebLayout extends StatelessWidget {
                       _WebContentArea(child: screens[i]),
                   ],
                 ),
-              ),
-              // Offline Banner
-              const Positioned(
-                top: 0,
-                left: 0,
-                right: 0,
-                child: OfflineBanner(),
               ),
             ],
           ),
@@ -680,6 +683,7 @@ class _CustomTabBar extends StatelessWidget {
   final int unreadNotifications;
   final int pendingConnections;
   final int unreadMessages;
+  final String accountType;
 
   const _CustomTabBar({
     required this.currentIndex,
@@ -687,7 +691,10 @@ class _CustomTabBar extends StatelessWidget {
     required this.unreadNotifications,
     required this.pendingConnections,
     required this.unreadMessages,
+    required this.accountType,
   });
+
+  bool get isCompanyAccount => accountType == 'empresa' || accountType == 'headhunter';
 
   @override
   Widget build(BuildContext context) {
@@ -729,9 +736,9 @@ class _CustomTabBar extends StatelessWidget {
           Container(
             key: cmNavMatchKey,
             child: _TabItem(
-              icon: CupertinoIcons.bolt_fill,
-              inactiveIcon: CupertinoIcons.bolt,
-              label: 'Matches',
+              icon: isCompanyAccount ? CupertinoIcons.briefcase_fill : CupertinoIcons.bolt_fill,
+              inactiveIcon: isCompanyAccount ? CupertinoIcons.briefcase : CupertinoIcons.bolt,
+              label: isCompanyAccount ? 'Candidatos' : 'Matches',
               badgeCount: pendingConnections,
               isActive: currentIndex == 2,
               onTap: () => onTap(2),

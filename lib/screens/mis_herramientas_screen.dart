@@ -16,6 +16,7 @@ import 'scheduling_screen.dart';
 import 'ats_dashboard_screen.dart';
 import 'onboarding_pitch_screen.dart';
 import 'settings_screen.dart';
+import 'admin_dashboard_screen.dart';
 
 /// Pantalla privada del usuario: todas las herramientas que usa él mismo,
 /// separadas de su perfil público. Agrupadas por los mismos 4 pilares que la
@@ -23,7 +24,8 @@ import 'settings_screen.dart';
 /// que app y web hablen el mismo idioma.
 class MisHerramientasScreen extends StatelessWidget {
   final NexUser profile;
-  const MisHerramientasScreen({super.key, required this.profile});
+  final bool isAdmin;
+  const MisHerramientasScreen({super.key, required this.profile, this.isAdmin = false});
 
   bool get _isCompany =>
       profile.accountType == 'empresa' || profile.accountType == 'headhunter';
@@ -235,6 +237,14 @@ class MisHerramientasScreen extends StatelessWidget {
             subtitle: 'Privacidad, notificaciones y más',
             onTap: () => _push(context, const SettingsScreen()),
           ),
+          if (isAdmin)
+            _ToolTile(
+              icon: CupertinoIcons.shield_lefthalf_fill,
+              color: const Color(0xFF6B7280),
+              title: 'Panel de administración',
+              subtitle: 'Usuarios, ofertas, reportes y métricas',
+              onTap: () => _push(context, const AdminDashboardScreen()),
+            ),
         ],
       );
 

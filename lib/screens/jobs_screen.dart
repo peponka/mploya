@@ -15,6 +15,7 @@ import '../widgets/coach_mark.dart';
 import '../widgets/mploya_toast.dart';
 import 'saved_jobs_screen.dart';
 import 'create_job_screen.dart';
+import 'job_detail_screen.dart';
 
 class JobsScreen extends ConsumerStatefulWidget {
   const JobsScreen({super.key});
@@ -37,50 +38,75 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
     _fetchJobs();
   }
 
+  // Token anti-carrera: si el usuario cambia de filtro rápido, solo el último
+  // fetch tiene derecho a escribir el resultado (evita que una respuesta vieja
+  // pise a una nueva y las vacantes "aparezcan y desaparezcan").
+  int _fetchSeq = 0;
+
   Future<void> _fetchJobs() async {
+    final int seq = ++_fetchSeq;
     setState(() => _isLoading = true);
+
+    // Una sola consulta confiable: no depende de columnas que la tabla puede no
+    // tener (antes filtraba por is_active/modality/seniority, inexistentes, y la
+    // query fallaba). El filtrado Remoto/Presencial/C-Level se hace del lado del
+    // cliente sobre los datos que sí existen.
+    List<Map<String, dynamic>> jobs = [];
     try {
-      var query = _supabase
+      final res = await _supabase
           .from('jobs')
           .select('*, users!jobs_company_id_fkey(name, avatar_url)')
-          .eq('is_active', true);
-
-      if (_selectedFilter == 'Remoto') {
-        query = query.eq('modality', 'remote');
-      } else if (_selectedFilter == 'Presencial') {
-        query = query.inFilter('modality', ['onsite', 'hybrid']);
-      } else if (_selectedFilter == 'C-Level') {
-        query = query.inFilter('seniority', ['lead', 'clevel']);
-      }
-
-      final res = await query.order('created_at', ascending: false).limit(50);
-      var jobs = List<Map<String, dynamic>>.from(res);
-
-      if (_selectedFilter == 'Para Ti') {
-        jobs = await _rankJobsForUser(jobs);
-      }
-
-      if (mounted) {
-        setState(() {
-          _jobs = jobs;
-          _isLoading = false;
-        });
-      }
+          .order('created_at', ascending: false)
+          .limit(50);
+      jobs = List<Map<String, dynamic>>.from(res);
     } catch (e) {
-      debugPrint('Error fetch jobs: $e');
+      debugPrint('Error fetch jobs (con join): $e');
       try {
         final res = await _supabase
             .from('jobs')
             .select()
             .order('created_at', ascending: false)
             .limit(50);
-        setState(() {
-          _jobs = List<Map<String, dynamic>>.from(res);
-          _isLoading = false;
-        });
-      } catch (_) {
-        if (mounted) setState(() => _isLoading = false);
+        jobs = List<Map<String, dynamic>>.from(res);
+      } catch (e2) {
+        debugPrint('Error fetch jobs (fallback): $e2');
+        jobs = [];
       }
+    }
+
+    jobs = _applyClientFilter(jobs);
+
+    if (_selectedFilter == 'Para Ti') {
+      jobs = await _rankJobsForUser(jobs);
+    }
+
+    // Solo el fetch más reciente escribe el resultado.
+    if (mounted && seq == _fetchSeq) {
+      setState(() {
+        _jobs = jobs;
+        _isLoading = false;
+      });
+    }
+  }
+
+  // Filtro best-effort sobre campos que sí existen (location, tags, title).
+  List<Map<String, dynamic>> _applyClientFilter(List<Map<String, dynamic>> jobs) {
+    bool isRemote(Map<String, dynamic> j) =>
+        (j['location']?.toString().toLowerCase() ?? '').contains('remoto');
+    bool isClevel(Map<String, dynamic> j) {
+      final hay = '${j['title'] ?? ''} ${(j['tags'] as List?)?.join(' ') ?? ''}'.toLowerCase();
+      return ['c-level', 'clevel', 'cto', 'cfo', 'ceo', 'director', 'lead', 'head'].any(hay.contains);
+    }
+
+    switch (_selectedFilter) {
+      case 'Remoto':
+        return jobs.where(isRemote).toList();
+      case 'Presencial':
+        return jobs.where((j) => !isRemote(j)).toList();
+      case 'C-Level':
+        return jobs.where(isClevel).toList();
+      default:
+        return jobs;
     }
   }
 
@@ -400,13 +426,28 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
                               final job = _jobs[index];
                               final jobId = job['id']?.toString() ?? '';
                               final matchScore = _matchScores[jobId];
-                              return _JobListCard(
-                                job: job,
-                                isApplied: _appliedJobIds.contains(jobId),
-                                matchScore: matchScore != null && matchScore > 0 ? matchScore : null,
-                                onApply: () => _applyToJob(
-                                  jobId,
-                                  job['title']?.toString() ?? 'Vacante',
+                              final effectiveScore = matchScore != null && matchScore > 0 ? matchScore : null;
+                              void apply() => _applyToJob(
+                                    jobId,
+                                    job['title']?.toString() ?? 'Vacante',
+                                  );
+                              return GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onTap: () => Navigator.of(context).push(
+                                  CupertinoPageRoute(
+                                    builder: (_) => JobDetailScreen(
+                                      job: job,
+                                      matchScore: effectiveScore,
+                                      isApplied: _appliedJobIds.contains(jobId),
+                                      onApply: apply,
+                                    ),
+                                  ),
+                                ),
+                                child: _JobListCard(
+                                  job: job,
+                                  isApplied: _appliedJobIds.contains(jobId),
+                                  matchScore: effectiveScore,
+                                  onApply: apply,
                                 ),
                               );
                             },

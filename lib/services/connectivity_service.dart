@@ -46,29 +46,46 @@ class ConnectivityService {
     });
   }
 
-  /// Verificación puntual de conectividad vía DNS lookup.
+  // Cuántos chequeos seguidos deben fallar antes de declarar "sin conexión".
+  // Con 1 daba falsos positivos: un hipo puntual de DNS en 4G (o que un host
+  // esté lento/bloqueado por la operadora) mostraba la barra roja con internet
+  // funcionando. Exigimos 2 fallas seguidas.
+  int _consecutiveFailures = 0;
+  static const int _failuresToGoOffline = 2;
+
+  /// Verificación puntual de conectividad vía DNS lookup a varios hosts.
   Future<bool> checkConnectivity() async {
     if (kIsWeb) {
       _updateStatus(true); // En web, el browser maneja esto
       return true;
     }
 
-    try {
-      final result = await InternetAddress.lookup('dns.google')
-          .timeout(const Duration(seconds: 5));
-      final online = result.isNotEmpty && result[0].rawAddress.isNotEmpty;
-      _updateStatus(online);
-      return online;
-    } on SocketException catch (_) {
-      _updateStatus(false);
-      return false;
-    } on TimeoutException catch (_) {
-      _updateStatus(false);
-      return false;
-    } catch (_) {
-      _updateStatus(false);
-      return false;
+    final online = await _probe();
+    if (online) {
+      _consecutiveFailures = 0;
+      _updateStatus(true);
+    } else {
+      _consecutiveFailures++;
+      if (_consecutiveFailures >= _failuresToGoOffline) {
+        _updateStatus(false);
+      }
     }
+    return online;
+  }
+
+  // Estamos online si CUALQUIERA de estos hosts resuelve. Probar varios evita
+  // depender de uno solo (dns.google a veces está throttleado en móvil).
+  Future<bool> _probe() async {
+    for (final host in const ['dns.google', 'one.one.one.one', 'supabase.com']) {
+      try {
+        final result = await InternetAddress.lookup(host)
+            .timeout(const Duration(seconds: 3));
+        if (result.isNotEmpty && result[0].rawAddress.isNotEmpty) return true;
+      } catch (_) {
+        // probar el siguiente host
+      }
+    }
+    return false;
   }
 
   void _updateStatus(bool online) {
@@ -135,35 +152,37 @@ class OfflineBanner extends StatelessWidget {
       initialData: ConnectivityService.instance.isOnline,
       builder: (context, snapshot) {
         final isOnline = snapshot.data ?? true;
-        return AnimatedSlide(
-          duration: const Duration(milliseconds: 300),
-          offset: isOnline ? const Offset(0, -1) : Offset.zero,
-          child: AnimatedOpacity(
-            duration: const Duration(milliseconds: 300),
-            opacity: isOnline ? 0 : 1,
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 6),
-              color: const Color(0xFFFF3B30),
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(CupertinoIcons.wifi_slash, size: 14, color: CupertinoColors.white),
-                  SizedBox(width: 6),
-                  Text(
-                    'Sin conexión a internet',
-                    style: TextStyle(
-                      color: CupertinoColors.white,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      fontFamily: '.SF Pro Text',
-                      decoration: TextDecoration.none,
-                    ),
+        // AnimatedSize colapsa la altura a 0 cuando hay conexión (en vez de
+        // solo ocultarlo con opacidad/slide, que dejaba el espacio reservado
+        // y tapaba el título de la pantalla de abajo).
+        return AnimatedSize(
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeOut,
+          alignment: Alignment.topCenter,
+          child: isOnline
+              ? const SizedBox(width: double.infinity)
+              : Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  color: const Color(0xFFFF3B30),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(CupertinoIcons.wifi_slash, size: 14, color: CupertinoColors.white),
+                      SizedBox(width: 6),
+                      Text(
+                        'Sin conexión a internet',
+                        style: TextStyle(
+                          color: CupertinoColors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          fontFamily: '.SF Pro Text',
+                          decoration: TextDecoration.none,
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-            ),
-          ),
+                ),
         );
       },
     );

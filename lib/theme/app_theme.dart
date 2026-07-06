@@ -27,6 +27,12 @@ class NexTheme {
   static const Color success = Color(0xFF10B981);
   static const Color info = Color(0xFF3B82F6);
 
+  // Acento reservado para funciones con IA (Personalidad IA, Bio con IA, Coach).
+  // Regla de color de la app: naranja = marca/acción principal,
+  // violeta = "esto lo hace la IA", gris = utilidad/secundario.
+  static const Color aiAccent = Color(0xFF6C3FC8);
+  static const Color aiAccentLight = Color(0xFF9B6FE8);
+
   // ──── Light Mode (Ultra-clean iOS Style) ────
   static const Color lightBg = Color(0xFFF2F2F7);
   static const Color lightCard = Color(0xFFFFFFFF);

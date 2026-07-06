@@ -8,7 +8,7 @@ import '../theme/app_theme.dart';
 import '../models/models.dart';
 import '../screens/b2b_paywall_screen.dart';
 import '../screens/vacantes_screen.dart';
-import '../screens/chat_inmail_screen.dart';
+import '../screens/messaging_screen.dart';
 import '../screens/profile_screen.dart';
 // nexus_inbox_tab removed – replaced by inline Contactos section
 import '../widgets/nex_avatar.dart';
@@ -145,9 +145,12 @@ class _AtsDashboardScreenState extends State<AtsDashboardScreen> {
                     }
                   }
                 } catch (e) {
+                  // Si el servidor falla NO se revela el perfil: el cobro se hace
+                  // en el backend (unlock_stealth_profile), así que sin respuesta
+                  // OK no hay desbloqueo. Antes acá se mostraba éxito igual, lo que
+                  // permitía "desbloquear" sin cobrar de verdad.
                   debugPrint('Error RPC unlock: $e');
-                  if (context.mounted) setState(() => _tokensDisponibles -= 1);
-                  _showSuccessDialog(user);
+                  if (mounted) _showUnlockError();
                 }
               } else {
                 if (mounted) {
@@ -155,6 +158,23 @@ class _AtsDashboardScreenState extends State<AtsDashboardScreen> {
                 }
               }
             },
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showUnlockError() {
+    showCupertinoDialog(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: const Text('No se pudo desbloquear'),
+        content: const Text('Hubo un problema al procesar el desbloqueo y no se descontó ningún crédito. Probá de nuevo en unos segundos.'),
+        actions: [
+          CupertinoDialogAction(
+            isDefaultAction: true,
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Entendido'),
           ),
         ],
       ),
@@ -180,7 +200,7 @@ class _AtsDashboardScreenState extends State<AtsDashboardScreen> {
             child: const Text('Enviar mensaje prioritario'),
             onPressed: () {
               Navigator.pop(ctx);
-              Navigator.of(context).push(CupertinoPageRoute(builder: (_) => ChatInmailScreen(targetUser: user)));
+              Navigator.of(context).push(CupertinoPageRoute(builder: (_) => ChatDetailScreen(otherUser: user)));
             },
           ),
         ],
@@ -198,7 +218,7 @@ class _AtsDashboardScreenState extends State<AtsDashboardScreen> {
           slivers: [
             CupertinoSliverNavigationBar(
               transitionBetweenRoutes: false,
-              largeTitle: Text('Conexiones', style: TextStyle(color: context.textPrimary, fontFamily: '.SF Pro Display', letterSpacing: -0.5, fontWeight: FontWeight.w900)),
+              largeTitle: Text('Candidatos', style: TextStyle(color: context.textPrimary, fontFamily: '.SF Pro Display', letterSpacing: -0.5, fontWeight: FontWeight.w900)),
               backgroundColor: context.bgColor,
               border: null,
               trailing: CupertinoButton(
@@ -245,8 +265,10 @@ class _AtsDashboardScreenState extends State<AtsDashboardScreen> {
               ),
             ),
 
-            // ── Credits banner (subtle, for companies only) ──
-            if (_tokensDisponibles > 0)
+            // ── Credits banner: solo visible en la pestaña Confidencial, que es
+            // donde efectivamente se gastan los créditos (evita mostrarlo fuera
+            // de contexto en Pendientes/Contactos) ──
+            if (_tokensDisponibles > 0 && _filtroActivo == 'Confidencial 🔒')
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
@@ -611,7 +633,7 @@ class _AtsDashboardScreenState extends State<AtsDashboardScreen> {
                           onTap: () {
                             HapticFeedback.selectionClick();
                             Navigator.of(context).push(
-                              CupertinoPageRoute(builder: (_) => ChatInmailScreen(targetUser: user)),
+                              CupertinoPageRoute(builder: (_) => ChatDetailScreen(otherUser: user)),
                             );
                           },
                           child: Container(

@@ -251,8 +251,8 @@ class _ProfilePersonalitySectionState extends State<ProfilePersonalitySection> {
                         children: [
                           Text('Analizar Personalidad IA',
                             style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF1C1C1E))),
-                          Text('Detecta tus soft skills desde tu video-pitch',
-                            style: TextStyle(fontSize: 11, color: Color(0xFF8E8E93)), maxLines: 1, overflow: TextOverflow.ellipsis),
+                          Text('Detecta tus soft skills con IA',
+                            style: TextStyle(fontSize: 11, color: Color(0xFF8E8E93)), maxLines: 2, overflow: TextOverflow.ellipsis),
                         ],
                       ),
                     ),

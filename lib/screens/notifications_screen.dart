@@ -339,29 +339,36 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                   ),
 
                 // ── Notification list ──
+                // SliverFillRemaining centra el estado vacío en el espacio que
+                // sobra debajo del header/tip, en vez de quedar pegado arriba
+                // con un padding fijo y dejar un vacío enorme más abajo.
                 if (myNotifs.isEmpty)
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.only(top: 60),
-                      child: Column(
-                        children: [
-                          Container(
-                            width: 72, height: 72,
-                            decoration: BoxDecoration(
-                              color: context.isDark ? NexTheme.darkSurface : const Color(0xFFF2F2F7),
-                              shape: BoxShape.circle,
+                  SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: Center(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 32),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 72, height: 72,
+                              decoration: BoxDecoration(
+                                color: context.isDark ? NexTheme.darkSurface : const Color(0xFFF2F2F7),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(CupertinoIcons.bell, size: 32, color: context.textTertiary),
                             ),
-                            child: Icon(CupertinoIcons.bell, size: 32, color: context.textTertiary),
-                          ),
-                          const SizedBox(height: 16),
-                          Text('Sin notificaciones', style: TextStyle(color: context.textPrimary, fontSize: 18, fontWeight: FontWeight.w700)),
-                          const SizedBox(height: 6),
-                          Text(
-                            'Interacciones, matches y alertas\naparecerán aquí.',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(color: context.textSecondary, fontSize: 14, height: 1.4),
-                          ),
-                        ],
+                            const SizedBox(height: 16),
+                            Text('Sin notificaciones', style: TextStyle(color: context.textPrimary, fontSize: 18, fontWeight: FontWeight.w700)),
+                            const SizedBox(height: 6),
+                            Text(
+                              'Interacciones, matches y alertas\naparecerán aquí.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(color: context.textSecondary, fontSize: 14, height: 1.4),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   )

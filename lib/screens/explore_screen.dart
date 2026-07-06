@@ -1127,39 +1127,43 @@ class _TopSearchBar extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 6),
-              // Activar GPS button
-              SpringInteraction(
-                onTap: () {
-                  HapticFeedback.selectionClick();
-                  onActivateGps();
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                  decoration: BoxDecoration(
-                    color: const Color(0xE0FFFFFF),
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: const [
-                      BoxShadow(
-                        color: Color(0x08000000),
-                        blurRadius: 8,
-                        offset: Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: gpsActivating
-                      ? const SizedBox(
-                          width: 14, height: 14,
-                          child: CupertinoActivityIndicator(radius: 6),
-                        )
-                      : const Text(
-                          'Activar GPS',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF1C1C1E),
-                            fontFamily: '.SF Pro Text',
-                          ),
+              // Activar GPS: botón ícono compacto (acción rápida de un toque,
+              // no compite en ancho con el nombre de ciudad ni con "Elegir Ciudad").
+              Semantics(
+                button: true,
+                label: 'Activar GPS y usar mi ubicación actual',
+                child: SpringInteraction(
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    onActivateGps();
+                  },
+                  child: Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      color: const Color(0xE0FFFFFF),
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Color(0x08000000),
+                          blurRadius: 8,
+                          offset: Offset(0, 2),
                         ),
+                      ],
+                    ),
+                    child: gpsActivating
+                        ? const Center(
+                            child: SizedBox(
+                              width: 14, height: 14,
+                              child: CupertinoActivityIndicator(radius: 6),
+                            ),
+                          )
+                        : const Icon(
+                            CupertinoIcons.location_fill,
+                            size: 16,
+                            color: MployaTheme.brandAccent,
+                          ),
+                  ),
                 ),
               ),
               const SizedBox(width: 8),
