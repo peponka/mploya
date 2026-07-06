@@ -39,7 +39,10 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
     _init();
   }
 
-  Future<String> _fetchToken() async {
+  // Devuelve token + appId. El appId lo manda el servidor (es público, no
+  // secreto) para no depender de un --dart-define en cada build — que es
+  // justamente lo que faltaba y hacía crashear la llamada (appId vacío).
+  Future<({String token, String appId})> _fetchToken() async {
     final session = Supabase.instance.client.auth.currentSession;
     final jwt = session?.accessToken ?? '';
     final resp = await http.post(
@@ -51,17 +54,28 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
       body: jsonEncode({'channelName': widget.channelName, 'uid': 0}),
     ).timeout(const Duration(seconds: 10));
     if (resp.statusCode != 200) throw Exception('Token ${resp.statusCode}: ${resp.body}');
-    return (jsonDecode(resp.body) as Map<String, dynamic>)['token'] as String;
+    final data = jsonDecode(resp.body) as Map<String, dynamic>;
+    // Respaldo al valor de compilación por si la función aún no fue actualizada.
+    final appId = (data['appId'] as String?)?.isNotEmpty == true
+        ? data['appId'] as String
+        : _appId;
+    return (token: data['token'] as String, appId: appId);
   }
 
   Future<void> _init() async {
     await [Permission.camera, Permission.microphone].request();
 
     try {
-      final token = await _fetchToken();
+      final creds = await _fetchToken();
+      final token = creds.token;
+
+      if (creds.appId.isEmpty) {
+        if (mounted) setState(() => _error = 'La videollamada no está configurada (falta App ID).');
+        return;
+      }
 
       _engine = createAgoraRtcEngine();
-      await _engine!.initialize(RtcEngineContext(appId: _appId));
+      await _engine!.initialize(RtcEngineContext(appId: creds.appId));
 
       _engine!.registerEventHandler(RtcEngineEventHandler(
         onJoinChannelSuccess: (connection, elapsed) {

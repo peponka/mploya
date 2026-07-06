@@ -44,7 +44,9 @@ serve(async (req) => {
       RtcRole.PUBLISHER, expireTs, expireTs
     );
 
-    return new Response(JSON.stringify({ token }), {
+    // Devolvemos también el appId (es público, no secreto) para que el cliente
+    // no dependa de un --dart-define en cada build.
+    return new Response(JSON.stringify({ token, appId: APP_ID }), {
       headers: { 'Content-Type': 'application/json', ...cors },
     });
   } catch (e) {
