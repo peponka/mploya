@@ -8,13 +8,20 @@ import 'package:flutter/widgets.dart';
 
 final Set<String> _registered = {};
 
-Widget buildJitsiWebView(String room) {
+Widget buildJitsiWebView(String room, String displayName) {
   final viewType = 'jitsi-view-$room';
   if (!_registered.contains(viewType)) {
     _registered.add(viewType);
+    // Config en el fragment de la URL: saltar la pantalla previa (que pedía
+    // nombre/código) y entrar directo con el nombre del usuario ya seteado.
+    final name = Uri.encodeComponent('"$displayName"');
+    final src = 'https://meet.jit.si/$room'
+        '#config.prejoinConfig.enabled=false'
+        '&config.prejoinPageEnabled=false'
+        '&userInfo.displayName=$name';
     ui_web.platformViewRegistry.registerViewFactory(viewType, (int viewId) {
       final iframe = html.IFrameElement()
-        ..src = 'https://meet.jit.si/$room'
+        ..src = src
         ..style.border = 'none'
         ..style.width = '100%'
         ..style.height = '100%'

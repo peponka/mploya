@@ -157,7 +157,7 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
                 ],
               ),
             ),
-            Expanded(child: buildJitsiWebView(widget.channelName)),
+            Expanded(child: buildJitsiWebView(widget.channelName, widget.displayName)),
           ],
         ),
       ),
