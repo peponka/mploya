@@ -96,7 +96,7 @@ class _PremiumPaywallScreenState extends State<PremiumPaywallScreen> {
         ),
         const _FeatureConfig(
           icon: CupertinoIcons.chat_bubble_2_fill,
-          title: 'InMails VIP ilimitados',
+          title: 'Mensajes VIP ilimitados',
           subtitle: 'Contacta candidatos C-Level con 85% de tasa de respuesta.',
         ),
       ];
@@ -114,7 +114,7 @@ class _PremiumPaywallScreenState extends State<PremiumPaywallScreen> {
       ),
       const _FeatureConfig(
         icon: CupertinoIcons.envelope_badge_fill,
-        title: 'InMails ilimitados',
+        title: 'Mensajes directos ilimitados',
         subtitle: 'Enviá mensajes directos a reclutadores sin esperar a hacer Match.',
       ),
     ];

@@ -182,7 +182,7 @@ class _ChatInmailScreenState extends State<ChatInmailScreen> {
                               color: MployaTheme.brandAccent.withValues(alpha: 0.08),
                               borderRadius: BorderRadius.circular(12),
                             ),
-                            child: const Text('Estás usando un InMail Premium.\nEl candidato recibirá una notificación prioritaria.', textAlign: TextAlign.center, style: TextStyle(color: MployaTheme.brandAccent, fontSize: 12)),
+                            child: const Text('Estás usando un Mensaje Premium.\nEl candidato recibirá una notificación prioritaria.', textAlign: TextAlign.center, style: TextStyle(color: MployaTheme.brandAccent, fontSize: 12)),
                           ),
                         );
                       }
@@ -288,7 +288,7 @@ class _ChatInmailScreenState extends State<ChatInmailScreen> {
           Expanded(
             child: CupertinoTextField(
               controller: _msgController,
-              placeholder: 'Escribe tu InMail directo...',
+              placeholder: 'Escribe tu mensaje...',
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
                 color: CupertinoColors.systemGrey6.resolveFrom(context),

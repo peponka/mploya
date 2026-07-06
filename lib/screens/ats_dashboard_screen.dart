@@ -166,7 +166,7 @@ class _AtsDashboardScreenState extends State<AtsDashboardScreen> {
       context: context,
       builder: (ctx) => CupertinoAlertDialog(
         title: const Text('¡Perfil Desbloqueado!'),
-        content: const Text('Ahora tienes acceso completo a su identidad y puedes iniciar un InMail directo.'),
+        content: const Text('Ahora tienes acceso completo a su identidad y puedes iniciar un mensaje directo.'),
         actions: [
           CupertinoDialogAction(
             child: const Text('Ver Perfil'),
@@ -177,7 +177,7 @@ class _AtsDashboardScreenState extends State<AtsDashboardScreen> {
           ),
           CupertinoDialogAction(
             isDefaultAction: true,
-            child: const Text('Enviar InMail Prioritario'),
+            child: const Text('Enviar mensaje prioritario'),
             onPressed: () {
               Navigator.pop(ctx);
               Navigator.of(context).push(CupertinoPageRoute(builder: (_) => ChatInmailScreen(targetUser: user)));
