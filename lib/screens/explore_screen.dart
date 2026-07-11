@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:ui';
 import 'dart:math';
 import 'explore_demo_data.dart' as demo;
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
@@ -20,7 +21,9 @@ import '../widgets/spring_interaction.dart';
 import '../services/search_service.dart';
 import '../widgets/search_overlay.dart';
 import 'profile_screen.dart';
+import 'messaging_screen.dart';
 import 'saved_jobs_screen.dart';
+import '../services/hashtag_service.dart';
 
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // SQL REQUERIDO â€” Ejecuta esta función en Supabase SQL Editor una sola vez.
@@ -132,10 +135,110 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
   static const double _fallbackLng = -58.3816;
 
   final _searchController = TextEditingController();
+  // Scroll del panel de resultados (versión web: panel fijo a la derecha).
+  final ScrollController _panelScroll = ScrollController();
   int _selectedFilter = 1;
   bool _showSearchOverlay = false;
   bool _showLocationActions = false;
   String? _selectedCityName; // Nombre de ciudad seleccionada manualmente
+
+  // ── Filtros avanzados del panel (web) — la RPC get_nearby_users solo trae
+  // id/name/headline/video_url/account_type/lat/lng, así que filtramos sobre
+  // esos campos reales (headline suele incluir cargo y empresa, ej. "CTO ·
+  // actual Globant"). No hay skills/salario en el pin, no se inventan. ──
+  String _exploreTextFilter = '';
+  String _exploreTypeFilter = 'todos'; // todos | candidato | empresa
+
+  // IDs de conexiones aceptadas reales — para marcar en el mapa qué pines ya
+  // son un match tuyo, como en el mockup (callout "Matches" sobre un pin).
+  Set<String> _connectionIds = {};
+
+  Future<void> _loadConnectionIds() async {
+    final uid = Supabase.instance.client.auth.currentUser?.id;
+    if (uid == null) return;
+    try {
+      final rows = await Supabase.instance.client
+          .from('connections')
+          .select('requester_id, addressee_id')
+          .or('requester_id.eq.$uid,addressee_id.eq.$uid')
+          .eq('status', 'accepted');
+      final ids = rows.map<String>((r) {
+        final req = r['requester_id']?.toString() ?? '';
+        final add = r['addressee_id']?.toString() ?? '';
+        return req == uid ? add : req;
+      }).where((id) => id.isNotEmpty).toSet();
+      if (mounted) setState(() => _connectionIds = ids);
+    } catch (_) {}
+  }
+
+  List<_UserPinData> _applyExploreFilters(List<_UserPinData> users) {
+    var out = users;
+    if (_exploreTypeFilter == 'candidato') {
+      out = out.where((u) => u.accountType != 'empresa').toList();
+    } else if (_exploreTypeFilter == 'empresa') {
+      out = out.where((u) => u.accountType == 'empresa').toList();
+    }
+    if (_exploreTextFilter.trim().isNotEmpty) {
+      final q = _exploreTextFilter.trim().toLowerCase();
+      out = out.where((u) => u.headline.toLowerCase().contains(q) || u.name.toLowerCase().contains(q)).toList();
+    }
+    return out;
+  }
+
+  Widget _buildExploreFilterBar(BuildContext context) {
+    Widget typeChip(String value, String label) {
+      final active = _exploreTypeFilter == value;
+      return GestureDetector(
+        onTap: () => setState(() => _exploreTypeFilter = value),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+          decoration: BoxDecoration(
+            color: active ? MployaTheme.brandAccent : const Color(0xFFF2F2F7),
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Text(label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: active ? CupertinoColors.white : const Color(0xFF3C3C43),
+              )),
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('FILTROS AVANZADOS',
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 0.8, color: Color(0xFF8E8E93))),
+          const SizedBox(height: 10),
+          CupertinoTextField(
+            placeholder: 'Buscar por cargo o empresa...',
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            prefix: const Padding(padding: EdgeInsets.only(left: 8), child: Icon(CupertinoIcons.search, size: 15, color: Color(0xFF8E8E93))),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF2F2F7),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            style: const TextStyle(fontSize: 13),
+            onChanged: (v) => setState(() => _exploreTextFilter = v),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              typeChip('todos', 'Todos'),
+              const SizedBox(width: 8),
+              typeChip('candidato', 'Candidatos'),
+              const SizedBox(width: 8),
+              typeChip('empresa', 'Empresas'),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 
   // ── GPS state ──
   Position? _userPosition;
@@ -206,6 +309,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
     super.initState();
     _mapController = MapController();
     _initLocation();
+    _loadConnectionIds();
   }
 
   Future<void> _initLocation() async {
@@ -570,6 +674,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
   void dispose() {
     _searchController.dispose();
     _mapController.dispose();
+    _panelScroll.dispose();
     super.dispose();
   }
 
@@ -610,12 +715,14 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
     return FutureBuilder<List<_UserPinData>>(
       future: _nearbyFuture,
       builder: (context, snap) {
-        final users = snap.data ?? <_UserPinData>[];
+        final allUsers = snap.data ?? <_UserPinData>[];
+        final users = _applyExploreFilters(allUsers);
         final isLoading = snap.connectionState == ConnectionState.waiting;
 
-        return CupertinoPageScaffold(
-          backgroundColor: const Color(0xFFE8E8E3),
-          child: Stack(
+        // En web: mapa a la izquierda + panel de resultados fijo a la derecha.
+        // En móvil: mapa full-screen + hoja arrastrable.
+        final wide = MediaQuery.of(context).size.width > 900;
+        final mapStack = Stack(
             children: [
               // â”€â”€ 1. MAPA centrado en la posición real del usuario â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
               Positioned.fill(
@@ -624,6 +731,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                   users: users,
                   mapController: _mapController,
                   initialZoom: _zoomForFilter,
+                  connectionIds: _connectionIds,
                 ),
               ),
 
@@ -703,8 +811,9 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                 ),
               ),
 
-              // â”€â”€ 3. HOJA INFERIOR con perfiles reales â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-              DraggableScrollableSheet(
+              // â”€â”€ 3. HOJA INFERIOR con perfiles reales (solo móvil) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+              if (!wide)
+                DraggableScrollableSheet(
                 initialChildSize: 0.38,
                 minChildSize: 0.13,
                 maxChildSize: 0.88,
@@ -761,7 +870,240 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
 
               // GPS banner removed — location controls now in top search bar
             ],
+          );
+        return CupertinoPageScaffold(
+          backgroundColor: const Color(0xFFE8E8E3),
+          child: wide
+              ? Row(
+                  children: [
+                    Expanded(child: mapStack),
+                    // ── Panel de resultados (web): fijo a la derecha ──
+                    Container(
+                      width: 384,
+                      decoration: const BoxDecoration(
+                        color: CupertinoColors.white,
+                        border: Border(left: BorderSide(color: Color(0x14000000), width: 0.5)),
+                      ),
+                      child: SafeArea(
+                        left: false,
+                        child: Column(
+                          children: [
+                            _buildExploreFilterBar(context),
+                            Expanded(
+                              child: _BottomSheet(
+                                scrollController: _panelScroll,
+                                users: users,
+                                isLoading: isLoading,
+                                avatarColor: _avatarColor,
+                                onUserTap: (userPin) => _mapController.move(userPin.point, 14.0),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    if (MediaQuery.of(context).size.width > 1300)
+                      _buildFeaturedPanel(context, users),
+                  ],
+                )
+              : mapStack,
+        );
+      },
+    );
+  }
+
+  // ── Panel destacado (solo pantallas muy anchas): un perfil real cercano +
+  // el match más reciente del usuario, con datos reales de Supabase — nada
+  // inventado, si no hay datos la sección correspondiente simplemente no
+  // se muestra. ──
+  Widget _buildFeaturedPanel(BuildContext context, List<_UserPinData> users) {
+    final featured = users.isNotEmpty ? users.first : null;
+    return Container(
+      width: 260,
+      decoration: const BoxDecoration(
+        color: CupertinoColors.white,
+        border: Border(left: BorderSide(color: Color(0x14000000), width: 0.5)),
+      ),
+      child: SafeArea(
+        left: false,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('PERFIL DESTACADO',
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 0.8, color: Color(0xFF8E8E93))),
+              const SizedBox(height: 10),
+              if (featured == null)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF7F8FA),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFFEDEFF2)),
+                  ),
+                  child: Column(
+                    children: [
+                      Container(
+                        width: 44, height: 44,
+                        decoration: BoxDecoration(color: MployaTheme.brandAccent.withValues(alpha: 0.1), shape: BoxShape.circle),
+                        child: const Icon(CupertinoIcons.person_crop_circle, color: MployaTheme.brandAccent, size: 22),
+                      ),
+                      const SizedBox(height: 10),
+                      Text('Sin perfiles cerca todavía',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: context.textPrimary)),
+                      const SizedBox(height: 4),
+                      Text('Ampliá el radio o cambiá de ciudad para ver profesionales.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(fontSize: 11.5, color: context.textTertiary, height: 1.3)),
+                    ],
+                  ),
+                )
+              else
+                _FeaturedProfileCard(pin: featured),
+              const SizedBox(height: 20),
+              _RecentMatchCard(),
+              const SizedBox(height: 20),
+              Center(
+                child: Text('¡Dale Play a tu carrera!',
+                    style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: context.textTertiary)),
+              ),
+            ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Featured profile card: perfil real cercano con foto/tags reales ──
+class _FeaturedProfileCard extends StatelessWidget {
+  final _UserPinData pin;
+  const _FeaturedProfileCard({required this.pin});
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<Map<String, dynamic>?>(
+      future: Supabase.instance.client
+          .from('users')
+          .select('avatar_url, tags, company')
+          .eq('id', pin.id)
+          .maybeSingle(),
+      builder: (context, snap) {
+        final avatarUrl = snap.data?['avatar_url']?.toString();
+        final tags = (snap.data?['tags'] as List?)?.map((t) => t.toString()).toList() ?? [];
+        return GestureDetector(
+          onTap: () async {
+            final data = await Supabase.instance.client.from('users').select().eq('id', pin.id).maybeSingle();
+            if (data != null && context.mounted) {
+              Navigator.of(context).push(CupertinoPageRoute(builder: (_) => ProfileScreen(user: NexUser.fromJson(data))));
+            }
+          },
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: AspectRatio(
+                  aspectRatio: 1,
+                  child: Container(
+                    color: const Color(0xFFEFEFEF),
+                    child: (avatarUrl != null && avatarUrl.isNotEmpty)
+                        ? CachedNetworkImage(imageUrl: avatarUrl, fit: BoxFit.cover)
+                        : Center(
+                            child: Text(pin.name.isNotEmpty ? pin.name[0].toUpperCase() : '?',
+                                style: const TextStyle(fontSize: 40, fontWeight: FontWeight.w800, color: Color(0xFFBBBBBB))),
+                          ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(pin.name, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Color(0xFF1C1C1E))),
+              if (pin.headline.isNotEmpty)
+                Text(pin.headline, style: const TextStyle(fontSize: 12.5, color: Color(0xFF8E8E93)), maxLines: 1, overflow: TextOverflow.ellipsis),
+              if (tags.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 5, runSpacing: 5,
+                  children: tags.take(6).map((t) => Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(color: MployaTheme.brandAccent.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(999)),
+                        child: Text('#$t', style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: MployaTheme.brandAccent)),
+                      )).toList(),
+                ),
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+// ── Card de match más reciente: solo se muestra si existe uno real ──
+class _RecentMatchCard extends StatelessWidget {
+  const _RecentMatchCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final uid = Supabase.instance.client.auth.currentUser?.id;
+    if (uid == null) return const SizedBox.shrink();
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: Supabase.instance.client
+          .from('connections')
+          .select('requester_id, addressee_id, updated_at')
+          .or('requester_id.eq.$uid,addressee_id.eq.$uid')
+          .eq('status', 'accepted')
+          .order('updated_at', ascending: false)
+          .limit(1),
+      builder: (context, snap) {
+        final rows = snap.data ?? [];
+        if (rows.isEmpty) return const SizedBox.shrink();
+        final r = rows.first;
+        final otherId = r['requester_id']?.toString() == uid ? r['addressee_id']?.toString() : r['requester_id']?.toString();
+        if (otherId == null) return const SizedBox.shrink();
+        return FutureBuilder<Map<String, dynamic>?>(
+          future: Supabase.instance.client.from('users').select('name, headline, company').eq('id', otherId).maybeSingle(),
+          builder: (context, userSnap) {
+            final name = userSnap.data?['name']?.toString();
+            if (name == null) return const SizedBox.shrink();
+            final headline = userSnap.data?['headline']?.toString() ?? '';
+            final company = userSnap.data?['company']?.toString();
+            final subtitle = [headline, company].where((s) => s != null && s.isNotEmpty).join(' · ');
+            return GestureDetector(
+              onTap: () => Navigator.of(context).push(CupertinoPageRoute(builder: (_) => MessagingScreen())),
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: MployaTheme.brandAccent.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 26, height: 26,
+                      decoration: const BoxDecoration(color: MployaTheme.brandAccent, shape: BoxShape.circle),
+                      child: const Icon(CupertinoIcons.bolt_fill, color: CupertinoColors.white, size: 13),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('¡Match!', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Color(0xFF1C1C1E))),
+                          Text('con $name${subtitle.isNotEmpty ? ' · $subtitle' : ''}',
+                              style: const TextStyle(fontSize: 12, color: Color(0xFF8E8E93)), maxLines: 2, overflow: TextOverflow.ellipsis),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
         );
       },
     );
@@ -777,11 +1119,13 @@ class _MapBackground extends StatelessWidget {
   final List<_UserPinData> users;
   final MapController mapController;
   final double initialZoom;
+  final Set<String> connectionIds;
   const _MapBackground({
     required this.center,
     required this.users,
     required this.mapController,
     required this.initialZoom,
+    this.connectionIds = const {},
   });
 
   @override
@@ -804,23 +1148,27 @@ class _MapBackground extends StatelessWidget {
         MarkerLayer(
           markers: [
             // Pines de usuarios reales â€” empresas y candidatos
-            ...users.map((u) => Marker(
-                  point: u.point,
-                  width: 150,
-                  height: 68,
-                  alignment: Alignment.topCenter,
-                  child: SpringInteraction(
-                    onTap: () {
-                      HapticFeedback.lightImpact();
-                      mapController.move(u.point, 14.0);
-                    },
-                    child: _LocationPin(
-                      label: u.name,
-                      hasVideo: u.hasVideo,
-                      isCompany: u.isCompany,
-                    ),
+            ...users.map((u) {
+              final isMatch = connectionIds.contains(u.id);
+              return Marker(
+                point: u.point,
+                width: 150,
+                height: isMatch ? 92 : 68,
+                alignment: Alignment.topCenter,
+                child: SpringInteraction(
+                  onTap: () {
+                    HapticFeedback.lightImpact();
+                    mapController.move(u.point, 14.0);
+                  },
+                  child: _LocationPin(
+                    label: u.name,
+                    hasVideo: u.hasVideo,
+                    isCompany: u.isCompany,
+                    isMatch: isMatch,
                   ),
-                )),
+                ),
+              );
+            }),
             // Tu señal GPS en el centro de la zona
             Marker(
               point: center,
@@ -840,10 +1188,12 @@ class _LocationPin extends StatelessWidget {
   final String label;
   final bool hasVideo;
   final bool isCompany;
+  final bool isMatch;
   const _LocationPin({
     required this.label,
     required this.hasVideo,
     this.isCompany = false,
+    this.isMatch = false,
   });
 
   @override
@@ -867,6 +1217,26 @@ class _LocationPin extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
+        // 0. Callout "Match" — solo si ya es una conexión aceptada real.
+        if (isMatch) ...[
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: MployaTheme.brandAccent,
+              borderRadius: BorderRadius.circular(999),
+              boxShadow: [BoxShadow(color: MployaTheme.brandAccent.withValues(alpha: 0.4), blurRadius: 8, offset: const Offset(0, 2))],
+            ),
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(CupertinoIcons.bolt_fill, size: 10, color: CupertinoColors.white),
+                SizedBox(width: 3),
+                Text('Match', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: CupertinoColors.white)),
+              ],
+            ),
+          ),
+          const SizedBox(height: 3),
+        ],
         // 1. Círculo principal del Pin (Estilo Zenly/Apple Maps fluido)
         Container(
           width: 38,
@@ -1355,12 +1725,79 @@ class _BottomSheet extends StatelessWidget {
                       ),
                     ),
                   ),
+                // ── Hashtags en tendencia: rellena el panel con contenido útil
+                // aunque no haya resultados en la zona, e invita a explorar por
+                // skill/tema en vez de solo por ubicación. ──
+                const SizedBox(height: 20),
+                _TrendingHashtagsSection(),
                 SizedBox(height: extra),
               ],
             ),
           ),
         ),
       ),
+    );
+  }
+}
+
+// ── Hashtags en tendencia: pills naranjas tipo "AI tags", tocar navega a
+// buscar candidatos/empresas por ese skill/tema. ──
+class _TrendingHashtagsSection extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<HashtagData>>(
+      future: HashtagService.instance.getTrendingHashtags(limit: 12),
+      builder: (context, snap) {
+        final tags = snap.data ?? [];
+        if (tags.isEmpty) return const SizedBox.shrink();
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(CupertinoIcons.flame_fill, size: 15, color: MployaTheme.brandAccent),
+                  const SizedBox(width: 6),
+                  const Text(
+                    'Tendencias',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Color(0xFF1C1C1E)),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: tags.map((h) => GestureDetector(
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    Navigator.of(context).push(
+                      CupertinoPageRoute(builder: (_) => TrendingHashtagsScreen(initialTag: h.tag)),
+                    );
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: MployaTheme.brandAccent.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(color: MployaTheme.brandAccent.withValues(alpha: 0.18), width: 0.5),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('#${h.tag}', style: const TextStyle(color: MployaTheme.brandAccent, fontSize: 12.5, fontWeight: FontWeight.w700)),
+                        const SizedBox(width: 5),
+                        Text('${h.count}', style: TextStyle(color: MployaTheme.brandAccent.withValues(alpha: 0.6), fontSize: 11, fontWeight: FontWeight.w600)),
+                      ],
+                    ),
+                  ),
+                )).toList(),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

@@ -270,9 +270,59 @@ class _AtsKanbanScreenState extends State<AtsKanbanScreen> {
     'rejected': CupertinoColors.systemRed,
   };
 
+  // ── Board web: todas las columnas al lado (render #5) ──
+  Widget _buildBoard(BuildContext context) {
+    final columnBg = CupertinoColors.systemGrey6.resolveFrom(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: _tabLabels.entries.map((e) {
+          final items = _columns[e.key] ?? [];
+          final color = _tabColors[e.key]!;
+          return Expanded(
+            child: Container(
+              margin: const EdgeInsets.symmetric(horizontal: 6),
+              decoration: BoxDecoration(color: columnBg, borderRadius: BorderRadius.circular(16)),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
+                    child: Row(children: [
+                      Container(width: 9, height: 9, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+                      const SizedBox(width: 8),
+                      Expanded(child: Text(e.value, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: context.textPrimary, fontSize: 14, fontWeight: FontWeight.w700))),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(color: color.withValues(alpha: 0.14), borderRadius: BorderRadius.circular(999)),
+                        child: Text('${items.length}', style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w800)),
+                      ),
+                    ]),
+                  ),
+                  Expanded(
+                    child: items.isEmpty
+                        ? Center(child: Text('Vacío', style: TextStyle(color: context.textTertiary, fontSize: 12)))
+                        : ListView.builder(
+                            padding: const EdgeInsets.fromLTRB(8, 0, 8, 12),
+                            physics: const BouncingScrollPhysics(),
+                            itemCount: items.length,
+                            itemBuilder: (context, index) => _buildKanbanCard(items[index]),
+                          ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final list = _columns[_selectedTab] ?? [];
+    final wide = MediaQuery.of(context).size.width > 900;
 
     return CupertinoPageScaffold(
       backgroundColor: context.bgColor,
@@ -284,7 +334,9 @@ class _AtsKanbanScreenState extends State<AtsKanbanScreen> {
       child: SafeArea(
         child: _isLoading
             ? const Center(child: CupertinoActivityIndicator())
-            : Column(
+            : wide
+                ? _buildBoard(context)
+                : Column(
                 children: [
                       // ── Tab Chips ──
                       SizedBox(

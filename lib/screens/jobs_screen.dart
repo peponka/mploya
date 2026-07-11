@@ -12,6 +12,7 @@ import '../widgets/job_heatmap_bar.dart';
 import '../services/ghost_apply_service.dart';
 import '../services/saved_jobs_service.dart';
 import '../widgets/coach_mark.dart';
+import '../widgets/web_ui.dart';
 import '../widgets/mploya_toast.dart';
 import 'saved_jobs_screen.dart';
 import 'create_job_screen.dart';
@@ -31,6 +32,102 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
   String _selectedFilter = 'Para Ti';
   Map<String, int> _matchScores = {};
   final Set<String> _appliedJobIds = {};
+
+  // ── Filtros avanzados (solo panel web) — aplicados en cliente sobre _jobs,
+  // igual que _selectedFilter, sin pegarle de nuevo al backend. ──
+  final Set<String> _skillsFilter = {};
+  String _companyFilter = '';
+  bool _onlySalary = false;
+
+  // ── Barra de filtros web (Ubicación / Tipo / Seniority / Buscar) — mismos
+  // valores reales que usa create_job_screen.dart al publicar una vacante. ──
+  String? _locationFilter;
+  String? _modalityFilter;
+  String? _seniorityFilter;
+  String _titleSearch = '';
+
+  static const Map<String, String> _modalityLabels = {
+    'remote': 'Remoto',
+    'hybrid': 'Híbrido',
+    'onsite': 'Presencial',
+  };
+
+  static const Map<String, String> _seniorityLabels = {
+    'junior': 'Junior',
+    'mid': 'Mid-Level',
+    'senior': 'Senior',
+    'lead': 'Lead / Manager',
+    'clevel': 'C-Level / Director',
+  };
+
+  List<Map<String, dynamic>> get _visibleJobs {
+    var jobs = _jobs;
+    if (_skillsFilter.isNotEmpty) {
+      jobs = jobs.where((j) {
+        final tags = ((j['tags'] as List?) ?? []).map((t) => t.toString().toLowerCase()).toSet();
+        return tags.intersection(_skillsFilter).isNotEmpty;
+      }).toList();
+    }
+    if (_companyFilter.trim().isNotEmpty) {
+      final q = _companyFilter.trim().toLowerCase();
+      jobs = jobs.where((j) {
+        final companyName = ((j['users'] as Map?)?['name']?.toString() ?? j['company']?.toString() ?? '').toLowerCase();
+        return companyName.contains(q);
+      }).toList();
+    }
+    if (_onlySalary) {
+      jobs = jobs.where((j) {
+        final s = j['salary_range']?.toString() ?? j['salary']?.toString() ?? '';
+        return s.trim().isNotEmpty;
+      }).toList();
+    }
+    if (_locationFilter != null) {
+      jobs = jobs.where((j) => j['location']?.toString() == _locationFilter).toList();
+    }
+    if (_modalityFilter != null) {
+      jobs = jobs.where((j) => j['modality']?.toString() == _modalityFilter).toList();
+    }
+    if (_seniorityFilter != null) {
+      jobs = jobs.where((j) => j['seniority']?.toString() == _seniorityFilter).toList();
+    }
+    if (_titleSearch.trim().isNotEmpty) {
+      final q = _titleSearch.trim().toLowerCase();
+      jobs = jobs.where((j) => (j['title']?.toString().toLowerCase() ?? '').contains(q)).toList();
+    }
+    return jobs;
+  }
+
+  List<String> get _availableSkills {
+    final counts = <String, int>{};
+    for (final j in _jobs) {
+      for (final t in ((j['tags'] as List?) ?? [])) {
+        final tag = t.toString().toLowerCase().trim();
+        if (tag.isNotEmpty) counts[tag] = (counts[tag] ?? 0) + 1;
+      }
+    }
+    final sorted = counts.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+    return sorted.take(12).map((e) => e.key).toList();
+  }
+
+  List<String> get _availableLocations {
+    final set = <String>{};
+    for (final j in _jobs) {
+      final loc = j['location']?.toString().trim() ?? '';
+      if (loc.isNotEmpty) set.add(loc);
+    }
+    final list = set.toList()..sort();
+    return list;
+  }
+
+  List<String> get _availableCompanies {
+    final set = <String>{};
+    for (final j in _jobs) {
+      final name = ((j['users'] as Map?)?['name']?.toString() ?? j['company']?.toString() ?? '').trim();
+      if (name.isNotEmpty) set.add(name);
+    }
+    final list = set.toList()..sort();
+    return list;
+  }
 
   @override
   void initState() {
@@ -355,9 +452,32 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
       child: SafeArea(
         child: _isLoading
             ? _buildLoadingSkeleton()
-            : _jobs.isEmpty
-                ? _buildEmptyState()
-                : CustomScrollView(
+            : _buildBody(context),
+      ),
+    );
+  }
+
+  Widget _buildBody(BuildContext context) {
+    final visible = _visibleJobs;
+    final list = visible.isEmpty ? _buildEmptyState() : _buildJobsList(visible);
+    if (!isWebWide(context)) return list;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(child: list),
+        SizedBox(
+          width: 280,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(0, 16, 16, 16),
+            child: _buildFiltersSidebar(context),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildJobsList(List<Map<String, dynamic>> visible) {
+    return CustomScrollView(
                     physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
                     slivers: [
                       // ── Pull-to-Refresh nativo iOS ──
@@ -367,45 +487,50 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
                           await _fetchJobs();
                         },
                       ),
-                      // ── Filtros ──
-                      SliverToBoxAdapter(
-                        child: SizedBox(
-                          height: 50,
-                          child: ListView(
-                            scrollDirection: Axis.horizontal,
-                            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                            children: ['Para Ti', 'Todos', 'Remoto', 'Presencial', 'C-Level']
-                                .map((f) => Padding(
-                                      padding: const EdgeInsets.only(right: 8),
-                                      child: GestureDetector(
-                                        onTap: () {
-                                          setState(() => _selectedFilter = f);
-                                          _fetchJobs();
-                                        },
-                                        child: Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                                          decoration: BoxDecoration(
-                                            gradient: _selectedFilter == f
-                                                ? const LinearGradient(colors: [Color(0xFF5F3DC4), Color(0xFFAE3EC9)])
-                                                : null,
-                                            color: _selectedFilter == f ? null : context.surfaceColor,
-                                            borderRadius: BorderRadius.circular(20),
-                                          ),
-                                          child: Text(
-                                            f,
-                                            style: TextStyle(
-                                              color: _selectedFilter == f ? Colors.white : context.textSecondary,
-                                              fontSize: 13,
-                                              fontWeight: FontWeight.w600,
+                      // ── Barra de filtros web (Ubicación / Tipo / Seniority / Buscar) ──
+                      if (isWebWide(context))
+                        SliverToBoxAdapter(child: _buildWebFilterBar(context))
+                      else
+                        // ── Filtros (pills, mobile) ──
+                        SliverToBoxAdapter(
+                          child: SizedBox(
+                            height: 50,
+                            child: ListView(
+                              scrollDirection: Axis.horizontal,
+                              padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                              children: ['Para Ti', 'Todos', 'Remoto', 'Presencial', 'C-Level']
+                                  .map((f) => Padding(
+                                        padding: const EdgeInsets.only(right: 8),
+                                        child: GestureDetector(
+                                          onTap: () {
+                                            setState(() => _selectedFilter = f);
+                                            _fetchJobs();
+                                          },
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                            decoration: BoxDecoration(
+                                              color: _selectedFilter == f ? context.brandAccent : context.cardColor,
+                                              borderRadius: BorderRadius.circular(20),
+                                              border: Border.all(
+                                                color: _selectedFilter == f ? Colors.transparent : context.dividerColor.withValues(alpha: 0.5),
+                                                width: 0.5,
+                                              ),
+                                            ),
+                                            child: Text(
+                                              f,
+                                              style: TextStyle(
+                                                color: _selectedFilter == f ? Colors.white : context.textSecondary,
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w600,
+                                              ),
                                             ),
                                           ),
                                         ),
-                                      ),
-                                    ))
-                                .toList(),
+                                      ))
+                                  .toList(),
+                            ),
                           ),
                         ),
-                      ),
 
                       // ── Coach Banner (first visit) ──
                       SliverToBoxAdapter(
@@ -417,47 +542,254 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
                         ),
                       ),
 
-                      // ── Job Cards ──
-                      SliverPadding(
-                        padding: const EdgeInsets.all(16),
-                        sliver: SliverList(
-                          delegate: SliverChildBuilderDelegate(
-                            (context, index) {
-                              final job = _jobs[index];
-                              final jobId = job['id']?.toString() ?? '';
-                              final matchScore = _matchScores[jobId];
-                              final effectiveScore = matchScore != null && matchScore > 0 ? matchScore : null;
-                              void apply() => _applyToJob(
-                                    jobId,
-                                    job['title']?.toString() ?? 'Vacante',
-                                  );
-                              return GestureDetector(
-                                behavior: HitTestBehavior.opaque,
-                                onTap: () => Navigator.of(context).push(
-                                  CupertinoPageRoute(
-                                    builder: (_) => JobDetailScreen(
-                                      job: job,
-                                      matchScore: effectiveScore,
-                                      isApplied: _appliedJobIds.contains(jobId),
-                                      onApply: apply,
+                      // ── Job Cards (grilla responsive: 2 columnas en web) ──
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: WebGrid(children: [
+                            for (int index = 0; index < visible.length; index++)
+                              Builder(builder: (context) {
+                                final job = visible[index];
+                                final jobId = job['id']?.toString() ?? '';
+                                final matchScore = _matchScores[jobId];
+                                final effectiveScore = matchScore != null && matchScore > 0 ? matchScore : null;
+                                void apply() => _applyToJob(jobId, job['title']?.toString() ?? 'Vacante');
+                                return GestureDetector(
+                                  behavior: HitTestBehavior.opaque,
+                                  onTap: () => Navigator.of(context).push(
+                                    CupertinoPageRoute(
+                                      builder: (_) => JobDetailScreen(
+                                        job: job,
+                                        matchScore: effectiveScore,
+                                        isApplied: _appliedJobIds.contains(jobId),
+                                        onApply: apply,
+                                      ),
                                     ),
                                   ),
-                                ),
-                                child: _JobListCard(
-                                  job: job,
-                                  isApplied: _appliedJobIds.contains(jobId),
-                                  matchScore: effectiveScore,
-                                  onApply: apply,
-                                ),
-                              );
-                            },
-                            childCount: _jobs.length,
-                          ),
+                                  child: _JobListCard(
+                                    job: job,
+                                    isApplied: _appliedJobIds.contains(jobId),
+                                    matchScore: effectiveScore,
+                                    onApply: apply,
+                                  ),
+                                );
+                              }),
+                          ]),
                         ),
                       ),
                       const SliverToBoxAdapter(child: SizedBox(height: 100)),
                     ],
-                  ),
+                  );
+  }
+
+  Widget _buildWebFilterBar(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      child: Wrap(
+        spacing: 10,
+        runSpacing: 10,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          _dropdownChip(
+            context,
+            label: 'Ubicación',
+            value: _locationFilter,
+            options: _availableLocations,
+            onSelect: (v) => setState(() => _locationFilter = v),
+          ),
+          _dropdownChip(
+            context,
+            label: 'Tipo',
+            value: _modalityFilter != null ? _modalityLabels[_modalityFilter] : null,
+            options: _modalityLabels.values.toList(),
+            onSelect: (v) => setState(() =>
+                _modalityFilter = v == null ? null : _modalityLabels.entries.firstWhere((e) => e.value == v).key),
+          ),
+          _dropdownChip(
+            context,
+            label: 'Seniority',
+            value: _seniorityFilter != null ? _seniorityLabels[_seniorityFilter] : null,
+            options: _seniorityLabels.values.toList(),
+            onSelect: (v) => setState(() =>
+                _seniorityFilter = v == null ? null : _seniorityLabels.entries.firstWhere((e) => e.value == v).key),
+          ),
+          SizedBox(
+            width: 220,
+            child: CupertinoTextField(
+              placeholder: 'Buscar vacante...',
+              prefix: Padding(
+                padding: const EdgeInsets.only(left: 10),
+                child: Icon(CupertinoIcons.search, size: 16, color: context.textTertiary),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+              decoration: BoxDecoration(
+                color: context.cardColor,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: context.dividerColor.withValues(alpha: 0.4)),
+              ),
+              style: TextStyle(fontSize: 13, color: context.textPrimary),
+              onChanged: (v) => setState(() => _titleSearch = v),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _dropdownChip(
+    BuildContext context, {
+    required String label,
+    required String? value,
+    required List<String> options,
+    required void Function(String?) onSelect,
+  }) {
+    return GestureDetector(
+      onTap: () async {
+        final choice = await showCupertinoModalPopup<String>(
+          context: context,
+          builder: (ctx) => CupertinoActionSheet(
+            title: Text(label),
+            actions: [
+              CupertinoActionSheetAction(onPressed: () => Navigator.pop(ctx, ''), child: const Text('Todos')),
+              ...options.map((o) => CupertinoActionSheetAction(onPressed: () => Navigator.pop(ctx, o), child: Text(o))),
+            ],
+            cancelButton: CupertinoActionSheetAction(
+              onPressed: () => Navigator.pop(ctx),
+              isDefaultAction: true,
+              child: const Text('Cancelar'),
+            ),
+          ),
+        );
+        if (choice == null) return;
+        onSelect(choice.isEmpty ? null : choice);
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: context.cardColor,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: context.dividerColor.withValues(alpha: 0.4)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(value ?? label,
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: value != null ? context.textPrimary : context.textSecondary)),
+            const SizedBox(width: 6),
+            Icon(CupertinoIcons.chevron_down, size: 12, color: context.textTertiary),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFiltersSidebar(BuildContext context) {
+    final skills = _availableSkills;
+    return SingleChildScrollView(
+      child: WebCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const WebSectionLabel('Refiná tu búsqueda'),
+            Text('Por Empresa', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: context.textPrimary)),
+            const SizedBox(height: 8),
+            CupertinoTextField(
+              placeholder: 'Ej. Globant, MercadoLibre...',
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+              decoration: BoxDecoration(
+                color: context.isDark ? NexTheme.darkSurface : const Color(0xFFF7F8FA),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: context.dividerColor.withValues(alpha: 0.4)),
+              ),
+              style: TextStyle(fontSize: 13, color: context.textPrimary),
+              onChanged: (v) => setState(() => _companyFilter = v),
+            ),
+            if (_availableCompanies.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: _availableCompanies.take(8).map((c) {
+                  final active = _companyFilter.trim().toLowerCase() == c.toLowerCase();
+                  return GestureDetector(
+                    onTap: () => setState(() => _companyFilter = active ? '' : c),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: active ? context.brandAccent : (context.isDark ? NexTheme.darkSurface : const Color(0xFFF2F2F7)),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(c, style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: active ? CupertinoColors.white : context.textSecondary)),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ],
+            const SizedBox(height: 18),
+            Text('Skills', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: context.textPrimary)),
+            const SizedBox(height: 8),
+            if (skills.isEmpty)
+              Text('Sin datos todavía', style: TextStyle(fontSize: 12.5, color: context.textTertiary))
+            else
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: skills.map((s) {
+                  final active = _skillsFilter.contains(s);
+                  return GestureDetector(
+                    onTap: () => setState(() => active ? _skillsFilter.remove(s) : _skillsFilter.add(s)),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: active ? context.brandAccent : (context.isDark ? NexTheme.darkSurface : const Color(0xFFF2F2F7)),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text('#$s',
+                          style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: active ? CupertinoColors.white : context.textSecondary)),
+                    ),
+                  );
+                }).toList(),
+              ),
+            const SizedBox(height: 18),
+            Text('Rango Salarial', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: context.textPrimary)),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: Text('Con salario informado',
+                      style: TextStyle(fontSize: 12.5, color: context.textSecondary)),
+                ),
+                CupertinoSwitch(
+                  value: _onlySalary,
+                  activeTrackColor: context.brandAccent,
+                  onChanged: (v) => setState(() => _onlySalary = v),
+                ),
+              ],
+            ),
+            if (_skillsFilter.isNotEmpty ||
+                _companyFilter.isNotEmpty ||
+                _onlySalary ||
+                _locationFilter != null ||
+                _modalityFilter != null ||
+                _seniorityFilter != null ||
+                _titleSearch.isNotEmpty) ...[
+              const SizedBox(height: 14),
+              GestureDetector(
+                onTap: () => setState(() {
+                  _skillsFilter.clear();
+                  _companyFilter = '';
+                  _onlySalary = false;
+                  _locationFilter = null;
+                  _modalityFilter = null;
+                  _seniorityFilter = null;
+                  _titleSearch = '';
+                }),
+                child: Text('Limpiar filtros',
+                    style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: context.brandAccent)),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
@@ -650,29 +982,34 @@ class _JobListCardState extends State<_JobListCard> {
     final createdAt = job['created_at']?.toString() ?? '';
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: context.cardColor,
         borderRadius: BorderRadius.circular(20),
         border: isStealth
-            ? Border.all(color: const Color(0xFFDAA520).withValues(alpha: 0.3))
-            : null,
-        boxShadow: context.cardShadow,
+            ? Border.all(color: const Color(0xFFDAA520).withValues(alpha: 0.35), width: 1)
+            : Border.all(color: context.dividerColor.withValues(alpha: 0.25), width: 0.5),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 18, offset: const Offset(0, 8)),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Header: Company + Stealth badge
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Company avatar
               Container(
-                width: 44,
-                height: 44,
+                width: 50,
+                height: 50,
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  color: context.brandAccent.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(14),
+                  gradient: LinearGradient(
+                    colors: [context.brandAccent.withValues(alpha: 0.16), context.brandAccent.withValues(alpha: 0.08)],
+                    begin: Alignment.topLeft, end: Alignment.bottomRight,
+                  ),
                   image: (companyAvatar != null && companyAvatar.isNotEmpty)
                       ? DecorationImage(
                           image: CachedNetworkImageProvider(companyAvatar),
@@ -686,63 +1023,44 @@ class _JobListCardState extends State<_JobListCard> {
                           companyName[0].toUpperCase(),
                           style: TextStyle(
                             color: context.brandAccent,
-                            fontSize: 18,
+                            fontSize: 19,
                             fontWeight: FontWeight.w800,
                           ),
                         ),
                       )
                     : null,
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 13),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        fontSize: 17,
+                        fontSize: 16.5,
                         fontWeight: FontWeight.w800,
                         color: context.textPrimary,
                         letterSpacing: -0.3,
+                        height: 1.2,
                       ),
                     ),
-                    const SizedBox(height: 2),
+                    const SizedBox(height: 3),
                     Text(
                       companyName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontSize: 13,
-                        color: context.textSecondary,
-                        fontWeight: FontWeight.w500,
+                        color: context.textTertiary,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ],
                 ),
               ),
-              if (isStealth)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFDAA520).withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: const Color(0xFFDAA520).withValues(alpha: 0.3)),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(CupertinoIcons.lock_fill, size: 10, color: Color(0xFFDAA520)),
-                      SizedBox(width: 4),
-                      Text(
-                        'C-Level',
-                        style: TextStyle(
-                          color: Color(0xFFDAA520),
-                          fontSize: 10,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
               // ── Bookmark ──
               GestureDetector(
                 onTap: () async {
@@ -770,69 +1088,70 @@ class _JobListCardState extends State<_JobListCard> {
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
 
-          // Match score badge (only when "Para Ti" filter is active)
-          if (widget.matchScore != null && widget.matchScore! > 0) ...[
-            Row(
-              children: [
+          // Badges: match IA, stealth, salario — misma altura, mismo idioma visual
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              if (widget.matchScore != null && widget.matchScore! > 0)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF5F3DC4), Color(0xFFAE3EC9)],
-                    ),
-                    borderRadius: BorderRadius.circular(8),
+                    color: kMployaPurple.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(999),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Text('⚡', style: TextStyle(fontSize: 12)),
-                      const SizedBox(width: 4),
+                      const Icon(CupertinoIcons.sparkles, size: 12, color: kMployaPurple),
+                      const SizedBox(width: 5),
                       Text(
                         '${widget.matchScore}% match',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w800,
-                        ),
+                        style: const TextStyle(color: kMployaPurple, fontSize: 12.5, fontWeight: FontWeight.w800),
                       ),
                     ],
                   ),
                 ),
-              ],
-            ),
-            const SizedBox(height: 10),
-          ],
-
-          // Salary + Date
-          Row(
-            children: [
-              if (salary != null && salary.isNotEmpty) ...[
+              if (isStealth)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
-                    color: context.brandAccent.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(8),
+                    color: const Color(0xFFDAA520).withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(CupertinoIcons.lock_fill, size: 11, color: Color(0xFFDAA520)),
+                      SizedBox(width: 5),
+                      Text(
+                        'C-Level',
+                        style: TextStyle(color: Color(0xFFDAA520), fontSize: 12, fontWeight: FontWeight.w800),
+                      ),
+                    ],
+                  ),
+                ),
+              if (salary != null && salary.isNotEmpty)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: context.brandAccent.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(999),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(CupertinoIcons.money_dollar_circle, size: 14, color: context.brandAccent),
-                      const SizedBox(width: 4),
+                      Icon(CupertinoIcons.money_dollar_circle, size: 13, color: context.brandAccent),
+                      const SizedBox(width: 5),
                       Text(
                         salary,
-                        style: TextStyle(
-                          color: context.brandAccent,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                        ),
+                        style: TextStyle(color: context.brandAccent, fontSize: 12.5, fontWeight: FontWeight.w800),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(width: 8),
-              ],
             ],
           ),
 
@@ -843,15 +1162,15 @@ class _JobListCardState extends State<_JobListCard> {
               spacing: 6,
               runSpacing: 6,
               children: tags.take(5).map((tag) => Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF5F3DC4).withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(6),
+                      color: context.isDark ? CupertinoColors.systemGrey6.darkColor : const Color(0xFFF3F3F5),
+                      borderRadius: BorderRadius.circular(999),
                     ),
                     child: Text(
                       tag.startsWith('#') ? tag : '#$tag',
-                      style: const TextStyle(
-                        color: Color(0xFF5F3DC4),
+                      style: TextStyle(
+                        color: context.textSecondary,
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
                       ),
@@ -866,23 +1185,32 @@ class _JobListCardState extends State<_JobListCard> {
           ],
           const SizedBox(height: 18),
 
-          // Apply button
+          // Apply button (píldora con ícono de video)
           SizedBox(
             width: double.infinity,
             child: CupertinoButton(
-              borderRadius: BorderRadius.circular(12),
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              color: isApplied
-                  ? CupertinoColors.systemGrey4
-                  : MployaTheme.brandAccent,
+              borderRadius: BorderRadius.circular(999),
+              padding: const EdgeInsets.symmetric(vertical: 13),
+              color: isApplied ? CupertinoColors.systemGrey4 : MployaTheme.brandAccent,
               onPressed: isApplied ? null : onApply,
-              child: Text(
-                isApplied ? '✓ Aplicación enviada' : 'Aplicar con mi Video-Pitch',
-                style: TextStyle(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 15,
-                  color: isApplied ? CupertinoColors.systemGrey : Colors.white,
-                ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    isApplied ? CupertinoIcons.checkmark_alt : CupertinoIcons.videocam_fill,
+                    size: 17,
+                    color: isApplied ? CupertinoColors.systemGrey : Colors.white,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    isApplied ? 'Aplicación enviada' : 'Aplicar con Video',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
+                      color: isApplied ? CupertinoColors.systemGrey : Colors.white,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),

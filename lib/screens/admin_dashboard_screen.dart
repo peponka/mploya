@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../theme/app_theme.dart';
+import '../widgets/web_ui.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -86,13 +87,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 padding: const EdgeInsets.all(24),
                 child: IndexedStack(
                   index: _tab,
-                  children: const [
-                    _OverviewTab(),
-                    _UsersTab(accountFilter: null, title: 'Usuarios'),
-                    _UsersTab(accountFilter: 'empresa', title: 'Empresas'),
-                    _JobsTab(),
-                    _BoostsTab(),
-                    _ReportsTab(),
+                  children: [
+                    _OverviewTab(onNavigateTab: (i) => setState(() => _tab = i)),
+                    const _UsersTab(accountFilter: null, title: 'Usuarios'),
+                    const _UsersTab(accountFilter: 'empresa', title: 'Empresas'),
+                    const _JobsTab(),
+                    const _BoostsTab(),
+                    const _ReportsTab(),
                   ],
                 ),
               ),
@@ -212,7 +213,8 @@ class _TabChip extends StatelessWidget {
 // Resumen con gráficos
 // ─────────────────────────────────────────────────────────────────────────────
 class _OverviewTab extends StatefulWidget {
-  const _OverviewTab();
+  final ValueChanged<int>? onNavigateTab;
+  const _OverviewTab({this.onNavigateTab});
   @override
   State<_OverviewTab> createState() => _OverviewTabState();
 }
@@ -225,6 +227,7 @@ class _OverviewTabState extends State<_OverviewTab> {
   List<FlSpot> _growthSpots = [];
   List<MapEntry<String, int>> _topSkills = [];
   List<MapEntry<String, int>> _topCities = [];
+  List<Map<String, dynamic>> _pendingReportsPreview = [];
 
   @override
   void initState() {
@@ -282,6 +285,16 @@ class _OverviewTabState extends State<_OverviewTab> {
         final r = await _sb.from('user_reports').select('id').eq('status', 'pending').count(CountOption.exact);
         _kpis['Reportes pendientes'] = r.count;
       } catch (_) { _kpis['Reportes pendientes'] = 0; }
+
+      try {
+        final rows = await _sb
+            .from('user_reports')
+            .select('id, reason, created_at')
+            .eq('status', 'pending')
+            .order('created_at', ascending: false)
+            .limit(4);
+        _pendingReportsPreview = List<Map<String, dynamic>>.from(rows as List);
+      } catch (_) { _pendingReportsPreview = []; }
 
       // Crecimiento últimos 30 días
       try {
@@ -352,9 +365,7 @@ class _OverviewTabState extends State<_OverviewTab> {
           const SizedBox(height: 20),
 
           // KPI cards
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
+          WebGrid(
             children: [
               _KpiCard(label: 'Usuarios totales', value: _kpis['Usuarios'] ?? 0, icon: Icons.people_alt_outlined, color: const Color(0xFF3B82F6)),
               _KpiCard(label: 'Candidatos', value: _kpis['Candidatos'] ?? 0, icon: Icons.person_outline, color: const Color(0xFF22C55E)),
@@ -369,7 +380,25 @@ class _OverviewTabState extends State<_OverviewTab> {
               _KpiCard(label: 'Reportes pend.', value: _kpis['Reportes pendientes'] ?? 0, icon: Icons.flag_outlined, color: MployaTheme.danger),
             ],
           ),
-          const SizedBox(height: 28),
+          const SizedBox(height: 20),
+
+          // Accesos rápidos + moderación pendiente
+          LayoutBuilder(builder: (context, c) {
+            final wide = c.maxWidth > 620;
+            final quick = _buildQuickAccessCard(context);
+            final mod = _buildModerationPreviewCard(context);
+            if (wide) {
+              return IntrinsicHeight(
+                child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                  Expanded(flex: 2, child: mod),
+                  const SizedBox(width: 16),
+                  Expanded(flex: 1, child: quick),
+                ]),
+              );
+            }
+            return Column(children: [mod, const SizedBox(height: 16), quick]);
+          }),
+          const SizedBox(height: 16),
 
           // Distribución + Actividad
           LayoutBuilder(builder: (context, c) {
@@ -470,6 +499,85 @@ class _OverviewTabState extends State<_OverviewTab> {
             return Column(children: [skills, const SizedBox(height: 16), cities]);
           }),
           const SizedBox(height: 24),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuickAccessCard(BuildContext context) {
+    final shortcuts = [
+      (icon: Icons.people_alt_outlined, color: const Color(0xFF3B82F6), label: 'Usuarios', tab: 1),
+      (icon: Icons.business_outlined, color: const Color(0xFF6366F1), label: 'Empresas', tab: 2),
+      (icon: Icons.work_outline, color: const Color(0xFF06B6D4), label: 'Ofertas', tab: 3),
+      (icon: Icons.rocket_launch_outlined, color: MployaTheme.brandAccent, label: 'Boosts', tab: 4),
+      (icon: Icons.flag_outlined, color: MployaTheme.danger, label: 'Reportes', tab: 5),
+    ];
+    return WebCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Accesos rápidos', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: context.textPrimary)),
+          const SizedBox(height: 14),
+          for (final s in shortcuts)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: GestureDetector(
+                onTap: () => widget.onNavigateTab?.call(s.tab),
+                behavior: HitTestBehavior.opaque,
+                child: Row(
+                  children: [
+                    WebIconBadge(icon: s.icon, color: s.color, size: 30),
+                    const SizedBox(width: 10),
+                    Expanded(child: Text(s.label, style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: context.textPrimary))),
+                    Icon(Icons.chevron_right, size: 16, color: context.textTertiary),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildModerationPreviewCard(BuildContext context) {
+    return WebCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Text('Moderación pendiente', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: context.textPrimary)),
+            const Spacer(),
+            GestureDetector(
+              onTap: () => widget.onNavigateTab?.call(5),
+              child: const Text('Ver todo', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: MployaTheme.brandAccent)),
+            ),
+          ]),
+          const SizedBox(height: 12),
+          if (_pendingReportsPreview.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Text('Sin reportes pendientes', style: TextStyle(fontSize: 13, color: context.textTertiary)),
+            )
+          else
+            for (final r in _pendingReportsPreview)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Row(
+                  children: [
+                    const WebIconBadge(icon: Icons.flag_outlined, color: MployaTheme.danger, size: 28),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        r['reason']?.toString() ?? 'Reporte sin motivo',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: context.textPrimary),
+                      ),
+                    ),
+                    const WebBadge(label: 'Pendiente', color: MployaTheme.danger),
+                  ],
+                ),
+              ),
         ],
       ),
     );
@@ -578,25 +686,10 @@ class _KpiCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = context.isDark;
     final display = value >= 1000 ? '${(value / 1000).toStringAsFixed(1)}k' : '$value';
-    return Container(
-      width: 185,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF141414) : Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: isDark ? const Color(0xFF222222) : const Color(0xFFEDEFF2)),
-      ),
+    return WebCard(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Icon(icon, size: 18, color: color),
-        ),
+        WebIconBadge(icon: icon, color: color, size: 36),
         const SizedBox(height: 14),
         Text(display,
             style: TextStyle(
@@ -623,14 +716,7 @@ class _ChartCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = context.isDark;
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF141414) : Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: isDark ? const Color(0xFF222222) : const Color(0xFFEDEFF2)),
-      ),
+    return WebCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,

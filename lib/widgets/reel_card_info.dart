@@ -56,6 +56,51 @@ class ReelTagPill extends StatelessWidget {
   }
 }
 
+/// Tag pill claro (fondo blanco/gris) para el panel de info en tarjeta blanca.
+class _WhiteTagPill extends StatelessWidget {
+  final String tag;
+  const _WhiteTagPill({required this.tag});
+
+  @override
+  Widget build(BuildContext context) {
+    final label = tag.isEmpty ? tag : tag[0].toUpperCase() + tag.substring(1);
+    return Semantics(
+      button: true,
+      label: 'Buscar hashtag $tag',
+      child: GestureDetector(
+        onTap: () {
+          Navigator.of(context).push(CupertinoPageRoute(
+            builder: (_) => TrendingHashtagsScreen(initialTag: tag),
+          ));
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF2F2F7),
+            borderRadius: BorderRadius.circular(MployaTheme.radiusPill),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(width: 6, height: 6, decoration: const BoxDecoration(color: NexTheme.brandAccent, shape: BoxShape.circle)),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: const TextStyle(
+                  color: Color(0xFF374151),
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w600,
+                  decoration: TextDecoration.none,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// Status badge (Disponible / Contratando) junto al nombre.
 class ReelStatusBadge extends StatelessWidget {
   final NexUser author;
@@ -305,90 +350,140 @@ class ReelInfoPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final displayTags = author.tags.isNotEmpty ? author.tags.take(3).toList() : <String>[];
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // ── Hashtags (max 3, TikTok-style pills) ──
-        if (displayTags.isNotEmpty) ...[
-          Wrap(
-            spacing: 6,
-            runSpacing: 4,
-            children: displayTags.map((tag) => ReelTagPill(tag: tag)).toList(),
-          ),
-          const SizedBox(height: 6),
-        ],
+    // ── Panel blanco (estilo mockup: tarjeta clara debajo del video, en vez
+    // del overlay transparente sobre el video) ──
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // ── Tags (max 3, pills claros) ──
+          if (displayTags.isNotEmpty) ...[
+            Wrap(
+              spacing: 6,
+              runSpacing: 4,
+              children: displayTags.map((tag) => _WhiteTagPill(tag: tag)).toList(),
+            ),
+            const SizedBox(height: 10),
+          ],
 
-        // ── Name + Match Badge (TikTok-style: inline) ──
-        GestureDetector(
-          onTap: () {
-            Navigator.of(context).push(CupertinoPageRoute(builder: (_) => ProfileScreen(user: author)));
-          },
-          child: Row(
-            children: [
-              Flexible(
-                child: Text(
-                  isLocked ? '${author.name.split(' ').first}' : author.name,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 17,
-                    fontWeight: FontWeight.w700,
-                    shadows: [
-                      Shadow(color: Colors.black, blurRadius: 8),
-                      Shadow(color: Colors.black, blurRadius: 16),
-                    ],
-                    decoration: TextDecoration.none,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              if (matchScore > 0) ...[
-                const SizedBox(width: 8),
-                GestureDetector(
-                  onTap: onMatchTap,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: NexTheme.brandAccent.withValues(alpha: 0.25),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: NexTheme.brandAccent.withValues(alpha: 0.4), width: 0.5),
-                    ),
-                    child: Text(
-                      'Match $matchScore%',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        decoration: TextDecoration.none,
+          // ── Avatar/logo + Nombre + Subtítulo ──
+          GestureDetector(
+            onTap: () {
+              Navigator.of(context).push(CupertinoPageRoute(builder: (_) => ProfileScreen(user: author)));
+            },
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(9),
+                      child: Container(
+                        width: 34, height: 34,
+                        color: const Color(0xFFF2F2F7),
+                        child: isLocked
+                            ? const Icon(CupertinoIcons.eye_slash_fill, color: Color(0xFF6B7280), size: 16)
+                            : (author.avatarUrl != null && author.avatarUrl!.isNotEmpty)
+                                ? CachedNetworkImage(
+                                    imageUrl: author.avatarUrl!,
+                                    fit: BoxFit.cover,
+                                    placeholder: (_, __) => const SizedBox.shrink(),
+                                    errorWidget: (_, __, ___) => Center(child: Text(author.initials, style: const TextStyle(color: Color(0xFF6B7280), fontWeight: FontWeight.w800, fontSize: 12))),
+                                  )
+                                : Center(child: Text(author.initials, style: const TextStyle(color: Color(0xFF6B7280), fontWeight: FontWeight.w800, fontSize: 12))),
                       ),
                     ),
+                    if (author.isVerified && !isLocked)
+                      Positioned(
+                        right: -3, bottom: -3,
+                        child: Container(
+                          padding: const EdgeInsets.all(1.5),
+                          decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+                          child: const Icon(CupertinoIcons.checkmark_seal_fill, color: NexTheme.brandAccent, size: 13),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        isLocked ? author.name.split(' ').first : author.name,
+                        style: const TextStyle(
+                          color: Color(0xFF111111),
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                          decoration: TextDecoration.none,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      GestureDetector(
+                        onTap: () => _showDetailsSheet(context),
+                        child: Text(
+                          _buildSubtitle(),
+                          style: const TextStyle(
+                            color: Color(0xFF6B7280),
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w500,
+                            decoration: TextDecoration.none,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
-            ],
-          ),
-        ),
-
-        const SizedBox(height: 3),
-
-        // ── Company / Position (1 line: headline · company) ──
-        GestureDetector(
-          onTap: () => _showDetailsSheet(context),
-          child: Text(
-            _buildSubtitle(),
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.75),
-              fontSize: 14,
-              fontWeight: FontWeight.w400,
-              shadows: const [Shadow(color: Colors.black, blurRadius: 6)],
-              decoration: TextDecoration.none,
             ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
           ),
-        ),
-      ],
+
+          if (matchScore > 0) ...[
+            const SizedBox(height: 12),
+            GestureDetector(
+              onTap: onMatchTap,
+              child: Container(
+                width: double.infinity,
+                alignment: Alignment.center,
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                decoration: BoxDecoration(
+                  color: NexTheme.brandAccent,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Ver detalles del match ($matchScore% - ${_matchTier(matchScore)})',
+                      style: const TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.w700, decoration: TextDecoration.none),
+                    ),
+                    const SizedBox(width: 4),
+                    const Icon(CupertinoIcons.chevron_right, color: Colors.white, size: 12),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
     );
+  }
+
+  String _matchTier(int score) {
+    if (score >= 70) return 'Altamente Compatible';
+    if (score >= 40) return 'Buen Match';
+    return 'Compatible';
   }
 
   String _buildSubtitle() {

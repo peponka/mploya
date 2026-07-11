@@ -1,11 +1,13 @@
 import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 import 'package:visibility_detector/visibility_detector.dart';
 import '../theme/app_theme.dart';
 import '../models/models.dart';
+import '../navigation/main_navigation.dart';
 import 'nex_avatar.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -281,6 +283,26 @@ class _VideoBlockState extends State<_VideoBlock> {
   bool _isLoading = false;
   bool _hasError = false;
 
+  // Pestaña del sidebar en la que vive esta card. Si el usuario cambia de
+  // sección, VisibilityDetector puede seguir reportando esta card como
+  // "visible" (geométricamente lo es dentro del IndexedStack inactivo), así
+  // que sin este guard el video revive el audio en otra sección.
+  late final int _ownerTabIndex = currentMainTabNotifier.value;
+
+  @override
+  void initState() {
+    super.initState();
+    currentMainTabNotifier.addListener(_onTabChanged);
+  }
+
+  void _onTabChanged() {
+    if (!mounted || _controller == null) return;
+    if (currentMainTabNotifier.value != _ownerTabIndex) {
+      if (_controller!.value.isPlaying) _controller!.pause();
+      if (kIsWeb) _controller!.setVolume(0);
+    }
+  }
+
   String get _durationLabel {
     if (!_isInitialized || _controller == null) return 'Video-Pitch';
     final d = _controller!.value.duration;
@@ -346,6 +368,7 @@ class _VideoBlockState extends State<_VideoBlock> {
   void _handleVisibility(VisibilityInfo info) {
     if (!mounted) return;
     final fraction = info.visibleFraction;
+    if (currentMainTabNotifier.value != _ownerTabIndex) return;
 
     if (fraction > 0.6) {
       // Auto-play cuando cruza el 60% de exposición
@@ -364,6 +387,7 @@ class _VideoBlockState extends State<_VideoBlock> {
 
   @override
   void dispose() {
+    currentMainTabNotifier.removeListener(_onTabChanged);
     _controller?.removeListener(_videoListener);
     _controller?.dispose();
     super.dispose();

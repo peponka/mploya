@@ -12,6 +12,7 @@ import '../screens/messaging_screen.dart';
 import '../screens/profile_screen.dart';
 // nexus_inbox_tab removed – replaced by inline Contactos section
 import '../widgets/nex_avatar.dart';
+import '../widgets/web_ui.dart';
 import '../services/social_service.dart';
 
 class AtsDashboardScreen extends StatefulWidget {
@@ -23,9 +24,15 @@ class AtsDashboardScreen extends StatefulWidget {
 
 class _AtsDashboardScreenState extends State<AtsDashboardScreen> {
   int _tokensDisponibles = 0;
-  String _filtroActivo = 'Pendientes';
-  final List<String> _filtros = ['Pendientes', 'Contactos', 'Confidencial 🔒'];
-  
+  String _filtroActivo = 'Postulantes';
+  final List<String> _filtros = ['Postulantes', 'Pendientes', 'Contactos', 'Confidencial 🔒'];
+
+  // ── Postulantes reales (job_applications × jobs × users, vía RPC
+  // get_company_candidates) — reemplaza la idea de "Gestor de Talentos" del
+  // mockup con datos reales en vez de la tabla fantasía. ──
+  Future<List<Map<String, dynamic>>>? _candidatesFuture;
+  String? _candidatesStatusFilter;
+
   late Future<List<Map<String, dynamic>>> _stealthCatalogFuture;
 
   final _supabase = Supabase.instance.client;
@@ -42,6 +49,24 @@ class _AtsDashboardScreenState extends State<AtsDashboardScreen> {
     _fetchWallet();
     _loadCatalog();
     _setupStreams();
+    _loadCandidates();
+  }
+
+  void _loadCandidates({String? status}) {
+    setState(() {
+      _candidatesStatusFilter = status;
+      _candidatesFuture = _fetchCompanyCandidates(status);
+    });
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchCompanyCandidates(String? status) async {
+    try {
+      final res = await _supabase.rpc('get_company_candidates', params: {'p_status': status});
+      return List<Map<String, dynamic>>.from(res as List);
+    } catch (e) {
+      debugPrint('Error RPC get_company_candidates: $e');
+      return [];
+    }
   }
 
   void _setupStreams() {
@@ -210,25 +235,25 @@ class _AtsDashboardScreenState extends State<AtsDashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return CupertinoPageScaffold(
-      backgroundColor: context.bgColor,
-      child: SafeArea(
-        child: CustomScrollView(
+    final wide = isWebWide(context);
+
+    final scrollContent = CustomScrollView(
           physics: const BouncingScrollPhysics(),
           slivers: [
-            CupertinoSliverNavigationBar(
-              transitionBetweenRoutes: false,
-              largeTitle: Text('Candidatos', style: TextStyle(color: context.textPrimary, fontFamily: '.SF Pro Display', letterSpacing: -0.5, fontWeight: FontWeight.w900)),
-              backgroundColor: context.bgColor,
-              border: null,
-              trailing: CupertinoButton(
-                padding: EdgeInsets.zero,
-                child: const Icon(CupertinoIcons.briefcase_fill, color: MployaTheme.brandAccent),
-                onPressed: () {
-                  Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const VacantesScreen()));
-                },
+            if (!wide)
+              CupertinoSliverNavigationBar(
+                transitionBetweenRoutes: false,
+                largeTitle: Text('Candidatos', style: TextStyle(color: context.textPrimary, fontFamily: '.SF Pro Display', letterSpacing: -0.5, fontWeight: FontWeight.w900)),
+                backgroundColor: context.bgColor,
+                border: null,
+                trailing: CupertinoButton(
+                  padding: EdgeInsets.zero,
+                  child: const Icon(CupertinoIcons.briefcase_fill, color: MployaTheme.brandAccent),
+                  onPressed: () {
+                    Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const VacantesScreen()));
+                  },
+                ),
               ),
-            ),
 
             // ── KPIs: Pendientes + Contactos activos ──
             SliverToBoxAdapter(
@@ -257,6 +282,7 @@ class _AtsDashboardScreenState extends State<AtsDashboardScreen> {
                           icon: CupertinoIcons.person_2_fill,
                           label: 'Contactos',
                           value: '$count',
+                          color: kMployaBlue,
                         );
                       },
                     ),
@@ -360,7 +386,9 @@ class _AtsDashboardScreenState extends State<AtsDashboardScreen> {
             ),
 
             // ── Content by Tab ──
-            if (_filtroActivo == 'Pendientes') ...[
+            if (_filtroActivo == 'Postulantes') ...[
+              _buildCandidatesTableSection(wide),
+            ] else if (_filtroActivo == 'Pendientes') ...[
               _buildPendingRequestsSection(),
             ] else if (_filtroActivo == 'Contactos') ...[
               _buildAcceptedConnectionsSection(),
@@ -370,6 +398,223 @@ class _AtsDashboardScreenState extends State<AtsDashboardScreen> {
 
             const SliverToBoxAdapter(child: SizedBox(height: 80)),
           ],
+    );
+
+    // ── Web: header de página + contenido dentro de una card con sombra ──
+    if (wide) {
+      return CupertinoPageScaffold(
+        backgroundColor: const Color(0xFFF1F1F4),
+        child: WebPage(
+          title: 'Candidatos',
+          subtitle: 'Gestioná solicitudes, contactos y el radar confidencial.',
+          actions: [
+            WebButton(
+              icon: CupertinoIcons.briefcase_fill,
+              label: 'Vacantes',
+              filled: false,
+              onTap: () => Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const VacantesScreen())),
+            ),
+          ],
+          child: Container(
+            decoration: BoxDecoration(
+              color: context.cardColor,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: const Color(0x0F000000), width: 0.5),
+              boxShadow: const [BoxShadow(color: Color(0x0A000000), blurRadius: 18, offset: Offset(0, 6))],
+            ),
+            margin: const EdgeInsets.only(bottom: 16),
+            clipBehavior: Clip.antiAlias,
+            child: scrollContent,
+          ),
+        ),
+      );
+    }
+
+    return CupertinoPageScaffold(
+      backgroundColor: context.bgColor,
+      child: SafeArea(child: scrollContent),
+    );
+  }
+
+  // ── POSTULANTES (job_applications reales × vacante × perfil) ──────────────
+
+  static const Map<String, String> _statusLabels = {
+    'pending': 'Nueva solicitud',
+    'viewed': 'Pre-seleccionado',
+    'accepted': 'Oferta',
+    'rejected': 'Descartado',
+  };
+  static const Map<String, Color> _statusColors = {
+    'pending': kMployaBlue,
+    'viewed': Color(0xFFD97706),
+    'accepted': Color(0xFF059669),
+    'rejected': MployaTheme.danger,
+  };
+
+  Widget _buildCandidatesTableSection(bool wide) {
+    return SliverToBoxAdapter(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(flex: wide ? 3 : 1, child: _candidatesListCard()),
+            if (wide) ...[
+              const SizedBox(width: 16),
+              SizedBox(width: 260, child: _candidatesFiltersCard()),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _candidatesListCard() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      child: FutureBuilder<List<Map<String, dynamic>>>(
+        future: _candidatesFuture,
+        builder: (context, snap) {
+          if (!snap.hasData) {
+            return const Padding(
+              padding: EdgeInsets.symmetric(vertical: 48),
+              child: Center(child: CupertinoActivityIndicator()),
+            );
+          }
+          final rows = snap.data!;
+          if (rows.isEmpty) {
+            return WebEmptyState(
+              icon: CupertinoIcons.person_3,
+              title: 'Todavía no tenés postulantes',
+              subtitle: 'Cuando alguien aplique a una de tus vacantes con video, va a aparecer acá.',
+            );
+          }
+          return Column(
+            children: [
+              for (int i = 0; i < rows.length; i++)
+                _candidateRow(rows[i], isLast: i == rows.length - 1),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _candidateRow(Map<String, dynamic> r, {required bool isLast}) {
+    final status = r['status']?.toString() ?? 'pending';
+    final statusLabel = _statusLabels[status] ?? status;
+    final statusColor = _statusColors[status] ?? context.textTertiary;
+    final name = r['candidate_name']?.toString() ?? 'Candidato';
+    final headline = r['candidate_headline']?.toString() ?? '';
+    final jobTitle = r['job_title']?.toString() ?? 'Vacante';
+    final avatarUrl = r['candidate_avatar_url']?.toString();
+    final appliedAt = DateTime.tryParse(r['applied_at']?.toString() ?? '');
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 14),
+      decoration: BoxDecoration(
+        border: isLast ? null : Border(bottom: BorderSide(color: context.dividerColor.withValues(alpha: 0.5), width: 0.5)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 40, height: 40,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: MployaTheme.brandAccent.withValues(alpha: 0.12),
+              image: (avatarUrl != null && avatarUrl.isNotEmpty)
+                  ? DecorationImage(image: NetworkImage(avatarUrl), fit: BoxFit.cover)
+                  : null,
+            ),
+            child: (avatarUrl == null || avatarUrl.isEmpty)
+                ? Center(child: Text(name.isNotEmpty ? name[0].toUpperCase() : '?', style: const TextStyle(color: MployaTheme.brandAccent, fontWeight: FontWeight.w800)))
+                : null,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            flex: 3,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(name, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: context.textPrimary), maxLines: 1, overflow: TextOverflow.ellipsis),
+                if (headline.isNotEmpty)
+                  Text(headline, style: TextStyle(fontSize: 12, color: context.textTertiary), maxLines: 1, overflow: TextOverflow.ellipsis),
+              ],
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Text(jobTitle, style: TextStyle(fontSize: 13, color: context.textSecondary), maxLines: 1, overflow: TextOverflow.ellipsis),
+          ),
+          Expanded(
+            flex: 2,
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(color: statusColor.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(999)),
+                child: Text(statusLabel, style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: statusColor)),
+              ),
+            ),
+          ),
+          if (appliedAt != null)
+            SizedBox(
+              width: 90,
+              child: Text(_timeAgoShort(appliedAt), style: TextStyle(fontSize: 12, color: context.textTertiary)),
+            ),
+          SizedBox(
+            width: 90,
+            child: GestureDetector(
+              onTap: () async {
+                final data = await _supabase.from('users').select().eq('id', r['candidate_id']).maybeSingle();
+                if (data != null && mounted) {
+                  Navigator.of(context).push(CupertinoPageRoute(builder: (_) => ProfileScreen(user: NexUser.fromJson(data))));
+                }
+              },
+              child: Text('Ver perfil', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: MployaTheme.brandAccent)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _timeAgoShort(DateTime dt) {
+    final diff = DateTime.now().difference(dt);
+    if (diff.inDays > 0) return 'Hace ${diff.inDays}d';
+    if (diff.inHours > 0) return 'Hace ${diff.inHours}h';
+    if (diff.inMinutes > 0) return 'Hace ${diff.inMinutes}m';
+    return 'Recién';
+  }
+
+  Widget _candidatesFiltersCard() {
+    return WebCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const WebSectionLabel('Filtrar por estado'),
+          _statusFilterChip(null, 'Todos'),
+          ..._statusLabels.entries.map((e) => _statusFilterChip(e.key, e.value)),
+        ],
+      ),
+    );
+  }
+
+  Widget _statusFilterChip(String? status, String label) {
+    final active = _candidatesStatusFilter == status;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: GestureDetector(
+        onTap: () => _loadCandidates(status: status),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: active ? MployaTheme.brandAccent.withValues(alpha: 0.1) : Colors.transparent,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: active ? MployaTheme.brandAccent : context.dividerColor),
+          ),
+          child: Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: active ? MployaTheme.brandAccent : context.textSecondary)),
         ),
       ),
     );
@@ -667,17 +912,100 @@ class _AtsDashboardScreenState extends State<AtsDashboardScreen> {
 
   // ── STEALTH CATALOG ────────────────────────────────────────────────────────
 
+  // Fila limpia de candidato confidencial — sin card pesada por ítem, solo
+  // avatar difuminado + nombre + un botón/pill de desbloqueo, separadas por
+  // hairlines. Estilo lista, no grilla de tarjetas.
+  Widget _stealthRow(BuildContext context, Map<String, dynamic> u, bool isLast) {
+    final isUnlocked = u['is_unlocked'] == true;
+    final hairline = context.dividerColor.withValues(alpha: 0.4);
+    return Container(
+      decoration: BoxDecoration(
+        border: isLast ? null : Border(bottom: BorderSide(color: hairline, width: 0.5)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+        child: Row(
+          children: [
+            ClipOval(
+              child: ImageFiltered(
+                imageFilter: ImageFilter.blur(sigmaX: isUnlocked ? 0 : 7, sigmaY: isUnlocked ? 0 : 7),
+                child: Container(
+                  width: 46, height: 46,
+                  decoration: BoxDecoration(color: MployaTheme.brandAccent.withValues(alpha: 0.14), shape: BoxShape.circle),
+                  child: Icon(CupertinoIcons.person_fill, color: MployaTheme.brandAccent.withValues(alpha: 0.6), size: 24),
+                ),
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text((u['real_name'] ?? 'Confidencial').toString(),
+                      maxLines: 1, overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: context.textPrimary, fontSize: 15, fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 2),
+                  Text((u['headline'] ?? 'Directivo C-Level').toString(),
+                      maxLines: 1, overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: context.textTertiary, fontSize: 13)),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            GestureDetector(
+              onTap: () {
+                if (isUnlocked) {
+                  final candidate = NexUser(id: u['candidate_id']?.toString() ?? '', name: u['real_name']?.toString() ?? 'Candidato', headline: u['headline']?.toString() ?? '');
+                  Navigator.of(context).push(CupertinoPageRoute(builder: (_) => ProfileScreen(user: candidate)));
+                } else {
+                  _unlockProfile(NexUser(id: u['candidate_id']?.toString() ?? '', name: u['real_name']?.toString() ?? 'Candidato Confidencial', headline: u['headline']?.toString() ?? ''));
+                }
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                decoration: BoxDecoration(
+                  color: isUnlocked ? MployaTheme.brandAccent.withValues(alpha: 0.10) : MployaTheme.brandAccent,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(isUnlocked ? CupertinoIcons.checkmark_seal_fill : CupertinoIcons.lock_open_fill,
+                        color: isUnlocked ? MployaTheme.brandAccent : Colors.white, size: 13),
+                    const SizedBox(width: 6),
+                    Text(
+                      isUnlocked ? 'Ver perfil' : 'Desbloquear',
+                      style: TextStyle(color: isUnlocked ? MployaTheme.brandAccent : Colors.white, fontWeight: FontWeight.w700, fontSize: 12.5),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildStealthSection() {
     return SliverMainAxisGroup(
       slivers: [
         SliverToBoxAdapter(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('Descubrimiento Confidencial', style: TextStyle(color: context.textPrimary, fontSize: 18, fontWeight: FontWeight.bold)),
-                const Icon(CupertinoIcons.lock_shield_fill, color: MployaTheme.brandAccent, size: 20),
+                WebIconBadge(icon: CupertinoIcons.lock_shield_fill, color: MployaTheme.brandAccent, size: 30),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Descubrimiento Confidencial', style: TextStyle(color: context.textPrimary, fontSize: 15, fontWeight: FontWeight.w700)),
+                      Text('Perfiles C-Level en modo oculto', style: TextStyle(color: context.textTertiary, fontSize: 12)),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
@@ -688,9 +1016,9 @@ class _AtsDashboardScreenState extends State<AtsDashboardScreen> {
             if (!snapshot.hasData) {
               return const SliverToBoxAdapter(child: Center(child: CupertinoActivityIndicator()));
             }
-            
+
             final stealthUsers = snapshot.data!;
-            
+
             if (stealthUsers.isEmpty) {
               return SliverToBoxAdapter(
                 child: Padding(
@@ -700,93 +1028,15 @@ class _AtsDashboardScreenState extends State<AtsDashboardScreen> {
               );
             }
 
-            return SliverList(
-              delegate: SliverChildBuilderDelegate(
-                (context, index) {
-                  final u = stealthUsers[index];
-                  final isUnlocked = u['is_unlocked'] == true;
-                  
-                  return Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: context.cardColor,
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: context.cardShadow,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            ClipOval(
-                              child: ImageFiltered(
-                                imageFilter: ImageFilter.blur(sigmaX: isUnlocked ? 0 : 8, sigmaY: isUnlocked ? 0 : 8),
-                                child: Container(
-                                  width: 56, height: 56,
-                                  decoration: BoxDecoration(
-                                    color: MployaTheme.brandAccent.withValues(alpha: 0.15),
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: Icon(CupertinoIcons.person_fill, color: MployaTheme.brandAccent.withValues(alpha: 0.6), size: 32),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text((u['real_name'] ?? 'Confidencial').toString(), style: TextStyle(color: context.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
-                                  const SizedBox(height: 4),
-                                  Text((u['headline'] ?? 'Directivo C-Level').toString(), style: const TextStyle(color: MployaTheme.brandAccent, fontSize: 14, fontWeight: FontWeight.w500)),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          (u['about'] ?? 'Logros clave no disponibles.').toString(),
-                          style: TextStyle(color: context.textPrimary, fontSize: 14, height: 1.4),
-                          maxLines: 3, overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 16),
-                        GestureDetector(
-                          onTap: () {
-                            if (isUnlocked) {
-                              final candidate = NexUser(id: u['candidate_id']?.toString() ?? '', name: u['real_name']?.toString() ?? 'Candidato', headline: u['headline']?.toString() ?? '');
-                              Navigator.of(context).push(CupertinoPageRoute(builder: (_) => ProfileScreen(user: candidate)));
-                            } else {
-                              _unlockProfile(NexUser(id: u['candidate_id']?.toString() ?? '', name: u['real_name']?.toString() ?? 'Candidato Confidencial', headline: u['headline']?.toString() ?? ''));
-                            }
-                          },
-                          child: Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            decoration: BoxDecoration(
-                              color: isUnlocked ? context.cardColor : MployaTheme.brandAccent,
-                              borderRadius: BorderRadius.circular(12),
-                              boxShadow: isUnlocked ? [] : [BoxShadow(color: MployaTheme.brandAccent.withValues(alpha: 0.3), blurRadius: 8, offset: const Offset(0, 2))],
-                            ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(isUnlocked ? Icons.verified : Icons.lock_open_rounded, color: isUnlocked ? MployaTheme.brandAccent : Colors.white, size: 16),
-                                const SizedBox(width: 8),
-                                Text(
-                                  isUnlocked ? 'Ver Perfil y CV' : 'Desbloquear (1 Crédito)',
-                                  style: TextStyle(color: isUnlocked ? MployaTheme.brandAccent : Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-                childCount: stealthUsers.length,
+            return SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 0),
+                child: Column(
+                  children: [
+                    for (int i = 0; i < stealthUsers.length; i++)
+                      _stealthRow(context, stealthUsers[i], i == stealthUsers.length - 1),
+                  ],
+                ),
               ),
             );
           },
@@ -797,29 +1047,27 @@ class _AtsDashboardScreenState extends State<AtsDashboardScreen> {
 
   // ── Helpers ──────────────────────────────────────────────────────────────
 
-  Widget _buildMetricCard({required IconData icon, required String label, required String value, bool isAccent = false}) {
+  Widget _buildMetricCard({required IconData icon, required String label, required String value, bool isAccent = false, Color? color}) {
+    final c = color ?? MployaTheme.brandAccent;
     return Expanded(
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: isAccent ? MployaTheme.brandAccent.withValues(alpha: 0.08) : context.cardColor,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: context.cardShadow,
+          color: isAccent ? c.withValues(alpha: 0.06) : context.cardColor,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isAccent ? c.withValues(alpha: 0.18) : context.dividerColor.withValues(alpha: 0.3),
+            width: 0.5,
+          ),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(label, style: TextStyle(color: context.textSecondary, fontSize: 12, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 8),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.baseline,
-              textBaseline: TextBaseline.alphabetic,
-              children: [
-                Icon(icon, color: MployaTheme.brandAccent, size: 24),
-                const SizedBox(width: 8),
-                Text(value, style: TextStyle(color: context.textPrimary, fontSize: 28, fontWeight: FontWeight.bold, fontFamily: '.SF Pro Display')),
-              ],
-            ),
+            WebIconBadge(icon: icon, color: c, size: 34),
+            const SizedBox(height: 12),
+            Text(value, style: TextStyle(color: context.textPrimary, fontSize: 24, fontWeight: FontWeight.w800, letterSpacing: -0.5)),
+            const SizedBox(height: 2),
+            Text(label, style: TextStyle(color: context.textTertiary, fontSize: 12.5)),
           ],
         ),
       ),

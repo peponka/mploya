@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:video_player/video_player.dart';
+import '../models/models.dart' show resolveVideoUrl;
 
 /// Manager singleton que pre-inicializa VideoPlayerControllers
 /// para los próximos videos del feed, eliminando el spinner al hacer swipe.
@@ -68,6 +69,11 @@ class VideoPreloadManager {
   /// Verifica si un controller está listo para reproducir.
   bool isReady(String url) {
     return _cache[url]?.isReady ?? false;
+  }
+
+  /// Verifica si la precarga de esa URL falló.
+  bool hasError(String url) {
+    return _cache[url]?.hasError ?? false;
   }
 
   /// Registra un callback para cuando el controller esté listo.
@@ -142,11 +148,16 @@ class VideoPreloadManager {
       return;
     }
 
+    // Cachea por la URL original, pero resuelve dominios bloqueados por CORS
+    // a un asset local antes de crear el controller — mismo criterio que
+    // usaba antes tiktok_reel_card.dart en su fallback (ahora unificado acá,
+    // fuente única de verdad para evitar dos controllers sobre la misma URL).
+    final resolved = resolveVideoUrl(url);
     final VideoPlayerController controller;
-    if (url.startsWith('asset:')) {
-      controller = VideoPlayerController.asset(url.replaceAll('asset:', ''));
+    if (resolved.startsWith('asset:')) {
+      controller = VideoPlayerController.asset(resolved.replaceAll('asset:', ''));
     } else {
-      controller = VideoPlayerController.networkUrl(Uri.parse(url));
+      controller = VideoPlayerController.networkUrl(Uri.parse(resolved));
     }
 
     final cached = _CachedController(controller);
@@ -165,6 +176,13 @@ class VideoPreloadManager {
     }).catchError((e) {
       debugPrint('⚠️ Preload error for $url: $e');
       cached.hasError = true;
+      // Avisar a quien esté esperando este controller — si no, onReady()
+      // se queda colgado para siempre (spinner infinito) cuando la carga
+      // falla en vez de solo tardar.
+      for (final cb in cached.onReadyCallbacks) {
+        cb();
+      }
+      cached.onReadyCallbacks.clear();
     });
   }
 

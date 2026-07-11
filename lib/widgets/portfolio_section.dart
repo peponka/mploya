@@ -151,34 +151,39 @@ class _PortfolioSectionState extends State<PortfolioSection> {
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
               child: Container(
+                width: double.infinity,
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
-                  color: NexTheme.brandAccent.withValues(alpha: 0.05),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: NexTheme.brandAccent.withValues(alpha: 0.15),
-                    width: 1,
+                  gradient: LinearGradient(
+                    colors: [NexTheme.premiumStart.withValues(alpha: 0.07), NexTheme.premiumEnd.withValues(alpha: 0.04)],
+                    begin: Alignment.topLeft, end: Alignment.bottomRight,
                   ),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: NexTheme.premiumEnd.withValues(alpha: 0.16), width: 0.5),
                 ),
                 child: Column(
                   children: [
-                    Icon(
-                      CupertinoIcons.film,
-                      size: 36,
-                      color: NexTheme.brandAccent.withValues(alpha: 0.5),
+                    Container(
+                      width: 52, height: 52,
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(colors: [NexTheme.premiumStart, NexTheme.premiumEnd]),
+                        borderRadius: BorderRadius.circular(15),
+                        boxShadow: [BoxShadow(color: NexTheme.premiumEnd.withValues(alpha: 0.3), blurRadius: 14, offset: const Offset(0, 6))],
+                      ),
+                      child: const Icon(CupertinoIcons.film_fill, size: 24, color: Colors.white),
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 14),
                     Text(
                       'Mostrá tu trabajo en acción',
                       style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
+                        fontSize: 15.5,
+                        fontWeight: FontWeight.w700,
                         color: context.textPrimary,
                       ),
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Subí hasta 3 vídeos de 60s mostrando\nproyectos, habilidades o resultados.',
+                      'Subí hasta 3 vídeos de 60s con proyectos,\nhabilidades o resultados.',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 13,
@@ -186,6 +191,24 @@ class _PortfolioSectionState extends State<PortfolioSection> {
                         height: 1.4,
                       ),
                     ),
+                    if (widget.isOwnProfile) ...[
+                      const SizedBox(height: 16),
+                      SpringInteraction(
+                        onTap: _showAddVideoDialog,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(colors: [NexTheme.premiumStart, NexTheme.premiumEnd]),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                            Icon(CupertinoIcons.plus, size: 15, color: Colors.white),
+                            SizedBox(width: 6),
+                            Text('Agregar video', style: TextStyle(color: Colors.white, fontSize: 13.5, fontWeight: FontWeight.w700)),
+                          ]),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),

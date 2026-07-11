@@ -46,6 +46,7 @@ import 'camera_screen.dart';
 import 'onboarding_pitch_screen.dart';
 import 'settings_screen.dart';
 import 'mis_herramientas_screen.dart';
+import 'ats_dashboard_screen.dart';
 import '../widgets/mploya_ui.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -265,171 +266,179 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildScaffold(BuildContext context, NexUser profile, bool isOwnProfile) {
-    return CupertinoPageScaffold(
-      backgroundColor: context.isDark ? NexTheme.darkBg : CupertinoColors.white,
-      child: CustomScrollView(
-        physics: const BouncingScrollPhysics(
-          parent: AlwaysScrollableScrollPhysics(),
+    // En web, el perfil se centra en una columna cómoda (~720px) en vez de
+    // estirarse a todo el ancho como un celular gigante.
+    final wide = MediaQuery.of(context).size.width > 900;
+    final sheet = context.isDark ? NexTheme.darkBg : CupertinoColors.white;
+    final bg = context.isDark ? NexTheme.darkBg : const Color(0xFFF1F1F4);
+    const physics = BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics());
+
+    // Barra de acciones (compartir / ajustes).
+    final navSliver = SliverToBoxAdapter(
+      child: Container(
+        color: sheet,
+        padding: EdgeInsets.only(top: wide ? 10 : MediaQuery.of(context).padding.top + 8, bottom: 4),
+        child: Row(
+          children: [
+            if (!isOwnProfile)
+              CupertinoButton(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                minimumSize: Size.zero,
+                onPressed: () => Navigator.of(context).pop(),
+                child: Icon(CupertinoIcons.back, size: 22, color: context.textPrimary),
+              )
+            else
+              const SizedBox(width: 16),
+            const Spacer(),
+            CupertinoButton(
+              padding: EdgeInsets.zero,
+              minimumSize: Size.zero,
+              onPressed: () => ShareService.instance.shareProfile(
+                name: profile.name,
+                headline: profile.headline,
+                userId: profile.id,
+                accountType: profile.accountType,
+              ),
+              child: Icon(CupertinoIcons.square_arrow_up, size: 20, color: context.textPrimary),
+            ),
+            const SizedBox(width: 16),
+            CupertinoButton(
+              padding: EdgeInsets.zero,
+              minimumSize: Size.zero,
+              onPressed: () => _showSettingsSheet(context, profile),
+              child: Icon(CupertinoIcons.ellipsis, size: 22, color: context.textPrimary),
+            ),
+            const SizedBox(width: 16),
+          ],
         ),
-        slivers: [
-          // ── Nav Bar (minimal) ──
-          SliverToBoxAdapter(
+      ),
+    );
+
+    // Columna izquierda: identidad (avatar, nombre, badges, botones, stats).
+    final leftSlivers = <Widget>[
+      _buildProfileHeader(context, profile, isOwnProfile),
+      _buildNameSection(context, profile, isOwnProfile),
+    ];
+
+    // Columna derecha: progreso, herramientas, tabs y contenido.
+    final rightSlivers = <Widget>[
+      if (isOwnProfile)
+        SliverToBoxAdapter(
+          child: Container(
+            color: sheet,
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+            child: MployaProgressCard(profile: profile, onTap: () => _openEditProfile(context, profile)),
+          ),
+        ),
+      if (isOwnProfile && profile.accountType != 'empresa' && profile.accountType != 'headhunter')
+        SliverToBoxAdapter(
+          child: Container(
+            color: sheet,
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+            child: ConfidentialModeCard(profile: profile),
+          ),
+        ),
+      if (isOwnProfile && (profile.accountType == 'empresa' || profile.accountType == 'headhunter'))
+        SliverToBoxAdapter(child: _buildCompanyQuickTools(context)),
+      if (isOwnProfile) SliverToBoxAdapter(child: _buildToolsEntry(context, profile)),
+      if (isOwnProfile)
+        SliverToBoxAdapter(
+          child: Container(
+            color: sheet,
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
             child: Container(
-              color: context.isDark ? NexTheme.darkBg : CupertinoColors.white,
-              padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top + 8, bottom: 4),
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: context.isDark ? NexTheme.darkSurface : const Color(0xFFF2F2F7),
+                borderRadius: BorderRadius.circular(12),
+              ),
               child: Row(
                 children: [
-                  if (!isOwnProfile)
-                    CupertinoButton(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      minimumSize: Size.zero,
-                      onPressed: () => Navigator.of(context).pop(),
-                      child: Icon(CupertinoIcons.back, size: 22, color: context.textPrimary),
-                    )
-                  else
-                    const SizedBox(width: 16),
-                  const Spacer(),
-                  CupertinoButton(
-                    padding: EdgeInsets.zero,
-                    minimumSize: Size.zero,
-                    onPressed: () => ShareService.instance.shareProfile(
-                      name: profile.name,
-                      headline: profile.headline,
-                      userId: profile.id,
-                      accountType: profile.accountType,
-                    ),
-                    child: Icon(CupertinoIcons.square_arrow_up, size: 20, color: context.textPrimary),
-                  ),
-                  const SizedBox(width: 16),
-                  CupertinoButton(
-                    padding: EdgeInsets.zero,
-                    minimumSize: Size.zero,
-                    onPressed: () => _showSettingsSheet(context, profile),
-                    child: Icon(CupertinoIcons.ellipsis, size: 22, color: context.textPrimary),
-                  ),
-                  const SizedBox(width: 16),
+                  _SegTab(label: 'Sobre mí', isSelected: _selectedProfileTab == 0, onTap: () => setState(() => _selectedProfileTab = 0)),
+                  _SegTab(label: 'Portfolio', isSelected: _selectedProfileTab == 1, onTap: () => setState(() => _selectedProfileTab = 1)),
                 ],
               ),
             ),
           ),
+        ),
+      if (!isOwnProfile || _selectedProfileTab == 0) ...[
+        SliverToBoxAdapter(child: _buildVideoPitchSection(context, profile)),
+        SliverToBoxAdapter(
+          child: ProfilePersonalitySection(userId: profile.id, isOwnProfile: isOwnProfile, headline: profile.headline, skills: profile.skills),
+        ),
+        if (profile.experience.isNotEmpty)
+          SliverToBoxAdapter(child: _buildExperienceClean(context, profile, isOwnProfile)),
+        SliverToBoxAdapter(child: _buildSkillsClean(context, profile, isOwnProfile)),
+      ],
+      if (!isOwnProfile || _selectedProfileTab == 1) ...[
+        SliverToBoxAdapter(child: PortfolioSection(userId: profile.id, isOwnProfile: isOwnProfile)),
+        SliverToBoxAdapter(child: _buildVideoReplies(context, profile, isOwnProfile)),
+        SliverToBoxAdapter(child: EmployerRatingSection(companyId: profile.id, companyAccountType: profile.accountType, isOwnProfile: isOwnProfile)),
+        SliverToBoxAdapter(child: SkillBadgesSection(userId: profile.id, isOwnProfile: isOwnProfile)),
+      ],
+    ];
 
-          // ── Avatar + Edit Button ──
-          _buildProfileHeader(context, profile, isOwnProfile),
+    Widget sheetColumn({required List<Widget> slivers, EdgeInsets? margin, double? width, bool shrink = false}) {
+      return Container(
+        width: width,
+        margin: margin,
+        decoration: BoxDecoration(
+          color: sheet,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: const Color(0x0F000000), width: 0.5),
+          boxShadow: const [BoxShadow(color: Color(0x0A000000), blurRadius: 18, offset: Offset(0, 6))],
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: CustomScrollView(
+          shrinkWrap: shrink,
+          physics: shrink ? const NeverScrollableScrollPhysics() : physics,
+          slivers: slivers,
+        ),
+      );
+    }
 
-          // ── Name + Headline + Badges ──
-          _buildNameSection(context, profile, isOwnProfile),
-
-          // ── Progreso de perfil (motivador prominente estilo JobToday) ──
-          if (isOwnProfile)
-            SliverToBoxAdapter(
-              child: Container(
-                color: context.isDark ? NexTheme.darkBg : CupertinoColors.white,
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-                child: MployaProgressCard(
-                  profile: profile,
-                  onTap: () => _openEditProfile(context, profile),
+    // ── Web: 2 columnas (identidad compacta | contenido) ──
+    if (wide) {
+      return CupertinoPageScaffold(
+        backgroundColor: bg,
+        child: SafeArea(
+          child: SizedBox.expand(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                sheetColumn(
+                  width: 330,
+                  shrink: true,
+                  margin: const EdgeInsets.fromLTRB(16, 16, 0, 16),
+                  slivers: [...leftSlivers, const SliverToBoxAdapter(child: SizedBox(height: 22))],
                 ),
-              ),
-            ),
-
-          // ── Acceso a "Mis herramientas" (pantalla privada del usuario) ──
-          if (isOwnProfile)
-            SliverToBoxAdapter(child: _buildToolsEntry(context, profile)),
-
-          // ── Tab Selector (only for own profile) ──
-          if (isOwnProfile)
-            SliverToBoxAdapter(
-              child: Container(
-                color: context.isDark ? NexTheme.darkBg : CupertinoColors.white,
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-                child: Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    color: context.isDark ? NexTheme.darkSurface : const Color(0xFFF2F2F7),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    children: [
-                      _SegTab(label: 'Sobre mí', isSelected: _selectedProfileTab == 0, onTap: () => setState(() => _selectedProfileTab = 0)),
-                      _SegTab(label: 'Portfolio', isSelected: _selectedProfileTab == 1, onTap: () => setState(() => _selectedProfileTab = 1)),
-                    ],
+                const SizedBox(width: 18),
+                Flexible(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 700),
+                    child: sheetColumn(
+                      margin: const EdgeInsets.fromLTRB(0, 16, 16, 16),
+                      slivers: [navSliver, ...rightSlivers, const SliverToBoxAdapter(child: SizedBox(height: 40))],
+                    ),
                   ),
                 ),
-              ),
+              ],
             ),
+          ),
+        ),
+      );
+    }
 
-          // ════════════════════════════════════════════════════════════════════
-          // TAB 0: SOBRE MÍ — Video-Pitch, Experiencia, Personalidad, Skills
-          // ════════════════════════════════════════════════════════════════════
-          if (!isOwnProfile || _selectedProfileTab == 0) ...[
-            // ── Video-Pitch Section ──
-            SliverToBoxAdapter(
-              child: _buildVideoPitchSection(context, profile),
-            ),
-
-            // ── PERSONALIDAD IA — Análisis de soft skills ──
-            SliverToBoxAdapter(
-              child: ProfilePersonalitySection(
-                userId: profile.id,
-                isOwnProfile: isOwnProfile,
-                headline: profile.headline,
-                skills: profile.skills,
-              ),
-            ),
-
-            // ── EXPERIENCIA — Clean timeline ──
-            if (profile.experience.isNotEmpty)
-              SliverToBoxAdapter(
-                child: _buildExperienceClean(context, profile, isOwnProfile),
-              ),
-
-            // ── SKILLS — Clean pills ──
-            SliverToBoxAdapter(
-              child: _buildSkillsClean(context, profile, isOwnProfile),
-            ),
-          ],
-
-          // ════════════════════════════════════════════════════════════════════
-          // TAB 1: PORTFOLIO — Videos, Replies, Ratings, Badges
-          // ════════════════════════════════════════════════════════════════════
-          if (!isOwnProfile || _selectedProfileTab == 1) ...[
-            // ── PORTFOLIO — Hasta 3 vídeos de proyectos ──
-            SliverToBoxAdapter(
-              child: PortfolioSection(
-                userId: profile.id,
-                isOwnProfile: isOwnProfile,
-              ),
-            ),
-
-            // ── Video Replies de Empresas ──
-            SliverToBoxAdapter(
-              child: _buildVideoReplies(context, profile, isOwnProfile),
-            ),
-
-            // ── EMPLOYER RATING — Reputación de empresa ──
-            SliverToBoxAdapter(
-              child: EmployerRatingSection(
-                companyId: profile.id,
-                companyAccountType: profile.accountType,
-                isOwnProfile: isOwnProfile,
-              ),
-            ),
-
-            // ── SKILL BADGES — Validated skill certificates ──
-            SliverToBoxAdapter(
-              child: SkillBadgesSection(
-                userId: profile.id,
-                isOwnProfile: isOwnProfile,
-              ),
-            ),
-          ],
-
-          // Las herramientas privadas (IA, crecimiento, cuenta) ahora viven en
-          // MisHerramientasScreen, accesible desde el botón "Mis herramientas".
-
-          // ── Bottom nav spacer ── (140, no 100: en algunos Android la tab
-          // bar + inset del gesto de navegación supera los 100px y tapaba la
-          // última fila de hashtags)
+    // ── Móvil: una sola columna ──
+    return CupertinoPageScaffold(
+      backgroundColor: sheet,
+      child: CustomScrollView(
+        physics: physics,
+        slivers: [
+          navSliver,
+          ...leftSlivers,
+          ...rightSlivers,
           const SliverToBoxAdapter(child: SizedBox(height: 140)),
         ],
       ),
@@ -445,6 +454,86 @@ class _ProfileScreenState extends State<ProfileScreen> {
     } else {
       Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const CandidateProfileFormScreen(isEditing: true)));
     }
+  }
+
+  // ── Accesos rápidos de empresa (Analítica / Candidatos / Entrevistas) ─────
+  Widget _buildCompanyQuickTools(BuildContext context) {
+    return Container(
+      color: context.isDark ? NexTheme.darkBg : CupertinoColors.white,
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
+      child: Row(
+        children: [
+          Expanded(
+            child: _companyQuickTool(
+              context,
+              icon: CupertinoIcons.chart_bar_fill,
+              color: const Color(0xFF8B5CF6),
+              label: 'Analítica',
+              onTap: () => Navigator.of(context).push(
+                CupertinoPageRoute(builder: (_) => const ProfileAnalyticsDashboardScreen()),
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: _companyQuickTool(
+              context,
+              icon: CupertinoIcons.briefcase_fill,
+              color: const Color(0xFF2563EB),
+              label: 'Candidatos',
+              onTap: () => Navigator.of(context).push(
+                CupertinoPageRoute(builder: (_) => const AtsDashboardScreen()),
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: _companyQuickTool(
+              context,
+              icon: CupertinoIcons.calendar,
+              color: const Color(0xFFD97706),
+              label: 'Entrevistas',
+              onTap: () => Navigator.of(context).push(
+                CupertinoPageRoute(builder: (_) => const SchedulingScreen(isCompany: true)),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _companyQuickTool(
+    BuildContext context, {
+    required IconData icon,
+    required Color color,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        decoration: BoxDecoration(
+          color: context.isDark ? NexTheme.darkSurface : const Color(0xFFF7F8FA),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: context.isDark ? const Color(0xFF222222) : const Color(0xFFEDEFF2)),
+        ),
+        child: Column(
+          children: [
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(color: color.withValues(alpha: 0.12), shape: BoxShape.circle),
+              child: Icon(icon, size: 16, color: color),
+            ),
+            const SizedBox(height: 6),
+            Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: context.textPrimary)),
+          ],
+        ),
+      ),
+    );
   }
 
   // ── Entrada a "Mis herramientas" (pantalla privada del usuario) ───────────
@@ -584,11 +673,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
   SliverToBoxAdapter _buildProfileHeader(BuildContext context, NexUser profile, bool isOwnProfile) {
     return SliverToBoxAdapter(
       child: Container(
-        color: context.isDark ? NexTheme.darkBg : CupertinoColors.white,
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+        width: double.infinity,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Color(0xFFF97316), Color(0xFFC2410C)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.vertical(bottom: Radius.circular(30)),
+        ),
+        padding: EdgeInsets.fromLTRB(20, MediaQuery.of(context).padding.top + 20, 20, 26),
         child: Column(
           children: [
-            // ── Avatar (centered) ──
+            // ── Avatar con anillo blanco ──
             GestureDetector(
               onTap: () {
                 if (isOwnProfile) {
@@ -606,35 +703,79 @@ class _ProfileScreenState extends State<ProfileScreen> {
               child: Stack(
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(3),
-                    decoration: BoxDecoration(
+                    padding: const EdgeInsets.all(4),
+                    decoration: const BoxDecoration(
                       shape: BoxShape.circle,
-                      color: context.isDark ? NexTheme.darkBg : CupertinoColors.white,
-                      border: Border.all(color: MployaTheme.brandAccent.withValues(alpha: 0.2), width: 2),
+                      color: CupertinoColors.white,
+                      boxShadow: [BoxShadow(color: Color(0x33000000), blurRadius: 22, offset: Offset(0, 10))],
                     ),
-                    child: NexAvatar(user: profile, size: 96, showBadge: true),
+                    child: NexAvatar(user: profile, size: 100, showBadge: true),
                   ),
                   if (isOwnProfile)
                     Positioned(
                       bottom: 4,
                       right: 4,
                       child: Container(
-                        width: 30,
-                        height: 30,
+                        width: 32,
+                        height: 32,
                         decoration: BoxDecoration(
-                          color: MployaTheme.brandAccent,
+                          color: CupertinoColors.white,
                           shape: BoxShape.circle,
-                          border: Border.all(color: CupertinoColors.white, width: 2.5),
+                          border: Border.all(color: const Color(0x14000000), width: 0.5),
                         ),
-                        child: const Icon(CupertinoIcons.camera_fill, color: CupertinoColors.white, size: 13),
+                        child: const Icon(CupertinoIcons.camera_fill, color: MployaTheme.brandAccent, size: 15),
                       ),
                     ),
                 ],
               ),
             ),
             const SizedBox(height: 14),
+            // ── Nombre (blanco sobre el gradiente) ──
+            Text(
+              profile.name,
+              style: const TextStyle(fontSize: 25, fontWeight: FontWeight.w800, color: CupertinoColors.white, letterSpacing: -0.5),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 4),
+            // ── Cargo ──
+            Text(
+              profile.headline,
+              style: const TextStyle(fontSize: 14.5, color: Color(0xE6FFFFFF), height: 1.35),
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 13),
+            // ── Badges sobre el gradiente ──
+            Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                if (profile.isVerified || profile.isPremium)
+                  _heroBadge(CupertinoIcons.checkmark_shield_fill, 'Verificado'),
+                if (profile.location != null)
+                  _heroBadge(CupertinoIcons.location_solid, profile.location!),
+                _heroBadge(CupertinoIcons.circle_fill, profile.isOpenToWork ? 'Disponible' : (profile.isHiring ? 'Contratando' : 'Activo')),
+              ],
+            ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _heroBadge(IconData icon, String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
+      decoration: BoxDecoration(color: const Color(0x33FFFFFF), borderRadius: BorderRadius.circular(999)),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12.5, color: CupertinoColors.white),
+          const SizedBox(width: 5),
+          Text(label, style: const TextStyle(color: CupertinoColors.white, fontSize: 12.5, fontWeight: FontWeight.w700)),
+        ],
       ),
     );
   }
@@ -645,53 +786,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return SliverToBoxAdapter(
       child: Container(
         color: context.isDark ? NexTheme.darkBg : CupertinoColors.white,
-        padding: const EdgeInsets.symmetric(horizontal: 20),
+        padding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            // ── Name ──
-            Text(
-              profile.name,
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: context.textPrimary, letterSpacing: -0.5),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 4),
-            // ── Headline ──
-            Text(
-              profile.headline,
-              style: TextStyle(fontSize: 15, color: context.textSecondary, height: 1.35),
-              textAlign: TextAlign.center,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: 10),
-            // ── Inline Badges (compact row) ──
-            Wrap(
-              alignment: WrapAlignment.center,
-              spacing: 6,
-              runSpacing: 6,
-              children: [
-                if (profile.isVerified || profile.isPremium)
-                  _profileBadge(
-                    icon: CupertinoIcons.checkmark_shield_fill,
-                    label: 'Verificado',
-                    color: MployaTheme.brandAccent,
-                  ),
-                if (profile.location != null)
-                  _profileBadge(
-                    icon: CupertinoIcons.location_solid,
-                    label: profile.location!,
-                    color: context.textSecondary,
-                  ),
-                _profileBadge(
-                  icon: CupertinoIcons.circle_fill,
-                  label: profile.isOpenToWork ? 'Disponible' : (profile.isHiring ? 'Contratando' : 'Activo'),
-                  color: profile.isOpenToWork ? MployaTheme.openToWork : (profile.isHiring ? MployaTheme.hiring : MployaTheme.brandAccent),
-                  filled: true,
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
             // ── Action Row (Edit + Generate Bio) ──
             if (isOwnProfile)
               Row(
@@ -715,24 +813,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ],
               ),
             const SizedBox(height: 20),
-            // ── Stats Row (3 columns, compact) ──
+            // ── Stats: 3 mini-cards con números grandes ──
             GestureDetector(
               onTap: isOwnProfile ? () => Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const ProfileViewersScreen())) : null,
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                decoration: BoxDecoration(
-                  color: context.isDark ? NexTheme.darkSurface : const Color(0xFFF9F9F9),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(child: _statColumn(profile.connections == 0 ? '—' : '${profile.connections}', 'Conexiones', context)),
-                    Container(width: 0.5, height: 32, color: context.dividerColor),
-                    Expanded(child: _statColumn(profile.profileViews == 0 ? '—' : '${profile.profileViews}', 'Vistas', context)),
-                    Container(width: 0.5, height: 32, color: context.dividerColor),
-                    Expanded(child: _statColumn(profile.matchPercentage == 0 ? '—' : '${profile.matchPercentage.round()}', 'Matches', context)),
-                  ],
-                ),
+              child: Row(
+                children: [
+                  Expanded(child: _statCard(context, '${profile.connections}', 'Conexiones')),
+                  const SizedBox(width: 10),
+                  Expanded(child: _statCard(context, '${profile.profileViews}', 'Vistas')),
+                  const SizedBox(width: 10),
+                  Expanded(child: _statCard(context, '${profile.matchPercentage.round()}', 'Matches')),
+                ],
               ),
             ),
 
@@ -866,19 +957,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   // ── Stat Column Helper ──────────────────────────────────────────────────────
 
-  Widget _statColumn(String value, String label, BuildContext context) {
-    final isEmpty = value == '—';
-    return Column(
-      children: [
-        Text(value, style: TextStyle(
-          fontSize: isEmpty ? 22 : 20,
-          fontWeight: FontWeight.w800,
-          color: isEmpty ? context.textTertiary : context.textPrimary,
-          letterSpacing: -0.5,
-        )),
-        const SizedBox(height: 2),
-        Text(label, style: TextStyle(fontSize: 12, color: context.textSecondary, fontWeight: FontWeight.w500)),
-      ],
+  Widget _statCard(BuildContext context, String value, String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 14),
+      decoration: BoxDecoration(
+        color: context.isDark ? NexTheme.darkSurface : const Color(0xFFF7F7F9),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: context.dividerColor.withValues(alpha: 0.3), width: 0.5),
+      ),
+      child: Column(
+        children: [
+          Text(value, style: TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.w800,
+            color: context.textPrimary,
+            letterSpacing: -0.5,
+          )),
+          const SizedBox(height: 2),
+          Text(label, style: TextStyle(fontSize: 12, color: context.textTertiary, fontWeight: FontWeight.w500)),
+        ],
+      ),
     );
   }
 
@@ -1091,8 +1189,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          // Video thumbnail
+          const SizedBox(height: 14),
+          // Video thumbnail — aspect 16:9 real, esquinas redondeadas y sombra
           GestureDetector(
             onTap: () {
               showCupertinoModalPopup<void>(
@@ -1104,53 +1202,69 @@ class _ProfileScreenState extends State<ProfileScreen> {
               );
             },
             child: Container(
-              width: double.infinity,
-              height: 180,
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF1A1A2E), Color(0xFF16213E)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.16), blurRadius: 24, offset: const Offset(0, 10))],
               ),
-              child: Stack(
-                children: [
-                  Center(
-                    child: Container(
-                      width: 52, height: 52,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.15),
-                        shape: BoxShape.circle,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(20),
+                child: AspectRatio(
+                  aspectRatio: 16 / 9,
+                  child: Container(
+                    decoration: const BoxDecoration(
+                      gradient: RadialGradient(
+                        center: Alignment.center,
+                        radius: 1.1,
+                        colors: [Color(0xFF2D2D45), Color(0xFF15151F)],
                       ),
-                      child: const Icon(CupertinoIcons.play_fill, color: Colors.white, size: 24),
+                    ),
+                    child: Stack(
+                      children: [
+                        Center(
+                          child: Container(
+                            width: 58, height: 58,
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              shape: BoxShape.circle,
+                              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.25), blurRadius: 14, offset: const Offset(0, 4))],
+                            ),
+                            child: const Icon(CupertinoIcons.play_fill, color: MployaTheme.brandAccent, size: 26),
+                          ),
+                        ),
+                        Positioned(
+                          top: 12, left: 12,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.45),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                              Icon(CupertinoIcons.videocam_fill, color: Colors.white, size: 12),
+                              SizedBox(width: 5),
+                              Text('Video-Pitch', style: TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.w700)),
+                            ]),
+                          ),
+                        ),
+                        Positioned(
+                          top: 12, right: 12,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: MployaTheme.brandAccent,
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                              Icon(CupertinoIcons.sparkles, color: Colors.white, size: 12),
+                              SizedBox(width: 4),
+                              Text('92 pts', style: TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.w700)),
+                            ]),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  // Duration
-                  Positioned(
-                    top: 12, left: 12,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.4),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Text('Video', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
-                    ),
-                  ),
-                  // Score
-                  Positioned(
-                    top: 12, right: 12,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: MployaTheme.brandAccent.withValues(alpha: 0.85),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Text('92 pts', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700)),
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
           ),
@@ -1360,16 +1474,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                     decoration: BoxDecoration(
-                      color: context.isDark ? CupertinoColors.white : const Color(0xFF1C1C1E),
+                      color: MployaTheme.brandAccent.withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(MployaTheme.radiusPill),
+                      border: Border.all(color: MployaTheme.brandAccent.withValues(alpha: 0.35), width: 1),
                     ),
-                    child: Text(
-                      '+ agregar',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: context.isDark ? CupertinoColors.black : CupertinoColors.white,
-                      ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(CupertinoIcons.add, size: 13, color: MployaTheme.brandAccent),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Agregar',
+                          style: TextStyle(
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w700,
+                            color: MployaTheme.brandAccent,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),

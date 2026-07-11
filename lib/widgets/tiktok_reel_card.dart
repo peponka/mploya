@@ -9,6 +9,7 @@ import 'package:visibility_detector/visibility_detector.dart';
 import '../theme/app_theme.dart';
 import '../models/models.dart';
 import '../screens/profile_screen.dart';
+import '../screens/match_celebration_screen.dart';
 import '../services/social_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -53,7 +54,7 @@ class TikTokReelCard extends ConsumerStatefulWidget {
 }
 
 class _TikTokReelCardState extends ConsumerState<TikTokReelCard>
-    with ReelCardModerationMixin {
+    with ReelCardModerationMixin, RouteAware {
   VideoPlayerController? _controller;
   bool _isInitialized = false;
   bool _hasError = false;
@@ -81,6 +82,10 @@ class _TikTokReelCardState extends ConsumerState<TikTokReelCard>
   String? _replyVideoUrl;
   String? _replySenderName;
 
+  // Recuerda si el video estaba sonando antes de abrir otra pantalla encima,
+  // para reanudarlo (solo ese) al volver al feed. Ver [didPushNext]/[didPopNext].
+  bool _wasPlayingBeforeRoute = false;
+
   @override
   void initState() {
     super.initState();
@@ -89,6 +94,40 @@ class _TikTokReelCardState extends ConsumerState<TikTokReelCard>
     _initVideo();
     currentMainTabNotifier.addListener(_onTabChanged);
     HashtagMatchService.instance.loadFrequencies();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Suscribirse al observador de rutas para pausar el video cuando se abra
+    // otra pantalla encima del feed (perfil, mensajes, modales, etc.).
+    final route = ModalRoute.of(context);
+    if (route is ModalRoute<dynamic>) {
+      feedRouteObserver.subscribe(this, route);
+    }
+  }
+
+  /// Se abrió otra ruta ENCIMA del feed → pausar y silenciar este video.
+  @override
+  void didPushNext() {
+    if (_controller == null) return;
+    _wasPlayingBeforeRoute = _controller!.value.isPlaying;
+    if (_wasPlayingBeforeRoute) {
+      _controller!.pause();
+      if (kIsWeb) _controller!.setVolume(0);
+    }
+  }
+
+  /// Volvimos al feed (se cerró la pantalla de encima) → reanudar solo el video
+  /// que estaba sonando, y solo si el feed sigue siendo la pestaña activa.
+  @override
+  void didPopNext() {
+    if (!mounted || _controller == null) return;
+    if (_wasPlayingBeforeRoute && currentMainTabNotifier.value == 0) {
+      if (kIsWeb) _controller!.setVolume(1.0);
+      _controller!.play();
+    }
+    _wasPlayingBeforeRoute = false;
   }
 
   // ─── Data Loading ─────────────────────────────────────────────────────────
@@ -183,6 +222,7 @@ class _TikTokReelCardState extends ConsumerState<TikTokReelCard>
     if (!mounted || _controller == null) return;
     if (currentMainTabNotifier.value != 0) {
       if (_controller!.value.isPlaying) _controller!.pause();
+      if (kIsWeb) _controller!.setVolume(0);
     }
   }
 
@@ -203,38 +243,35 @@ class _TikTokReelCardState extends ConsumerState<TikTokReelCard>
     }
     if (mounted) setState(() { _isInitialized = false; _hasError = false; });
 
-    try {
-      final preloaded = VideoPreloadManager.instance.getController(url);
-      if (preloaded != null) {
-        if (_controller != null && !_usesPreloaded) await _controller!.dispose();
-        _controller = preloaded;
-        _usesPreloaded = true;
-        if (mounted) {
-          setState(() { _isInitialized = true; _hasError = false; });
-          _controller!.play();
-        }
-        return;
-      }
-
+    final preloaded = VideoPreloadManager.instance.getController(url);
+    if (preloaded != null) {
       if (_controller != null && !_usesPreloaded) await _controller!.dispose();
-      _usesPreloaded = false;
-
-      final finalUrl = resolveVideoUrl(url);
-      if (finalUrl.startsWith('asset:')) {
-        _controller = VideoPlayerController.asset(finalUrl.replaceAll('asset:', ''));
-      } else {
-        _controller = VideoPlayerController.networkUrl(Uri.parse(finalUrl));
-      }
-      await _controller!.initialize();
-      _controller!.setLooping(true);
+      _controller = preloaded;
+      _usesPreloaded = true;
       if (mounted) {
         setState(() { _isInitialized = true; _hasError = false; });
         _controller!.play();
       }
-    } catch (e) {
-      debugPrint('Error loading TikTok video: $e');
-      if (mounted) setState(() => _hasError = true);
+      return;
     }
+
+    // Todavía no está listo (recién empezó a precargarse o sigue en curso) —
+    // esperamos al MISMO controller vía onReady() en vez de crear uno nuevo
+    // para la misma URL: dos VideoPlayerController simultáneos sobre el mismo
+    // video colgaban el reproductor en web (doble descarga del archivo).
+    VideoPreloadManager.instance.onReady(url, () {
+      if (!mounted) return;
+      if (VideoPreloadManager.instance.hasError(url)) {
+        setState(() => _hasError = true);
+        return;
+      }
+      final ready = VideoPreloadManager.instance.getController(url);
+      if (ready == null) return; // evicteado mientras esperábamos
+      _controller = ready;
+      _usesPreloaded = true;
+      setState(() { _isInitialized = true; _hasError = false; });
+      _controller!.play();
+    });
   }
 
   void _handleVisibility(VisibilityInfo info) {
@@ -245,6 +282,12 @@ class _TikTokReelCardState extends ConsumerState<TikTokReelCard>
       _loadMetadata();
     }
     if (!_isInitialized || _controller == null) return;
+    // IndexedStack mantiene TODAS las pestañas con el mismo tamaño aunque solo
+    // pinte la activa, así que VisibilityDetector puede seguir reportando esta
+    // card como "visible" (geométricamente lo es) incluso estando en otra
+    // sección — sin este guard, revivía el video justo después de que
+    // _onTabChanged lo pausaba (por eso se seguía escuchando en otras pestañas).
+    if (currentMainTabNotifier.value != 0) return;
     if (fraction > 0.6) {
       if (!_controller!.value.isPlaying) {
         if (kIsWeb) _controller!.setVolume(1.0);
@@ -521,6 +564,7 @@ class _TikTokReelCardState extends ConsumerState<TikTokReelCard>
 
   @override
   void dispose() {
+    feedRouteObserver.unsubscribe(this);
     currentMainTabNotifier.removeListener(_onTabChanged);
     if (!_usesPreloaded) _controller?.dispose();
     super.dispose();
@@ -632,6 +676,8 @@ class _TikTokReelCardState extends ConsumerState<TikTokReelCard>
                   Future.delayed(const Duration(milliseconds: 800), () {
                     if (mounted) setState(() => _showBoltAnimation = false);
                   });
+                  // Celebración "¡Nuevo Match!" (render #3)
+                  MatchCelebrationScreen.show(context, author, matchPct: matchScore > 0 ? matchScore : null);
                 }
               });
             },
@@ -680,11 +726,11 @@ class _TikTokReelCardState extends ConsumerState<TikTokReelCard>
             ),
           ),
 
-          // ── Info Panel (bottom left, TikTok-style) ──
+          // ── Info Panel (tarjeta blanca de ancho completo, estilo mockup) ──
           Positioned(
-            bottom: 140,
-            left: 12,
-            right: 56,
+            bottom: 0,
+            left: 0,
+            right: 0,
             child: ReelInfoPanel(
               author: author,
               postContent: widget.post.content,
@@ -701,11 +747,12 @@ class _TikTokReelCardState extends ConsumerState<TikTokReelCard>
           if (_showBoltAnimation)
             const ReelBoltAnimation(),
 
-          // ── Actions Bar (overlay solo en móvil; en web va al costado) ──
+          // ── Actions Bar (overlay solo en móvil, sobre el video, por encima
+          // de la tarjeta blanca de info; en web va al costado) ──
           if (!widget.webMode)
             Positioned(
               right: 8,
-              bottom: 120,
+              bottom: 178,
               child: ClipRRect(
                 key: widget.isFirstCard ? cmFeedActionsKey : null,
                 borderRadius: BorderRadius.circular(NexTheme.radiusXL),
@@ -724,6 +771,22 @@ class _TikTokReelCardState extends ConsumerState<TikTokReelCard>
                     child: actionsBar,
                   ),
                 ),
+              ),
+            ),
+
+          // ── Expertise / Top Talent (top edge, sobre el badge de Historias) ──
+          if (!isLocked && (author.tags.isNotEmpty || author.isPremium || author.isVerified))
+            Positioned(
+              top: 54,
+              left: 14,
+              right: 14,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (author.tags.isNotEmpty) Expanded(child: _expertiseBadge(author.tags)),
+                  if (author.tags.isNotEmpty && (author.isPremium || author.isVerified)) const SizedBox(width: 8),
+                  if (author.isPremium || author.isVerified) _topTalentBadge(),
+                ],
               ),
             ),
 
@@ -895,6 +958,51 @@ class _TikTokReelCardState extends ConsumerState<TikTokReelCard>
       key: Key('tiktok-${widget.post.id}'),
       onVisibilityChanged: _handleVisibility,
       child: content,
+    );
+  }
+
+  // ── Badge "EXPERTISE: tag1 · tag2 · tag3" (top-left, sobre los tags reales) ──
+  Widget _expertiseBadge(List<String> tags) {
+    final label = tags.take(3).map((t) => t.isEmpty ? t : t[0].toUpperCase() + t.substring(1)).join('  ·  ');
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.35),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text.rich(
+        TextSpan(children: [
+          const TextSpan(
+            text: 'EXPERTISE: ',
+            style: TextStyle(color: Colors.white70, fontSize: 10.5, fontWeight: FontWeight.w800, letterSpacing: 0.4),
+          ),
+          TextSpan(text: label, style: const TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.w600)),
+        ]),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+    );
+  }
+
+  // ── Badge "Top Talent" (top-right, solo para cuentas premium/verificadas) ──
+  Widget _topTalentBadge() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF59E0B),
+        borderRadius: BorderRadius.circular(8),
+        boxShadow: [
+          BoxShadow(color: const Color(0xFFF59E0B).withValues(alpha: 0.4), blurRadius: 8, offset: const Offset(0, 3)),
+        ],
+      ),
+      child: const Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(CupertinoIcons.rosette, color: Colors.white, size: 12),
+          SizedBox(width: 4),
+          Text('Top Talent', style: TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.w800)),
+        ],
+      ),
     );
   }
 }

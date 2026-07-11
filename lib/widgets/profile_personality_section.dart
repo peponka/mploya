@@ -85,7 +85,7 @@ class _ProfilePersonalitySectionState extends State<ProfilePersonalitySection> {
 
     return Container(
       color: context.isDark ? NexTheme.darkBg : CupertinoColors.white,
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+      padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -120,13 +120,14 @@ class _ProfilePersonalitySectionState extends State<ProfilePersonalitySection> {
           const SizedBox(height: 16),
 
           if (_saved != null) ...[
-            // ── Mini preview of results ──
+            // ── Mini preview of results (card elevada) ──
             Container(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(18),
               decoration: BoxDecoration(
-                color: const Color(0xFFF9F5FF),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFF6C3FC8).withValues(alpha: 0.15)),
+                color: const Color(0xFFFAF7FF),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: const Color(0xFF6C3FC8).withValues(alpha: 0.14)),
+                boxShadow: [BoxShadow(color: const Color(0xFF6C3FC8).withValues(alpha: 0.10), blurRadius: 20, offset: const Offset(0, 8))],
               ),
               child: Column(
                 children: [
@@ -206,20 +207,25 @@ class _ProfilePersonalitySectionState extends State<ProfilePersonalitySection> {
                   gradient: const LinearGradient(
                     colors: [Color(0xFF6C3FC8), Color(0xFF9B6FE8)],
                   ),
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(999),
                   boxShadow: [
                     BoxShadow(
                       color: const Color(0xFF6C3FC8).withValues(alpha: 0.30),
-                      blurRadius: 14,
-                      offset: const Offset(0, 6),
+                      blurRadius: 16,
+                      offset: const Offset(0, 8),
                     ),
                   ],
                 ),
-                child: const Center(
-                  child: Text(
-                    'Ver análisis completo',
-                    style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700),
-                  ),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(CupertinoIcons.chart_bar_alt_fill, color: Colors.white, size: 16),
+                    SizedBox(width: 8),
+                    Text(
+                      'Ver análisis completo',
+                      style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700),
+                    ),
+                  ],
                 ),
               ),
             ),

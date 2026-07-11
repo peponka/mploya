@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../theme/app_theme.dart';
 import '../navigation/main_navigation.dart';
 import '../widgets/unsaved_changes_guard.dart';
+import '../services/ai_match_service.dart';
 
 class CreateJobScreen extends StatefulWidget {
   final bool fromOnboarding;
@@ -26,6 +27,7 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
   String _seniority = 'mid';
   final List<String> _tags = [];
   bool _isSubmitting = false;
+  bool _isGenerating = false;
 
   final Map<String, String> _modalityLabels = {
     'remote': 'Remoto',
@@ -55,6 +57,42 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
     setState(() => _tags.remove(tag));
   }
 
+  // Genera con IA (Gemini) descripción + salario + tags a partir del título.
+  Future<void> _generateWithAI() async {
+    final title = _titleController.text.trim();
+    if (title.isEmpty) {
+      _showAlert('Escribí primero el título del puesto.');
+      return;
+    }
+    if (_isGenerating) return;
+    setState(() => _isGenerating = true);
+    final res = await AIMatchService.instance.generateJobPosting(
+      title,
+      notes: _descriptionController.text.trim().isEmpty ? null : _descriptionController.text.trim(),
+    );
+    if (mounted && res != null) {
+      final desc = (res['description'] ?? '').toString().trim();
+      final reqs = (res['requirements'] as List?)?.map((e) => '• $e').join('\n') ?? '';
+      setState(() {
+        _descriptionController.text = [
+          if (desc.isNotEmpty) desc,
+          if (reqs.isNotEmpty) 'Requisitos:\n$reqs',
+        ].join('\n\n');
+        final salary = (res['salary_range'] ?? '').toString().trim();
+        if (salary.isNotEmpty) _salaryController.text = salary;
+        for (final t in (res['tags'] as List?) ?? []) {
+          final clean = t.toString().replaceAll('#', '').trim().toLowerCase();
+          if (clean.isNotEmpty && !_tags.contains(clean) && _tags.length < 8) {
+            _tags.add(clean);
+          }
+        }
+      });
+    } else if (mounted) {
+      _showAlert('No se pudo generar con IA. Probá de nuevo en unos segundos.');
+    }
+    if (mounted) setState(() => _isGenerating = false);
+  }
+
   Future<void> _submit() async {
     final title = _titleController.text.trim();
     if (title.isEmpty) {
@@ -68,7 +106,7 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
     setState(() => _isSubmitting = true);
 
     try {
-      await _supabase.from('jobs').insert({
+      final inserted = await _supabase.from('jobs').insert({
         'company_id': uid,
         'title': title,
         'description': _descriptionController.text.trim(),
@@ -77,7 +115,15 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
         'modality': _modality,
         'seniority': _seniority,
         'tags': _tags,
-      });
+      }).select('id').single();
+
+      // Generar el embedding de la vacante para el AI Matching (migración 005).
+      // Best-effort: no bloquea la navegación ni falla la creación si el
+      // servicio de embeddings no responde.
+      final jobId = inserted['id']?.toString();
+      if (jobId != null) {
+        AIMatchService.instance.generateJobEmbedding(jobId);
+      }
 
       if (mounted) {
         if (widget.fromOnboarding) {
@@ -166,6 +212,38 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
                   controller: _titleController,
                   placeholder: 'ej: Senior Flutter Developer',
                   autofocus: true,
+                ),
+                const SizedBox(height: 12),
+                // ── Generar con IA: completa descripción, salario y tags ──
+                GestureDetector(
+                  onTap: _generateWithAI,
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    decoration: BoxDecoration(
+                      color: MployaTheme.brandAccent.withValues(alpha: 0.10),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: MployaTheme.brandAccent.withValues(alpha: 0.35)),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        if (_isGenerating)
+                          const CupertinoActivityIndicator(radius: 9, color: MployaTheme.brandAccent)
+                        else
+                          const Icon(CupertinoIcons.sparkles, color: MployaTheme.brandAccent, size: 18),
+                        const SizedBox(width: 8),
+                        Text(
+                          _isGenerating ? 'Generando…' : 'Generar con IA ✨',
+                          style: const TextStyle(
+                            color: MployaTheme.brandAccent,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 24),
 

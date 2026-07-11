@@ -15,7 +15,10 @@ import '../services/chat_service.dart';
 import '../services/content_moderation_service.dart';
 import '../utils/time_utils.dart';
 import '../navigation/main_navigation.dart';
+import '../widgets/web_ui.dart';
 import 'agora_call_screen.dart';
+import 'profile_screen.dart';
+import 'scheduling_screen.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MessagingScreen — inbox & matches reales (Premium "No-Line" Theme)
@@ -31,6 +34,10 @@ class MessagingScreen extends StatefulWidget {
 class _MessagingScreenState extends State<MessagingScreen> {
   // ── Search ──
   String _searchQuery = '';
+  // ── Filtro de conversaciones (chips: Todos / Talento Match / No leídos) ──
+  String _convFilter = 'todos';
+  // ── Panel maestro-detalle web: conversación seleccionada ──
+  NexUser? _selectedUser;
 
   // ── Streams — Defense in depth: filtros explícitos + RLS ──────────────
   // Aunque RLS protege los datos en Supabase, agregamos filtros del lado
@@ -123,9 +130,13 @@ class _MessagingScreenState extends State<MessagingScreen> {
                             padding: EdgeInsets.zero,
                             onPressed: () {
                               Navigator.pop(ctx);
-                              Navigator.of(context).push(
-                                CupertinoPageRoute(builder: (_) => ChatDetailScreen(otherUser: u)),
-                              );
+                              if (MediaQuery.of(context).size.width > 900) {
+                                setState(() => _selectedUser = u);
+                              } else {
+                                Navigator.of(context).push(
+                                  CupertinoPageRoute(builder: (_) => ChatDetailScreen(otherUser: u)),
+                                );
+                              }
                             },
                             child: Padding(
                               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
@@ -162,9 +173,166 @@ class _MessagingScreenState extends State<MessagingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return CupertinoPageScaffold(
-      backgroundColor: context.isDark ? NexTheme.darkBg : const Color(0xFFF9F9FA), // Surface Lowest
-      child: CustomScrollView(
+    final wide = MediaQuery.of(context).size.width > 900;
+
+    if (!wide) {
+      return CupertinoPageScaffold(
+        backgroundColor: context.isDark ? NexTheme.darkBg : const Color(0xFFF9F9FA),
+        child: _buildListPane(
+          context,
+          onTapUser: (u) => Navigator.of(context).push(
+            CupertinoPageRoute(builder: (_) => ChatDetailScreen(otherUser: u)),
+          ),
+        ),
+      );
+    }
+
+    // En web: si NO hay conversaciones, un solo estado vacío premium a todo el
+    // ancho (partir en 2 paneles vacíos no tiene sentido). Si SÍ hay, panel
+    // maestro-detalle real (lista angosta + "elegí una conversación"), como
+    // WhatsApp Web/Slack.
+    return StreamBuilder<List<Map<String, dynamic>>>(
+      stream: _connectionsStream,
+      builder: (ctx1, connSnap) {
+        return StreamBuilder<List<Map<String, dynamic>>>(
+          stream: _usersStream,
+          builder: (ctx2, snap) {
+            final loading = !snap.hasData || !connSnap.hasData;
+            bool hasConversations = true;
+            if (!loading) {
+              final validUserIds = connSnap.data!
+                  .where((c) => c['status'] == 'accepted')
+                  .map((c) => c['requester_id'] == _currentUserId ? c['addressee_id'] : c['requester_id'])
+                  .toSet();
+              hasConversations = snap.data!.any((r) => validUserIds.contains(r['id']));
+            }
+
+            if (!loading && !hasConversations) {
+              return CupertinoPageScaffold(
+                backgroundColor: const Color(0xFFF1F1F4),
+                child: WebPage(
+                  title: 'Mensajes',
+                  subtitle: 'Tus conversaciones con conexiones aparecerán acá.',
+                  child: Center(
+                    child: WebCard(
+                      padding: const EdgeInsets.all(40),
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 380),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 76, height: 76,
+                              decoration: BoxDecoration(color: MployaTheme.brandAccent.withValues(alpha: 0.10), borderRadius: BorderRadius.circular(20)),
+                              child: Icon(CupertinoIcons.chat_bubble_2_fill, size: 34, color: MployaTheme.brandAccent),
+                            ),
+                            const SizedBox(height: 20),
+                            Text('Inbox vacío', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800, color: context.textPrimary)),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Explorá el feed inmersivo y hacé match con profesionales para iniciar una conversación.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(fontSize: 13.5, color: context.textTertiary, height: 1.5),
+                            ),
+                            const SizedBox(height: 22),
+                            WebButton(
+                              icon: CupertinoIcons.play_fill,
+                              label: 'Ir al Feed',
+                              onTap: () {
+                                currentMainTabNotifier.value = 0;
+                                Navigator.of(context).popUntil((route) => route.isFirst);
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }
+
+            // Si el usuario seleccionado ya no está en la lista (búsqueda, etc.),
+            // no lo perdemos — solo se deselecciona si de verdad desapareció.
+            final selected = _selectedUser;
+
+            // Con conversaciones (o mientras carga): panel maestro-detalle.
+            return CupertinoPageScaffold(
+              backgroundColor: const Color(0xFFF1F1F4),
+              child: SafeArea(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Container(
+                      width: 400,
+                      margin: const EdgeInsets.fromLTRB(16, 16, 0, 16),
+                      decoration: BoxDecoration(
+                        color: context.cardColor,
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(color: const Color(0x0F000000), width: 0.5),
+                        boxShadow: const [BoxShadow(color: Color(0x0A000000), blurRadius: 18, offset: Offset(0, 6))],
+                      ),
+                      clipBehavior: Clip.antiAlias,
+                      child: _buildListPane(
+                        context,
+                        selectedUser: selected,
+                        onTapUser: (u) => setState(() => _selectedUser = u),
+                      ),
+                    ),
+                    if (selected == null)
+                      Expanded(
+                        child: Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 84, height: 84,
+                                decoration: BoxDecoration(color: MployaTheme.brandAccent.withValues(alpha: 0.10), borderRadius: BorderRadius.circular(24)),
+                                child: Icon(CupertinoIcons.chat_bubble_2_fill, size: 38, color: MployaTheme.brandAccent.withValues(alpha: 0.6)),
+                              ),
+                              const SizedBox(height: 20),
+                              Text('Elegí una conversación', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: context.textPrimary)),
+                              const SizedBox(height: 6),
+                              Text('Seleccioná un chat de la lista para ver los mensajes.',
+                                  style: TextStyle(fontSize: 13.5, color: context.textTertiary)),
+                            ],
+                          ),
+                        ),
+                      )
+                    else ...[
+                      Expanded(
+                        child: Container(
+                          margin: const EdgeInsets.fromLTRB(16, 16, 0, 16),
+                          decoration: BoxDecoration(
+                            color: context.cardColor,
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(color: const Color(0x0F000000), width: 0.5),
+                            boxShadow: const [BoxShadow(color: Color(0x0A000000), blurRadius: 18, offset: Offset(0, 6))],
+                          ),
+                          clipBehavior: Clip.antiAlias,
+                          child: ChatDetailScreen(key: ValueKey(selected.id), otherUser: selected),
+                        ),
+                      ),
+                      SizedBox(
+                        width: 260,
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+                          child: _quickActionsSidebar(context, selected),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildListPane(BuildContext context, {required void Function(NexUser) onTapUser, NexUser? selectedUser}) {
+    return CustomScrollView(
         physics: const BouncingScrollPhysics(
           parent: AlwaysScrollableScrollPhysics(),
         ),
@@ -177,7 +345,7 @@ class _MessagingScreenState extends State<MessagingScreen> {
                 : const Color(0xDDFFFFFF), // Blurred backing
             border: null, // "No-Line" Rule
             largeTitle: Text(
-              'Inbox',
+              'Mensajes',
               style: TextStyle(
                 fontWeight: FontWeight.w900,
                 letterSpacing: -0.8,
@@ -241,6 +409,22 @@ class _MessagingScreenState extends State<MessagingScreen> {
                     setState(() => _searchQuery = value);
                   },
                 ),
+              ),
+            ),
+          ),
+
+          // ── Chips de filtro (Todos / Talento Match / No leídos) ──
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 4),
+              child: Row(
+                children: [
+                  _filterChip('todos', 'Todos'),
+                  const SizedBox(width: 8),
+                  _filterChip('match', 'Talento Match'),
+                  const SizedBox(width: 8),
+                  _filterChip('noleidos', 'No leídos'),
+                ],
               ),
             ),
           ),
@@ -321,6 +505,35 @@ class _MessagingScreenState extends State<MessagingScreen> {
                     stream: _messagesStreamGlobal,
                     builder: (context, msgSnap) {
                       final allMsgs = msgSnap.data ?? [];
+
+                      // ── Filtro por chip (sobre datos reales) ──
+                      bool userHasUnread(NexUser u) => allMsgs.any((m) =>
+                          m['sender_id'] == u.id && m['receiver_id'] == _currentUserId && m['is_read'] != true);
+                      final visibleUsers = users.where((u) {
+                        switch (_convFilter) {
+                          case 'match':
+                            return u.isPremium || u.isVerified;
+                          case 'noleidos':
+                            return userHasUnread(u);
+                          default:
+                            return true;
+                        }
+                      }).toList();
+
+                      if (visibleUsers.isEmpty) {
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 40),
+                          child: Center(
+                            child: Text(
+                              _convFilter == 'noleidos'
+                                  ? 'No tenés mensajes sin leer.'
+                                  : 'Sin conversaciones en este filtro.',
+                              style: TextStyle(fontSize: 13.5, color: context.textTertiary),
+                            ),
+                          ),
+                        );
+                      }
+
                       return Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         child: Container(
@@ -334,7 +547,7 @@ class _MessagingScreenState extends State<MessagingScreen> {
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(30),
                             child: Column(
-                              children: users.asMap().entries.map((entry) {
+                              children: visibleUsers.asMap().entries.map((entry) {
                                 final i = entry.key;
                                 final user = entry.value;
 
@@ -345,20 +558,19 @@ class _MessagingScreenState extends State<MessagingScreen> {
                                 final lastMsg = userMsgs.isNotEmpty ? userMsgs.first : null;
                                 final unreadCount = userMsgs.where((m) => m['receiver_id'] == _currentUserId && m['is_read'] != true).length;
                                 final hasUnread = unreadCount > 0;
-                                final previewText = lastMsg != null ? (lastMsg['text']?.toString() ?? lastMsg['content']?.toString() ?? '') : 'Inicia la conversación...';
+                                final previewText = lastMsg != null
+                                    ? (lastMsg['text']?.toString() ?? lastMsg['content']?.toString() ?? '')
+                                    : (user.headline.isNotEmpty ? user.headline : 'Inicia la conversación...');
                                 final timeText = lastMsg != null ? timeAgo(lastMsg['created_at']) : '';
 
                                 return _ConversationTile(
                                   user: user,
-                                  isLast: i == users.length - 1,
+                                  isLast: i == visibleUsers.length - 1,
                                   previewText: previewText,
                                   timeText: timeText,
                                   hasUnread: hasUnread,
-                                  onTap: () => Navigator.of(context).push(
-                                    CupertinoPageRoute(
-                                      builder: (_) => ChatDetailScreen(otherUser: user),
-                                    ),
-                                  ),
+                                  isSelected: selectedUser?.id == user.id,
+                                  onTap: () => onTapUser(user),
                                 );
                               }).toList(),
                             ),
@@ -375,6 +587,78 @@ class _MessagingScreenState extends State<MessagingScreen> {
             },
           ),
         ],
+    );
+  }
+
+  Widget _filterChip(String value, String label) {
+    final active = _convFilter == value;
+    return GestureDetector(
+      onTap: () => setState(() => _convFilter = value),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        decoration: BoxDecoration(
+          color: active ? MployaTheme.brandAccent.withValues(alpha: 0.12) : context.cardColor,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: active ? MployaTheme.brandAccent : context.dividerColor.withValues(alpha: 0.5),
+            width: active ? 1.2 : 0.5,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            color: active ? MployaTheme.brandAccent : context.textSecondary,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _quickActionsSidebar(BuildContext context, NexUser user) {
+    return SingleChildScrollView(
+      child: WebCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const WebSectionLabel('Acciones Rápidas'),
+            _quickActionRow(
+              context,
+              icon: CupertinoIcons.person_fill,
+              label: 'Ver Perfil',
+              onTap: () => Navigator.of(context).push(CupertinoPageRoute(builder: (_) => ProfileScreen(user: user))),
+            ),
+            _quickActionRow(
+              context,
+              icon: CupertinoIcons.calendar,
+              label: 'Agendar Entrevista',
+              onTap: () => Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const SchedulingScreen(isCompany: true))),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _quickActionRow(BuildContext context, {required IconData icon, required String label, required VoidCallback onTap}) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        child: Row(
+          children: [
+            Container(
+              width: 32, height: 32,
+              decoration: BoxDecoration(color: MployaTheme.brandAccent.withValues(alpha: 0.10), borderRadius: BorderRadius.circular(9)),
+              child: Icon(icon, size: 15, color: MployaTheme.brandAccent),
+            ),
+            const SizedBox(width: 10),
+            Expanded(child: Text(label, style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: context.textPrimary))),
+            Icon(CupertinoIcons.chevron_right, size: 14, color: context.textTertiary),
+          ],
+        ),
       ),
     );
   }
@@ -669,6 +953,7 @@ class _ConversationTile extends StatelessWidget {
   final String previewText;
   final String timeText;
   final bool hasUnread;
+  final bool isSelected;
   final VoidCallback onTap;
 
   const _ConversationTile({
@@ -677,6 +962,7 @@ class _ConversationTile extends StatelessWidget {
     required this.previewText,
     required this.timeText,
     required this.hasUnread,
+    this.isSelected = false,
     required this.onTap,
   });
 
@@ -684,12 +970,15 @@ class _ConversationTile extends StatelessWidget {
   Widget build(BuildContext context) {
 
     return Material(
-      color: Colors.transparent,
+      color: isSelected ? MployaTheme.brandAccent.withValues(alpha: 0.08) : Colors.transparent,
       child: InkWell(
         onTap: onTap,
         highlightColor: const Color(0x0A000000),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Container(
+          decoration: BoxDecoration(
+            border: Border(left: BorderSide(color: isSelected ? MployaTheme.brandAccent : Colors.transparent, width: 3)),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 14),
           child: Row(
             children: [
               NexAvatar(user: user, size: 56, showBadge: true, heroTag: 'avatar_${user.id}'),
@@ -724,6 +1013,20 @@ class _ConversationTile extends StatelessWidget {
                         ),
                       ],
                     ),
+                    if (user.isPremium || user.isVerified) ...[
+                      const SizedBox(height: 2),
+                      const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(CupertinoIcons.star_fill, size: 11, color: MployaTheme.brandAccent),
+                          SizedBox(width: 4),
+                          Text(
+                            'Premium Match',
+                            style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: MployaTheme.brandAccent),
+                          ),
+                        ],
+                      ),
+                    ],
                     const SizedBox(height: 4),
                     Row(
                       children: [
@@ -969,6 +1272,30 @@ class ChatDetailScreenState extends State<ChatDetailScreen> {
   }
 
   // ── Iniciar videollamada Jitsi (estilo Google Meet) ──
+  Widget _headerAction({required IconData icon, required String label, required VoidCallback onTap}) {
+    return CupertinoButton(
+      padding: EdgeInsets.zero,
+      minimumSize: Size.zero,
+      onPressed: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: context.cardColor,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: const [BoxShadow(color: Color(0x0C000000), blurRadius: 8, offset: Offset(0, 2))],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 16, color: MployaTheme.brandAccent),
+            const SizedBox(width: 4),
+            Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: MployaTheme.brandAccent)),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _startJitsiCall() async {
     if (_currentUserId == null) return;
     HapticFeedback.mediumImpact();
@@ -1220,26 +1547,23 @@ class ChatDetailScreenState extends State<ChatDetailScreen> {
             ),
           ],
         ),
-        trailing: CupertinoButton(
-          padding: EdgeInsets.zero,
-          minimumSize: Size.zero,
-          onPressed: () => _startJitsiCall(),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: context.cardColor,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: const [BoxShadow(color: Color(0x0C000000), blurRadius: 8, offset: Offset(0, 2))],
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _headerAction(
+              icon: CupertinoIcons.video_camera_solid,
+              label: 'Video',
+              onTap: () => _startJitsiCall(),
             ),
-            child: const Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(CupertinoIcons.video_camera_solid, size: 18, color: MployaTheme.brandAccent),
-                SizedBox(width: 4),
-                Text('Entrevista', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: MployaTheme.brandAccent)),
-              ],
+            const SizedBox(width: 8),
+            _headerAction(
+              icon: CupertinoIcons.person_fill,
+              label: 'Ver Perfil',
+              onTap: () => Navigator.of(context).push(
+                CupertinoPageRoute(builder: (_) => ProfileScreen(user: widget.otherUser)),
+              ),
             ),
-          ),
+          ],
         ),
       ),
       child: SafeArea(

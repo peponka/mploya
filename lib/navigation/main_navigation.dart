@@ -14,12 +14,22 @@ import '../screens/profile_screen.dart';
 import '../screens/ats_dashboard_screen.dart';
 import '../screens/jobs_screen.dart';
 import '../screens/messaging_screen.dart';
+import '../screens/empresa_panel_screen.dart';
 import '../services/revenuecat_service.dart';
 import '../services/connectivity_service.dart';
 import '../services/video_preload_manager.dart';
 import '../services/coach_mark_service.dart';
 
 final ValueNotifier<int> currentMainTabNotifier = ValueNotifier<int>(0);
+
+/// Observador global de rutas. Permite que las cards del feed se enteren cuando
+/// se abre otra pantalla ENCIMA del feed (perfil, mensajes, modales, etc.) y
+/// pausen su video — el feed sigue montado debajo, así que ni el
+/// [VisibilityDetector] ni el cambio de pestaña lo detectan. Se registra en
+/// `CupertinoApp.navigatorObservers`. Usa `ModalRoute` (no `PageRoute`) para
+/// captar también los modales/popups (sheet de match, compartir, action sheets).
+final RouteObserver<ModalRoute<dynamic>> feedRouteObserver =
+    RouteObserver<ModalRoute<dynamic>>();
 
 class MainNavigation extends StatefulWidget {
   const MainNavigation({super.key});
@@ -78,6 +88,7 @@ class _MainNavigationState extends State<MainNavigation> {
         _profile,            // 4
         _messages,           // 5
         const JobsScreen(),  // 6 (web sidebar only)
+        const EmpresaPanelScreen(), // 7 (web sidebar only, empresa)
       ];
 
   Future<void> _fetchAccountType() async {
@@ -380,6 +391,16 @@ class _WebLayout extends StatelessWidget {
                 child: ListView(
                   padding: const EdgeInsets.symmetric(vertical: 8),
                   children: [
+                    if (accountType == 'empresa' || accountType == 'headhunter')
+                      _SidebarItem(
+                        icon: CupertinoIcons.chart_bar_square_fill,
+                        inactiveIcon: CupertinoIcons.chart_bar_square,
+                        label: 'Panel',
+                        isActive: currentIndex == 7,
+                        isExpanded: isExpanded,
+                        badgeCount: 0,
+                        onTap: () => onTap(7),
+                      ),
                     Container(
                       key: cmNavFeedKey,
                       child: _SidebarItem(

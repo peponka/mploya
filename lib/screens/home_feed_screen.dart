@@ -160,6 +160,30 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
                         Positioned.fill(
                           child: _FeedSkeletonPulse(),
                         ),
+                        // ── Branding AI Match (render #2) ──
+                        Positioned.fill(
+                          child: Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  width: 60, height: 60,
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFF97316).withValues(alpha: 0.18),
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                  child: const Icon(CupertinoIcons.bolt_fill, color: Color(0xFFF97316), size: 30),
+                                ),
+                                const SizedBox(height: 18),
+                                const Text('AI Match', style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: 1.0)),
+                                const SizedBox(height: 6),
+                                Text('Encontrando tu match ideal…', style: TextStyle(color: Colors.white.withValues(alpha: 0.6), fontSize: 13)),
+                                const SizedBox(height: 18),
+                                const CupertinoActivityIndicator(color: Colors.white),
+                              ],
+                            ),
+                          ),
+                        ),
                         // Placeholder overlay info
                         Positioned(
                           bottom: 100,

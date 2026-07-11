@@ -1,11 +1,13 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// generate-embedding — Genera el embedding del PERFIL de un usuario y lo persiste
-// en users.profile_embedding usando Gemini (gemini-embedding-001, 1536 dims).
+// generate-job-embedding — Genera el embedding de UNA vacante y lo persiste en
+// jobs.embedding usando Gemini (gemini-embedding-001, 1536 dims), el MISMO modelo
+// y dimensión que los perfiles (generate-embedding), para que vacantes y
+// candidatos vivan en el mismo espacio vectorial y el matching coseno tenga sentido.
 //
-// Mismo modelo y dimensión que generate-job-embedding (vacantes) → perfiles y
-// vacantes comparten espacio vectorial y el matching coseno tiene sentido.
+// El proveedor de embeddings está aislado acá: cambiarlo implica tocar solo esta
+// función + generate-embedding + la dimensión de las columnas vector(1536).
 //
 // Requiere el secret GEMINI_API_KEY (Supabase → Edge Functions → Secrets).
 // ─────────────────────────────────────────────────────────────────────────────
@@ -23,10 +25,10 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   try {
-    const { user_id } = await req.json();
+    const { job_id } = await req.json();
 
-    if (!user_id) {
-      return new Response(JSON.stringify({ error: 'user_id requerido' }), {
+    if (!job_id) {
+      return new Response(JSON.stringify({ error: 'job_id requerido' }), {
         status: 400,
         headers: corsHeaders,
       });
@@ -37,33 +39,35 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     );
 
-    // Leer perfil del usuario
-    const { data: user, error } = await supabase
-      .from('users')
-      .select('name, headline, about, tags, skills')
-      .eq('id', user_id)
+    // Leer la vacante
+    const { data: job, error } = await supabase
+      .from('jobs')
+      .select('title, description, salary_range, location, seniority, tags')
+      .eq('id', job_id)
       .maybeSingle();
 
-    if (error || !user) {
-      return new Response(JSON.stringify({ error: 'Usuario no encontrado' }), {
+    if (error || !job) {
+      return new Response(JSON.stringify({ error: 'Vacante no encontrada' }), {
         status: 404,
         headers: corsHeaders,
       });
     }
 
-    // Construir texto representativo del perfil
-    const profileText = [
-      user.headline,
-      user.about,
-      ...(Array.isArray(user.tags) ? user.tags : []),
-      ...(Array.isArray(user.skills) ? user.skills : []),
+    // Construir texto representativo de la vacante
+    const jobText = [
+      job.title,
+      job.description,
+      job.salary_range,
+      job.location,
+      job.seniority,
+      ...(Array.isArray(job.tags) ? job.tags : []),
     ]
       .filter(Boolean)
       .join(' ');
 
-    if (!profileText.trim()) {
+    if (!jobText.trim()) {
       return new Response(
-        JSON.stringify({ error: 'Perfil vacío — completá headline, tags y skills primero' }),
+        JSON.stringify({ error: 'Vacante vacía — completá al menos título y descripción' }),
         { status: 400, headers: corsHeaders },
       );
     }
@@ -85,7 +89,7 @@ Deno.serve(async (req) => {
         'x-goog-api-key': geminiKey,
       },
       body: JSON.stringify({
-        content: { parts: [{ text: profileText }] },
+        content: { parts: [{ text: jobText }] },
         outputDimensionality: EMBED_DIMS,
       }),
     });
@@ -108,11 +112,11 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Guardar embedding en la tabla users
+    // Persistir el embedding en la vacante
     const { error: updateError } = await supabase
-      .from('users')
-      .update({ profile_embedding: JSON.stringify(embedding) })
-      .eq('id', user_id);
+      .from('jobs')
+      .update({ embedding: JSON.stringify(embedding) })
+      .eq('id', job_id);
 
     if (updateError) {
       return new Response(

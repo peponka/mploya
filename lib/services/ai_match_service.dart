@@ -182,6 +182,88 @@ class AIMatchService {
     }
   }
 
+  // ───────────────────────────────────────────────────────────────────────────
+  // Vacantes (jobs) — matching vacante↔candidato (migración 005)
+  // ───────────────────────────────────────────────────────────────────────────
+
+  /// Genera y persiste el embedding de una vacante.
+  ///
+  /// Llama a la Edge Function `generate-job-embedding`, que lee la vacante,
+  /// construye un texto representativo y guarda el vector en `jobs.embedding`.
+  /// Best-effort: se puede llamar sin `await` tras crear/editar la vacante.
+  ///
+  /// Retorna true si fue exitoso.
+  Future<bool> generateJobEmbedding(String jobId) async {
+    try {
+      debugPrint('🧠 Generando embedding de vacante $jobId...');
+      final response = await _supabase.functions.invoke(
+        'generate-job-embedding',
+        body: {'job_id': jobId},
+      );
+      if (response.status == 200) {
+        debugPrint('✅ Embedding de vacante generado');
+        return true;
+      }
+      debugPrint('❌ Error generando embedding de vacante: ${response.status}');
+      return false;
+    } catch (e) {
+      debugPrint('❌ AIMatchService.generateJobEmbedding: $e');
+      return false;
+    }
+  }
+
+  /// Candidatos ordenados por compatibilidad con una vacante.
+  ///
+  /// Llama al RPC `match_candidates_for_job` (pgvector, similitud coseno) y
+  /// agrega `match_percentage` (0-100) a cada resultado.
+  Future<List<Map<String, dynamic>>> getCandidatesForJob(
+    String jobId, {
+    int limit = 20,
+  }) async {
+    try {
+      final results = await _supabase.rpc(
+        'match_candidates_for_job',
+        params: {'p_job_id': jobId, 'p_limit': limit},
+      );
+      final matches = List<Map<String, dynamic>>.from(results ?? []);
+      for (final match in matches) {
+        final sim = (match['similarity'] as num?)?.toDouble() ?? 0;
+        match['match_percentage'] = (sim * 100).round();
+      }
+      debugPrint('🎯 ${matches.length} candidatos para vacante $jobId');
+      return matches;
+    } catch (e) {
+      debugPrint('❌ AIMatchService.getCandidatesForJob: $e');
+      return [];
+    }
+  }
+
+  /// Genera con IA (Gemini) los campos de una vacante a partir del título.
+  ///
+  /// Llama a la Edge Function `generate-job-posting` y devuelve un mapa con
+  /// {description, requirements[], salary_range, seniority, tags[]}, o null si
+  /// falla. El resultado se muestra EDITABLE antes de guardar.
+  Future<Map<String, dynamic>?> generateJobPosting(String title, {String? notes}) async {
+    try {
+      final response = await _supabase.functions.invoke(
+        'generate-job-posting',
+        body: {
+          'title': title,
+          if (notes != null && notes.isNotEmpty) 'notes': notes,
+        },
+      );
+      final data = response.data;
+      if (response.status == 200 && data is Map && data['success'] == true && data['data'] is Map) {
+        return Map<String, dynamic>.from(data['data'] as Map);
+      }
+      debugPrint('❌ generateJobPosting status ${response.status}: $data');
+      return null;
+    } catch (e) {
+      debugPrint('❌ AIMatchService.generateJobPosting: $e');
+      return null;
+    }
+  }
+
   void _invalidateCache() {
     _matchCacheTime = null;
     _cachedMatches = null;

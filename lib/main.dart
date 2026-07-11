@@ -12,6 +12,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'l10n/app_localizations.dart';
 import 'theme/app_theme.dart';
 import 'screens/splash_screen.dart';
+import 'navigation/main_navigation.dart' show feedRouteObserver;
 import 'services/push_notification_service.dart';
 import 'firebase_options.dart';
 import 'services/deep_link_service.dart';
@@ -222,6 +223,7 @@ class MployaApp extends StatelessWidget {
 
         return CupertinoApp(
           navigatorKey: DeepLinkService.navigatorKey,
+          navigatorObservers: [feedRouteObserver],
           title: 'Mploya',
           debugShowCheckedModeBanner: false,
           theme: isDark ? MployaTheme.darkTheme : MployaTheme.lightTheme,

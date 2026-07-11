@@ -141,50 +141,89 @@ class _EmployerRatingSectionState extends State<EmployerRatingSection> {
             ),
           ),
 
-          // ── Rating Overview ──
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            child: Row(
-              children: [
-                // Big rating number
-                Column(
-                  children: [
-                    Text(
-                      summary.totalReviews > 0 ? '${summary.avgOverall}' : '—',
-                      style: TextStyle(
-                        fontSize: 42,
-                        fontWeight: FontWeight.w900,
-                        color: context.textPrimary,
-                        letterSpacing: -1,
+          // ── Rating Overview (o estado vacío si no hay reseñas) ──
+          if (summary.totalReviews > 0)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: Row(
+                children: [
+                  // Big rating number
+                  Column(
+                    children: [
+                      Text(
+                        '${summary.avgOverall}',
+                        style: TextStyle(
+                          fontSize: 42,
+                          fontWeight: FontWeight.w900,
+                          color: context.textPrimary,
+                          letterSpacing: -1,
+                        ),
                       ),
+                      _buildStarsRow(summary.avgOverall, 18),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${summary.totalReviews} opiniones',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: context.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(width: 24),
+                  // Category bars
+                  Expanded(
+                    child: Column(
+                      children: [
+                        _categoryBar(context, 'Comunicación', summary.avgCommunication),
+                        const SizedBox(height: 6),
+                        _categoryBar(context, 'Transparencia', summary.avgTransparency),
+                        const SizedBox(height: 6),
+                        _categoryBar(context, 'Respeto', summary.avgRespect),
+                      ],
                     ),
-                    _buildStarsRow(summary.avgOverall, 18),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${summary.totalReviews} opiniones',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: context.textSecondary,
+                  ),
+                ],
+              ),
+            )
+          else
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: NexTheme.premiumGold.withValues(alpha: 0.06),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: NexTheme.premiumGold.withValues(alpha: 0.16)),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 40, height: 40,
+                      decoration: BoxDecoration(
+                        color: NexTheme.premiumGold.withValues(alpha: 0.14),
+                        borderRadius: BorderRadius.circular(11),
+                      ),
+                      child: const Icon(CupertinoIcons.star, color: NexTheme.premiumGold, size: 19),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Todavía sin reseñas',
+                              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: context.textPrimary)),
+                          const SizedBox(height: 2),
+                          Text('Las primeras opiniones aparecerán acá.',
+                              style: TextStyle(fontSize: 12.5, color: context.textSecondary)),
+                        ],
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(width: 24),
-                // Category bars
-                Expanded(
-                  child: Column(
-                    children: [
-                      _categoryBar(context, 'Comunicación', summary.avgCommunication),
-                      const SizedBox(height: 6),
-                      _categoryBar(context, 'Transparencia', summary.avgTransparency),
-                      const SizedBox(height: 6),
-                      _categoryBar(context, 'Respeto', summary.avgRespect),
-                    ],
-                  ),
-                ),
-              ],
+              ),
             ),
-          ),
 
           // ── Response time badge ──
           if (summary.responseTimeBadge.isNotEmpty)

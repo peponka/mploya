@@ -11,6 +11,11 @@ import '../services/social_service.dart';
 import '../services/error_handler.dart';
 import '../widgets/skeleton_loader.dart';
 import '../services/smart_notification_service.dart';
+import '../services/scheduling_service.dart';
+import '../widgets/web_ui.dart';
+import 'profile_screen.dart';
+import 'ats_dashboard_screen.dart';
+import 'scheduling_screen.dart';
 
 class NotificationsScreen extends ConsumerStatefulWidget {
   const NotificationsScreen({super.key});
@@ -26,6 +31,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   int _pitchesReceived = 0;
   bool _insightsLoaded = false;
   List<SmartNotification> _digests = [];
+  bool _bannerDismissed = false;
 
   @override
   void initState() {
@@ -153,7 +159,12 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     return CupertinoPageScaffold(
       backgroundColor: context.isDark ? NexTheme.darkBg : CupertinoColors.white,
       child: SafeArea(
-        child: StreamBuilder<List<Map<String, dynamic>>>(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: MediaQuery.of(context).size.width > 900 ? 720 : double.infinity,
+            ),
+            child: StreamBuilder<List<Map<String, dynamic>>>(
           stream: NotificationService.instance.notificationsStream,
           builder: (context, snapshot) {
             if (snapshot.hasError) {
@@ -205,6 +216,14 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
 
             final hasActivity = _profileViews > 0 || _totalMatches > 0 || _pitchesReceived > 0;
             final unreadCount = myNotifs.where((n) => n['is_read'] != true).length;
+
+            final isCompany = currentUser?.accountType == 'empresa' || currentUser?.accountType == 'headhunter';
+
+            if (isWebWide(context)) {
+              return isCompany
+                  ? const _CompanyAlertsWeb()
+                  : _buildWeb(context, myNotifs, hasActivity, unreadCount);
+            }
 
             return CustomScrollView(
               physics: const BouncingScrollPhysics(),
@@ -413,6 +432,8 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
             );
           },
         ),
+          ),
+        ),
       ),
     );
   }
@@ -420,6 +441,124 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   String _getInsightTip() {
     return NotificationService.instance.getInsightTip(
       _pitchesReceived, _totalMatches, _profileViews,
+    );
+  }
+
+  // ── Layout web ────────────────────────────────────────────────────────────
+  Widget _buildWeb(BuildContext context, List<Map<String, dynamic>> myNotifs, bool hasActivity, int unreadCount) {
+    return WebPage(
+      title: 'Notificaciones',
+      subtitle: hasActivity ? '$_profileViews vistas · $_totalMatches matches · $_pitchesReceived respuestas' : null,
+      actions: [
+        if (unreadCount > 0)
+          WebButton(label: 'Leer todas ($unreadCount)', filled: false, onTap: () => _markAllAsRead(myNotifs)),
+      ],
+      child: ListView(
+        physics: const BouncingScrollPhysics(),
+        padding: const EdgeInsets.only(bottom: 40),
+        children: [
+          if (_insightsLoaded && !hasActivity && !_bannerDismissed) _webTipBanner(context),
+          ..._digests.map((d) => _webDigestCard(context, d)),
+          if (myNotifs.isEmpty)
+            WebEmptyState(
+              icon: CupertinoIcons.bell,
+              title: 'Tu centro de notificaciones está impecable',
+              subtitle: 'Interacciones, matches y alertas aparecerán aquí.',
+            )
+          else ...[
+            const WebSectionLabel('Recientes'),
+            WebCard(
+              padding: EdgeInsets.zero,
+              child: Column(
+                children: myNotifs.map((n) {
+                  final type = _parseType(n['type']?.toString() ?? 'like');
+                  final isConnection = type == NotificationType.connection;
+                  return GestureDetector(
+                    onTap: () => _markAsRead(n),
+                    behavior: HitTestBehavior.opaque,
+                    child: _NotificationTile(
+                      isRead: n['is_read'] == true,
+                      description: n['description']?.toString() ?? '',
+                      timeAgo: NotificationService.instance.timeAgo(n['created_at']),
+                      icon: _iconForType(type),
+                      iconColor: _colorForType(type),
+                      showQuickActions: isConnection && n['is_read'] != true,
+                      onAccept: isConnection ? () => _handleAccept(n) : null,
+                      onReject: isConnection ? () => _handleReject(n) : null,
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _webTipBanner(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 20),
+      child: WebCard(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            const WebIconBadge(icon: CupertinoIcons.rocket_fill, size: 40),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Impulsá tu visibilidad',
+                      style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: context.textPrimary)),
+                  const SizedBox(height: 3),
+                  Text(_getInsightTip(), style: TextStyle(fontSize: 13, color: context.textSecondary, height: 1.4)),
+                ],
+              ),
+            ),
+            const SizedBox(width: 14),
+            WebButton(label: 'Completar ahora', onTap: () => Navigator.of(context).maybePop()),
+            const SizedBox(width: 10),
+            GestureDetector(
+              onTap: () => setState(() => _bannerDismissed = true),
+              child: Icon(CupertinoIcons.xmark, size: 16, color: context.textTertiary),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _webDigestCard(BuildContext context, SmartNotification d) {
+    return GestureDetector(
+      onTap: () async {
+        await SmartNotificationService.instance.markRead(d.id);
+        if (mounted) setState(() => _digests.removeWhere((x) => x.id == d.id));
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 20),
+        child: WebCard(
+          borderColor: const Color(0xFFD6E4FF),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const WebIconBadge(icon: CupertinoIcons.sparkles, color: Color(0xFF5856D6), size: 36),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(d.title, style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: context.textPrimary)),
+                    const SizedBox(height: 3),
+                    Text(d.body, style: TextStyle(fontSize: 13, color: context.textSecondary, height: 1.4)),
+                  ],
+                ),
+              ),
+              const Icon(CupertinoIcons.xmark_circle, size: 18, color: Color(0xFFAEAEB2)),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -573,6 +712,312 @@ class _NotificationTile extends StatelessWidget {
                 shape: BoxShape.circle,
               ),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Panel de Alertas para empresas — dark, con postulantes nuevos reales
+// (get_company_candidates), próximas entrevistas reales (scheduled_interviews)
+// y conexiones reales. Sin radar de skills ni "Premium Insight": esas partes
+// del mockup no tienen una fuente de datos real detrás todavía.
+// ─────────────────────────────────────────────────────────────────────────────
+class _CompanyAlertsWeb extends StatefulWidget {
+  const _CompanyAlertsWeb();
+
+  @override
+  State<_CompanyAlertsWeb> createState() => _CompanyAlertsWebState();
+}
+
+class _CompanyAlertsWebState extends State<_CompanyAlertsWeb> {
+  final _supabase = Supabase.instance.client;
+  Future<List<Map<String, dynamic>>>? _newCandidates;
+  Future<List<ScheduledInterview>>? _interviews;
+  Future<List<Map<String, dynamic>>>? _connections;
+
+  @override
+  void initState() {
+    super.initState();
+    _newCandidates = _fetchNewCandidates();
+    _interviews = SchedulingService.instance.fetchMyInterviews();
+    _connections = _fetchConnections();
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchNewCandidates() async {
+    try {
+      final res = await _supabase.rpc('get_company_candidates', params: {'p_status': 'pending'});
+      return List<Map<String, dynamic>>.from(res as List);
+    } catch (e) {
+      debugPrint('Error get_company_candidates (alertas): $e');
+      return [];
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchConnections() async {
+    final uid = _supabase.auth.currentUser?.id;
+    if (uid == null) return [];
+    try {
+      final rows = await _supabase
+          .from('connections')
+          .select('requester_id, addressee_id, created_at')
+          .or('requester_id.eq.$uid,addressee_id.eq.$uid')
+          .eq('status', 'accepted')
+          .order('created_at', ascending: false)
+          .limit(5);
+      final otherIds = rows.map<String>((r) {
+        final req = r['requester_id']?.toString() ?? '';
+        final add = r['addressee_id']?.toString() ?? '';
+        return req == uid ? add : req;
+      }).where((id) => id.isNotEmpty).toList();
+      if (otherIds.isEmpty) return [];
+      final users = await _supabase.from('users').select('id, name, headline').inFilter('id', otherIds);
+      return List<Map<String, dynamic>>.from(users);
+    } catch (e) {
+      debugPrint('Error connections (alertas): $e');
+      return [];
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return WebPage(
+      title: 'Panel de alertas de candidatos',
+      subtitle: 'Novedades reales de tus vacantes, en un solo lugar.',
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(flex: 3, child: _newCandidatesColumn()),
+          const SizedBox(width: 16),
+          SizedBox(width: 300, child: _sidebarColumn()),
+        ],
+      ),
+    );
+  }
+
+  Widget _newCandidatesColumn() {
+    return SingleChildScrollView(
+      child: FutureBuilder<List<Map<String, dynamic>>>(
+        future: _newCandidates,
+        builder: (context, snap) {
+          if (!snap.hasData) {
+            return const Padding(padding: EdgeInsets.symmetric(vertical: 48), child: Center(child: CupertinoActivityIndicator()));
+          }
+          final rows = snap.data!;
+          if (rows.isEmpty) {
+            return WebCard(
+              padding: const EdgeInsets.symmetric(vertical: 40),
+              child: WebEmptyState(
+                icon: CupertinoIcons.bell,
+                title: '¡Estás al día!',
+                subtitle: 'Sin alertas nuevas.\n(Tip: revisá tus vacantes activas.)',
+              ),
+            );
+          }
+          return Column(
+            children: rows.map((r) => _candidateAlertCard(r)).toList(),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _candidateAlertCard(Map<String, dynamic> r) {
+    final name = r['candidate_name']?.toString() ?? 'Candidato';
+    final headline = r['candidate_headline']?.toString() ?? '';
+    final jobTitle = r['job_title']?.toString() ?? 'tu vacante';
+    final avatarUrl = r['candidate_avatar_url']?.toString();
+    final tags = (r['candidate_tags'] as List?)?.map((t) => t.toString()).toList() ?? [];
+    return GestureDetector(
+      onTap: () async {
+        final data = await _supabase.from('users').select().eq('id', r['candidate_id']).maybeSingle();
+        if (data != null && mounted) {
+          Navigator.of(context).push(CupertinoPageRoute(builder: (_) => ProfileScreen(user: NexUser.fromJson(data))));
+        }
+      },
+      child: WebCard(
+        padding: const EdgeInsets.all(16),
+        onTap: () async {
+          final data = await _supabase.from('users').select().eq('id', r['candidate_id']).maybeSingle();
+          if (data != null && mounted) {
+            Navigator.of(context).push(CupertinoPageRoute(builder: (_) => ProfileScreen(user: NexUser.fromJson(data))));
+          }
+        },
+        child: Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 48, height: 48,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: MployaTheme.brandAccent.withValues(alpha: 0.12),
+                image: (avatarUrl != null && avatarUrl.isNotEmpty) ? DecorationImage(image: NetworkImage(avatarUrl), fit: BoxFit.cover) : null,
+              ),
+              child: (avatarUrl == null || avatarUrl.isEmpty)
+                  ? Center(child: Text(name.isNotEmpty ? name[0].toUpperCase() : '?', style: const TextStyle(color: MployaTheme.brandAccent, fontWeight: FontWeight.w800)))
+                  : null,
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(name, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: context.textPrimary)),
+                      ),
+                      const WebBadge(label: 'Nuevo'),
+                    ],
+                  ),
+                  if (headline.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(headline, style: TextStyle(fontSize: 12.5, color: context.textTertiary)),
+                    ),
+                  const SizedBox(height: 8),
+                  Text('Postuló a "$jobTitle"',
+                      style: TextStyle(fontSize: 12.5, color: context.textSecondary, fontWeight: FontWeight.w600)),
+                  if (tags.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: tags.take(4).map((t) => Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(color: context.dividerColor.withValues(alpha: 0.4), borderRadius: BorderRadius.circular(999)),
+                            child: Text('#$t', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: context.textSecondary)),
+                          )).toList(),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _sidebarColumn() {
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          WebCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const WebSectionLabel('Próximas entrevistas', color: kMployaBlue),
+                FutureBuilder<List<ScheduledInterview>>(
+                  future: _interviews,
+                  builder: (context, snap) {
+                    if (!snap.hasData) return const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: Center(child: CupertinoActivityIndicator()));
+                    final list = snap.data!;
+                    if (list.isEmpty) {
+                      return Text('Sin entrevistas agendadas.\n(Tip: programá una nueva entrevista.)',
+                          style: TextStyle(fontSize: 12.5, color: context.textTertiary, height: 1.4));
+                    }
+                    return Column(
+                      children: list.take(4).map((i) => Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 30, height: 30,
+                                  decoration: BoxDecoration(color: kMployaBlue.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)),
+                                  child: const Icon(CupertinoIcons.calendar, size: 14, color: kMployaBlue),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text('${i.date} · ${i.time}', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: context.textPrimary)),
+                                ),
+                              ],
+                            ),
+                          )).toList(),
+                    );
+                  },
+                ),
+                const SizedBox(height: 14),
+                SizedBox(
+                  width: double.infinity,
+                  child: WebButton(
+                    icon: CupertinoIcons.add,
+                    label: 'Agregar Entrevista',
+                    onTap: () => Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const SchedulingScreen(isCompany: true))),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          WebCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const WebSectionLabel('Conexiones recientes', color: kMployaPurple),
+                FutureBuilder<List<Map<String, dynamic>>>(
+                  future: _connections,
+                  builder: (context, snap) {
+                    if (!snap.hasData) return const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: Center(child: CupertinoActivityIndicator()));
+                    final list = snap.data!;
+                    if (list.isEmpty) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: List.generate(5, (i) => Padding(
+                                  padding: const EdgeInsets.only(right: 8),
+                                  child: Container(
+                                    width: 30, height: 30,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      border: Border.all(color: i == 0 ? MployaTheme.brandAccent : context.dividerColor, width: 1.5),
+                                    ),
+                                  ),
+                                )),
+                          ),
+                          const SizedBox(height: 10),
+                          Text('Todavía no tenés conexiones.\n(Tip: conectá con candidatos destacados.)',
+                              style: TextStyle(fontSize: 12.5, color: context.textTertiary, height: 1.4)),
+                        ],
+                      );
+                    }
+                    return Column(
+                      children: list.map((u) => Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 28, height: 28,
+                                  decoration: BoxDecoration(shape: BoxShape.circle, color: kMployaPurple.withValues(alpha: 0.15)),
+                                  child: Center(child: Text((u['name']?.toString() ?? '?')[0].toUpperCase(), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: kMployaPurple))),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(u['name']?.toString() ?? '', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: context.textPrimary), maxLines: 1, overflow: TextOverflow.ellipsis),
+                                ),
+                              ],
+                            ),
+                          )).toList(),
+                    );
+                  },
+                ),
+                const SizedBox(height: 14),
+                SizedBox(
+                  width: double.infinity,
+                  child: WebButton(
+                    label: 'Ver Candidatos',
+                    onTap: () => Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const AtsDashboardScreen())),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
