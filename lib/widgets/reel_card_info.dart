@@ -76,18 +76,19 @@ class _WhiteTagPill extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
           decoration: BoxDecoration(
-            color: const Color(0xFFF2F2F7),
+            color: NexTheme.brandAccent.withValues(alpha: 0.08),
             borderRadius: BorderRadius.circular(MployaTheme.radiusPill),
+            border: Border.all(color: NexTheme.brandAccent.withValues(alpha: 0.12)),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Container(width: 6, height: 6, decoration: const BoxDecoration(color: NexTheme.brandAccent, shape: BoxShape.circle)),
+              Container(width: 7, height: 7, decoration: const BoxDecoration(color: NexTheme.brandAccent, shape: BoxShape.circle)),
               const SizedBox(width: 6),
               Text(
                 label,
                 style: const TextStyle(
-                  color: Color(0xFF374151),
+                  color: Color(0xFF1F2937),
                   fontSize: 11.5,
                   fontWeight: FontWeight.w600,
                   decoration: TextDecoration.none,
@@ -95,6 +96,48 @@ class _WhiteTagPill extends StatelessWidget {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Glass tag pill for the transparent overlay panel.
+class _GlassTagPill extends StatelessWidget {
+  final String tag;
+  const _GlassTagPill({required this.tag});
+
+  @override
+  Widget build(BuildContext context) {
+    final label = tag.isEmpty ? tag : tag[0].toUpperCase() + tag.substring(1);
+    return GestureDetector(
+      onTap: () {
+        Navigator.of(context).push(CupertinoPageRoute(
+          builder: (_) => TrendingHashtagsScreen(initialTag: tag),
+        ));
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(MployaTheme.radiusPill),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(width: 6, height: 6, decoration: const BoxDecoration(color: NexTheme.brandAccent, shape: BoxShape.circle)),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 11.5,
+                fontWeight: FontWeight.w600,
+                decoration: TextDecoration.none,
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -350,132 +393,146 @@ class ReelInfoPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final displayTags = author.tags.isNotEmpty ? author.tags.take(3).toList() : <String>[];
 
-    // ── Panel blanco (estilo mockup: tarjeta clara debajo del video, en vez
-    // del overlay transparente sobre el video) ──
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // ── Tags (max 3, pills claros) ──
-          if (displayTags.isNotEmpty) ...[
-            Wrap(
-              spacing: 6,
-              runSpacing: 4,
-              children: displayTags.map((tag) => _WhiteTagPill(tag: tag)).toList(),
-            ),
-            const SizedBox(height: 10),
-          ],
-
-          // ── Avatar/logo + Nombre + Subtítulo ──
-          GestureDetector(
-            onTap: () {
-              Navigator.of(context).push(CupertinoPageRoute(builder: (_) => ProfileScreen(user: author)));
-            },
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(9),
-                      child: Container(
-                        width: 34, height: 34,
-                        color: const Color(0xFFF2F2F7),
-                        child: isLocked
-                            ? const Icon(CupertinoIcons.eye_slash_fill, color: Color(0xFF6B7280), size: 16)
-                            : (author.avatarUrl != null && author.avatarUrl!.isNotEmpty)
-                                ? CachedNetworkImage(
-                                    imageUrl: author.avatarUrl!,
-                                    fit: BoxFit.cover,
-                                    placeholder: (_, __) => const SizedBox.shrink(),
-                                    errorWidget: (_, __, ___) => Center(child: Text(author.initials, style: const TextStyle(color: Color(0xFF6B7280), fontWeight: FontWeight.w800, fontSize: 12))),
-                                  )
-                                : Center(child: Text(author.initials, style: const TextStyle(color: Color(0xFF6B7280), fontWeight: FontWeight.w800, fontSize: 12))),
-                      ),
-                    ),
-                    if (author.isVerified && !isLocked)
-                      Positioned(
-                        right: -3, bottom: -3,
-                        child: Container(
-                          padding: const EdgeInsets.all(1.5),
-                          decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
-                          child: const Icon(CupertinoIcons.checkmark_seal_fill, color: NexTheme.brandAccent, size: 13),
-                        ),
-                      ),
-                  ],
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        isLocked ? author.name.split(' ').first : author.name,
-                        style: const TextStyle(
-                          color: Color(0xFF111111),
-                          fontSize: 16,
-                          fontWeight: FontWeight.w800,
-                          decoration: TextDecoration.none,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      GestureDetector(
-                        onTap: () => _showDetailsSheet(context),
-                        child: Text(
-                          _buildSubtitle(),
-                          style: const TextStyle(
-                            color: Color(0xFF6B7280),
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w500,
-                            decoration: TextDecoration.none,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+    // ── Panel glassmorphism compacto (no tapa la cara) ──
+    return ClipRRect(
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      child: BackdropFilter(
+        filter: ui.ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+          decoration: BoxDecoration(
+            color: Colors.black.withValues(alpha: 0.35),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+            border: Border(top: BorderSide(color: Colors.white.withValues(alpha: 0.15))),
           ),
-
-          if (matchScore > 0) ...[
-            const SizedBox(height: 12),
-            GestureDetector(
-              onTap: onMatchTap,
-              child: Container(
-                width: double.infinity,
-                alignment: Alignment.center,
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                decoration: BoxDecoration(
-                  color: NexTheme.brandAccent,
-                  borderRadius: BorderRadius.circular(20),
-                ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // ── Avatar + Nombre + Tags (todo en una fila compacta) ──
+              GestureDetector(
+                onTap: () {
+                  Navigator.of(context).push(CupertinoPageRoute(builder: (_) => ProfileScreen(user: author)));
+                },
                 child: Row(
-                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    Text(
-                      'Ver detalles del match ($matchScore% - ${_matchTier(matchScore)})',
-                      style: const TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.w700, decoration: TextDecoration.none),
+                    // Avatar
+                    Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(9),
+                          child: Container(
+                            width: 34, height: 34,
+                            color: Colors.white.withValues(alpha: 0.15),
+                            child: isLocked
+                                ? const Icon(CupertinoIcons.eye_slash_fill, color: Colors.white70, size: 16)
+                                : (author.avatarUrl != null && author.avatarUrl!.isNotEmpty)
+                                    ? CachedNetworkImage(
+                                        imageUrl: author.avatarUrl!,
+                                        fit: BoxFit.cover,
+                                        placeholder: (_, __) => const SizedBox.shrink(),
+                                        errorWidget: (_, __, ___) => Center(child: Text(author.initials, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 12))),
+                                      )
+                                    : Center(child: Text(author.initials, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 12))),
+                          ),
+                        ),
+                        if (author.isVerified && !isLocked)
+                          Positioned(
+                            right: -3, bottom: -3,
+                            child: Container(
+                              padding: const EdgeInsets.all(1.5),
+                              decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.6), shape: BoxShape.circle),
+                              child: const Icon(CupertinoIcons.checkmark_seal_fill, color: NexTheme.brandAccent, size: 13),
+                            ),
+                          ),
+                      ],
                     ),
-                    const SizedBox(width: 4),
-                    const Icon(CupertinoIcons.chevron_right, color: Colors.white, size: 12),
+                    const SizedBox(width: 10),
+                    // Name + subtitle
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            isLocked ? author.name.split(' ').first : author.name,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: -0.3,
+                              decoration: TextDecoration.none,
+                              shadows: [Shadow(color: Colors.black54, blurRadius: 4)],
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          GestureDetector(
+                            onTap: () => _showDetailsSheet(context),
+                            child: Text(
+                              _buildSubtitle(),
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.7),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                                decoration: TextDecoration.none,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
               ),
-            ),
-          ],
-        ],
+
+              // ── Tags inline (compact row) ──
+              if (displayTags.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 4,
+                  children: displayTags.map((tag) => _GlassTagPill(tag: tag)).toList(),
+                ),
+              ],
+
+              // ── CTA match (compact) ──
+              if (matchScore > 0) ...[
+                const SizedBox(height: 10),
+                GestureDetector(
+                  onTap: onMatchTap,
+                  child: Container(
+                    width: double.infinity,
+                    alignment: Alignment.center,
+                    padding: const EdgeInsets.symmetric(vertical: 9),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(colors: [Color(0xFFF97316), Color(0xFFFB923C)]),
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(color: const Color(0xFFF97316).withValues(alpha: 0.4), blurRadius: 12, offset: const Offset(0, 4)),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Ver detalles del match ($matchScore% - ${_matchTier(matchScore)})',
+                          style: const TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.w800, decoration: TextDecoration.none),
+                        ),
+                        const SizedBox(width: 4),
+                        const Icon(CupertinoIcons.chevron_right, color: Colors.white, size: 12),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
       ),
     );
   }

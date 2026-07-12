@@ -190,17 +190,37 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
       final active = _exploreTypeFilter == value;
       return GestureDetector(
         onTap: () => setState(() => _exploreTypeFilter = value),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOut,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
           decoration: BoxDecoration(
-            color: active ? MployaTheme.brandAccent : const Color(0xFFF2F2F7),
+            gradient: active
+                ? const LinearGradient(
+                    colors: [Color(0xFFFF6B2C), Color(0xFFFF8F1F)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  )
+                : null,
+            color: active ? null : const Color(0xFFF5F5F7),
             borderRadius: BorderRadius.circular(999),
+            border: active ? null : Border.all(color: const Color(0xFFE5E5EA), width: 0.5),
+            boxShadow: active
+                ? [
+                    BoxShadow(
+                      color: const Color(0xFFFF6B2C).withValues(alpha: 0.30),
+                      blurRadius: 10,
+                      offset: const Offset(0, 3),
+                    ),
+                  ]
+                : [],
           ),
           child: Text(label,
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
                 color: active ? CupertinoColors.white : const Color(0xFF3C3C43),
+                letterSpacing: active ? 0.3 : 0,
               )),
         ),
       );
@@ -212,19 +232,31 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text('FILTROS AVANZADOS',
-              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 0.8, color: Color(0xFF8E8E93))),
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1.2, color: Color(0xFF8E8E93))),
           const SizedBox(height: 10),
-          CupertinoTextField(
-            placeholder: 'Buscar por cargo o empresa...',
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            prefix: const Padding(padding: EdgeInsets.only(left: 8), child: Icon(CupertinoIcons.search, size: 15, color: Color(0xFF8E8E93))),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF2F2F7),
-              borderRadius: BorderRadius.circular(10),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+              child: CupertinoTextField(
+                placeholder: 'Buscar por cargo o empresa...',
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                prefix: const Padding(padding: EdgeInsets.only(left: 8), child: Icon(CupertinoIcons.search, size: 15, color: Color(0xFF8E8E93))),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF2F2F7),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFE5E5EA), width: 0.5),
+                  boxShadow: const [
+                    BoxShadow(color: Color(0x1A000000), blurRadius: 8, offset: Offset(0, 2)),
+                  ],
+                ),
+                style: const TextStyle(fontSize: 13, color: Color(0xFF1C1C1E)),
+                placeholderStyle: const TextStyle(fontSize: 13, color: Color(0xFF8E8E93)),
+                onChanged: (v) => setState(() => _exploreTextFilter = v),
+              ),
             ),
-            style: const TextStyle(fontSize: 13),
-            onChanged: (v) => setState(() => _exploreTextFilter = v),
           ),
+
           const SizedBox(height: 10),
           Row(
             children: [
@@ -880,9 +912,12 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                     // ── Panel de resultados (web): fijo a la derecha ──
                     Container(
                       width: 384,
-                      decoration: const BoxDecoration(
-                        color: CupertinoColors.white,
-                        border: Border(left: BorderSide(color: Color(0x14000000), width: 0.5)),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFAFAFC),
+                        border: const Border(left: BorderSide(color: Color(0xFFEEEFF2), width: 1)),
+                        boxShadow: [
+                          BoxShadow(color: const Color(0xFF000000).withValues(alpha: 0.04), blurRadius: 20, offset: const Offset(-4, 0)),
+                        ],
                       ),
                       child: SafeArea(
                         left: false,
@@ -920,9 +955,12 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
     final featured = users.isNotEmpty ? users.first : null;
     return Container(
       width: 260,
-      decoration: const BoxDecoration(
-        color: CupertinoColors.white,
-        border: Border(left: BorderSide(color: Color(0x14000000), width: 0.5)),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFAFAFC),
+        border: const Border(left: BorderSide(color: Color(0xFFEEEFF2), width: 1)),
+        boxShadow: [
+          BoxShadow(color: const Color(0xFF000000).withValues(alpha: 0.04), blurRadius: 20, offset: const Offset(-4, 0)),
+        ],
       ),
       child: SafeArea(
         left: false,
@@ -932,7 +970,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text('PERFIL DESTACADO',
-                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 0.8, color: Color(0xFF8E8E93))),
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1.2, color: Color(0xFF6B7280))),
               const SizedBox(height: 10),
               if (featured == null)
                 Container(
@@ -1407,20 +1445,25 @@ class _TopSearchBar extends StatelessWidget {
           ClipRRect(
             borderRadius: BorderRadius.circular(18),
             child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+              filter: ImageFilter.blur(sigmaX: 28, sigmaY: 28),
               child: Container(
                 decoration: BoxDecoration(
-                  color: const Color(0xEEFFFFFF),
+                  color: const Color(0xEAFFFFFF),
                   borderRadius: BorderRadius.circular(18),
+                  border: Border.all(
+                    color: const Color(0x20000000),
+                    width: 0.5,
+                  ),
                   boxShadow: const [
                     BoxShadow(
-                        color: Color(0x1C000000),
-                        blurRadius: 28,
-                        offset: Offset(0, 6)),
+                        color: Color(0x22000000),
+                        blurRadius: 32,
+                        spreadRadius: -2,
+                        offset: Offset(0, 8)),
                     BoxShadow(
-                        color: Color(0x0CFFFFFF),
+                        color: Color(0x0AFFFFFF),
                         blurRadius: 1,
-                        offset: Offset(0, 1)),
+                        offset: Offset(0, -1)),
                   ],
                 ),
                 child: CupertinoSearchTextField(
@@ -1473,15 +1516,27 @@ class _TopSearchBar extends StatelessWidget {
                   onChooseCity();
                 },
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
                   decoration: BoxDecoration(
-                    color: MployaTheme.brandAccent,
+                    gradient: LinearGradient(
+                      colors: [
+                        MployaTheme.brandAccent,
+                        MployaTheme.brandAccent.withValues(alpha: 0.82),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
                     borderRadius: BorderRadius.circular(16),
                     boxShadow: [
                       BoxShadow(
-                        color: MployaTheme.brandAccent.withValues(alpha: 0.25),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
+                        color: MployaTheme.brandAccent.withValues(alpha: 0.35),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                      const BoxShadow(
+                        color: Color(0x18FFFFFF),
+                        blurRadius: 1,
+                        offset: Offset(0, -0.5),
                       ),
                     ],
                   ),
@@ -1492,6 +1547,7 @@ class _TopSearchBar extends StatelessWidget {
                       fontWeight: FontWeight.w700,
                       color: CupertinoColors.white,
                       fontFamily: '.SF Pro Text',
+                      letterSpacing: 0.2,
                     ),
                   ),
                 ),
@@ -1507,32 +1563,39 @@ class _TopSearchBar extends StatelessWidget {
                     HapticFeedback.selectionClick();
                     onActivateGps();
                   },
-                  child: Container(
-                    width: 34,
-                    height: 34,
-                    decoration: BoxDecoration(
-                      color: const Color(0xE0FFFFFF),
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: const [
-                        BoxShadow(
-                          color: Color(0x08000000),
-                          blurRadius: 8,
-                          offset: Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: gpsActivating
-                        ? const Center(
-                            child: SizedBox(
-                              width: 14, height: 14,
-                              child: CupertinoActivityIndicator(radius: 6),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                      child: Container(
+                        width: 34,
+                        height: 34,
+                        decoration: BoxDecoration(
+                          color: const Color(0xD8FFFFFF),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0x14000000), width: 0.5),
+                          boxShadow: const [
+                            BoxShadow(
+                              color: Color(0x10000000),
+                              blurRadius: 10,
+                              offset: Offset(0, 3),
                             ),
-                          )
-                        : const Icon(
-                            CupertinoIcons.location_fill,
-                            size: 16,
-                            color: MployaTheme.brandAccent,
-                          ),
+                          ],
+                        ),
+                        child: gpsActivating
+                            ? const Center(
+                                child: SizedBox(
+                                  width: 14, height: 14,
+                                  child: CupertinoActivityIndicator(radius: 6),
+                                ),
+                              )
+                            : const Icon(
+                                CupertinoIcons.location_fill,
+                                size: 16,
+                                color: MployaTheme.brandAccent,
+                              ),
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -1603,13 +1666,13 @@ class _BottomSheet extends StatelessWidget {
     return ClipRRect(
       borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 28, sigmaY: 28),
+        filter: ImageFilter.blur(sigmaX: 32, sigmaY: 32),
         child: Container(
           decoration: const BoxDecoration(
-            color: Color(0xF5FFFFFF),
+            color: Color(0xFAFFFFFF),
             borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
             boxShadow: [
-              BoxShadow(color: Color(0x1C000000), blurRadius: 32, offset: Offset(0, -8)),
+              BoxShadow(color: Color(0x22000000), blurRadius: 40, spreadRadius: -4, offset: Offset(0, -10)),
             ],
           ),
           child: SingleChildScrollView(
@@ -1618,12 +1681,21 @@ class _BottomSheet extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // â”€â”€ Drag handle â”€â”€
+                Container(
+                  height: 3,
+                  decoration: const BoxDecoration(
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                    gradient: LinearGradient(
+                      colors: [Color(0xFFFF6B2C), Color(0xFFFF8F1F), Color(0x00FF8F1F)],
+                      stops: [0.0, 0.5, 1.0],
+                    ),
+                  ),
+                ),
                 Center(
                   child: Padding(
-                    padding: const EdgeInsets.only(top: 12, bottom: 6),
+                    padding: const EdgeInsets.only(top: 10, bottom: 6),
                     child: Container(
-                      width: 36, height: 4,
+                      width: 32, height: 3.5,
                       decoration: BoxDecoration(
                         color: const Color(0xFFD1D1D6),
                         borderRadius: BorderRadius.circular(2),
@@ -1631,6 +1703,9 @@ class _BottomSheet extends StatelessWidget {
                     ),
                   ),
                 ),
+                // â”€â”€ Drag handle â”€â”€
+
+
                 // â”€â”€ Header: Título + conteo + guardados â”€â”€
                 Padding(
                   padding: const EdgeInsets.fromLTRB(20, 4, 16, 0),
@@ -1639,22 +1714,39 @@ class _BottomSheet extends StatelessWidget {
                       const Text(
                         'Cerca de ti',
                         style: TextStyle(
-                          fontSize: 20, fontWeight: FontWeight.w800,
+                          fontSize: 22, fontWeight: FontWeight.w900,
                           color: Color(0xFF1C1C1E),
-                          fontFamily: '.SF Pro Display', letterSpacing: -0.4,
+                          fontFamily: '.SF Pro Display', letterSpacing: -0.5,
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      Text(
-                        '${users.length}',
-                        style: TextStyle(
-                          fontSize: 15, fontWeight: FontWeight.w700,
-                          color: MployaTheme.brandAccent,
-                          fontFamily: '.SF Pro Text',
+                      const SizedBox(width: 10),
+                      // Orange pill count badge
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFFFF6B2C), Color(0xFFFF8F1F)],
+                          ),
+                          borderRadius: BorderRadius.circular(999),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFFFF6B2C).withValues(alpha: 0.25),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Text(
+                          '${users.length}',
+                          style: const TextStyle(
+                            fontSize: 13, fontWeight: FontWeight.w800,
+                            color: CupertinoColors.white,
+                            fontFamily: '.SF Pro Text',
+                          ),
                         ),
                       ),
                       const Spacer(),
-                      // â”€â”€ Saved / Bookmark button â”€â”€
+                      // Glass bookmark button
                       Semantics(
                         button: true,
                         label: 'Ver perfiles guardados',
@@ -1665,19 +1757,36 @@ class _BottomSheet extends StatelessWidget {
                               CupertinoPageRoute(builder: (_) => const SavedJobsScreen()),
                             );
                           },
-                          child: Container(
-                            width: 36, height: 36,
-                            decoration: BoxDecoration(
-                              color: MployaTheme.brandAccent.withValues(alpha: 0.08),
-                              borderRadius: BorderRadius.circular(10),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(18),
+                            child: BackdropFilter(
+                              filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                              child: Container(
+                                width: 36, height: 36,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xD8FFFFFF),
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: const Color(0x14000000), width: 0.5),
+                                  boxShadow: const [
+                                    BoxShadow(
+                                      color: Color(0x0C000000),
+                                      blurRadius: 8,
+                                      offset: Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: Icon(CupertinoIcons.bookmark_fill, size: 16, color: MployaTheme.brandAccent),
+                              ),
                             ),
-                            child: Icon(CupertinoIcons.bookmark_fill, size: 16, color: MployaTheme.brandAccent),
                           ),
                         ),
                       ),
                     ],
                   ),
                 ),
+                      // â”€â”€ Saved / Bookmark button â”€â”€
+
+
                 const SizedBox(height: 12),
                 // â”€â”€ Content â”€â”€
                 if (isLoading)
@@ -1755,20 +1864,39 @@ class _TrendingHashtagsSection extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // ── Premium gradient header ──
               Row(
                 children: [
-                  Icon(CupertinoIcons.flame_fill, size: 15, color: MployaTheme.brandAccent),
-                  const SizedBox(width: 6),
-                  const Text(
-                    'Tendencias',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Color(0xFF1C1C1E)),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFFF97316), Color(0xFFEF4444)],
+                      ),
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(color: const Color(0xFFF97316).withValues(alpha: 0.3), blurRadius: 8, offset: const Offset(0, 2)),
+                      ],
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(CupertinoIcons.flame_fill, size: 13, color: CupertinoColors.white),
+                        SizedBox(width: 5),
+                        Text(
+                          'Tendencias',
+                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: CupertinoColors.white, fontFamily: '.SF Pro Display', letterSpacing: -0.2),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 12),
+              // ── Glassmorphism hashtag pills ──
               Wrap(
                 spacing: 8,
-                runSpacing: 8,
+                runSpacing: 10,
                 children: tags.map((h) => GestureDetector(
                   onTap: () {
                     HapticFeedback.selectionClick();
@@ -1776,20 +1904,39 @@ class _TrendingHashtagsSection extends StatelessWidget {
                       CupertinoPageRoute(builder: (_) => TrendingHashtagsScreen(initialTag: h.tag)),
                     );
                   },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                    decoration: BoxDecoration(
-                      color: MployaTheme.brandAccent.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(999),
-                      border: Border.all(color: MployaTheme.brandAccent.withValues(alpha: 0.18), width: 0.5),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text('#${h.tag}', style: const TextStyle(color: MployaTheme.brandAccent, fontSize: 12.5, fontWeight: FontWeight.w700)),
-                        const SizedBox(width: 5),
-                        Text('${h.count}', style: TextStyle(color: MployaTheme.brandAccent.withValues(alpha: 0.6), fontSize: 11, fontWeight: FontWeight.w600)),
-                      ],
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(999),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+                      child: Container(
+                        padding: const EdgeInsets.only(left: 12, top: 6, bottom: 6, right: 6),
+                        decoration: BoxDecoration(
+                          color: CupertinoColors.white.withValues(alpha: 0.85),
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(color: MployaTheme.brandAccent.withValues(alpha: 0.15), width: 0.5),
+                          boxShadow: [
+                            BoxShadow(color: const Color(0xFF000000).withValues(alpha: 0.04), blurRadius: 6, offset: const Offset(0, 2)),
+                          ],
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text('#${h.tag}', style: const TextStyle(color: Color(0xFF1C1C1E), fontSize: 12.5, fontWeight: FontWeight.w700, fontFamily: '.SF Pro Text')),
+                            const SizedBox(width: 6),
+                            // Count badge
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [MployaTheme.brandAccent.withValues(alpha: 0.15), MployaTheme.brandAccent.withValues(alpha: 0.08)],
+                                ),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: Text('${h.count}', style: const TextStyle(color: MployaTheme.brandAccent, fontSize: 10.5, fontWeight: FontWeight.w800, fontFamily: '.SF Pro Text')),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
                 )).toList(),
@@ -1815,35 +1962,64 @@ class _UserCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final typeColor = user.isCompany ? const Color(0xFF5856D6) : MployaTheme.brandAccent;
+    final bool hasVideo = user.hasVideo;
 
     return Container(
-      width: 240,
+      width: 248,
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        color: CupertinoColors.white,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: const [
-          BoxShadow(color: Color(0x0C000000), blurRadius: 20, offset: Offset(0, 8)),
+        // Gradient border for users with video
+        gradient: hasVideo
+            ? const LinearGradient(
+                colors: [Color(0xFFF97316), Color(0xFFEF4444), Color(0xFFF97316)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              )
+            : null,
+        color: hasVideo ? null : const Color(0xFFE5E5EA),
+        boxShadow: [
+          BoxShadow(color: color.withValues(alpha: 0.12), blurRadius: 24, offset: const Offset(0, 10)),
+          const BoxShadow(color: Color(0x08000000), blurRadius: 6, offset: Offset(0, 2)),
         ],
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
+      child: Container(
+        margin: const EdgeInsets.all(1.5),
+        decoration: BoxDecoration(
+          color: CupertinoColors.white,
+          borderRadius: BorderRadius.circular(18.5),
+        ),
+        padding: const EdgeInsets.all(14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // â”€â”€ Avatar + Name + Headline â”€â”€
+            // ── Avatar + Name + Headline ──
             Row(
               children: [
+                // Larger avatar with gradient ring
                 Container(
-                  width: 42, height: 42,
+                  width: 48, height: 48,
                   decoration: BoxDecoration(
-                    color: color, shape: BoxShape.circle,
-                    boxShadow: [BoxShadow(color: color.withValues(alpha: 0.2), blurRadius: 8, offset: const Offset(0, 3))],
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(
+                      colors: [color, color.withValues(alpha: 0.7)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    boxShadow: [
+                      BoxShadow(color: color.withValues(alpha: 0.25), blurRadius: 12, offset: const Offset(0, 4)),
+                    ],
                   ),
                   child: Center(
                     child: Text(
                       user.initials,
-                      style: const TextStyle(color: CupertinoColors.white, fontWeight: FontWeight.w700, fontSize: 16, fontFamily: '.SF Pro Display'),
+                      style: const TextStyle(
+                        color: CupertinoColors.white,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 17,
+                        fontFamily: '.SF Pro Display',
+                        letterSpacing: 0.5,
+                      ),
                     ),
                   ),
                 ),
@@ -1854,13 +2030,13 @@ class _UserCard extends StatelessWidget {
                     children: [
                       Text(
                         user.name, maxLines: 1, overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Color(0xFF1C1C1E), fontFamily: '.SF Pro Display', letterSpacing: -0.3),
+                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Color(0xFF1C1C1E), fontFamily: '.SF Pro Display', letterSpacing: -0.3),
                       ),
-                      const SizedBox(height: 2),
+                      const SizedBox(height: 3),
                       Text(
                         user.headline.isNotEmpty ? user.headline : 'Profesional en Mploya',
                         maxLines: 1, overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Color(0xFF8E8E93), fontFamily: '.SF Pro Text'),
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Color(0xFF8E8E93), fontFamily: '.SF Pro Text', letterSpacing: -0.1),
                       ),
                     ],
                   ),
@@ -1868,22 +2044,30 @@ class _UserCard extends StatelessWidget {
               ],
             ),
             const Spacer(),
-            // â”€â”€ Bottom: Type pill + Distance + CTA â”€â”€
+            // ── Bottom: Type pill + Distance + CTA ──
             Row(
               children: [
-                // Type pill
+                // Premium type pill with colored dot
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: typeColor.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(6),
+                    color: typeColor.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: typeColor.withValues(alpha: 0.15), width: 0.5),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(user.isCompany ? CupertinoIcons.building_2_fill : CupertinoIcons.person_solid, size: 10, color: typeColor),
-                      const SizedBox(width: 3),
-                      Text(user.typeLabel, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: typeColor, fontFamily: '.SF Pro Text')),
+                      Container(
+                        width: 6, height: 6,
+                        decoration: BoxDecoration(
+                          color: typeColor,
+                          shape: BoxShape.circle,
+                          boxShadow: [BoxShadow(color: typeColor.withValues(alpha: 0.4), blurRadius: 4)],
+                        ),
+                      ),
+                      const SizedBox(width: 5),
+                      Text(user.typeLabel, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: typeColor, fontFamily: '.SF Pro Text', letterSpacing: -0.1)),
                     ],
                   ),
                 ),
@@ -1891,9 +2075,11 @@ class _UserCard extends StatelessWidget {
                 // Distance
                 Icon(CupertinoIcons.location_solid, size: 10, color: const Color(0xFFAEAEB2)),
                 const SizedBox(width: 2),
-                Text(user.commuteLabel, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Color(0xFFAEAEB2), fontFamily: '.SF Pro Text')),
-                const Spacer(),
-                // CTA
+                Flexible(
+                  child: Text(user.commuteLabel, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Color(0xFFAEAEB2), fontFamily: '.SF Pro Text')),
+                ),
+                const SizedBox(width: 6),
+                // Gradient CTA button
                 GestureDetector(
                   onTap: () {
                     HapticFeedback.mediumImpact();
@@ -1904,12 +2090,26 @@ class _UserCard extends StatelessWidget {
                     Navigator.of(context).push(CupertinoPageRoute(builder: (_) => StoryViewerScreen(users: [nexUser])));
                   },
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
                     decoration: BoxDecoration(
-                      color: MployaTheme.brandAccent,
-                      borderRadius: BorderRadius.circular(12),
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFFF97316), Color(0xFFEA580C)],
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                      ),
+                      borderRadius: BorderRadius.circular(14),
+                      boxShadow: [
+                        BoxShadow(color: const Color(0xFFF97316).withValues(alpha: 0.3), blurRadius: 8, offset: const Offset(0, 3)),
+                      ],
                     ),
-                    child: const Text('Ver', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: CupertinoColors.white, fontFamily: '.SF Pro Text')),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('Ver', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: CupertinoColors.white, fontFamily: '.SF Pro Text', letterSpacing: 0.2)),
+                        SizedBox(width: 3),
+                        Icon(CupertinoIcons.arrow_right, size: 11, color: CupertinoColors.white),
+                      ],
+                    ),
                   ),
                 ),
               ],
@@ -1920,6 +2120,8 @@ class _UserCard extends StatelessWidget {
     );
   }
 }
+
+
 
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Zoom Control Button â€” estilo Apple Maps
@@ -1937,30 +2139,40 @@ class _ZoomButton extends StatelessWidget {
         HapticFeedback.lightImpact();
         onTap();
       },
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(12),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-          child: Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: CupertinoColors.white.withValues(alpha: 0.85),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: const Color(0x22000000),
-                width: 0.5,
-              ),
-              boxShadow: const [
-                BoxShadow(
-                  color: Color(0x1A000000),
-                  blurRadius: 8,
-                  offset: Offset(0, 2),
-                ),
-              ],
+      child: Container(
+        width: 42,
+        height: 42,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(13),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFFF97316).withValues(alpha: 0.08),
+              blurRadius: 12,
+              offset: const Offset(0, 2),
             ),
-            child: Center(
-              child: Icon(icon, size: 18, color: const Color(0xFF1C1C1E)),
+            const BoxShadow(
+              color: Color(0x1A000000),
+              blurRadius: 10,
+              offset: Offset(0, 3),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(13),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+            child: Container(
+              decoration: BoxDecoration(
+                color: CupertinoColors.white.withValues(alpha: 0.82),
+                borderRadius: BorderRadius.circular(13),
+                border: Border.all(
+                  color: CupertinoColors.white.withValues(alpha: 0.6),
+                  width: 0.8,
+                ),
+              ),
+              child: Center(
+                child: Icon(icon, size: 18, color: const Color(0xFF1C1C1E)),
+              ),
             ),
           ),
         ),

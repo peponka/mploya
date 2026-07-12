@@ -114,40 +114,35 @@ class ReelActionsBar extends StatelessWidget {
       children: [
         // ── Avatar + Smart Connect ──
         _buildAvatarSection(context),
-        const SizedBox(height: 16),
+        const SizedBox(height: 18),
 
         // ── Like / Match (with reactions) ──
         _buildReactionsSection(),
-        const SizedBox(height: 16),
+        _buildLabel('Interesado'),
+        const SizedBox(height: 14),
 
         // ── Video Reply ──
-        _buildActionButton(
+        _buildGlassButton(
           onTap: onCommentsTap,
           semanticLabel: 'Responder con video a ${author.name}',
-          icon: Icon(
-            CupertinoIcons.videocam_fill,
-            color: _fg,
-            size: 26,
-            shadows: _sh,
-          ),
+          icon: CupertinoIcons.videocam_fill,
+          color: _fg,
         ),
-        const SizedBox(height: 16),
+        _buildLabel('Video'),
+        const SizedBox(height: 14),
 
         // ── Bookmark ──
-        _buildActionButton(
+        _buildGlassButton(
           onTap: () {
             HapticFeedback.selectionClick();
             onBookmarkTap();
           },
           semanticLabel: isBookmarked ? 'Quitar de guardados' : 'Guardar perfil',
-          icon: Icon(
-            isBookmarked ? CupertinoIcons.bookmark_fill : CupertinoIcons.bookmark,
-            color: isBookmarked ? const Color(0xFFFFD60A) : _fg,
-            size: 26,
-            shadows: _sh,
-          ),
+          icon: isBookmarked ? CupertinoIcons.bookmark_fill : CupertinoIcons.bookmark,
+          color: isBookmarked ? const Color(0xFFFFD60A) : _fg,
         ),
-        const SizedBox(height: 16),
+        _buildLabel('Guardar'),
+        const SizedBox(height: 14),
 
         // ── Share (long-press → Nexus ⚡, includes More) ──
         Semantics(
@@ -156,25 +151,22 @@ class ReelActionsBar extends StatelessWidget {
           child: GestureDetector(
             onTap: onShareTap,
             onLongPress: () {
-              // Nexus functionality via long-press
               if (nexusSent) return;
               HapticFeedback.heavyImpact();
               onNexusTap();
             },
             onDoubleTap: onMoreTap,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  nexusSent ? CupertinoIcons.bolt_circle_fill : CupertinoIcons.arrow_turn_up_right,
-                  color: nexusSent ? const Color(0xFFFFD60A) : _fg,
-                  size: 26,
-                  shadows: _sh,
-                ),
-              ],
+            child: _glassCircle(
+              child: Icon(
+                nexusSent ? CupertinoIcons.bolt_circle_fill : CupertinoIcons.arrow_turn_up_right,
+                color: nexusSent ? const Color(0xFFFFD60A) : _fg,
+                size: 24,
+                shadows: _sh,
+              ),
             ),
           ),
         ),
+        _buildLabel('Compartir'),
       ],
     );
   }
@@ -320,9 +312,9 @@ class ReelActionsBar extends StatelessWidget {
               activeReaction != null
                   ? Text(activeReaction!, style: const TextStyle(fontSize: 26, shadows: [Shadow(color: Colors.black54, blurRadius: 6)]))
                   : Icon(
-                      isMatched ? CupertinoIcons.hand_thumbsup_fill : CupertinoIcons.hand_thumbsup,
+                      isMatched ? CupertinoIcons.star_fill : CupertinoIcons.star,
                       color: isMatched ? NexTheme.brandAccent : _fg,
-                      size: 28,
+                      size: 30,
                       shadows: _sh,
                     ),
               if (matchCount > 0 || reactionCounts.isNotEmpty) ...[
@@ -343,6 +335,51 @@ class ReelActionsBar extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+  Widget _buildGlassButton({required VoidCallback onTap, required String semanticLabel, required IconData icon, required Color color}) {
+    return Semantics(
+      button: true,
+      label: semanticLabel,
+      child: GestureDetector(
+        onTap: onTap,
+        child: _glassCircle(
+          child: Icon(icon, color: color, size: 24, shadows: _sh),
+        ),
+      ),
+    );
+  }
+
+  Widget _glassCircle({required Widget child}) {
+    return ClipOval(
+      child: BackdropFilter(
+        filter: ui.ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+        child: Container(
+          width: 46,
+          height: 46,
+          decoration: BoxDecoration(
+            color: Colors.black.withValues(alpha: 0.25),
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
+          ),
+          child: Center(child: child),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLabel(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: _fg.withValues(alpha: 0.8),
+          fontSize: 10,
+          fontWeight: FontWeight.w600,
+          shadows: _sh,
+        ),
+      ),
     );
   }
 }

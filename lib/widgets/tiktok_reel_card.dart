@@ -790,7 +790,7 @@ class _TikTokReelCardState extends ConsumerState<TikTokReelCard>
               ),
             ),
 
-          // ── Match Badge (top right, solid pill) ──
+          // ── Match Badge (top right, glassmorphism pill) ──
           if (matchScore > 0 && !isLocked)
             Positioned(
               top: 100,
@@ -798,34 +798,43 @@ class _TikTokReelCardState extends ConsumerState<TikTokReelCard>
               child: GestureDetector(
                 key: widget.isFirstCard ? cmFeedMatchBadgeKey : null,
                 onTap: () => _showMatchDetails(context, author, matchScore),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: NexTheme.brandAccent,
-                    borderRadius: BorderRadius.circular(22),
-                    boxShadow: [
-                      BoxShadow(
-                        color: NexTheme.brandAccent.withValues(alpha: 0.4),
-                        blurRadius: 12,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(CupertinoIcons.bolt_fill, color: Colors.white, size: 14),
-                      const SizedBox(width: 5),
-                      Text(
-                        '$matchScore% match',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 0.3,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(22),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [NexTheme.brandAccent, NexTheme.brandAccent.withValues(alpha: 0.85)],
                         ),
+                        borderRadius: BorderRadius.circular(22),
+                        border: Border.all(color: Colors.white.withValues(alpha: 0.25), width: 0.5),
+                        boxShadow: [
+                          BoxShadow(
+                            color: NexTheme.brandAccent.withValues(alpha: 0.5),
+                            blurRadius: 16,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
                       ),
-                    ],
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(CupertinoIcons.sparkles, color: Colors.white, size: 14),
+                          const SizedBox(width: 5),
+                          Text(
+                            '✦ $matchScore% match',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0.3,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -961,46 +970,58 @@ class _TikTokReelCardState extends ConsumerState<TikTokReelCard>
     );
   }
 
-  // ── Badge "EXPERTISE: tag1 · tag2 · tag3" (top-left, sobre los tags reales) ──
+  // ── Badge "EXPERTISE: tag1 · tag2 · tag3" (glassmorphism, top-left) ──
   Widget _expertiseBadge(List<String> tags) {
     final label = tags.take(3).map((t) => t.isEmpty ? t : t[0].toUpperCase() + t.substring(1)).join('  ·  ');
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.35),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Text.rich(
-        TextSpan(children: [
-          const TextSpan(
-            text: 'EXPERTISE: ',
-            style: TextStyle(color: Colors.white70, fontSize: 10.5, fontWeight: FontWeight.w800, letterSpacing: 0.4),
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(20),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+          decoration: BoxDecoration(
+            color: Colors.black.withValues(alpha: 0.2),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
           ),
-          TextSpan(text: label, style: const TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.w600)),
-        ]),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
+          child: Text.rich(
+            TextSpan(children: [
+              TextSpan(
+                text: 'EXPERTISE: ',
+                style: TextStyle(color: NexTheme.brandAccent, fontSize: 10.5, fontWeight: FontWeight.w900, letterSpacing: 0.5),
+              ),
+              TextSpan(text: label, style: const TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.w600)),
+            ]),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
       ),
     );
   }
 
-  // ── Badge "Top Talent" (top-right, solo para cuentas premium/verificadas) ──
+  // ── Badge "Top Talent" (premium gold gradient, top-right) ──
   Widget _topTalentBadge() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
       decoration: BoxDecoration(
-        color: const Color(0xFFF59E0B),
-        borderRadius: BorderRadius.circular(8),
+        gradient: const LinearGradient(
+          colors: [Color(0xFFF59E0B), Color(0xFFFBBF24)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.3), width: 0.5),
         boxShadow: [
-          BoxShadow(color: const Color(0xFFF59E0B).withValues(alpha: 0.4), blurRadius: 8, offset: const Offset(0, 3)),
+          BoxShadow(color: const Color(0xFFF59E0B).withValues(alpha: 0.5), blurRadius: 14, offset: const Offset(0, 4)),
         ],
       ),
       child: const Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(CupertinoIcons.rosette, color: Colors.white, size: 12),
-          SizedBox(width: 4),
-          Text('Top Talent', style: TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.w800)),
+          Icon(CupertinoIcons.sparkles, color: Colors.white, size: 12),
+          SizedBox(width: 5),
+          Text('Top Talent', style: TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.w800, letterSpacing: 0.3)),
         ],
       ),
     );
