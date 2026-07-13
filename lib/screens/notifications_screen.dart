@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 // Material widgets (SliverAppBar, Colors, Icons) have no Cupertino equivalent
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../theme/app_theme.dart';
 import '../models/models.dart';
@@ -207,7 +208,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                 myNotifs.insert(0, {
                    'id': 'stealth-tip-${DateTime.now().toIso8601String().substring(0, 10)}',
                    'type': 'profileView',
-                   'description': stealthTip,
+                   'body': stealthTip,
                    'is_read': false,
                    'created_at': DateTime.now().toIso8601String(),
                 });
@@ -217,12 +218,8 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
             final hasActivity = _profileViews > 0 || _totalMatches > 0 || _pitchesReceived > 0;
             final unreadCount = myNotifs.where((n) => n['is_read'] != true).length;
 
-            final isCompany = currentUser?.accountType == 'empresa' || currentUser?.accountType == 'headhunter';
-
             if (isWebWide(context)) {
-              return isCompany
-                  ? const _CompanyAlertsWeb()
-                  : _buildWeb(context, myNotifs, hasActivity, unreadCount);
+              return _buildWeb(context, myNotifs, hasActivity, unreadCount);
             }
 
             return CustomScrollView(
@@ -235,7 +232,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                     child: Row(
                       children: [
                         Text(
-                          'Notificaciones',
+                          'Alertas',
                           style: TextStyle(
                             fontSize: 28,
                             fontWeight: FontWeight.w900,
@@ -265,6 +262,67 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                   ),
                 ),
 
+                // ── Banner de visibilidad (mobile) ──
+                if (_insightsLoaded && !hasActivity && !_bannerDismissed)
+                  SliverToBoxAdapter(
+                    child: Container(
+                      margin: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFFFFF7ED), Color(0xFFFEF3C7)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: MployaTheme.brandAccent.withValues(alpha: 0.15)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                width: 36, height: 36,
+                                decoration: BoxDecoration(
+                                  gradient: const LinearGradient(colors: [Color(0xFFF97316), Color(0xFFFB923C)]),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: const Icon(CupertinoIcons.rocket_fill, color: CupertinoColors.white, size: 16),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text('Aumentá tu visibilidad',
+                                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: context.textPrimary)),
+                              ),
+                              GestureDetector(
+                                onTap: () => setState(() => _bannerDismissed = true),
+                                child: Icon(CupertinoIcons.xmark, size: 14, color: context.textTertiary),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Text('Completá tu perfil y grabá un video pitch para destacarte ante los reclutadores.',
+                              style: TextStyle(fontSize: 12.5, color: context.textSecondary, height: 1.4)),
+                          const SizedBox(height: 12),
+                          GestureDetector(
+                            onTap: () => Navigator.of(context).maybePop(),
+                            child: Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(vertical: 10),
+                              decoration: BoxDecoration(
+                                color: MployaTheme.brandAccent,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Text('Grabar Video Pitch', textAlign: TextAlign.center,
+                                  style: TextStyle(color: CupertinoColors.white, fontSize: 13.5, fontWeight: FontWeight.w700)),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
                 // ── Weekly Summary (compact, only if there's data) ──
                 if (_insightsLoaded && hasActivity)
                   SliverToBoxAdapter(
@@ -283,32 +341,6 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                           _CompactMetric(value: '$_totalMatches', label: 'Matches', icon: CupertinoIcons.bolt_fill),
                           Container(width: 1, height: 28, color: context.dividerColor),
                           _CompactMetric(value: '$_pitchesReceived', label: 'Replies', icon: CupertinoIcons.chat_bubble_fill),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                // ── Tip (only if no activity yet) ──
-                if (_insightsLoaded && !hasActivity)
-                  SliverToBoxAdapter(
-                    child: Container(
-                      margin: const EdgeInsets.fromLTRB(20, 0, 20, 16),
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: context.isDark ? const Color(0xFF2A2310) : const Color(0xFFFFF8E1),
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: const Color(0xFFFFE082).withValues(alpha: context.isDark ? 0.2 : 0.5)),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(CupertinoIcons.lightbulb_fill, color: Color(0xFFFFB800), size: 20),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              _getInsightTip(),
-                              style: TextStyle(color: context.textSecondary, fontSize: 13, height: 1.4, fontFamily: '.SF Pro Text'),
-                            ),
-                          ),
                         ],
                       ),
                     ),
@@ -357,76 +389,14 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                     ),
                   ),
 
-                // ── Notification list ──
-                // SliverFillRemaining centra el estado vacío en el espacio que
-                // sobra debajo del header/tip, en vez de quedar pegado arriba
-                // con un padding fijo y dejar un vacío enorme más abajo.
-                if (myNotifs.isEmpty)
-                  SliverFillRemaining(
-                    hasScrollBody: false,
-                    child: Center(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 32),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Container(
-                              width: 72, height: 72,
-                              decoration: BoxDecoration(
-                                color: context.isDark ? NexTheme.darkSurface : const Color(0xFFF2F2F7),
-                                shape: BoxShape.circle,
-                              ),
-                              child: Icon(CupertinoIcons.bell, size: 32, color: context.textTertiary),
-                            ),
-                            const SizedBox(height: 16),
-                            Text('Sin notificaciones', style: TextStyle(color: context.textPrimary, fontSize: 18, fontWeight: FontWeight.w700)),
-                            const SizedBox(height: 6),
-                            Text(
-                              'Interacciones, matches y alertas\naparecerán aquí.',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(color: context.textSecondary, fontSize: 14, height: 1.4),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  )
-                else ...[
-                  // Section header only when there are notifications
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 4, 20, 10),
-                      child: Text(
-                        'Recientes',
-                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: context.textPrimary),
-                      ),
-                    ),
+                // ── Cards Grid (2 columns on mobile) ──
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+                    child: _buildMobileCardsGrid(context, myNotifs),
                   ),
-                  SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) {
-                        final n = myNotifs[index];
-                        final type = _parseType(n['type']?.toString() ?? 'like');
-                        final isConnection = type == NotificationType.connection;
-                        return GestureDetector(
-                          onTap: () => _markAsRead(n),
-                          behavior: HitTestBehavior.opaque,
-                          child: _NotificationTile(
-                            isRead: n['is_read'] == true,
-                            description: n['description']?.toString() ?? '',
-                            timeAgo: NotificationService.instance.timeAgo(n['created_at']),
-                            icon: _iconForType(type),
-                            iconColor: _colorForType(type),
-                            showQuickActions: isConnection && n['is_read'] != true,
-                            onAccept: isConnection ? () => _handleAccept(n) : null,
-                            onReject: isConnection ? () => _handleReject(n) : null,
-                          ),
-                        );
-                      },
-                      childCount: myNotifs.length,
-                    ),
-                  ),
-                ],
+                ),
+
                 const SliverToBoxAdapter(child: SizedBox(height: 100)),
               ],
             );
@@ -438,17 +408,103 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     );
   }
 
+  // ── Mobile Cards Grid (2 columns) ──────────────────────────────────────────
+  Widget _buildMobileCardsGrid(BuildContext context, List<Map<String, dynamic>> myNotifs) {
+    final List<_AlertCardData> alertCards = myNotifs.map((n) {
+      final type = _parseType(n['type']?.toString() ?? 'like');
+      final isConnection = type == NotificationType.connection;
+      return _AlertCardData(
+        type: type,
+        title: n['body']?.toString() ?? n['title']?.toString() ?? '',
+        timeAgo: NotificationService.instance.timeAgo(n['created_at']),
+        isRead: n['is_read'] == true,
+        avatarUrl: n['avatar_url']?.toString(),
+        name: n['sender_name']?.toString(),
+        headline: n['sender_headline']?.toString(),
+        companyName: n['company_name']?.toString(),
+        onTap: () => _markAsRead(n),
+        onAccept: isConnection ? () => _handleAccept(n) : null,
+        onReject: isConnection ? () => _handleReject(n) : null,
+      );
+    }).toList();
+
+    final showDemo = alertCards.isEmpty;
+    final displayCards = showDemo ? _demoAlertCards() : alertCards;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (showDemo)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10, left: 4),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: MployaTheme.brandAccent.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(CupertinoIcons.sparkles, size: 11, color: MployaTheme.brandAccent),
+                      SizedBox(width: 4),
+                      Text('Preview', style: TextStyle(color: MployaTheme.brandAccent, fontSize: 11, fontWeight: FontWeight.w700)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: displayCards.map((card) => SizedBox(
+            width: (MediaQuery.of(context).size.width - 42) / 2,
+            child: _MobileAlertCard(data: card),
+          )).toList(),
+        ),
+      ],
+    );
+  }
+
   String _getInsightTip() {
     return NotificationService.instance.getInsightTip(
       _pitchesReceived, _totalMatches, _profileViews,
     );
   }
 
-  // ── Layout web ────────────────────────────────────────────────────────────
+  // ── Layout web — Cards Grid ────────────────────────────────────────────────
   Widget _buildWeb(BuildContext context, List<Map<String, dynamic>> myNotifs, bool hasActivity, int unreadCount) {
+    // Convertir notificaciones reales a alert cards
+    final List<_AlertCardData> alertCards = myNotifs.map((n) {
+      final type = _parseType(n['type']?.toString() ?? 'like');
+      final isConnection = type == NotificationType.connection;
+      return _AlertCardData(
+        type: type,
+        title: n['body']?.toString() ?? n['title']?.toString() ?? '',
+        timeAgo: NotificationService.instance.timeAgo(n['created_at']),
+        isRead: n['is_read'] == true,
+        avatarUrl: n['avatar_url']?.toString(),
+        name: n['sender_name']?.toString(),
+        headline: n['sender_headline']?.toString(),
+        companyName: n['company_name']?.toString(),
+        onTap: () => _markAsRead(n),
+        onAccept: isConnection ? () => _handleAccept(n) : null,
+        onReject: isConnection ? () => _handleReject(n) : null,
+      );
+    }).toList();
+
+    // Si no hay notifs reales, mostrar demo cards
+    final showDemo = alertCards.isEmpty;
+    final displayCards = showDemo ? _demoAlertCards() : alertCards;
+
     return WebPage(
-      title: 'Notificaciones',
-      subtitle: hasActivity ? '$_profileViews vistas · $_totalMatches matches · $_pitchesReceived respuestas' : null,
+      title: 'Alertas',
+      subtitle: hasActivity
+          ? '$_profileViews vistas · $_totalMatches matches · $_pitchesReceived respuestas'
+          : 'Coincidencias, vistas de perfil y oportunidades',
       actions: [
         if (unreadCount > 0)
           WebButton(label: 'Leer todas ($unreadCount)', filled: false, onTap: () => _markAllAsRead(myNotifs)),
@@ -457,67 +513,85 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         physics: const BouncingScrollPhysics(),
         padding: const EdgeInsets.only(bottom: 40),
         children: [
-          if (_insightsLoaded && !hasActivity && !_bannerDismissed) _webTipBanner(context),
+          // ── Banner de visibilidad ──
+          if (_insightsLoaded && !hasActivity && !_bannerDismissed) _webVisibilityBanner(context),
+          // ── Smart Digests ──
           ..._digests.map((d) => _webDigestCard(context, d)),
-          if (myNotifs.isEmpty)
-            WebEmptyState(
-              icon: CupertinoIcons.bell,
-              title: 'Tu centro de notificaciones está impecable',
-              subtitle: 'Interacciones, matches y alertas aparecerán aquí.',
-            )
-          else ...[
-            const WebSectionLabel('Recientes'),
-            WebCard(
-              padding: EdgeInsets.zero,
-              child: Column(
-                children: myNotifs.map((n) {
-                  final type = _parseType(n['type']?.toString() ?? 'like');
-                  final isConnection = type == NotificationType.connection;
-                  return GestureDetector(
-                    onTap: () => _markAsRead(n),
-                    behavior: HitTestBehavior.opaque,
-                    child: _NotificationTile(
-                      isRead: n['is_read'] == true,
-                      description: n['description']?.toString() ?? '',
-                      timeAgo: NotificationService.instance.timeAgo(n['created_at']),
-                      icon: _iconForType(type),
-                      iconColor: _colorForType(type),
-                      showQuickActions: isConnection && n['is_read'] != true,
-                      onAccept: isConnection ? () => _handleAccept(n) : null,
-                      onReject: isConnection ? () => _handleReject(n) : null,
+          // ── Grid de Alert Cards ──
+          if (showDemo)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: MployaTheme.brandAccent.withValues(alpha: 0.10),
+                      borderRadius: BorderRadius.circular(999),
                     ),
-                  );
-                }).toList(),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(CupertinoIcons.sparkles, size: 13, color: MployaTheme.brandAccent),
+                        const SizedBox(width: 5),
+                        Text('Vista previa', style: TextStyle(color: MployaTheme.brandAccent, fontSize: 12, fontWeight: FontWeight.w700)),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Text('Así se verán tus alertas cuando tengas actividad',
+                      style: TextStyle(color: context.textTertiary, fontSize: 13)),
+                ],
               ),
             ),
-          ],
+          WebGrid(
+            children: displayCards.map((card) => _AlertCardWidget(data: card)).toList(),
+          ),
         ],
       ),
     );
   }
 
-  Widget _webTipBanner(BuildContext context) {
+  /// Banner de visibilidad rediseñado con gradient y CTA prominente
+  Widget _webVisibilityBanner(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 20),
-      child: WebCard(
+      margin: const EdgeInsets.only(bottom: 24),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFFFFF7ED), Color(0xFFFEF3C7)],
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: MployaTheme.brandAccent.withValues(alpha: 0.15)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
         child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            const WebIconBadge(icon: CupertinoIcons.rocket_fill, size: 40),
-            const SizedBox(width: 14),
+            Container(
+              width: 48, height: 48,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(colors: [Color(0xFFF97316), Color(0xFFFB923C)]),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: const Icon(CupertinoIcons.rocket_fill, color: CupertinoColors.white, size: 22),
+            ),
+            const SizedBox(width: 16),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Impulsá tu visibilidad',
-                      style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: context.textPrimary)),
+                  Text('Aumentá tu visibilidad',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: context.textPrimary)),
                   const SizedBox(height: 3),
-                  Text(_getInsightTip(), style: TextStyle(fontSize: 13, color: context.textSecondary, height: 1.4)),
+                  Text('Completá tu perfil y grabá un video pitch para destacarte ante los reclutadores.',
+                      style: TextStyle(fontSize: 13, color: context.textSecondary, height: 1.4)),
                 ],
               ),
             ),
-            const SizedBox(width: 14),
-            WebButton(label: 'Completar ahora', onTap: () => Navigator.of(context).maybePop()),
+            const SizedBox(width: 16),
+            WebButton(label: 'Grabar Video Pitch', onTap: () => Navigator.of(context).maybePop()),
             const SizedBox(width: 10),
             GestureDetector(
               onTap: () => setState(() => _bannerDismissed = true),
@@ -560,6 +634,62 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         ),
       ),
     );
+  }
+
+  /// Demo alert cards para cuando no hay notificaciones reales
+  List<_AlertCardData> _demoAlertCards() {
+    return [
+      _AlertCardData(
+        type: NotificationType.jobAlert,
+        cardKind: _AlertKind.talentMatch,
+        title: 'Senior UX Lead',
+        name: 'María López',
+        headline: 'HR Manager',
+        companyName: 'Google',
+        compatibilityScore: 0.87,
+        skillTags: ['Figma', 'Sketch', 'Research', 'UX', 'Strategy'],
+        timeAgo: 'Hace 2h',
+      ),
+      _AlertCardData(
+        type: NotificationType.profileView,
+        cardKind: _AlertKind.premiumView,
+        title: 'Vista de perfil',
+        name: 'Sarah J.',
+        headline: 'Senior Recruiter',
+        companyName: 'Google',
+        timeAgo: 'Hace 1 h',
+      ),
+      _AlertCardData(
+        type: NotificationType.like,
+        cardKind: _AlertKind.marketInfo,
+        title: 'Salarios de UX en auge',
+        subtitle: 'El mercado UX creció 23% en LatAm. Los salarios promedio subieron a USD 4.500/mes.',
+        timeAgo: 'Hace 3h',
+      ),
+      _AlertCardData(
+        type: NotificationType.like,
+        cardKind: _AlertKind.marketInfo,
+        title: 'Demanda de Flutter +40%',
+        subtitle: 'Las búsquedas de desarrolladores Flutter aumentaron significativamente este trimestre.',
+        timeAgo: 'Hace 5h',
+      ),
+      _AlertCardData(
+        type: NotificationType.connection,
+        cardKind: _AlertKind.connectionRequest,
+        title: 'Solicitud de conexión',
+        name: 'Carlos M.',
+        headline: 'Tech Lead en Mercado Libre',
+        timeAgo: 'Hace 30 min',
+      ),
+      _AlertCardData(
+        type: NotificationType.connection,
+        cardKind: _AlertKind.connectionRequest,
+        title: 'Solicitud de conexión',
+        name: 'Ana R.',
+        headline: 'Product Designer en Globant',
+        timeAgo: 'Hace 45 min',
+      ),
+    ];
   }
 }
 
@@ -1023,3 +1153,615 @@ class _CompanyAlertsWebState extends State<_CompanyAlertsWeb> {
     );
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Alert Card Data Model & Types
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum _AlertKind { talentMatch, premiumView, marketInfo, connectionRequest, generic }
+
+class _AlertCardData {
+  final NotificationType type;
+  final _AlertKind cardKind;
+  final String title;
+  final String? subtitle;
+  final String? name;
+  final String? headline;
+  final String? companyName;
+  final String? avatarUrl;
+  final String timeAgo;
+  final bool isRead;
+  final double? compatibilityScore;
+  final List<String>? skillTags;
+  final VoidCallback? onTap;
+  final VoidCallback? onAccept;
+  final VoidCallback? onReject;
+
+  _AlertCardData({
+    required this.type,
+    _AlertKind? cardKind,
+    required this.title,
+    this.subtitle,
+    this.name,
+    this.headline,
+    this.companyName,
+    this.avatarUrl,
+    this.timeAgo = '',
+    this.isRead = false,
+    this.compatibilityScore,
+    this.skillTags,
+    this.onTap,
+    this.onAccept,
+    this.onReject,
+  }) : cardKind = cardKind ?? _inferKind(type);
+
+  static _AlertKind _inferKind(NotificationType type) {
+    switch (type) {
+      case NotificationType.jobAlert:
+        return _AlertKind.talentMatch;
+      case NotificationType.profileView:
+        return _AlertKind.premiumView;
+      case NotificationType.connection:
+        return _AlertKind.connectionRequest;
+      default:
+        return _AlertKind.generic;
+    }
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Alert Card Widget — renders each card type with proper visuals
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _AlertCardWidget extends StatelessWidget {
+  final _AlertCardData data;
+  const _AlertCardWidget({required this.data});
+
+  @override
+  Widget build(BuildContext context) {
+    switch (data.cardKind) {
+      case _AlertKind.talentMatch:
+        return _buildTalentMatchCard(context);
+      case _AlertKind.premiumView:
+        return _buildPremiumViewCard(context);
+      case _AlertKind.marketInfo:
+        return _buildMarketInfoCard(context);
+      case _AlertKind.connectionRequest:
+        return _buildConnectionCard(context);
+      case _AlertKind.generic:
+        return _buildGenericCard(context);
+    }
+  }
+
+  // ── Coincidencia de Talento ──
+  Widget _buildTalentMatchCard(BuildContext context) {
+    return WebCard(
+      onTap: data.onTap,
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('COINCIDENCIA DE TALENTO',
+              style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: MployaTheme.brandAccent, letterSpacing: 0.8)),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              _avatar(data.name, data.avatarUrl, 52),
+              const SizedBox(width: 12),
+              if (data.companyName != null)
+                Container(
+                  width: 28, height: 28,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF4285F4).withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Center(
+                    child: Text(data.companyName![0], style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Color(0xFF4285F4))),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(data.title, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: context.textPrimary)),
+          const SizedBox(height: 14),
+          Text('Skills compatibilidad', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: context.textSecondary)),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 48,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: List.generate(
+                data.skillTags?.length ?? 5,
+                (i) {
+                  final heights = [0.85, 0.45, 0.65, 0.90, 0.55];
+                  final h = i < heights.length ? heights[i] : 0.5;
+                  return Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 2),
+                      child: Container(
+                        height: 48 * h,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [MployaTheme.brandAccent.withValues(alpha: 0.6), MployaTheme.brandAccent],
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                          ),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
+          if (data.skillTags != null)
+            Row(
+              children: data.skillTags!.map((t) => Expanded(
+                    child: Text(t, textAlign: TextAlign.center, style: TextStyle(fontSize: 8.5, color: context.textTertiary, fontWeight: FontWeight.w600)),
+                  )).toList(),
+            ),
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              decoration: BoxDecoration(
+                color: MployaTheme.brandAccent,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Text('Ver Coincidencia', textAlign: TextAlign.center,
+                  style: TextStyle(color: CupertinoColors.white, fontSize: 13.5, fontWeight: FontWeight.w700)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Vista de Perfil Premium ──
+  Widget _buildPremiumViewCard(BuildContext context) {
+    return WebCard(
+      onTap: data.onTap,
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('VISTA DE PERFIL PREMIUM',
+              style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: Color(0xFF00838F), letterSpacing: 0.8)),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              _avatar(data.name, data.avatarUrl, 48),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(data.name ?? '', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: context.textPrimary)),
+                    Text(data.headline ?? '', style: TextStyle(fontSize: 12.5, color: context.textSecondary)),
+                  ],
+                ),
+              ),
+              if (data.companyName != null)
+                Container(
+                  width: 28, height: 28,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF4285F4).withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Center(
+                    child: Text(data.companyName![0], style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Color(0xFF4285F4))),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Divider(color: context.dividerColor.withValues(alpha: 0.4), height: 1),
+          const SizedBox(height: 10),
+          Text('Completá tu perfil: ${data.headline ?? "Recruiter"} con sempetaante aquí el argentino.',
+              style: TextStyle(fontSize: 12.5, color: context.textSecondary, height: 1.4)),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              const Spacer(),
+              Text('Visto ${data.timeAgo}', style: TextStyle(fontSize: 11.5, color: context.textTertiary, fontWeight: FontWeight.w500)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Información de Mercado ──
+  Widget _buildMarketInfoCard(BuildContext context) {
+    return WebCard(
+      onTap: data.onTap,
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('INFORMACIÓN DE MERCADO',
+              style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: Color(0xFF057642), letterSpacing: 0.8)),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Container(
+                width: 36, height: 36,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF057642).withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(CupertinoIcons.chart_bar_fill, color: Color(0xFF057642), size: 18),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                width: 36, height: 36,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF4285F4).withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Center(
+                  child: Text('G', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF4285F4))),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Text(data.title, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: context.textPrimary)),
+          if (data.subtitle != null) ...[
+            const SizedBox(height: 4),
+            Text(data.subtitle!, style: TextStyle(fontSize: 12.5, color: context.textSecondary, height: 1.4)),
+          ],
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              decoration: BoxDecoration(
+                color: MployaTheme.brandAccent,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Text('Explorar Datos', textAlign: TextAlign.center,
+                  style: TextStyle(color: CupertinoColors.white, fontSize: 13.5, fontWeight: FontWeight.w700)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Solicitud de Conexión ──
+  Widget _buildConnectionCard(BuildContext context) {
+    return WebCard(
+      onTap: data.onTap,
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('SOLICITUD DE CONEXIÓN',
+              style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: Color(0xFF5F3DC4), letterSpacing: 0.8)),
+          const SizedBox(height: 14),
+          Center(child: _avatar(data.name, data.avatarUrl, 56)),
+          const SizedBox(height: 10),
+          Center(
+            child: Text(data.name ?? '', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: context.textPrimary)),
+          ),
+          if (data.headline != null)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text(data.headline!, textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: context.textSecondary)),
+              ),
+            ),
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              decoration: BoxDecoration(
+                color: MployaTheme.brandAccent,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Text('Aceptar', textAlign: TextAlign.center,
+                  style: TextStyle(color: CupertinoColors.white, fontSize: 13.5, fontWeight: FontWeight.w700)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Genérica ──
+  Widget _buildGenericCard(BuildContext context) {
+    return WebCard(
+      onTap: data.onTap,
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              WebIconBadge(
+                icon: _iconForKind(data.type),
+                color: _colorForKind(data.type),
+                size: 36,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(data.title, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: context.textPrimary), maxLines: 2, overflow: TextOverflow.ellipsis),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(data.timeAgo, style: TextStyle(fontSize: 11.5, color: context.textTertiary)),
+        ],
+      ),
+    );
+  }
+
+  // ── Helpers ──
+  Widget _avatar(String? name, String? url, double size) {
+    final initial = (name != null && name.isNotEmpty) ? name[0].toUpperCase() : '?';
+    final colors = _gradientForInitial(initial);
+    final fallback = Container(
+      width: size, height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: LinearGradient(colors: colors, begin: Alignment.topLeft, end: Alignment.bottomRight),
+        boxShadow: [BoxShadow(color: colors[0].withValues(alpha: 0.3), blurRadius: 8, offset: const Offset(0, 3))],
+      ),
+      child: Center(child: Text(initial, style: TextStyle(color: CupertinoColors.white, fontWeight: FontWeight.w800, fontSize: size * 0.38))),
+    );
+    if (url == null || url.isEmpty) return fallback;
+    return ClipOval(
+      child: SizedBox(
+        width: size, height: size,
+        child: Image.network(
+          url,
+          width: size, height: size,
+          fit: BoxFit.cover,
+          webHtmlElementStrategy: kIsWeb ? WebHtmlElementStrategy.prefer : WebHtmlElementStrategy.never,
+          errorBuilder: (_, __, ___) => fallback,
+        ),
+      ),
+    );
+  }
+
+  List<Color> _gradientForInitial(String initial) {
+    switch (initial) {
+      case 'M': return [const Color(0xFFE91E63), const Color(0xFFFF6090)];
+      case 'S': return [const Color(0xFF00838F), const Color(0xFF4DD0E1)];
+      case 'C': return [const Color(0xFF5F3DC4), const Color(0xFF9775FA)];
+      case 'A': return [const Color(0xFF057642), const Color(0xFF38D9A9)];
+      default:  return [MployaTheme.brandAccent, const Color(0xFFFB923C)];
+    }
+  }
+
+  IconData _iconForKind(NotificationType type) {
+    switch (type) {
+      case NotificationType.like: return CupertinoIcons.hand_thumbsup_fill;
+      case NotificationType.comment: return CupertinoIcons.chat_bubble_fill;
+      case NotificationType.connection: return CupertinoIcons.person_add_solid;
+      case NotificationType.jobAlert: return CupertinoIcons.briefcase_fill;
+      case NotificationType.profileView: return CupertinoIcons.eye_fill;
+      case NotificationType.mention: return CupertinoIcons.at;
+    }
+  }
+
+  Color _colorForKind(NotificationType type) {
+    switch (type) {
+      case NotificationType.like: return MployaTheme.brandAccent;
+      case NotificationType.comment: return const Color(0xFF057642);
+      case NotificationType.connection: return const Color(0xFF5F3DC4);
+      case NotificationType.jobAlert: return NexTheme.brandAccent;
+      case NotificationType.profileView: return const Color(0xFF00838F);
+      case NotificationType.mention: return const Color(0xFFC2185B);
+    }
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Mobile Alert Card — compact card for 2-column grid
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _MobileAlertCard extends StatelessWidget {
+  final _AlertCardData data;
+  const _MobileAlertCard({required this.data});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _cardColor();
+    final label = _cardLabel();
+    final icon = _cardIcon();
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: context.isDark ? NexTheme.darkCard : CupertinoColors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: context.dividerColor.withValues(alpha: 0.3), width: 0.5),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF000000).withValues(alpha: context.isDark ? 0.2 : 0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Header badge ──
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(label, style: TextStyle(fontSize: 8, fontWeight: FontWeight.w800, color: color, letterSpacing: 0.5)),
+          ),
+          const SizedBox(height: 10),
+
+          // ── Icon / Avatar ──
+          Row(
+            children: [
+              if (data.name != null && data.name!.isNotEmpty)
+                _buildAvatar(data.name, data.avatarUrl, 36)
+              else
+                Container(
+                  width: 36, height: 36,
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(icon, color: color, size: 17),
+                ),
+              if (data.companyName != null) ...[
+                const SizedBox(width: 6),
+                Container(
+                  width: 22, height: 22,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF4285F4).withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Center(
+                    child: Text(data.companyName![0], style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Color(0xFF4285F4))),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 8),
+
+          // ── Title ──
+          Text(
+            data.cardKind == _AlertKind.connectionRequest ? (data.name ?? data.title) : data.title,
+            style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: context.textPrimary, height: 1.3),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+
+          // ── Subtitle ──
+          if (data.headline != null || data.subtitle != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Text(
+                data.subtitle ?? data.headline ?? '',
+                style: TextStyle(fontSize: 10.5, color: context.textSecondary, height: 1.3),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+
+          const SizedBox(height: 10),
+
+          // ── CTA Buttons ──
+          Row(
+            children: [
+              Expanded(
+                child: GestureDetector(
+                  onTap: data.onTap ?? data.onAccept,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 7),
+                    decoration: BoxDecoration(
+                      color: MployaTheme.brandAccent,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(_ctaLabel(), textAlign: TextAlign.center,
+                        style: const TextStyle(color: CupertinoColors.white, fontSize: 11, fontWeight: FontWeight.w700)),
+                  ),
+                ),
+              ),
+              if (data.cardKind == _AlertKind.talentMatch) ...[
+                const SizedBox(width: 6),
+                GestureDetector(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 10),
+                    decoration: BoxDecoration(
+                      color: context.isDark ? NexTheme.darkSurface : const Color(0xFFF2F2F7),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text('Guardar', style: TextStyle(color: context.textSecondary, fontSize: 11, fontWeight: FontWeight.w600)),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAvatar(String? name, String? url, double size) {
+    final initial = (name != null && name.isNotEmpty) ? name[0].toUpperCase() : '?';
+    final colors = _gradientColors(initial);
+    final fallback = Container(
+      width: size, height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: LinearGradient(colors: colors, begin: Alignment.topLeft, end: Alignment.bottomRight),
+      ),
+      child: Center(child: Text(initial, style: TextStyle(color: CupertinoColors.white, fontWeight: FontWeight.w800, fontSize: size * 0.38))),
+    );
+    if (url == null || url.isEmpty) return fallback;
+    return ClipOval(
+      child: SizedBox(
+        width: size, height: size,
+        child: Image.network(url, width: size, height: size, fit: BoxFit.cover, webHtmlElementStrategy: kIsWeb ? WebHtmlElementStrategy.prefer : WebHtmlElementStrategy.never, errorBuilder: (_, __, ___) => fallback),
+      ),
+    );
+  }
+
+  List<Color> _gradientColors(String initial) {
+    switch (initial) {
+      case 'M': return [const Color(0xFFE91E63), const Color(0xFFFF6090)];
+      case 'S': return [const Color(0xFF00838F), const Color(0xFF4DD0E1)];
+      case 'C': return [const Color(0xFF5F3DC4), const Color(0xFF9775FA)];
+      case 'A': return [const Color(0xFF057642), const Color(0xFF38D9A9)];
+      default:  return [MployaTheme.brandAccent, const Color(0xFFFB923C)];
+    }
+  }
+
+  Color _cardColor() {
+    switch (data.cardKind) {
+      case _AlertKind.talentMatch: return MployaTheme.brandAccent;
+      case _AlertKind.premiumView: return const Color(0xFF00838F);
+      case _AlertKind.marketInfo: return const Color(0xFF057642);
+      case _AlertKind.connectionRequest: return const Color(0xFF5F3DC4);
+      case _AlertKind.generic: return MployaTheme.brandAccent;
+    }
+  }
+
+  String _cardLabel() {
+    switch (data.cardKind) {
+      case _AlertKind.talentMatch: return 'NUEVO MATCH';
+      case _AlertKind.premiumView: return 'VISTA PREMIUM';
+      case _AlertKind.marketInfo: return 'INFO MERCADO';
+      case _AlertKind.connectionRequest: return 'CONEXIÓN';
+      case _AlertKind.generic: return 'ALERTA';
+    }
+  }
+
+  IconData _cardIcon() {
+    switch (data.cardKind) {
+      case _AlertKind.talentMatch: return CupertinoIcons.briefcase_fill;
+      case _AlertKind.premiumView: return CupertinoIcons.eye_fill;
+      case _AlertKind.marketInfo: return CupertinoIcons.chart_bar_fill;
+      case _AlertKind.connectionRequest: return CupertinoIcons.person_add_solid;
+      case _AlertKind.generic: return CupertinoIcons.bell_fill;
+    }
+  }
+
+  String _ctaLabel() {
+    switch (data.cardKind) {
+      case _AlertKind.talentMatch: return 'Ver Detalles';
+      case _AlertKind.premiumView: return 'Ver Perfil';
+      case _AlertKind.marketInfo: return 'Explorar Datos';
+      case _AlertKind.connectionRequest: return 'Aceptar';
+      case _AlertKind.generic: return 'Ver';
+    }
+  }
+}
+

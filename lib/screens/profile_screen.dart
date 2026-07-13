@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/cupertino.dart';
 // Material widgets (SliverAppBar, Colors, Icons) have no Cupertino equivalent
 import 'package:flutter/material.dart';
@@ -48,6 +49,8 @@ import 'settings_screen.dart';
 import 'mis_herramientas_screen.dart';
 import 'ats_dashboard_screen.dart';
 import '../widgets/mploya_ui.dart';
+import '../widgets/web_ui.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 class ProfileScreen extends StatefulWidget {
   final NexUser? user;
@@ -397,33 +400,66 @@ class _ProfileScreenState extends State<ProfileScreen> {
       );
     }
 
-    // ── Web: 2 columnas (identidad compacta | contenido) ──
+    // ── Web: Premium Cards Grid ──
     if (wide) {
       return CupertinoPageScaffold(
         backgroundColor: bg,
         child: SafeArea(
-          child: SizedBox.expand(
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                sheetColumn(
-                  width: 330,
-                  shrink: true,
-                  margin: const EdgeInsets.fromLTRB(16, 16, 0, 16),
-                  slivers: [...leftSlivers, const SliverToBoxAdapter(child: SizedBox(height: 22))],
-                ),
-                const SizedBox(width: 18),
-                Flexible(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 700),
-                    child: sheetColumn(
-                      margin: const EdgeInsets.fromLTRB(0, 16, 16, 16),
-                      slivers: [navSliver, ...rightSlivers, const SliverToBoxAdapter(child: SizedBox(height: 40))],
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1140),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // ── Top bar ──
+                    Row(
+                      children: [
+                        if (profile.isPremium || profile.isVerified)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: MployaTheme.brandAccent,
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: const Text('Premium', style: TextStyle(color: CupertinoColors.white, fontSize: 12, fontWeight: FontWeight.w800)),
+                          ),
+                        const Spacer(),
+                        CupertinoButton(
+                          padding: EdgeInsets.zero,
+                          minimumSize: Size.zero,
+                          onPressed: () => ShareService.instance.shareProfile(
+                            name: profile.name, headline: profile.headline,
+                            userId: profile.id, accountType: profile.accountType,
+                          ),
+                          child: Icon(CupertinoIcons.square_arrow_up, size: 20, color: context.textSecondary),
+                        ),
+                        const SizedBox(width: 12),
+                        CupertinoButton(
+                          padding: EdgeInsets.zero,
+                          minimumSize: Size.zero,
+                          onPressed: () => _showSettingsSheet(context, profile),
+                          child: Icon(CupertinoIcons.ellipsis, size: 22, color: context.textSecondary),
+                        ),
+                      ],
                     ),
-                  ),
+                    const SizedBox(height: 16),
+                    // ── Row 1: Perfil + Empresa/Info + Acciones ──
+                    _buildWebRow1(context, profile, isOwnProfile),
+                    const SizedBox(height: 16),
+                    // ── Row 2: Video-Pitch + Skills + Info Mercado ──
+                    _buildWebRow2(context, profile, isOwnProfile),
+                    const SizedBox(height: 16),
+                    // ── Row 3: Herramientas ──
+                    if (isOwnProfile) _buildWebToolsCard(context, profile),
+                    const SizedBox(height: 16),
+                    // ── Tabs y contenido extra ──
+                    if (isOwnProfile) _buildWebTabsSection(context, profile),
+                    const SizedBox(height: 40),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         ),
@@ -445,7 +481,549 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  // ── Abrir el formulario de edición según el tipo de cuenta ────────────────
+  // ═══════════════════════════════════════════════════════════════════════════
+  // WEB PREMIUM CARDS
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  Widget _buildWebRow1(BuildContext context, NexUser profile, bool isOwnProfile) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // ── Card 1: Perfil ──
+        Expanded(child: _buildWebProfileCard(context, profile, isOwnProfile)),
+        const SizedBox(width: 16),
+        // ── Card 2: Empresa o Sobre mí ──
+        Expanded(child: _buildWebCompanyCard(context, profile, isOwnProfile)),
+        const SizedBox(width: 16),
+        // ── Card 3: Acciones rápidas ──
+        Expanded(child: _buildWebActionsCard(context, profile, isOwnProfile)),
+      ],
+    );
+  }
+
+  Widget _buildWebProfileCard(BuildContext context, NexUser profile, bool isOwnProfile) {
+    return WebCard(
+      child: Column(
+        children: [
+          // Foto
+          GestureDetector(
+            onTap: isOwnProfile ? () => _pickAndUploadAvatar(profile) : null,
+            child: Stack(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: CupertinoColors.white,
+                    boxShadow: [BoxShadow(color: Color(0x22000000), blurRadius: 16, offset: Offset(0, 6))],
+                  ),
+                  child: NexAvatar(user: profile, size: 90, showBadge: true),
+                ),
+                if (isOwnProfile)
+                  Positioned(
+                    bottom: 2, right: 2,
+                    child: Container(
+                      width: 28, height: 28,
+                      decoration: BoxDecoration(
+                        color: CupertinoColors.white, shape: BoxShape.circle,
+                        border: Border.all(color: const Color(0x14000000)),
+                      ),
+                      child: const Icon(CupertinoIcons.camera_fill, color: MployaTheme.brandAccent, size: 13),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          // Nombre + Headline
+          Text(profile.name, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: context.textPrimary, letterSpacing: -0.3), textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis),
+          const SizedBox(height: 3),
+          if (profile.isPremium || profile.isVerified)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                const Icon(CupertinoIcons.checkmark_seal_fill, size: 14, color: MployaTheme.brandAccent),
+                const SizedBox(width: 4),
+                Text('Premium', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: MployaTheme.brandAccent)),
+              ]),
+            ),
+          Text(profile.headline, style: TextStyle(fontSize: 13, color: context.textSecondary, height: 1.3), textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis),
+          const SizedBox(height: 18),
+          // Stats
+          Row(
+            children: [
+              Expanded(child: _webStatCard(context, '${profile.connections}', 'Conexiones')),
+              const SizedBox(width: 8),
+              Expanded(child: _webStatCard(context, '${profile.profileViews}', 'Vistas de Perfil\n(Premium)')),
+              const SizedBox(width: 8),
+              Expanded(child: _webStatCard(context, '${profile.matchPercentage.round()}', 'Matches')),
+            ],
+          ),
+          const SizedBox(height: 16),
+          // Botones
+          if (isOwnProfile)
+            Row(
+              children: [
+                Expanded(
+                  child: _webActionBtn(context, CupertinoIcons.pencil, 'Editar perfil', () => _openEditProfile(context, profile)),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _webActionBtn(context, CupertinoIcons.sparkles, 'Bio con IA', () => showGenerarBioSheet(context, profile), color: MployaTheme.aiAccent),
+                ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _webStatCard(BuildContext context, String value, String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      decoration: BoxDecoration(
+        color: context.isDark ? NexTheme.darkSurface : const Color(0xFFF7F7F8),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        children: [
+          Text(value, style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: context.textPrimary)),
+          const SizedBox(height: 2),
+          Text(label, style: TextStyle(fontSize: 10.5, color: context.textTertiary, height: 1.3), textAlign: TextAlign.center),
+        ],
+      ),
+    );
+  }
+
+  Widget _webActionBtn(BuildContext context, IconData icon, String label, VoidCallback onTap, {Color? color}) {
+    final c = color ?? MployaTheme.brandAccent;
+    return CupertinoButton(
+      padding: EdgeInsets.zero,
+      minimumSize: Size.zero,
+      onPressed: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 9),
+        decoration: BoxDecoration(
+          color: c.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: c.withValues(alpha: 0.2)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 14, color: c),
+            const SizedBox(width: 5),
+            Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: c)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildWebCompanyCard(BuildContext context, NexUser profile, bool isOwnProfile) {
+    final isCompany = profile.accountType == 'empresa' || profile.accountType == 'headhunter';
+    final companyName = profile.company ?? 'Mi Empresa';
+    final initial = companyName.isNotEmpty ? companyName[0].toUpperCase() : 'M';
+    return WebCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Logo
+          Center(
+            child: Container(
+              width: 70, height: 70,
+              decoration: BoxDecoration(
+                color: MployaTheme.brandAccent.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: Center(
+                child: Text(initial, style: const TextStyle(fontSize: 36, fontWeight: FontWeight.w900, color: MployaTheme.brandAccent)),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(companyName, style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: context.textPrimary)),
+          const SizedBox(height: 4),
+          Text(
+            isCompany ? 'Atraer, evaluar y conectar con el mejor talento Senior.' : profile.about ?? 'Perfil profesional en Mploya',
+            style: TextStyle(fontSize: 13, color: context.textSecondary, height: 1.4),
+            maxLines: 3, overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 16),
+          if (isCompany) ...[
+            Text('Posiciones abiertas:', style: TextStyle(fontSize: 12, color: context.textTertiary)),
+            const SizedBox(height: 2),
+            Text('15', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: context.textPrimary)),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                color: MployaTheme.brandAccent.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                const Icon(CupertinoIcons.checkmark_seal_fill, size: 14, color: MployaTheme.brandAccent),
+                const SizedBox(width: 5),
+                Text('Premium Employer', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: MployaTheme.brandAccent)),
+              ]),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWebActionsCard(BuildContext context, NexUser profile, bool isOwnProfile) {
+    final isCompany = profile.accountType == 'empresa' || profile.accountType == 'headhunter';
+    return WebCard(
+      child: Column(
+        children: [
+          // Botones de acción rápida
+          Row(
+            children: [
+              Expanded(child: _webQuickAction(context, CupertinoIcons.chart_bar_fill, 'Analítica', () {
+                Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const ProfileAnalyticsDashboardScreen()));
+              })),
+              const SizedBox(width: 12),
+              Expanded(child: _webQuickAction(context, CupertinoIcons.person_2_fill, isCompany ? 'Candidatos' : 'Red', () {
+                // Navigate to network/candidates
+              })),
+            ],
+          ),
+          const SizedBox(height: 16),
+          // Info cards
+          _webInfoRow(context, CupertinoIcons.person_badge_plus_fill, '5 candidatos nuevos', MployaTheme.success),
+          const SizedBox(height: 10),
+          _webInfoRow(context, CupertinoIcons.calendar, '2 entrevistas programadas', MployaTheme.info),
+        ],
+      ),
+    );
+  }
+
+  Widget _webQuickAction(BuildContext context, IconData icon, String label, VoidCallback onTap) {
+    return CupertinoButton(
+      padding: EdgeInsets.zero,
+      minimumSize: Size.zero,
+      onPressed: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 18),
+        decoration: BoxDecoration(
+          color: context.isDark ? NexTheme.darkSurface : const Color(0xFFF7F7F8),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Column(
+          children: [
+            Icon(icon, size: 26, color: context.textPrimary),
+            const SizedBox(height: 6),
+            Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: context.textPrimary)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _webInfoRow(BuildContext context, IconData icon, String text, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: color),
+          const SizedBox(width: 10),
+          Expanded(child: Text(text, style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: context.textPrimary))),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWebRow2(BuildContext context, NexUser profile, bool isOwnProfile) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Video-Pitch card
+        Expanded(child: _buildWebVideoPitchCard(context, profile, isOwnProfile)),
+        const SizedBox(width: 16),
+        // Skills card
+        Expanded(child: _buildWebSkillsCard(context, profile)),
+        const SizedBox(width: 16),
+        // Info Mercado card
+        Expanded(child: _buildWebMarketCard(context)),
+      ],
+    );
+  }
+
+  Widget _buildWebVideoPitchCard(BuildContext context, NexUser profile, bool isOwnProfile) {
+    final hasVideo = profile.videoUrl != null && profile.videoUrl!.isNotEmpty;
+    return WebCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Video-Pitch', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: context.textPrimary)),
+          const SizedBox(height: 12),
+          // Video thumbnail
+          GestureDetector(
+            onTap: () {
+              if (hasVideo) {
+                showCupertinoModalPopup<void>(context: context, builder: (_) => VideoPlayerModal(videoUrl: profile.videoUrl!, index: 0));
+              } else if (isOwnProfile) {
+                final isComp = profile.accountType == 'empresa' || profile.accountType == 'headhunter';
+                Navigator.of(context).push(CupertinoPageRoute(builder: (_) => OnboardingPitchScreen(isCompany: isComp)));
+              }
+            },
+            child: Container(
+              height: 130,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(colors: [Color(0xFF1A1A2E), Color(0xFF16213E)]),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Stack(
+                children: [
+                  // Waveform decoration
+                  Positioned(
+                    left: 16, right: 16, bottom: 20, top: 20,
+                    child: CustomPaint(painter: _WaveformPainter()),
+                  ),
+                  // Badge
+                  Positioned(
+                    top: 10, left: 10,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1A1A2E).withValues(alpha: 0.85),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(mainAxisSize: MainAxisSize.min, children: [
+                        const Icon(CupertinoIcons.play_fill, size: 11, color: CupertinoColors.white),
+                        const SizedBox(width: 4),
+                        Text(hasVideo ? 'Video-Pitch' : 'Sin video', style: const TextStyle(color: CupertinoColors.white, fontSize: 11, fontWeight: FontWeight.w700)),
+                      ]),
+                    ),
+                  ),
+                  // Score badge
+                  if (hasVideo)
+                    Positioned(
+                      top: 10, right: 10,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: MployaTheme.brandAccent,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Text('Grabado · 97 pts', style: TextStyle(color: CupertinoColors.white, fontSize: 10, fontWeight: FontWeight.w800)),
+                      ),
+                    ),
+                  // Play button center
+                  Center(
+                    child: Container(
+                      width: 44, height: 44,
+                      decoration: BoxDecoration(
+                        color: MployaTheme.brandAccent,
+                        shape: BoxShape.circle,
+                        boxShadow: [BoxShadow(color: MployaTheme.brandAccent.withValues(alpha: 0.4), blurRadius: 16)],
+                      ),
+                      child: const Icon(CupertinoIcons.play_fill, color: CupertinoColors.white, size: 20),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWebSkillsCard(BuildContext context, NexUser profile) {
+    final skills = profile.skills.take(5).toList();
+    if (skills.isEmpty) {
+      return WebCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Skills compatibilidad', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: context.textPrimary)),
+            const SizedBox(height: 8),
+            Text('(Ejemplar)', style: TextStyle(fontSize: 12, color: context.textTertiary)),
+            const SizedBox(height: 16),
+            _webSkillBars(context, ['Progressive', 'UX', 'Liderazgo', 'UX', 'Agile']),
+          ],
+        ),
+      );
+    }
+    return WebCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Skills compatibilidad', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: context.textPrimary)),
+          const SizedBox(height: 16),
+          _webSkillBars(context, skills),
+        ],
+      ),
+    );
+  }
+
+  Widget _webSkillBars(BuildContext context, List<String> skills) {
+    final heights = [0.6, 0.8, 0.95, 0.7, 0.5];
+    return SizedBox(
+      height: 100,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: List.generate(skills.length, (i) {
+          return Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Expanded(
+                    child: Align(
+                      alignment: Alignment.bottomCenter,
+                      child: FractionallySizedBox(
+                        heightFactor: heights[i % heights.length],
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: MployaTheme.brandAccent.withValues(alpha: 0.75 + (i * 0.05)),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(skills[i], style: TextStyle(fontSize: 9.5, color: context.textTertiary), overflow: TextOverflow.ellipsis),
+                ],
+              ),
+            ),
+          );
+        }),
+      ),
+    );
+  }
+
+  Widget _buildWebMarketCard(BuildContext context) {
+    return WebCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(CupertinoIcons.chart_bar_alt_fill, size: 22, color: MployaTheme.brandAccent),
+              const SizedBox(width: 8),
+              Container(
+                width: 28, height: 28,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF4285F4).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Center(child: Text('G', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: const Color(0xFF4285F4)))),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Text('Información de Mercado', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: context.textTertiary, letterSpacing: 0.5)),
+          const SizedBox(height: 8),
+          Text('Salarios de UX en auge', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: context.textPrimary)),
+          const SizedBox(height: 12),
+          CupertinoButton(
+            padding: EdgeInsets.zero,
+            minimumSize: Size.zero,
+            onPressed: () {},
+            child: Row(
+              children: [
+                Text('Ver datos completos', style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: MployaTheme.brandAccent)),
+                const SizedBox(width: 4),
+                Icon(CupertinoIcons.chevron_right, size: 14, color: MployaTheme.brandAccent),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWebToolsCard(BuildContext context, NexUser profile) {
+    return WebCard(
+      onTap: () => Navigator.of(context).push(CupertinoPageRoute(builder: (_) => MisHerramientasScreen(profile: profile))),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Mis herramientas', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: context.textPrimary)),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              _webToolIcon('Li', const Color(0xFF0A66C2), 'LinkedIn'),
+              const SizedBox(width: 20),
+              _webToolIcon('C', const Color(0xFF006BFF), 'Calendly'),
+              const SizedBox(width: 20),
+              _webToolIcon('S', const Color(0xFF4A154B), 'Slack'),
+              const SizedBox(width: 20),
+              _webToolIcon('📝', null, 'CV Builder'),
+              const Spacer(),
+              Icon(CupertinoIcons.chevron_right, size: 18, color: context.textTertiary),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _webToolIcon(String label, Color? bg, String name) {
+    final isBg = bg != null;
+    return Column(
+      children: [
+        Container(
+          width: 48, height: 48,
+          decoration: BoxDecoration(
+            color: isBg ? bg : const Color(0xFFF2F2F7),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Center(
+            child: Text(label, style: TextStyle(fontSize: isBg ? 20 : 22, fontWeight: FontWeight.w800, color: isBg ? CupertinoColors.white : null)),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(name, style: const TextStyle(fontSize: 11, color: CupertinoColors.systemGrey)),
+      ],
+    );
+  }
+
+  Widget _buildWebTabsSection(BuildContext context, NexUser profile) {
+    return WebCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Tab bar
+          Container(
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: context.isDark ? NexTheme.darkSurface : const Color(0xFFF2F2F7),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                _SegTab(label: 'Sobre mí', isSelected: _selectedProfileTab == 0, onTap: () => setState(() => _selectedProfileTab = 0)),
+                _SegTab(label: 'Portfolio', isSelected: _selectedProfileTab == 1, onTap: () => setState(() => _selectedProfileTab = 1)),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          // Tab content
+          if (_selectedProfileTab == 0) ...[
+            ProfilePersonalitySection(userId: profile.id, isOwnProfile: true, headline: profile.headline, skills: profile.skills),
+            if (profile.experience.isNotEmpty) _buildExperienceClean(context, profile, true),
+            _buildSkillsClean(context, profile, true),
+          ],
+          if (_selectedProfileTab == 1) ...[
+            PortfolioSection(userId: profile.id, isOwnProfile: true),
+            EmployerRatingSection(companyId: profile.id, companyAccountType: profile.accountType, isOwnProfile: true),
+            SkillBadgesSection(userId: profile.id, isOwnProfile: true),
+          ],
+        ],
+      ),
+    );
+  }
   void _openEditProfile(BuildContext context, NexUser profile) {
     if (profile.accountType == 'empresa' || profile.accountType == 'headhunter') {
       Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const CompanyProfileFormScreen()));
@@ -2236,4 +2814,31 @@ class _QuickActionChip extends StatelessWidget {
       ),
     );
   }
+}
+
+// ── Waveform painter for video-pitch card ──
+class _WaveformPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = const Color(0xFFF97316).withValues(alpha: 0.35)
+      ..strokeWidth = 3
+      ..strokeCap = StrokeCap.round;
+    final midY = size.height / 2;
+    final barCount = 40;
+    final barWidth = size.width / barCount;
+    for (var i = 0; i < barCount; i++) {
+      final x = i * barWidth + barWidth / 2;
+      final h = (midY * 0.3) + (midY * 0.7) * (0.5 + 0.5 * _wave(i, barCount));
+      canvas.drawLine(Offset(x, midY - h / 2), Offset(x, midY + h / 2), paint);
+    }
+  }
+
+  double _wave(int i, int count) {
+    final t = i / count;
+    return (0.5 * (1 + math.sin(2 * math.pi * t * 3))) * (1 - (t - 0.5).abs() * 2);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

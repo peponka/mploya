@@ -981,16 +981,20 @@ class _JobListCardState extends State<_JobListCard> {
     final tags = tagsRaw is List ? tagsRaw.map((t) => t.toString()).toList() : <String>[];
     final createdAt = job['created_at']?.toString() ?? '';
 
+    final matchScore = widget.matchScore ?? 0;
+    final location = job['location']?.toString();
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: context.cardColor,
         borderRadius: BorderRadius.circular(20),
         border: isStealth
-            ? Border.all(color: const Color(0xFFDAA520).withValues(alpha: 0.35), width: 1)
-            : Border.all(color: context.dividerColor.withValues(alpha: 0.25), width: 0.5),
+            ? Border.all(color: const Color(0xFFDAA520).withValues(alpha: 0.35), width: 1.5)
+            : Border.all(color: context.dividerColor.withValues(alpha: 0.18), width: 0.5),
         boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 18, offset: const Offset(0, 8)),
+          BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 20, offset: const Offset(0, 8)),
+          BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 6, offset: const Offset(0, 2)),
         ],
       ),
       child: Column(
@@ -1061,6 +1065,26 @@ class _JobListCardState extends State<_JobListCard> {
                   ],
                 ),
               ),
+              // ── Match % circle ──
+              if (matchScore > 0)
+                SizedBox(
+                  width: 52, height: 52,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      SizedBox(
+                        width: 48, height: 48,
+                        child: CircularProgressIndicator(
+                          value: matchScore / 100,
+                          strokeWidth: 4,
+                          backgroundColor: context.dividerColor.withValues(alpha: 0.2),
+                          valueColor: AlwaysStoppedAnimation(matchScore >= 80 ? const Color(0xFF34C759) : matchScore >= 50 ? MployaTheme.brandAccent : context.textTertiary),
+                        ),
+                      ),
+                      Text('$matchScore%', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: context.textPrimary)),
+                    ],
+                  ),
+                ),
               // ── Bookmark ──
               GestureDetector(
                 onTap: () async {
@@ -1185,32 +1209,54 @@ class _JobListCardState extends State<_JobListCard> {
           ],
           const SizedBox(height: 18),
 
-          // Apply button (píldora con ícono de video)
+          // ── Location row ──
+          if (location != null && location.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Row(children: [
+              Icon(CupertinoIcons.location_solid, size: 13, color: context.textTertiary),
+              const SizedBox(width: 5),
+              Flexible(child: Text(location, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: context.textSecondary, fontSize: 12.5, fontWeight: FontWeight.w500))),
+            ]),
+          ],
+
+          // Apply button (premium gradient)
           SizedBox(
             width: double.infinity,
-            child: CupertinoButton(
-              borderRadius: BorderRadius.circular(999),
-              padding: const EdgeInsets.symmetric(vertical: 13),
-              color: isApplied ? CupertinoColors.systemGrey4 : MployaTheme.brandAccent,
-              onPressed: isApplied ? null : onApply,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    isApplied ? CupertinoIcons.checkmark_alt : CupertinoIcons.videocam_fill,
-                    size: 17,
-                    color: isApplied ? CupertinoColors.systemGrey : Colors.white,
+            child: GestureDetector(
+              onTap: isApplied ? null : onApply,
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 13),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(999),
+                  gradient: isApplied ? null : const LinearGradient(
+                    colors: [Color(0xFFF97316), Color(0xFFE2860B), Color(0xFFD4740A)],
+                    begin: Alignment.centerLeft,
+                    end: Alignment.centerRight,
                   ),
-                  const SizedBox(width: 8),
-                  Text(
-                    isApplied ? 'Aplicación enviada' : 'Aplicar con Video',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 15,
+                  color: isApplied ? CupertinoColors.systemGrey4 : null,
+                  boxShadow: isApplied ? null : [
+                    BoxShadow(color: const Color(0xFFF97316).withValues(alpha: 0.3), blurRadius: 12, offset: const Offset(0, 4)),
+                  ],
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      isApplied ? CupertinoIcons.checkmark_alt : CupertinoIcons.videocam_fill,
+                      size: 17,
                       color: isApplied ? CupertinoColors.systemGrey : Colors.white,
                     ),
-                  ),
-                ],
+                    const SizedBox(width: 8),
+                    Text(
+                      isApplied ? 'Aplicación enviada' : '▶ Aplicar con Video',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 15,
+                        color: isApplied ? CupertinoColors.systemGrey : Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

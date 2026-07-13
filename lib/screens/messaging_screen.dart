@@ -618,25 +618,73 @@ class _MessagingScreenState extends State<MessagingScreen> {
 
   Widget _quickActionsSidebar(BuildContext context, NexUser user) {
     return SingleChildScrollView(
-      child: WebCard(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const WebSectionLabel('Acciones Rápidas'),
-            _quickActionRow(
-              context,
-              icon: CupertinoIcons.person_fill,
-              label: 'Ver Perfil',
-              onTap: () => Navigator.of(context).push(CupertinoPageRoute(builder: (_) => ProfileScreen(user: user))),
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Column(
+        children: [
+          // ── Videollamada HD Card ──
+          WebCard(
+            child: Column(
+              children: [
+                Container(
+                  width: 80, height: 80,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFFF97316), Color(0xFFE2860B)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(color: const Color(0xFFF97316).withValues(alpha: 0.3), blurRadius: 16, offset: const Offset(0, 6)),
+                    ],
+                  ),
+                  child: const Icon(CupertinoIcons.videocam_fill, size: 36, color: CupertinoColors.white),
+                ),
+                const SizedBox(height: 12),
+                Text('Iniciar Videollamada HD', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: context.textPrimary), textAlign: TextAlign.center),
+                const SizedBox(height: 4),
+                Text('Conectá cara a cara', style: TextStyle(fontSize: 11.5, color: context.textTertiary)),
+              ],
             ),
-            _quickActionRow(
-              context,
-              icon: CupertinoIcons.calendar,
-              label: 'Agendar Entrevista',
-              onTap: () => Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const SchedulingScreen(isCompany: true))),
+          ),
+          const SizedBox(height: 12),
+          // ── Perfil del contacto ──
+          WebCard(
+            child: Column(
+              children: [
+                NexAvatar(user: user, size: 52, showBadge: true),
+                const SizedBox(height: 10),
+                Text(user.name, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: context.textPrimary), textAlign: TextAlign.center),
+                const SizedBox(height: 2),
+                Text(user.headline, style: TextStyle(fontSize: 12, color: context.textTertiary, height: 1.3), textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis),
+                const SizedBox(height: 12),
+                // Online indicator
+                Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                  Container(width: 8, height: 8, decoration: const BoxDecoration(color: Color(0xFF34C759), shape: BoxShape.circle)),
+                  const SizedBox(width: 5),
+                  Text('Online', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: const Color(0xFF34C759))),
+                ]),
+              ],
             ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 12),
+          // ── Acciones rápidas ──
+          WebCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const WebSectionLabel('Acciones Rápidas'),
+                const SizedBox(height: 4),
+                _quickActionRow(context, icon: CupertinoIcons.person_fill, label: 'Ver Perfil',
+                  onTap: () => Navigator.of(context).push(CupertinoPageRoute(builder: (_) => ProfileScreen(user: user)))),
+                _quickActionRow(context, icon: CupertinoIcons.calendar, label: 'Agendar Entrevista',
+                  onTap: () => Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const SchedulingScreen(isCompany: true)))),
+                _quickActionRow(context, icon: CupertinoIcons.star_fill, label: 'Guardar contacto', onTap: () {}),
+                _quickActionRow(context, icon: CupertinoIcons.doc_on_doc_fill, label: 'Compartir CV', onTap: () {}),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1720,7 +1768,15 @@ class ChatDetailScreenState extends State<ChatDetailScreen> {
                           ),
                         ),
                       ),
-                      const SizedBox(width: 12),
+                      const SizedBox(width: 8),
+                      // ── Mic button ──
+                      CupertinoButton(
+                        padding: EdgeInsets.zero,
+                        minimumSize: Size.zero,
+                        onPressed: () {},
+                        child: Icon(CupertinoIcons.mic_fill, size: 22, color: context.textTertiary),
+                      ),
+                      const SizedBox(width: 10),
                       CupertinoButton(
                         padding: EdgeInsets.zero,
                         minimumSize: Size.zero,
