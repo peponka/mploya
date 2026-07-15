@@ -728,7 +728,7 @@ class _TikTokReelCardState extends ConsumerState<TikTokReelCard>
 
           // ── Info Panel (tarjeta blanca de ancho completo, estilo mockup) ──
           Positioned(
-            bottom: 0,
+            bottom: 60,
             left: 0,
             right: 0,
             child: ReelInfoPanel(
@@ -752,7 +752,7 @@ class _TikTokReelCardState extends ConsumerState<TikTokReelCard>
           if (!widget.webMode)
             Positioned(
               right: 8,
-              bottom: 178,
+              bottom: 230,
               child: ClipRRect(
                 key: widget.isFirstCard ? cmFeedActionsKey : null,
                 borderRadius: BorderRadius.circular(NexTheme.radiusXL),
@@ -774,21 +774,6 @@ class _TikTokReelCardState extends ConsumerState<TikTokReelCard>
               ),
             ),
 
-          // ── Expertise / Top Talent (top edge, sobre el badge de Historias) ──
-          if (!isLocked && (author.tags.isNotEmpty || author.isPremium || author.isVerified))
-            Positioned(
-              top: 54,
-              left: 14,
-              right: 14,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (author.tags.isNotEmpty) Expanded(child: _expertiseBadge(author.tags)),
-                  if (author.tags.isNotEmpty && (author.isPremium || author.isVerified)) const SizedBox(width: 8),
-                  if (author.isPremium || author.isVerified) _topTalentBadge(),
-                ],
-              ),
-            ),
 
           // ── Match Badge (top right, glassmorphism pill) ──
           if (matchScore > 0 && !isLocked)

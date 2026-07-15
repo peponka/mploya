@@ -82,8 +82,8 @@ class _MainNavigationState extends State<MainNavigation> {
 
   List<Widget> get _screens => [
         _homeFeed,           // 0
-        _explore,            // 1
-        (_accountType == 'empresa' || _accountType == 'headhunter') ? _atsDashboard : _network, // 2
+        (_accountType == 'empresa' || _accountType == 'headhunter') ? _atsDashboard : _explore, // 1
+        (_accountType == 'empresa' || _accountType == 'headhunter') ? _explore : _network, // 2
         _notifications,      // 3
         _profile,            // 4
         _messages,           // 5
@@ -416,9 +416,13 @@ class _WebLayout extends StatelessWidget {
                     Container(
                       key: cmNavExploreKey,
                       child: _SidebarItem(
-                        icon: CupertinoIcons.compass_fill,
-                        inactiveIcon: CupertinoIcons.compass,
-                        label: 'Explorar',
+                        icon: (accountType == 'empresa' || accountType == 'headhunter')
+                            ? CupertinoIcons.square_grid_2x2_fill
+                            : CupertinoIcons.compass_fill,
+                        inactiveIcon: (accountType == 'empresa' || accountType == 'headhunter')
+                            ? CupertinoIcons.square_grid_2x2
+                            : CupertinoIcons.compass,
+                        label: (accountType == 'empresa' || accountType == 'headhunter') ? 'Dashboard' : 'Explorar',
                         isActive: currentIndex == 1,
                         isExpanded: isExpanded,
                         badgeCount: 0,
@@ -747,9 +751,9 @@ class _CustomTabBar extends StatelessWidget {
           Container(
             key: cmNavExploreKey,
             child: _TabItem(
-              icon: CupertinoIcons.compass_fill,
-              inactiveIcon: CupertinoIcons.compass,
-              label: 'Explorar',
+              icon: isCompanyAccount ? CupertinoIcons.square_grid_2x2_fill : CupertinoIcons.compass_fill,
+              inactiveIcon: isCompanyAccount ? CupertinoIcons.square_grid_2x2 : CupertinoIcons.compass,
+              label: isCompanyAccount ? 'Dashboard' : 'Explorar',
               isActive: currentIndex == 1,
               onTap: () => onTap(1),
             ),
@@ -757,9 +761,9 @@ class _CustomTabBar extends StatelessWidget {
           Container(
             key: cmNavMatchKey,
             child: _TabItem(
-              icon: isCompanyAccount ? CupertinoIcons.briefcase_fill : CupertinoIcons.bolt_fill,
-              inactiveIcon: isCompanyAccount ? CupertinoIcons.briefcase : CupertinoIcons.bolt,
-              label: isCompanyAccount ? 'Candidatos' : 'Matches',
+              icon: isCompanyAccount ? CupertinoIcons.compass_fill : CupertinoIcons.bolt_fill,
+              inactiveIcon: isCompanyAccount ? CupertinoIcons.compass : CupertinoIcons.bolt,
+              label: isCompanyAccount ? 'Explorar' : 'Matches',
               badgeCount: pendingConnections,
               isActive: currentIndex == 2,
               onTap: () => onTap(2),

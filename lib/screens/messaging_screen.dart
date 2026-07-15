@@ -210,43 +210,268 @@ class _MessagingScreenState extends State<MessagingScreen> {
             if (!loading && !hasConversations) {
               return CupertinoPageScaffold(
                 backgroundColor: const Color(0xFFF1F1F4),
-                child: WebPage(
-                  title: 'Mensajes',
-                  subtitle: 'Tus conversaciones con conexiones aparecerán acá.',
-                  child: Center(
-                    child: WebCard(
-                      padding: const EdgeInsets.all(40),
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 380),
+                child: SafeArea(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // ── LEFT: Demo Inbox ──
+                      Container(
+                        width: 380,
+                        margin: const EdgeInsets.fromLTRB(16, 16, 0, 16),
+                        decoration: BoxDecoration(
+                          color: context.cardColor,
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(color: context.dividerColor.withValues(alpha: 0.3)),
+                          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 20, offset: const Offset(0, 6))],
+                        ),
                         child: Column(
-                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            Container(
-                              width: 76, height: 76,
-                              decoration: BoxDecoration(color: MployaTheme.brandAccent.withValues(alpha: 0.10), borderRadius: BorderRadius.circular(20)),
-                              child: Icon(CupertinoIcons.chat_bubble_2_fill, size: 34, color: MployaTheme.brandAccent),
+                            // Header
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+                              child: Row(
+                                children: [
+                                  Text('Mensajes', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: context.textPrimary)),
+                                  const Spacer(),
+                                  Container(
+                                    width: 36, height: 36,
+                                    decoration: BoxDecoration(
+                                      color: MployaTheme.brandAccent.withValues(alpha: 0.1),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Icon(CupertinoIcons.square_pencil, size: 18, color: MployaTheme.brandAccent),
+                                  ),
+                                ],
+                              ),
                             ),
-                            const SizedBox(height: 20),
-                            Text('Inbox vacío', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800, color: context.textPrimary)),
-                            const SizedBox(height: 8),
-                            Text(
-                              'Explorá el feed inmersivo y hacé match con profesionales para iniciar una conversación.',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(fontSize: 13.5, color: context.textTertiary, height: 1.5),
+                            // Search
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(20, 14, 20, 10),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                decoration: BoxDecoration(
+                                  color: context.isDark ? NexTheme.darkSurface : const Color(0xFFF2F2F7),
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                                child: Row(children: [
+                                  Icon(CupertinoIcons.search, size: 16, color: context.textTertiary),
+                                  const SizedBox(width: 8),
+                                  Text('Buscar conexiones, mensajes...', style: TextStyle(color: context.textTertiary, fontSize: 14)),
+                                ]),
+                              ),
                             ),
-                            const SizedBox(height: 22),
-                            WebButton(
-                              icon: CupertinoIcons.play_fill,
-                              label: 'Ir al Feed',
-                              onTap: () {
-                                currentMainTabNotifier.value = 0;
-                                Navigator.of(context).popUntil((route) => route.isFirst);
-                              },
+                            // Filter chips
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 20),
+                              child: Row(children: [
+                                _demoFilterChip('Todos', true),
+                                const SizedBox(width: 8),
+                                _demoFilterChip('Talento Match', false),
+                                const SizedBox(width: 8),
+                                _demoFilterChip('No leídos', false),
+                              ]),
+                            ),
+                            const SizedBox(height: 10),
+                            // Nuevos matches (horizontal avatars)
+                            SizedBox(
+                              height: 90,
+                              child: ListView(
+                                scrollDirection: Axis.horizontal,
+                                padding: const EdgeInsets.symmetric(horizontal: 20),
+                                children: [
+                                  _demoMatchAvatar('Sofía', '👩‍💼', true),
+                                  _demoMatchAvatar('Carlos', '👨‍🔬', true),
+                                  _demoMatchAvatar('Ana', '👩‍⚕️', false),
+                                  _demoMatchAvatar('Diego', '👨‍🎓', true),
+                                  _demoMatchAvatar('Lucía', '👩‍🏫', false),
+                                ],
+                              ),
+                            ),
+                            Divider(height: 1, color: context.dividerColor.withValues(alpha: 0.3)),
+                            // Conversation tiles
+                            Expanded(
+                              child: ListView(
+                                padding: const EdgeInsets.symmetric(vertical: 4),
+                                children: [
+                                  _demoConversationTile('Elena García', '👩‍🎨', '¡Sí! Me encanta. ¿Grabamos hoy?', '09:25', 2, true),
+                                  _demoConversationTile('Alex Rivera', '👨‍💻', '¿Viste el concepto para el corto?', '09:22', 0, false),
+                                  _demoConversationTile('Martín López', '👨‍💼', 'Perfecto, te mando el brief 📎', '08:45', 1, false),
+                                  _demoConversationTile('Camila Ruiz', '👩‍🔬', 'El video quedó increíble 🎬', 'Ayer', 0, false),
+                                  _demoConversationTile('Lucas Herrera', '👨‍🎨', 'Dale, agendamos para el jueves', 'Ayer', 0, false),
+                                  _demoConversationTile('Valentina Torres', '👩‍🚀', '¡Gracias por la entrevista!', 'Lun', 3, false),
+                                ],
+                              ),
                             ),
                           ],
                         ),
                       ),
-                    ),
+                      // ── CENTER: Demo Chat ──
+                      Expanded(
+                        child: Container(
+                          margin: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: context.cardColor.withValues(alpha: 0.85),
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(color: context.dividerColor.withValues(alpha: 0.2)),
+                            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 20, offset: const Offset(0, 6))],
+                          ),
+                          child: Column(
+                            children: [
+                              // ── Chat header ──
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                                decoration: BoxDecoration(
+                                  color: context.cardColor,
+                                  borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
+                                  border: Border(bottom: BorderSide(color: context.dividerColor.withValues(alpha: 0.2))),
+                                ),
+                                child: Row(
+                                  children: [
+                                    _demoUserChip('Elena García', '👩‍🎨', true),
+                                    const Spacer(),
+                                    // Video call button
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                      decoration: BoxDecoration(
+                                        gradient: const LinearGradient(colors: [Color(0xFFF97316), Color(0xFFE2860B)]),
+                                        borderRadius: BorderRadius.circular(12),
+                                        boxShadow: [BoxShadow(color: const Color(0xFFF97316).withValues(alpha: 0.25), blurRadius: 8, offset: const Offset(0, 3))],
+                                      ),
+                                      child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                                        Icon(CupertinoIcons.videocam_fill, color: CupertinoColors.white, size: 16),
+                                        SizedBox(width: 6),
+                                        Text('Video HD', style: TextStyle(color: CupertinoColors.white, fontSize: 12, fontWeight: FontWeight.w700)),
+                                      ]),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Icon(CupertinoIcons.person_crop_circle, size: 28, color: context.textSecondary),
+                                  ],
+                                ),
+                              ),
+                              // ── Chat messages ──
+                              Expanded(
+                                child: ListView(
+                                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                                  children: [
+                                    _demoBubble('Hola Elena! Vi tu portafolio y me encantó tu estilo visual 🎨', true, '09:15', true),
+                                    _demoBubble('¡Gracias! Me especializo en motion graphics para startups', false, '09:17', false),
+                                    _demoBubble('Perfecto. Estamos buscando alguien para nuestro pitch video', true, '09:19', true),
+                                    _demoBubble('¿Viste el concepto para el corto?', false, '09:22', false),
+                                    _demoBubble('¡Sí! Me encanta. ¿Grabamos hoy?', true, '09:25', true),
+                                  ],
+                                ),
+                              ),
+                              // ── Input bar ──
+                              Container(
+                                margin: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                decoration: BoxDecoration(
+                                  color: context.isDark ? NexTheme.darkSurface : const Color(0xFFF2F2F7),
+                                  borderRadius: BorderRadius.circular(22),
+                                  border: Border.all(color: context.dividerColor.withValues(alpha: 0.3)),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(CupertinoIcons.plus_circle_fill, size: 24, color: context.textTertiary),
+                                    const SizedBox(width: 10),
+                                    Expanded(child: Text('Escribí un mensaje...', style: TextStyle(color: context.textTertiary, fontSize: 15))),
+                                    Icon(CupertinoIcons.mic_fill, size: 20, color: context.textTertiary),
+                                    const SizedBox(width: 12),
+                                    Container(
+                                      width: 36, height: 36,
+                                      decoration: BoxDecoration(
+                                        gradient: const LinearGradient(colors: [Color(0xFFF97316), Color(0xFFE2860B)]),
+                                        shape: BoxShape.circle,
+                                        boxShadow: [BoxShadow(color: const Color(0xFFF97316).withValues(alpha: 0.3), blurRadius: 8, offset: const Offset(0, 3))],
+                                      ),
+                                      child: const Icon(CupertinoIcons.arrow_up, size: 18, color: CupertinoColors.white),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      // ── RIGHT: Quick Actions Sidebar ──
+                      Container(
+                        width: 240,
+                        margin: const EdgeInsets.fromLTRB(0, 16, 16, 16),
+                        child: Column(
+                          children: [
+                            // Premium Camera
+                            Container(
+                              padding: const EdgeInsets.all(20),
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  colors: [Color(0xFFF97316), Color(0xFFE2860B), Color(0xFFD4740A)],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                borderRadius: BorderRadius.circular(18),
+                                boxShadow: [BoxShadow(color: const Color(0xFFF97316).withValues(alpha: 0.3), blurRadius: 16, offset: const Offset(0, 6))],
+                              ),
+                              child: Column(
+                                children: [
+                                  const Icon(CupertinoIcons.videocam_circle_fill, color: CupertinoColors.white, size: 42),
+                                  const SizedBox(height: 8),
+                                  const Text('Premium Camera', style: TextStyle(color: CupertinoColors.white, fontSize: 15, fontWeight: FontWeight.w800)),
+                                  const SizedBox(height: 4),
+                                  Text('Videollamada HD', style: TextStyle(color: CupertinoColors.white.withValues(alpha: 0.8), fontSize: 12)),
+                                  const SizedBox(height: 4),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                    decoration: BoxDecoration(color: const Color(0xFFEF4444), borderRadius: BorderRadius.circular(6)),
+                                    child: const Text('LIVE', style: TextStyle(color: CupertinoColors.white, fontSize: 10, fontWeight: FontWeight.w800)),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            // Contact card
+                            Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: context.cardColor,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(color: context.dividerColor.withValues(alpha: 0.3)),
+                              ),
+                              child: Column(
+                                children: [
+                                  Container(
+                                    width: 56, height: 56,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      gradient: LinearGradient(colors: [Colors.grey.shade200, Colors.grey.shade300]),
+                                    ),
+                                    child: const Center(child: Text('👩‍🎨', style: TextStyle(fontSize: 28))),
+                                  ),
+                                  const SizedBox(height: 10),
+                                  Text('Elena García', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: context.textPrimary)),
+                                  const SizedBox(height: 2),
+                                  Text('Motion Designer', style: TextStyle(fontSize: 12, color: context.textSecondary)),
+                                  const SizedBox(height: 4),
+                                  Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                                    Container(width: 8, height: 8, decoration: const BoxDecoration(color: Color(0xFF34C759), shape: BoxShape.circle)),
+                                    const SizedBox(width: 5),
+                                    Text('Active Now', style: TextStyle(fontSize: 11, color: const Color(0xFF34C759), fontWeight: FontWeight.w600)),
+                                  ]),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            // Quick actions
+                            _demoActionRow(CupertinoIcons.person_crop_circle, 'Ver Perfil'),
+                            const SizedBox(height: 6),
+                            _demoActionRow(CupertinoIcons.calendar, 'Agendar Entrevista'),
+                            const SizedBox(height: 6),
+                            _demoActionRow(CupertinoIcons.star, 'Guardar Perfil'),
+                            const SizedBox(height: 6),
+                            _demoActionRow(CupertinoIcons.doc_text, 'Enviar Brief'),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               );
@@ -616,6 +841,220 @@ class _MessagingScreenState extends State<MessagingScreen> {
     );
   }
 
+  /// Demo user chip for the empty-state chat preview
+  Widget _demoUserChip(String name, String emoji, bool active) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Stack(
+          children: [
+            Container(
+              width: 44, height: 44,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: LinearGradient(colors: [Colors.grey.shade200, Colors.grey.shade300]),
+                boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 8, offset: const Offset(0, 2))],
+              ),
+              child: Center(child: Text(emoji, style: const TextStyle(fontSize: 22))),
+            ),
+            if (active)
+              Positioned(
+                bottom: 1, right: 1,
+                child: Container(
+                  width: 12, height: 12,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF34C759),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: CupertinoColors.white, width: 2),
+                  ),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(width: 10),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(name, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: context.textPrimary)),
+            if (active) Text('Active Now', style: TextStyle(fontSize: 11, color: const Color(0xFF34C759), fontWeight: FontWeight.w600)),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _demoFilterChip(String label, bool active) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+      decoration: BoxDecoration(
+        color: active ? MployaTheme.brandAccent : Colors.transparent,
+        borderRadius: BorderRadius.circular(20),
+        border: active ? null : Border.all(color: context.dividerColor.withValues(alpha: 0.5)),
+      ),
+      child: Text(label, style: TextStyle(
+        color: active ? CupertinoColors.white : context.textSecondary,
+        fontSize: 13, fontWeight: FontWeight.w600,
+      )),
+    );
+  }
+
+  Widget _demoMatchAvatar(String name, String emoji, bool isNew) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(3),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: isNew
+                  ? const LinearGradient(colors: [Color(0xFFF97316), Color(0xFFE2860B)])
+                  : null,
+              border: isNew ? null : Border.all(color: context.dividerColor, width: 2),
+            ),
+            child: Container(
+              width: 48, height: 48,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: context.cardColor,
+              ),
+              child: Center(child: Text(emoji, style: const TextStyle(fontSize: 24))),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(name, style: TextStyle(fontSize: 11, fontWeight: isNew ? FontWeight.w700 : FontWeight.w500, color: context.textSecondary)),
+        ],
+      ),
+    );
+  }
+
+  Widget _demoConversationTile(String name, String emoji, String lastMsg, String time, int unread, bool isSelected) {
+    return GestureDetector(
+      onTap: () {
+        Navigator.of(context).push(
+          CupertinoPageRoute(builder: (_) => _DemoChatScreen(name: name, emoji: emoji)),
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: isSelected ? MployaTheme.brandAccent.withValues(alpha: 0.08) : Colors.transparent,
+          border: Border(left: BorderSide(color: isSelected ? MployaTheme.brandAccent : Colors.transparent, width: 3)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 48, height: 48,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: LinearGradient(colors: [Colors.grey.shade200, Colors.grey.shade300]),
+              ),
+              child: Center(child: Text(emoji, style: const TextStyle(fontSize: 24))),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(child: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 14, fontWeight: unread > 0 ? FontWeight.w800 : FontWeight.w600, color: context.textPrimary))),
+                      Text(time, style: TextStyle(fontSize: 11, color: unread > 0 ? MployaTheme.brandAccent : context.textTertiary, fontWeight: unread > 0 ? FontWeight.w700 : FontWeight.w500)),
+                    ],
+                  ),
+                  const SizedBox(height: 3),
+                  Row(
+                    children: [
+                      Expanded(child: Text(lastMsg, maxLines: 1, overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 13, color: context.textTertiary, fontWeight: unread > 0 ? FontWeight.w600 : FontWeight.w400))),
+                      if (unread > 0)
+                        Container(
+                          width: 20, height: 20,
+                          decoration: const BoxDecoration(color: MployaTheme.brandAccent, shape: BoxShape.circle),
+                          child: Center(child: Text('$unread', style: const TextStyle(color: CupertinoColors.white, fontSize: 11, fontWeight: FontWeight.w800))),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _demoBubble(String text, bool isMe, String time, bool isRead) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        children: [
+          Container(
+            constraints: const BoxConstraints(maxWidth: 380),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: isMe ? null : (context.isDark ? NexTheme.darkSurface : const Color(0xFFF2F2F7)),
+              gradient: isMe ? const LinearGradient(
+                colors: [Color(0xFFF97316), Color(0xFFE2860B)],
+                begin: Alignment.topLeft, end: Alignment.bottomRight,
+              ) : null,
+              borderRadius: BorderRadius.only(
+                topLeft: const Radius.circular(20),
+                topRight: const Radius.circular(20),
+                bottomLeft: Radius.circular(isMe ? 20 : 6),
+                bottomRight: Radius.circular(isMe ? 6 : 20),
+              ),
+              boxShadow: isMe
+                  ? [BoxShadow(color: const Color(0xFFF97316).withValues(alpha: 0.15), blurRadius: 8, offset: const Offset(0, 3))]
+                  : null,
+            ),
+            child: Text(text, style: TextStyle(
+              fontSize: 14.5, fontWeight: FontWeight.w500,
+              color: isMe ? CupertinoColors.white : context.textPrimary,
+            )),
+          ),
+          const SizedBox(height: 4),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(time, style: TextStyle(fontSize: 11, color: context.textTertiary)),
+              if (isMe) ...[
+                const SizedBox(width: 4),
+                Icon(
+                  isRead ? CupertinoIcons.checkmark_alt_circle_fill : CupertinoIcons.checkmark_alt_circle,
+                  size: 13, color: isRead ? MployaTheme.brandAccent : context.textTertiary,
+                ),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _demoActionRow(IconData icon, String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: context.cardColor,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: context.dividerColor.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: MployaTheme.brandAccent),
+          const SizedBox(width: 10),
+          Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: context.textPrimary)),
+          const Spacer(),
+          Icon(CupertinoIcons.chevron_right, size: 14, color: context.textTertiary),
+        ],
+      ),
+    );
+  }
+
   Widget _quickActionsSidebar(BuildContext context, NexUser user) {
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(vertical: 8),
@@ -713,63 +1152,33 @@ class _MessagingScreenState extends State<MessagingScreen> {
 
   Widget _buildEmptyInbox(BuildContext context) {
     return SliverToBoxAdapter(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 80),
-        child: Column(
-          children: [
-            Container(
-              width: 80,
-              height: 80,
-              decoration: BoxDecoration(
-                color: context.cardColor,
-                shape: BoxShape.circle,
-                boxShadow: const [
-                  BoxShadow(color: Color(0x14000000), blurRadius: 24, offset: Offset(0, 8))
-                ],
-              ),
-              child: Center(
-                child: Icon(
-                  CupertinoIcons.chat_bubble_2_fill,
-                  size: 38,
-                  color: context.brandAccent.withValues(alpha: 0.4),
-                ),
-              ),
+      child: Column(
+        children: [
+          // ── Nuevos Matches demo (horizontal scroll) ──
+          SizedBox(
+            height: 100,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+              children: [
+                _demoMatchAvatar('Sofía', '👩‍💼', true),
+                _demoMatchAvatar('Carlos', '👨‍🔬', true),
+                _demoMatchAvatar('Ana', '👩‍⚕️', false),
+                _demoMatchAvatar('Diego', '👨‍🎓', true),
+                _demoMatchAvatar('Lucía', '👩‍🏫', false),
+                _demoMatchAvatar('Mateo', '👨‍🎤', true),
+              ],
             ),
-            const SizedBox(height: 24),
-            Text(
-              'Inbox Vacío',
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.w800,
-                color: context.textPrimary,
-                fontFamily: '.SF Pro Display',
-                letterSpacing: -0.5,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'Explora el feed inmersivo y haz match con profesionales increíbles para iniciar una conversación.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 15,
-                color: context.textSecondary,
-                height: 1.4,
-                fontFamily: '.SF Pro Text',
-              ),
-            ),
-            const SizedBox(height: 32),
-            CupertinoButton(
-              color: MployaTheme.brandAccent,
-              borderRadius: BorderRadius.circular(20),
-              child: const Text('Ir al Feed', style: TextStyle(fontWeight: FontWeight.w700, color: CupertinoColors.white)),
-              onPressed: () {
-                // Navegar al tab Feed (index 0)
-                currentMainTabNotifier.value = 0;
-                Navigator.of(context).popUntil((route) => route.isFirst);
-              },
-            ),
-          ],
-        ),
+          ),
+          Divider(height: 1, color: context.dividerColor.withValues(alpha: 0.3)),
+          // ── Demo conversations ──
+          _demoConversationTile('Elena García', '👩‍🎨', '¡Sí! Me encanta. ¿Grabamos hoy?', '09:25', 2, true),
+          _demoConversationTile('Alex Rivera', '👨‍💻', '¿Viste el concepto para el corto?', '09:22', 0, false),
+          _demoConversationTile('Martín López', '👨‍💼', 'Perfecto, te mando el brief 📎', '08:45', 1, false),
+          _demoConversationTile('Camila Ruiz', '👩‍🔬', 'El video quedó increíble 🎬', 'Ayer', 0, false),
+          _demoConversationTile('Lucas Herrera', '👨‍🎨', 'Dale, agendamos para el jueves', 'Ayer', 0, false),
+          _demoConversationTile('Valentina Torres', '👩‍🚀', '¡Gracias por la entrevista!', 'Lun', 3, false),
+        ],
       ),
     );
   }
@@ -945,7 +1354,7 @@ class _MatchAvatarHero extends StatelessWidget {
             shape: BoxShape.circle,
             gradient: isNew
                 ? const LinearGradient(
-                    colors: [Color(0xFF004E99), Color(0xFF715092)],
+                    colors: [Color(0xFFF97316), Color(0xFFE2860B)],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   )
@@ -954,7 +1363,7 @@ class _MatchAvatarHero extends StatelessWidget {
             boxShadow: isNew
                 ? [
                     BoxShadow(
-                      color: const Color(0xFF004E99).withValues(alpha: 0.3),
+                      color: const Color(0xFFF97316).withValues(alpha: 0.3),
                       blurRadius: 12,
                       offset: const Offset(0, 4),
                     )
@@ -1786,13 +2195,13 @@ class ChatDetailScreenState extends State<ChatDetailScreen> {
                           height: 40,
                           decoration: BoxDecoration(
                             gradient: const LinearGradient(
-                              colors: [Color(0xFF004E99), Color(0xFF715092)],
+                              colors: [Color(0xFFF97316), Color(0xFFE2860B)],
                               begin: Alignment.topLeft,
                               end: Alignment.bottomRight,
                             ),
                             shape: BoxShape.circle,
                             boxShadow: [
-                              BoxShadow(color: const Color(0xFF004E99).withValues(alpha: 0.3), blurRadius: 12, offset: const Offset(0, 4))
+                              BoxShadow(color: const Color(0xFFF97316).withValues(alpha: 0.3), blurRadius: 12, offset: const Offset(0, 4))
                             ],
                           ),
                           child: Center(
@@ -1866,9 +2275,9 @@ class _EmptyChat extends StatelessWidget {
               padding: const EdgeInsets.all(4),
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                gradient: const LinearGradient(colors: [Color(0xFF004E99), Color(0xFF715092)]),
+                gradient: const LinearGradient(colors: [Color(0xFFF97316), Color(0xFFE2860B)]),
                 boxShadow: [
-                  BoxShadow(color: const Color(0xFF004E99).withValues(alpha: 0.3), blurRadius: 24, offset: const Offset(0, 8))
+                  BoxShadow(color: const Color(0xFFF97316).withValues(alpha: 0.3), blurRadius: 24, offset: const Offset(0, 8))
                 ],
               ),
               child: Container(
@@ -2040,7 +2449,7 @@ class _MessageBubble extends StatelessWidget {
                     color: isMe ? null : context.cardColor,
                     gradient: isMe
                         ? const LinearGradient(
-                            colors: [Color(0xFF004E99), Color(0xFF0A66C2)],
+                            colors: [Color(0xFFF97316), Color(0xFFE2860B)],
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
                           )
@@ -2052,7 +2461,7 @@ class _MessageBubble extends StatelessWidget {
                       bottomRight: Radius.circular(isMe ? 6 : 22),
                     ),
                     boxShadow: isMe
-                        ? [BoxShadow(color: const Color(0xFF004E99).withValues(alpha: 0.2), blurRadius: 12, offset: const Offset(0, 4))]
+                        ? [BoxShadow(color: const Color(0xFFF97316).withValues(alpha: 0.2), blurRadius: 12, offset: const Offset(0, 4))]
                         : const [BoxShadow(color: Color(0x08000000), blurRadius: 12, offset: Offset(0, 4))],
                   ),
                   child: Column(
@@ -2193,7 +2602,7 @@ class _MessageBubble extends StatelessWidget {
                           Icon(
                             isRead ? CupertinoIcons.checkmark_alt_circle_fill : CupertinoIcons.checkmark_alt_circle,
                             size: 14,
-                            color: isRead ? const Color(0xFF34AADC) : const Color(0xFFAEAEB2),
+                            color: isRead ? MployaTheme.brandAccent : const Color(0xFFAEAEB2),
                           ),
                         ],
                       ],
@@ -2527,6 +2936,175 @@ class _TypingDotState extends State<_TypingDot> with SingleTickerProviderStateMi
         decoration: const BoxDecoration(
           color: Color(0xFF8E8E93),
           shape: BoxShape.circle,
+        ),
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Demo Chat Screen — opens when tapping a demo conversation tile (mobile)
+// ═══════════════════════════════════════════════════════════════════════════
+class _DemoChatScreen extends StatelessWidget {
+  final String name;
+  final String emoji;
+
+  const _DemoChatScreen({required this.name, required this.emoji});
+
+  static const _demoMessages = [
+    {'text': 'Hola! Vi tu portafolio y me encantó tu estilo visual 🎨', 'isMe': true, 'time': '09:15'},
+    {'text': '¡Gracias! Me especializo en motion graphics para startups', 'isMe': false, 'time': '09:17'},
+    {'text': 'Perfecto. Estamos buscando alguien para nuestro pitch video', 'isMe': true, 'time': '09:19'},
+    {'text': '¿Viste el concepto para el corto?', 'isMe': false, 'time': '09:22'},
+    {'text': '¡Sí! Me encanta. ¿Grabamos hoy?', 'isMe': true, 'time': '09:25'},
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return CupertinoPageScaffold(
+      backgroundColor: context.isDark ? NexTheme.darkBg : const Color(0xFFF9F9FA),
+      child: SafeArea(
+        child: Column(
+          children: [
+            // ── Header ──
+            Container(
+              padding: const EdgeInsets.fromLTRB(8, 8, 16, 12),
+              decoration: BoxDecoration(
+                color: context.cardColor,
+                border: Border(bottom: BorderSide(color: context.dividerColor.withValues(alpha: 0.2))),
+              ),
+              child: Row(
+                children: [
+                  CupertinoButton(
+                    padding: EdgeInsets.zero,
+                    minSize: 0,
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: Icon(CupertinoIcons.chevron_left, size: 26, color: MployaTheme.brandAccent),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    width: 42, height: 42,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: LinearGradient(colors: [Colors.grey.shade200, Colors.grey.shade300]),
+                    ),
+                    child: Center(child: Text(emoji, style: const TextStyle(fontSize: 22))),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(name, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: context.textPrimary)),
+                        Row(children: [
+                          Container(width: 7, height: 7, decoration: const BoxDecoration(color: Color(0xFF34C759), shape: BoxShape.circle)),
+                          const SizedBox(width: 4),
+                          const Text('Active Now', style: TextStyle(fontSize: 12, color: Color(0xFF34C759), fontWeight: FontWeight.w600)),
+                        ]),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(colors: [Color(0xFFF97316), Color(0xFFE2860B)]),
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [BoxShadow(color: const Color(0xFFF97316).withValues(alpha: 0.25), blurRadius: 8, offset: const Offset(0, 3))],
+                    ),
+                    child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                      Icon(CupertinoIcons.videocam_fill, color: CupertinoColors.white, size: 16),
+                      SizedBox(width: 5),
+                      Text('Video HD', style: TextStyle(color: CupertinoColors.white, fontSize: 12, fontWeight: FontWeight.w700)),
+                    ]),
+                  ),
+                ],
+              ),
+            ),
+            // ── Messages ──
+            Expanded(
+              child: ListView.builder(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                itemCount: _demoMessages.length,
+                itemBuilder: (context, i) {
+                  final msg = _demoMessages[i];
+                  final isMe = msg['isMe'] as bool;
+                  final text = msg['text'] as String;
+                  final time = msg['time'] as String;
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Column(
+                      crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: isMe ? null : (context.isDark ? NexTheme.darkSurface : const Color(0xFFF2F2F7)),
+                            gradient: isMe ? const LinearGradient(
+                              colors: [Color(0xFFF97316), Color(0xFFE2860B)],
+                              begin: Alignment.topLeft, end: Alignment.bottomRight,
+                            ) : null,
+                            borderRadius: BorderRadius.only(
+                              topLeft: const Radius.circular(20),
+                              topRight: const Radius.circular(20),
+                              bottomLeft: Radius.circular(isMe ? 20 : 6),
+                              bottomRight: Radius.circular(isMe ? 6 : 20),
+                            ),
+                            boxShadow: isMe
+                                ? [BoxShadow(color: const Color(0xFFF97316).withValues(alpha: 0.15), blurRadius: 8, offset: const Offset(0, 3))]
+                                : null,
+                          ),
+                          child: Text(text, style: TextStyle(
+                            fontSize: 15, fontWeight: FontWeight.w500,
+                            color: isMe ? CupertinoColors.white : context.textPrimary,
+                          )),
+                        ),
+                        const SizedBox(height: 4),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(time, style: TextStyle(fontSize: 11, color: context.textTertiary)),
+                            if (isMe) ...[
+                              const SizedBox(width: 4),
+                              Icon(CupertinoIcons.checkmark_alt_circle_fill, size: 13, color: MployaTheme.brandAccent),
+                            ],
+                          ],
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+            // ── Input bar ──
+            Container(
+              margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: context.isDark ? NexTheme.darkSurface : const Color(0xFFF2F2F7),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(color: context.dividerColor.withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                children: [
+                  Icon(CupertinoIcons.plus_circle_fill, size: 24, color: context.textTertiary),
+                  const SizedBox(width: 10),
+                  Expanded(child: Text('Escribí un mensaje...', style: TextStyle(color: context.textTertiary, fontSize: 15))),
+                  Icon(CupertinoIcons.mic_fill, size: 20, color: context.textTertiary),
+                  const SizedBox(width: 12),
+                  Container(
+                    width: 36, height: 36,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(colors: [Color(0xFFF97316), Color(0xFFE2860B)]),
+                      shape: BoxShape.circle,
+                      boxShadow: [BoxShadow(color: const Color(0xFFF97316).withValues(alpha: 0.3), blurRadius: 8, offset: const Offset(0, 3))],
+                    ),
+                    child: const Icon(CupertinoIcons.arrow_up, size: 18, color: CupertinoColors.white),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );

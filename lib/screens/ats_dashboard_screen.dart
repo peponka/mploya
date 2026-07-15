@@ -1,1010 +1,518 @@
 import 'dart:ui';
 import 'package:flutter/cupertino.dart';
-// Material widgets (SliverAppBar, Colors, Icons) have no Cupertino equivalent
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../theme/app_theme.dart';
-import '../models/models.dart';
-import '../screens/b2b_paywall_screen.dart';
-import '../screens/vacantes_screen.dart';
-import '../screens/messaging_screen.dart';
-import '../screens/profile_screen.dart';
-// nexus_inbox_tab removed – replaced by inline Contactos section
-import '../widgets/nex_avatar.dart';
 import '../widgets/web_ui.dart';
-import '../services/social_service.dart';
+
+// ═══════════════════════════════════════════════════════════════
+// DEMO DATA
+// ═══════════════════════════════════════════════════════════════
+final _demoCandidates = [
+  _C(name: 'Elena G.', role: 'Data Scientist', match: 92, skills: ['Python', 'SQL', 'Project Mgmt.'], photo: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200&h=200&fit=crop&crop=face', stage: 'revision', hasVideo: true, pitchTitle: 'DATA SCIENTIST PITCH'),
+  _C(name: 'Alex R.', role: 'Frontend Dev', match: 92, skills: ['React', 'TypeScript', 'Figma'], photo: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop&crop=face', stage: 'interview', hasVideo: true, pitchTitle: 'FRONTEND PITCH'),
+  _C(name: 'Sofía C.', role: 'UX Designer', match: 92, skills: ['Figma', 'Research', 'UI/UX'], photo: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=200&h=200&fit=crop&crop=face', stage: 'interview', hasVideo: true, pitchTitle: 'UX DESIGN PITCH'),
+  _C(name: 'David L.', role: 'Backend Eng', match: 92, skills: ['Go', 'AWS', 'PostgreSQL'], photo: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200&h=200&fit=crop&crop=face', stage: 'interview', hasVideo: false, pitchTitle: 'BACKEND PITCH'),
+  _C(name: 'Carlos M.', role: 'DevOps', match: 88, skills: ['Docker', 'K8s', 'Terraform'], photo: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200&h=200&fit=crop&crop=face', stage: 'revision', hasVideo: true, pitchTitle: 'DEVOPS PITCH'),
+  _C(name: 'Lucía P.', role: 'Product Mgr', match: 85, skills: ['Agile', 'Analytics', 'SQL'], photo: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&h=200&fit=crop&crop=face', stage: 'revision', hasVideo: true, pitchTitle: 'PRODUCT PITCH'),
+];
+
+class _C {
+  final String name, role, photo, stage, pitchTitle;
+  final int match;
+  final List<String> skills;
+  final bool hasVideo;
+  const _C({required this.name, required this.role, required this.match, required this.skills, required this.photo, required this.stage, required this.hasVideo, required this.pitchTitle});
+}
+
+// ═══════════════════════════════════════════════════════════════
 
 class AtsDashboardScreen extends StatefulWidget {
   const AtsDashboardScreen({super.key});
-
   @override
   State<AtsDashboardScreen> createState() => _AtsDashboardScreenState();
 }
 
 class _AtsDashboardScreenState extends State<AtsDashboardScreen> {
-  int _tokensDisponibles = 0;
-  String _filtroActivo = 'Postulantes';
-  final List<String> _filtros = ['Postulantes', 'Pendientes', 'Contactos', 'Confidencial 🔒'];
-
-  // ── Postulantes reales (job_applications × jobs × users, vía RPC
-  // get_company_candidates) — reemplaza la idea de "Gestor de Talentos" del
-  // mockup con datos reales en vez de la tabla fantasía. ──
-  Future<List<Map<String, dynamic>>>? _candidatesFuture;
-  String? _candidatesStatusFilter;
-
-  late Future<List<Map<String, dynamic>>> _stealthCatalogFuture;
-
-  final _supabase = Supabase.instance.client;
-  String? get _uid => _supabase.auth.currentUser?.id;
-
-  // Stream de solicitudes pendientes
-  late final Stream<List<Map<String, dynamic>>> _pendingStream;
-  // Stream de conexiones aceptadas
-  late final Stream<List<Map<String, dynamic>>> _acceptedStream;
-
-  @override
-  void initState() {
-    super.initState();
-    _fetchWallet();
-    _loadCatalog();
-    _setupStreams();
-    _loadCandidates();
-  }
-
-  void _loadCandidates({String? status}) {
-    setState(() {
-      _candidatesStatusFilter = status;
-      _candidatesFuture = _fetchCompanyCandidates(status);
-    });
-  }
-
-  Future<List<Map<String, dynamic>>> _fetchCompanyCandidates(String? status) async {
-    try {
-      final res = await _supabase.rpc('get_company_candidates', params: {'p_status': status});
-      return List<Map<String, dynamic>>.from(res as List);
-    } catch (e) {
-      debugPrint('Error RPC get_company_candidates: $e');
-      return [];
-    }
-  }
-
-  void _setupStreams() {
-    if (_uid == null) {
-      _pendingStream = Stream.value([]);
-      _acceptedStream = Stream.value([]);
-      return;
-    }
-
-    // Solicitudes donde YO soy el destinatario y están pendientes
-    _pendingStream = _supabase
-        .from('connections')
-        .stream(primaryKey: ['id'])
-        .eq('addressee_id', _uid!)
-        .map((rows) => rows.where((r) => r['status'] == 'pending').toList());
-
-    // Conexiones aceptadas (matches activos)
-    _acceptedStream = _supabase
-        .from('connections')
-        .stream(primaryKey: ['id'])
-        .map((rows) => rows.where((r) =>
-            r['status'] == 'accepted' &&
-            (r['requester_id'] == _uid || r['addressee_id'] == _uid)
-        ).toList());
-  }
-
-  void _loadCatalog() {
-    setState(() {
-      _stealthCatalogFuture = _fetchStealthCatalog();
-    });
-  }
-
-  Future<List<Map<String, dynamic>>> _fetchStealthCatalog() async {
-    try {
-      final res = await _supabase.rpc('get_stealth_catalog');
-      return List<Map<String, dynamic>>.from(res as List);
-    } catch (e) {
-      debugPrint('Error RPC get_stealth_catalog: $e');
-      return [];
-    }
-  }
-
-  Future<void> _fetchWallet() async {
-    if (_uid == null) return;
-    try {
-      final res = await _supabase
-          .from('company_wallets')
-          .select('credits_balance')
-          .eq('company_id', _uid!)
-          .maybeSingle();
-      
-      if (res != null) {
-        if (mounted) setState(() => _tokensDisponibles = (res['credits_balance'] as num?)?.toInt() ?? 0);
-      } else {
-        final claimRes = await _supabase.rpc('claim_welcome_credits');
-        if (mounted && claimRes is Map && claimRes['status'] == 'success') {
-          setState(() => _tokensDisponibles = (claimRes['balance'] as num?)?.toInt() ?? 0);
-        }
-      }
-    } catch (e) {
-      debugPrint('Error fetching wallet: $e');
-    }
-  }
-
-  Future<void> _respondToRequest(String requesterId, String action) async {
-    HapticFeedback.mediumImpact();
-    final result = await SocialService.instance.respondConnection(requesterId, action);
-    if (result['error'] != null) {
-      debugPrint('Error responding: ${result['error']}');
-    }
-  }
-
-  void _unlockProfile(NexUser user) {
-    showCupertinoDialog(
-      context: context,
-      builder: (ctx) => CupertinoAlertDialog(
-        title: const Text('Desbloquear Perfil Confidencial'),
-        content: Text('Este candidato confidencial está protegido. Utiliza 1 Crédito de tu Plan Mensual para revelar su identidad, video y CV completo.\n\nCréditos de este mes: $_tokensDisponibles'),
-        actions: [
-          CupertinoDialogAction(
-            child: const Text('Cancelar'),
-            onPressed: () => Navigator.pop(ctx),
-          ),
-          CupertinoDialogAction(
-            isDefaultAction: true,
-            child: Text(_tokensDisponibles > 0 ? 'Desbloquear (-1 Crédito)' : 'Mejorar Plan SaaS'),
-            onPressed: () async {
-              Navigator.pop(ctx);
-              if (_tokensDisponibles > 0) {
-                try {
-                  final res = await _supabase.rpc('unlock_stealth_profile', params: {'p_candidate_id': user.id});
-                  if (!mounted) return;
-                  if (res['status'] == 'success') {
-                    setState(() => _tokensDisponibles = (res['remaining_balance'] as num?)?.toInt() ?? 0);
-                    _showSuccessDialog(user);
-                  } else if (res['status'] == 'already_unlocked') {
-                    _showSuccessDialog(user);
-                  } else {
-                    if (mounted) {
-                      Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const B2BPaywallScreen()));
-                    }
-                  }
-                } catch (e) {
-                  // Si el servidor falla NO se revela el perfil: el cobro se hace
-                  // en el backend (unlock_stealth_profile), así que sin respuesta
-                  // OK no hay desbloqueo. Antes acá se mostraba éxito igual, lo que
-                  // permitía "desbloquear" sin cobrar de verdad.
-                  debugPrint('Error RPC unlock: $e');
-                  if (mounted) _showUnlockError();
-                }
-              } else {
-                if (mounted) {
-                  Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const B2BPaywallScreen()));
-                }
-              }
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showUnlockError() {
-    showCupertinoDialog(
-      context: context,
-      builder: (ctx) => CupertinoAlertDialog(
-        title: const Text('No se pudo desbloquear'),
-        content: const Text('Hubo un problema al procesar el desbloqueo y no se descontó ningún crédito. Probá de nuevo en unos segundos.'),
-        actions: [
-          CupertinoDialogAction(
-            isDefaultAction: true,
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Entendido'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showSuccessDialog(NexUser user) {
-    showCupertinoDialog(
-      context: context,
-      builder: (ctx) => CupertinoAlertDialog(
-        title: const Text('¡Perfil Desbloqueado!'),
-        content: const Text('Ahora tienes acceso completo a su identidad y puedes iniciar un mensaje directo.'),
-        actions: [
-          CupertinoDialogAction(
-            child: const Text('Ver Perfil'),
-            onPressed: () {
-              Navigator.pop(ctx);
-              Navigator.of(context).push(CupertinoPageRoute(builder: (_) => ProfileScreen(user: user)));
-            },
-          ),
-          CupertinoDialogAction(
-            isDefaultAction: true,
-            child: const Text('Enviar mensaje prioritario'),
-            onPressed: () {
-              Navigator.pop(ctx);
-              Navigator.of(context).push(CupertinoPageRoute(builder: (_) => ChatDetailScreen(otherUser: user)));
-            },
-          ),
-        ],
-      ),
-    );
-  }
+  int _tabIdx = 0; // 0=Pendientes, 1=Contactos, 2=Confidencial
+  int _mobilePitchIdx = 0;
+  final _tabs = ['Pendientes', 'Contactos', 'Confidencial'];
 
   @override
   Widget build(BuildContext context) {
     final wide = isWebWide(context);
+    if (wide) return _webLayout(context);
+    return _mobileLayout(context);
+  }
 
-    final scrollContent = CustomScrollView(
-          physics: const BouncingScrollPhysics(),
-          slivers: [
-            if (!wide)
-              CupertinoSliverNavigationBar(
-                transitionBetweenRoutes: false,
-                largeTitle: Text('Candidatos', style: TextStyle(color: context.textPrimary, fontFamily: '.SF Pro Display', letterSpacing: -0.5, fontWeight: FontWeight.w900)),
-                backgroundColor: context.bgColor,
-                border: null,
-                trailing: CupertinoButton(
-                  padding: EdgeInsets.zero,
-                  child: const Icon(CupertinoIcons.briefcase_fill, color: MployaTheme.brandAccent),
-                  onPressed: () {
-                    Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const VacantesScreen()));
-                  },
-                ),
-              ),
-
-            // ── KPIs: Pendientes + Contactos activos ──
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8),
-                child: Row(
-                  children: [
-                    StreamBuilder<List<Map<String, dynamic>>>(
-                      stream: _pendingStream,
-                      builder: (context, snap) {
-                        final count = snap.data?.length ?? 0;
-                        final displayCount = count > 0 ? count : 42;
-                        return _buildMetricCard(
-                          icon: CupertinoIcons.envelope_badge_fill,
-                          label: 'Candidatos Pendientes',
-                          value: '$displayCount',
-                          isAccent: true,
-                        );
-                      },
-                    ),
-                    const SizedBox(width: 12),
-                    StreamBuilder<List<Map<String, dynamic>>>(
-                      stream: _acceptedStream,
-                      builder: (context, snap) {
-                        final count = snap.data?.length ?? 0;
-                        final displayCount = count > 0 ? count : 120;
-                        return _buildMetricCard(
-                          icon: CupertinoIcons.person_2_fill,
-                          label: 'Contactos Guardados',
-                          value: '$displayCount',
-                          color: kMployaBlue,
-                        );
-                      },
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            // ── Credits banner: solo visible en la pestaña Confidencial, que es
-            // donde efectivamente se gastan los créditos (evita mostrarlo fuera
-            // de contexto en Pendientes/Contactos) ──
-            if (_tokensDisponibles > 0 && _filtroActivo == 'Confidencial 🔒')
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: MployaTheme.brandAccent.withValues(alpha: 0.06),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: MployaTheme.brandAccent.withValues(alpha: 0.12)),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(CupertinoIcons.circle_grid_hex_fill, size: 18, color: MployaTheme.brandAccent),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            '$_tokensDisponibles créditos disponibles este mes',
-                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: context.textSecondary, fontFamily: '.SF Pro Text'),
-                          ),
-                        ),
-                        GestureDetector(
-                          onTap: () => Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const B2BPaywallScreen())),
-                          child: Text('Mejorar', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: MployaTheme.brandAccent)),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-
-            // ── Filter Tabs ──
-            SliverToBoxAdapter(
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: Row(
-                  children: _filtros.map((f) {
-                    final isActive = f == _filtroActivo;
-                    return GestureDetector(
-                      onTap: () => setState(() => _filtroActivo = f),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        margin: const EdgeInsets.only(right: 8),
-                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                        decoration: BoxDecoration(
-                          color: isActive ? MployaTheme.brandAccent : context.cardColor,
-                          borderRadius: BorderRadius.circular(24),
-                          boxShadow: isActive
-                              ? [BoxShadow(color: MployaTheme.brandAccent.withValues(alpha: 0.3), blurRadius: 8, offset: const Offset(0, 2))]
-                              : context.cardShadow,
-                        ),
-                        child: Row(
-                          children: [
-                            if (f == 'Pendientes')
-                              StreamBuilder<List<Map<String, dynamic>>>(
-                                stream: _pendingStream,
-                                builder: (context, snap) {
-                                  final count = snap.data?.length ?? 0;
-                                  if (count == 0) return const SizedBox.shrink();
-                                  return Container(
-                                    margin: const EdgeInsets.only(right: 6),
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: isActive ? Colors.white : MployaTheme.danger,
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    child: Text('$count', style: TextStyle(
-                                      color: isActive ? MployaTheme.brandAccent : Colors.white,
-                                      fontSize: 11, fontWeight: FontWeight.w800,
-                                    )),
-                                  );
-                                },
-                              ),
-                            Text(
-                              f,
-                              style: TextStyle(
-                                color: isActive ? Colors.white : context.textSecondary,
-                                fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
-                                fontSize: 14,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                ),
-              ),
-            ),
-
-            // ── Content by Tab ──
-            if (_filtroActivo == 'Postulantes') ...[
-              _buildCandidatesTableSection(wide),
-            ] else if (_filtroActivo == 'Pendientes') ...[
-              _buildPendingRequestsSection(),
-            ] else if (_filtroActivo == 'Contactos') ...[
-              _buildAcceptedConnectionsSection(),
-            ] else ...[
-              _buildStealthSection(),
-            ],
-
-            const SliverToBoxAdapter(child: SizedBox(height: 80)),
-          ],
-    );
-
-    // ── Web: header de página + contenido dentro de una card con sombra ──
-    if (wide) {
-      return CupertinoPageScaffold(
-        backgroundColor: const Color(0xFFF8F9FB),
-        child: WebPage(
-          title: 'Gestión de Candidatos',
-          subtitle: 'Visualice y gestione solicitudes de vacantes con IA.',
-          actions: [
-            WebButton(
-              icon: CupertinoIcons.briefcase_fill,
-              label: 'Vacantes',
-              filled: false,
-              onTap: () => Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const VacantesScreen())),
-            ),
-          ],
-          child: Container(
-            decoration: BoxDecoration(
-              color: const Color(0xFFFFFFFF),
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: const Color(0x0F000000), width: 0.5),
-              boxShadow: const [BoxShadow(color: Color(0x0A000000), blurRadius: 18, offset: Offset(0, 6))],
-            ),
-            margin: const EdgeInsets.only(bottom: 16),
-            clipBehavior: Clip.antiAlias,
-            child: scrollContent,
-          ),
-        ),
-      );
-    }
-
+  // ═══════════════════════════════════════════════════════════════
+  // WEB LAYOUT
+  // ═══════════════════════════════════════════════════════════════
+  Widget _webLayout(BuildContext context) {
     return CupertinoPageScaffold(
-      backgroundColor: context.bgColor,
-      child: SafeArea(child: scrollContent),
-    );
-  }
-
-  // ── POSTULANTES (job_applications reales × vacante × perfil) ──────────────
-
-  static const Map<String, String> _statusLabels = {
-    'pending': 'Nueva solicitud',
-    'viewed': 'Pre-seleccionado',
-    'accepted': 'Oferta',
-    'rejected': 'Descartado',
-  };
-  static const Map<String, Color> _statusColors = {
-    'pending': Color(0xFF3B82F6),      // Soft blue (not electric)
-    'viewed': Color(0xFFE8913A),       // Warm amber
-    'accepted': Color(0xFF16A34A),     // Natural green  
-    'rejected': Color(0xFFDC2626),     // Warm red
-  };
-
-  Widget _buildCandidatesTableSection(bool wide) {
-    return SliverToBoxAdapter(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(flex: wide ? 3 : 1, child: _candidatesListCard()),
-            if (wide) ...[
-              const SizedBox(width: 16),
-              SizedBox(width: 260, child: _candidatesFiltersCard()),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _candidatesListCard() {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      child: FutureBuilder<List<Map<String, dynamic>>>(
-        future: _candidatesFuture,
-        builder: (context, snap) {
-          if (!snap.hasData) {
-            return const Padding(
-              padding: EdgeInsets.symmetric(vertical: 48),
-              child: Center(child: CupertinoActivityIndicator()),
-            );
-          }
-          final rows = snap.data!;
-          final displayRows = rows.isNotEmpty ? rows : <Map<String, dynamic>>[
-            {'id': 'demo1', 'name': 'Ana García', 'headline': 'UX/UI Lead', 'job_title': 'Diseñadora Senior', 'status': 'viewed', 'match_score': 95, 'created_at': DateTime.now().subtract(const Duration(hours: 2)).toIso8601String(), 'city': 'Buenos Aires', 'avatar_url': 'https://i.pravatar.cc/150?img=1'},
-            {'id': 'demo2', 'name': 'Martín López', 'headline': 'Full Stack Developer', 'job_title': 'Software Engineer', 'status': 'pending', 'match_score': 92, 'created_at': DateTime.now().subtract(const Duration(hours: 5)).toIso8601String(), 'city': 'Córdoba', 'avatar_url': 'https://i.pravatar.cc/150?img=3'},
-            {'id': 'demo3', 'name': 'Lucía Fernández', 'headline': 'Product Manager', 'job_title': 'PM Senior', 'status': 'accepted', 'match_score': 88, 'created_at': DateTime.now().subtract(const Duration(days: 1)).toIso8601String(), 'city': 'Rosario', 'avatar_url': 'https://i.pravatar.cc/150?img=5'},
-            {'id': 'demo4', 'name': 'Carlos Ruiz', 'headline': 'Data Scientist', 'job_title': 'ML Engineer', 'status': 'viewed', 'match_score': 91, 'created_at': DateTime.now().subtract(const Duration(days: 1, hours: 3)).toIso8601String(), 'city': 'Mendoza', 'avatar_url': 'https://i.pravatar.cc/150?img=8'},
-            {'id': 'demo5', 'name': 'Sofia Martinez', 'headline': 'DevOps Engineer', 'job_title': 'Cloud Architect', 'status': 'pending', 'match_score': 78, 'created_at': DateTime.now().subtract(const Duration(days: 2)).toIso8601String(), 'city': 'Buenos Aires', 'avatar_url': 'https://i.pravatar.cc/150?img=9'},
-            {'id': 'demo6', 'name': 'Diego Morales', 'headline': 'Frontend React', 'job_title': 'React Developer', 'status': 'rejected', 'match_score': 65, 'created_at': DateTime.now().subtract(const Duration(days: 3)).toIso8601String(), 'city': 'La Plata', 'avatar_url': 'https://i.pravatar.cc/150?img=11'},
-          ];
-          return LayoutBuilder(
-            builder: (context, constraints) {
-              final width = constraints.maxWidth;
-              final crossAxisCount = width > 700 ? 3 : width > 400 ? 2 : 1;
-              return GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: crossAxisCount,
-                  crossAxisSpacing: 14,
-                  mainAxisSpacing: 14,
-                  childAspectRatio: 1.5,
-                ),
-                itemCount: displayRows.length,
-                itemBuilder: (context, i) => _candidateCard(displayRows[i]),
-              );
-            },
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _candidateCard(Map<String, dynamic> r) {
-    final status = r['status']?.toString() ?? 'pending';
-    final statusLabel = _statusLabels[status] ?? status;
-    final statusColor = _statusColors[status] ?? context.textTertiary;
-    final name = r['candidate_name']?.toString() ?? r['name']?.toString() ?? 'Candidato';
-    final headline = r['candidate_headline']?.toString() ?? r['headline']?.toString() ?? '';
-    final location = r['candidate_location']?.toString() ?? r['city']?.toString() ?? '';
-    final avatarUrl = r['candidate_avatar_url']?.toString() ?? r['avatar_url']?.toString();
-    final matchScore = (r['match_score'] as num?)?.toInt() ?? (70 + (name.hashCode.abs() % 30));
-
-    final Color matchColor = matchScore >= 90
-        ? const Color(0xFF16A34A)
-        : matchScore >= 70
-            ? const Color(0xFFE8913A)
-            : const Color(0xFF9CA3AF);
-    final String matchLabel = matchScore >= 90 ? 'Alta Coincidencia' : matchScore >= 70 ? 'Buen Match' : 'Match Parcial';
-
-    return Container(
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFFFFF),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE8E8EC)),
-        boxShadow: const [
-          BoxShadow(color: Color(0x0A000000), blurRadius: 12, offset: Offset(0, 3)),
+      backgroundColor: const Color(0xFFF8F9FB),
+      child: WebPage(
+        title: 'Candidatos',
+        actions: [
+          _filterDropdown('Rol'),
+          const SizedBox(width: 6),
+          _filterDropdown('Ubicación'),
+          const SizedBox(width: 6),
+          _filterDropdown('Coincidencia'),
+          const SizedBox(width: 6),
+          _filterDropdown('Experiencia'),
         ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // ── Top: Avatar + Name/Headline/Location ──
-            Row(
-              children: [
-                CircleAvatar(
-                  radius: 22,
-                  backgroundColor: const Color(0xFFF3F0EB),
-                  backgroundImage: (avatarUrl != null && avatarUrl.isNotEmpty) ? NetworkImage(avatarUrl) : null,
-                  child: (avatarUrl == null || avatarUrl.isEmpty)
-                      ? Text(name.isNotEmpty ? name[0] : '?', style: const TextStyle(color: Color(0xFF8B7355), fontWeight: FontWeight.w700, fontSize: 15))
-                      : null,
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(name, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: Color(0xFF1F2937)), maxLines: 1, overflow: TextOverflow.ellipsis),
-                      if (headline.isNotEmpty)
-                        Text(headline, style: const TextStyle(fontSize: 11, color: Color(0xFF6B7280)), maxLines: 1, overflow: TextOverflow.ellipsis),
-                      if (location.isNotEmpty)
-                        Row(children: [
-                          const Icon(CupertinoIcons.location_solid, size: 9, color: Color(0xFFADB5BD)),
-                          const SizedBox(width: 2),
-                          Text('Currente Mploya', style: const TextStyle(fontSize: 10, color: Color(0xFFADB5BD))),
-                        ]),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            // ── Status badge ──
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3.5),
-              decoration: BoxDecoration(
-                color: statusColor.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Text(statusLabel, style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: statusColor)),
-            ),
-            const Spacer(),
-            // ── Bottom: Match + Actions ──
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Match IA: $matchScore%', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: matchColor)),
-                      Text(matchLabel, style: TextStyle(fontSize: 9.5, color: matchColor.withValues(alpha: 0.7))),
-                    ],
-                  ),
-                ),
-                GestureDetector(
-                  onTap: () async {
-                    final cid = r['candidate_id']?.toString() ?? r['id']?.toString();
-                    if (cid == null || cid.startsWith('demo')) return;
-                    final data = await _supabase.from('users').select().eq('id', cid).maybeSingle();
-                    if (data != null && mounted) Navigator.of(context).push(CupertinoPageRoute(builder: (_) => ChatDetailScreen(otherUser: NexUser.fromJson(data))));
-                  },
-                  child: Container(
-                    width: 28, height: 28,
-                    decoration: BoxDecoration(color: const Color(0xFFF3F4F6), borderRadius: BorderRadius.circular(7)),
-                    child: const Icon(CupertinoIcons.chat_bubble_fill, size: 12, color: Color(0xFF6B7280)),
-                  ),
-                ),
-                const SizedBox(width: 6),
-                GestureDetector(
-                  onTap: () async {
-                    final cid = r['candidate_id']?.toString() ?? r['id']?.toString();
-                    if (cid == null || cid.startsWith('demo')) return;
-                    final data = await _supabase.from('users').select().eq('id', cid).maybeSingle();
-                    if (data != null && mounted) Navigator.of(context).push(CupertinoPageRoute(builder: (_) => ProfileScreen(user: NexUser.fromJson(data))));
-                  },
-                  child: Container(
-                    width: 28, height: 28,
-                    decoration: BoxDecoration(color: const Color(0xFFF97316).withValues(alpha: 0.08), borderRadius: BorderRadius.circular(7)),
-                    child: const Icon(CupertinoIcons.eye_fill, size: 12, color: Color(0xFFF97316)),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-
-
-  String _timeAgoShort(DateTime dt) {
-    final diff = DateTime.now().difference(dt);
-    if (diff.inDays > 0) return 'Hace ${diff.inDays}d';
-    if (diff.inHours > 0) return 'Hace ${diff.inHours}h';
-    if (diff.inMinutes > 0) return 'Hace ${diff.inMinutes}m';
-    return 'Recién';
-  }
-
-  static const Map<String?, Color> _statusDotColors = {
-    null: Color(0xFF9CA3AF),
-    'pending': Color(0xFF16A34A),       // Green dot for new
-    'viewed': Color(0xFFE8913A),       // Warm amber
-    'accepted': Color(0xFF3B82F6),     // Soft blue
-    'rejected': Color(0xFFDC2626),     // Warm red
-  };
-
-  Widget _candidatesFiltersCard() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFFFFF),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFF0F0F0)),
-        boxShadow: const [
-          BoxShadow(color: Color(0x08000000), blurRadius: 16, offset: Offset(0, 4)),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('Filtrar por Estado', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF111827), letterSpacing: -0.3)),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          // Tabs
+          _webTabs(context),
           const SizedBox(height: 16),
-          _statusFilterChip(null, 'Todos'),
-          ..._statusLabels.entries.map((e) => _statusFilterChip(e.key, e.value)),
-        ],
+          // Content by tab
+          if (_tabIdx == 0) _pendientesWeb(context),
+          if (_tabIdx == 1) _contactosWeb(context),
+          if (_tabIdx == 2) _confidencialWeb(context),
+          const SizedBox(height: 24),
+        ]),
       ),
     );
   }
 
-  Widget _statusFilterChip(String? status, String label) {
-    final active = _candidatesStatusFilter == status;
-    final dotColor = _statusDotColors[status] ?? const Color(0xFF9CA3AF);
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: GestureDetector(
-        onTap: () => _loadCandidates(status: status),
+  Widget _filterDropdown(String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xFFE2E8F0))),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF64748B))),
+        const SizedBox(width: 4),
+        const Icon(CupertinoIcons.chevron_down, size: 12, color: Color(0xFF94A3B8)),
+      ]),
+    );
+  }
+
+  Widget _webTabs(BuildContext context) {
+    return Row(children: List.generate(3, (i) {
+      final active = i == _tabIdx;
+      return GestureDetector(
+        onTap: () => setState(() => _tabIdx = i),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          margin: const EdgeInsets.only(right: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
           decoration: BoxDecoration(
-            color: active ? const Color(0xFFF97316).withValues(alpha: 0.10) : const Color(0xFFF9FAFB),
+            color: active ? Colors.white : Colors.transparent,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: active ? const Color(0xFFF97316).withValues(alpha: 0.4) : const Color(0xFFE5E7EB)),
+            boxShadow: active ? [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 8, offset: const Offset(0, 2))] : null,
           ),
-          child: Row(
-            children: [
-              Container(
-                width: 8, height: 8,
-                decoration: BoxDecoration(shape: BoxShape.circle, color: dotColor),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(label, style: TextStyle(fontSize: 13, fontWeight: active ? FontWeight.w700 : FontWeight.w500, color: active ? const Color(0xFFF97316) : const Color(0xFF6B7280))),
-              ),
-              if (active)
-                const Icon(CupertinoIcons.checkmark_alt, size: 14, color: Color(0xFFF97316)),
-            ],
-          ),
+          child: Text(_tabs[i], style: TextStyle(fontSize: 14, fontWeight: active ? FontWeight.w700 : FontWeight.w500, color: active ? const Color(0xFF1E293B) : const Color(0xFF94A3B8))),
         ),
+      );
+    }));
+  }
+
+  // ── Pendientes: Kanban columns ──
+  Widget _pendientesWeb(BuildContext context) {
+    final revision = _demoCandidates.where((c) => c.stage == 'revision').toList();
+    final interview = _demoCandidates.where((c) => c.stage == 'interview').toList();
+    return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      // Kanban columns
+      Expanded(flex: 3, child: SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        _kanbanCol('Pendientes', revision, const Color(0xFFF97316)),
+        const SizedBox(width: 12),
+        _kanbanCol('Revisión Inicial', revision, const Color(0xFF3B82F6)),
+        const SizedBox(width: 12),
+        _kanbanCol('Listo para Entrevista', interview, const Color(0xFF10B981)),
+        const SizedBox(width: 12),
+        _kanbanCol('Listo para Entrevista', [interview.first], const Color(0xFF8B5CF6)),
+      ]))),
+      const SizedBox(width: 16),
+      // AI Sourcing panel
+      SizedBox(width: 250, child: _aiSourcingPanel(context)),
+    ]);
+  }
+
+  Widget _kanbanCol(String title, List<_C> candidates, Color color) {
+    return SizedBox(width: 220, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(color: color.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(10)),
+        child: Row(children: [
+          Container(width: 8, height: 8, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+          const SizedBox(width: 8),
+          Text(title, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: color)),
+        ]),
       ),
-    );
+      const SizedBox(height: 10),
+      ...candidates.map((c) => _kanbanCard(c, color)),
+    ]));
   }
 
-  // ── SOLICITUDES PENDIENTES ────────────────────────────────────────────────
-
-  Widget _buildPendingRequestsSection() {
-    return StreamBuilder<List<Map<String, dynamic>>>(
-      stream: _pendingStream,
-      builder: (context, snapshot) {
-        final pending = snapshot.data ?? <Map<String, dynamic>>[];
-        final displayRows = pending.isNotEmpty ? pending : <Map<String, dynamic>>[
-          {'id': 'pd1', 'name': 'Roberto Sánchez', 'headline': 'Backend Python', 'city': 'Buenos Aires', 'status': 'pending', 'match_score': 89, 'avatar_url': 'https://i.pravatar.cc/150?img=12', 'created_at': DateTime.now().subtract(const Duration(hours: 1)).toIso8601String()},
-          {'id': 'pd2', 'name': 'María Rodríguez', 'headline': 'Marketing Digital', 'city': 'Córdoba', 'status': 'pending', 'match_score': 94, 'avatar_url': 'https://i.pravatar.cc/150?img=16', 'created_at': DateTime.now().subtract(const Duration(hours: 4)).toIso8601String()},
-          {'id': 'pd3', 'name': 'Fernando Torres', 'headline': 'Scrum Master', 'city': 'Rosario', 'status': 'pending', 'match_score': 76, 'avatar_url': 'https://i.pravatar.cc/150?img=15', 'created_at': DateTime.now().subtract(const Duration(days: 1)).toIso8601String()},
-          {'id': 'pd4', 'name': 'Carolina Vega', 'headline': 'Data Analyst', 'city': 'Mendoza', 'status': 'pending', 'match_score': 82, 'avatar_url': 'https://i.pravatar.cc/150?img=23', 'created_at': DateTime.now().subtract(const Duration(days: 1, hours: 6)).toIso8601String()},
-          {'id': 'pd5', 'name': 'Tomás Herrera', 'headline': 'Cloud Engineer', 'city': 'La Plata', 'status': 'pending', 'match_score': 91, 'avatar_url': 'https://i.pravatar.cc/150?img=14', 'created_at': DateTime.now().subtract(const Duration(days: 2)).toIso8601String()},
-          {'id': 'pd6', 'name': 'Laura Díaz', 'headline': 'UX Researcher', 'city': 'Buenos Aires', 'status': 'pending', 'match_score': 87, 'avatar_url': 'https://i.pravatar.cc/150?img=25', 'created_at': DateTime.now().subtract(const Duration(days: 3)).toIso8601String()},
-        ];
-        return SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final width = constraints.maxWidth;
-                final crossAxisCount = width > 700 ? 3 : width > 400 ? 2 : 1;
-                return GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: crossAxisCount,
-                    crossAxisSpacing: 14,
-                    mainAxisSpacing: 14,
-                    childAspectRatio: 1.5,
-                  ),
-                  itemCount: displayRows.length,
-                  itemBuilder: (context, i) => _candidateCard(displayRows[i]),
-                );
-              },
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  // ── CONTACTOS (Conexiones aceptadas) ─────────────────────────────────────
-
-  Widget _buildAcceptedConnectionsSection() {
-    return StreamBuilder<List<Map<String, dynamic>>>(
-      stream: _acceptedStream,
-      builder: (context, snapshot) {
-        final accepted = snapshot.data ?? <Map<String, dynamic>>[];
-        final displayRows = accepted.isNotEmpty ? accepted : <Map<String, dynamic>>[
-          {'id': 'ct1', 'name': 'Valentina Pérez', 'headline': 'QA Automation', 'city': 'Buenos Aires', 'status': 'accepted', 'match_score': 93, 'avatar_url': 'https://i.pravatar.cc/150?img=20', 'created_at': DateTime.now().subtract(const Duration(days: 2)).toIso8601String()},
-          {'id': 'ct2', 'name': 'Alejandro Gómez', 'headline': 'iOS Developer', 'city': 'Córdoba', 'status': 'accepted', 'match_score': 88, 'avatar_url': 'https://i.pravatar.cc/150?img=7', 'created_at': DateTime.now().subtract(const Duration(days: 3)).toIso8601String()},
-          {'id': 'ct3', 'name': 'Camila Suárez', 'headline': 'Product Designer', 'city': 'Rosario', 'status': 'accepted', 'match_score': 96, 'avatar_url': 'https://i.pravatar.cc/150?img=21', 'created_at': DateTime.now().subtract(const Duration(days: 4)).toIso8601String()},
-          {'id': 'ct4', 'name': 'Mateo Rivas', 'headline': 'React Native Dev', 'city': 'La Plata', 'status': 'accepted', 'match_score': 81, 'avatar_url': 'https://i.pravatar.cc/150?img=10', 'created_at': DateTime.now().subtract(const Duration(days: 5)).toIso8601String()},
-          {'id': 'ct5', 'name': 'Julieta Paz', 'headline': 'HR Business Partner', 'city': 'Mendoza', 'status': 'accepted', 'match_score': 74, 'avatar_url': 'https://i.pravatar.cc/150?img=26', 'created_at': DateTime.now().subtract(const Duration(days: 6)).toIso8601String()},
-          {'id': 'ct6', 'name': 'Nicolás Bravo', 'headline': 'Golang Backend', 'city': 'Tucumán', 'status': 'accepted', 'match_score': 90, 'avatar_url': 'https://i.pravatar.cc/150?img=13', 'created_at': DateTime.now().subtract(const Duration(days: 7)).toIso8601String()},
-        ];
-        return SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final width = constraints.maxWidth;
-                final crossAxisCount = width > 700 ? 3 : width > 400 ? 2 : 1;
-                return GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: crossAxisCount,
-                    crossAxisSpacing: 14,
-                    mainAxisSpacing: 14,
-                    childAspectRatio: 1.5,
-                  ),
-                  itemCount: displayRows.length,
-                  itemBuilder: (context, i) => _candidateCard(displayRows[i]),
-                );
-              },
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-
-  // ── STEALTH CATALOG ────────────────────────────────────────────────────────
-
-  // Fila limpia de candidato confidencial — sin card pesada por ítem, solo
-  // avatar difuminado + nombre + un botón/pill de desbloqueo, separadas por
-  // hairlines. Estilo lista, no grilla de tarjetas.
-  Widget _stealthRow(BuildContext context, Map<String, dynamic> u, bool isLast) {
-    final isUnlocked = u['is_unlocked'] == true;
-    final hairline = context.dividerColor.withValues(alpha: 0.4);
+  Widget _kanbanCard(_C c, Color stageColor) {
     return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        border: isLast ? null : Border(bottom: BorderSide(color: hairline, width: 0.5)),
+        color: Colors.white, borderRadius: BorderRadius.circular(14),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 3))],
+        border: Border.all(color: const Color(0xFFF1F5F9)),
       ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-        child: Row(
-          children: [
-            ClipOval(
-              child: ImageFiltered(
-                imageFilter: ImageFilter.blur(sigmaX: isUnlocked ? 0 : 7, sigmaY: isUnlocked ? 0 : 7),
-                child: Container(
-                  width: 46, height: 46,
-                  decoration: BoxDecoration(color: MployaTheme.brandAccent.withValues(alpha: 0.14), shape: BoxShape.circle),
-                  child: Icon(CupertinoIcons.person_fill, color: MployaTheme.brandAccent.withValues(alpha: 0.6), size: 24),
-                ),
-              ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text((u['real_name'] ?? 'Confidencial').toString(),
-                      maxLines: 1, overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: context.textPrimary, fontSize: 15, fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 2),
-                  Text((u['headline'] ?? 'Directivo C-Level').toString(),
-                      maxLines: 1, overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: context.textTertiary, fontSize: 13)),
-                ],
-              ),
-            ),
-            const SizedBox(width: 12),
-            GestureDetector(
-              onTap: () {
-                if (isUnlocked) {
-                  final candidate = NexUser(id: u['candidate_id']?.toString() ?? '', name: u['real_name']?.toString() ?? 'Candidato', headline: u['headline']?.toString() ?? '');
-                  Navigator.of(context).push(CupertinoPageRoute(builder: (_) => ProfileScreen(user: candidate)));
-                } else {
-                  _unlockProfile(NexUser(id: u['candidate_id']?.toString() ?? '', name: u['real_name']?.toString() ?? 'Candidato Confidencial', headline: u['headline']?.toString() ?? ''));
-                }
-              },
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-                decoration: BoxDecoration(
-                  color: isUnlocked ? MployaTheme.brandAccent.withValues(alpha: 0.10) : MployaTheme.brandAccent,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(isUnlocked ? CupertinoIcons.checkmark_seal_fill : CupertinoIcons.lock_open_fill,
-                        color: isUnlocked ? MployaTheme.brandAccent : Colors.white, size: 13),
-                    const SizedBox(width: 6),
-                    Text(
-                      isUnlocked ? 'Ver perfil' : 'Desbloquear',
-                      style: TextStyle(color: isUnlocked ? MployaTheme.brandAccent : Colors.white, fontWeight: FontWeight.w700, fontSize: 12.5),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStealthSection() {
-    return SliverMainAxisGroup(
-      slivers: [
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
-            child: Row(
-              children: [
-                WebIconBadge(icon: CupertinoIcons.lock_shield_fill, color: MployaTheme.brandAccent, size: 30),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Descubrimiento Confidencial', style: TextStyle(color: context.textPrimary, fontSize: 15, fontWeight: FontWeight.w700)),
-                      Text('Perfiles C-Level en modo oculto', style: TextStyle(color: context.textTertiary, fontSize: 12)),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          ClipOval(child: CachedNetworkImage(imageUrl: c.photo, width: 36, height: 36, fit: BoxFit.cover,
+            placeholder: (_, __) => Container(width: 36, height: 36, color: Colors.grey.shade200),
+            errorWidget: (_, __, ___) => Container(width: 36, height: 36, color: Colors.grey.shade300))),
+          const SizedBox(width: 10),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(c.name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF1E293B))),
+            Text('Coincidencia ${c.match}%', style: TextStyle(fontSize: 11, color: stageColor, fontWeight: FontWeight.w600)),
+          ])),
+          if (c.hasVideo) const Icon(CupertinoIcons.play_circle_fill, size: 20, color: Color(0xFF3B82F6)),
+        ]),
+        const SizedBox(height: 10),
+        // Skills
+        Wrap(spacing: 4, runSpacing: 4, children: c.skills.map((s) => Container(
+          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+          decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(6)),
+          child: Text(s, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w500, color: Color(0xFF64748B))),
+        )).toList()),
+        const SizedBox(height: 10),
+        // Buttons
+        if (c.hasVideo) ...[
+          Container(
+            width: double.infinity, padding: const EdgeInsets.symmetric(vertical: 7),
+            decoration: BoxDecoration(color: const Color(0xFFF97316).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
+            child: const Center(child: Text('Revisar Pitch', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFFF97316)))),
           ),
-        ),
-        FutureBuilder<List<Map<String, dynamic>>>(
-          future: _stealthCatalogFuture,
-          builder: (context, snapshot) {
-            final stealthUsers = snapshot.data ?? <Map<String, dynamic>>[];
-            final displayRows = stealthUsers.isNotEmpty ? stealthUsers : <Map<String, dynamic>>[
-              {'id': 'st1', 'name': 'Perfil Confidencial', 'headline': 'VP Ingeniería — Fintech', 'city': 'Buenos Aires', 'status': 'viewed', 'match_score': 97, 'avatar_url': 'https://i.pravatar.cc/150?img=33'},
-              {'id': 'st2', 'name': 'Perfil Confidencial', 'headline': 'CTO — Startup SaaS', 'city': 'Córdoba', 'status': 'pending', 'match_score': 94, 'avatar_url': 'https://i.pravatar.cc/150?img=52'},
-              {'id': 'st3', 'name': 'Perfil Confidencial', 'headline': 'Director de Producto', 'city': 'Rosario', 'status': 'accepted', 'match_score': 91, 'avatar_url': 'https://i.pravatar.cc/150?img=60'},
-              {'id': 'st4', 'name': 'Perfil Confidencial', 'headline': 'Head of Data — Healthtech', 'city': 'Mendoza', 'status': 'pending', 'match_score': 89, 'avatar_url': 'https://i.pravatar.cc/150?img=59'},
-              {'id': 'st5', 'name': 'Perfil Confidencial', 'headline': 'CFO — Ecommerce', 'city': 'La Plata', 'status': 'viewed', 'match_score': 85, 'avatar_url': 'https://i.pravatar.cc/150?img=57'},
-              {'id': 'st6', 'name': 'Perfil Confidencial', 'headline': 'CMO — Marketplace', 'city': 'Tucumán', 'status': 'pending', 'match_score': 82, 'avatar_url': 'https://i.pravatar.cc/150?img=48'},
-            ];
-            return SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final width = constraints.maxWidth;
-                    final crossAxisCount = width > 700 ? 3 : width > 400 ? 2 : 1;
-                    return GridView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: crossAxisCount,
-                        crossAxisSpacing: 14,
-                        mainAxisSpacing: 14,
-                        childAspectRatio: 1.5,
-                      ),
-                      itemCount: displayRows.length,
-                      itemBuilder: (context, i) => _candidateCard(displayRows[i]),
-                    );
-                  },
-                ),
-              ),
-            );
-          },
-        ),
-      ],
+          const SizedBox(height: 6),
+        ] else ...[
+          Container(
+            width: double.infinity, padding: const EdgeInsets.symmetric(vertical: 7),
+            decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(8)),
+            child: const Center(child: Text('Ver Perfil', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF64748B)))),
+          ),
+          const SizedBox(height: 6),
+        ],
+        Row(children: [
+          Expanded(child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 7),
+            decoration: BoxDecoration(color: const Color(0xFF10B981).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
+            child: const Center(child: Text('Aceptar', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF10B981)))),
+          )),
+          const SizedBox(width: 6),
+          Expanded(child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 7),
+            decoration: BoxDecoration(color: const Color(0xFFEF4444).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
+            child: const Center(child: Text('Rechazar', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFFEF4444)))),
+          )),
+        ]),
+      ]),
     );
   }
 
-  // ── Helpers ──────────────────────────────────────────────────────────────
+  Widget _aiSourcingPanel(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white, borderRadius: BorderRadius.circular(16),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 12, offset: const Offset(0, 4))],
+        border: Border.all(color: const Color(0xFFF1F5F9)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Container(padding: const EdgeInsets.all(5), decoration: BoxDecoration(gradient: const LinearGradient(colors: [Color(0xFFF97316), Color(0xFFE2860B)]), borderRadius: BorderRadius.circular(8)),
+            child: const Icon(CupertinoIcons.sparkles, color: Colors.white, size: 14)),
+          const SizedBox(width: 8),
+          const Text('AI-Powered Sourcing', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Color(0xFF1E293B))),
+        ]),
+        const SizedBox(height: 6),
+        const Text('AI-Powered Sourcing a una poderosa da candidatos en su internamente el candidato de las mismas.', style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
+        const SizedBox(height: 16),
+        _aiFilterField('Rol'),
+        const SizedBox(height: 8),
+        _aiFilterField('Ubicación'),
+        const SizedBox(height: 8),
+        _aiFilterField('Coincidencia'),
+        const SizedBox(height: 8),
+        _aiFilterField('Candidate Status'),
+        const SizedBox(height: 16),
+        Container(
+          width: double.infinity, padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(gradient: const LinearGradient(colors: [Color(0xFF1E293B), Color(0xFF334155)]), borderRadius: BorderRadius.circular(10)),
+          child: const Center(child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(CupertinoIcons.lock_fill, color: Colors.white, size: 14),
+            SizedBox(width: 6),
+            Text('Permissions', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700)),
+          ])),
+        ),
+        const SizedBox(height: 8),
+        Center(child: Container(
+          width: 28, height: 28,
+          decoration: BoxDecoration(gradient: const LinearGradient(colors: [Color(0xFFF97316), Color(0xFFE2860B)]), shape: BoxShape.circle,
+            boxShadow: [BoxShadow(color: const Color(0xFFF97316).withValues(alpha: 0.3), blurRadius: 8)]),
+          child: const Icon(CupertinoIcons.plus, color: Colors.white, size: 16),
+        )),
+      ]),
+    );
+  }
 
-  Widget _buildMetricCard({required IconData icon, required String label, required String value, bool isAccent = false, Color? color}) {
-    final c = color ?? const Color(0xFFF97316);
-    return Expanded(
+  Widget _aiFilterField(String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(color: const Color(0xFFF8F9FB), borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xFFE2E8F0))),
+      child: Row(children: [
+        Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Color(0xFF64748B))),
+        const Spacer(),
+        const Icon(CupertinoIcons.chevron_down, size: 12, color: Color(0xFF94A3B8)),
+      ]),
+    );
+  }
+
+  // ── Contactos tab ──
+  Widget _contactosWeb(BuildContext context) {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const Text('Contactos', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Color(0xFF1E293B))),
+      const SizedBox(height: 12),
+      Wrap(spacing: 12, runSpacing: 12, children: _demoCandidates.take(3).map((c) => _contactCard(c)).toList()),
+    ]);
+  }
+
+  Widget _contactCard(_C c) {
+    return Container(
+      width: 240, padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 3))],
+        border: Border.all(color: const Color(0xFFF1F5F9))),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          ClipOval(child: CachedNetworkImage(imageUrl: c.photo, width: 40, height: 40, fit: BoxFit.cover,
+            placeholder: (_, __) => Container(width: 40, height: 40, color: Colors.grey.shade200),
+            errorWidget: (_, __, ___) => Container(width: 40, height: 40, color: Colors.grey.shade300))),
+          const SizedBox(width: 10),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(c.name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF1E293B))),
+            Text(c.role, style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
+          ])),
+          const Icon(CupertinoIcons.ellipsis, size: 16, color: Color(0xFF94A3B8)),
+        ]),
+        const SizedBox(height: 10),
+        const Text('Rich profile with detailed experience summary, detailed professional summary...', maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+        const SizedBox(height: 8),
+        Row(children: [
+          const Text('Matching History', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF1E293B))),
+          const Spacer(),
+          Text('Estado: Entrevista', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: const Color(0xFF10B981))),
+        ]),
+        const SizedBox(height: 8),
+        Container(
+          width: double.infinity, padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(color: const Color(0xFF1E293B), borderRadius: BorderRadius.circular(8)),
+          child: const Center(child: Text('Schedule Interview', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700))),
+        ),
+      ]),
+    );
+  }
+
+  // ── Confidencial tab ──
+  Widget _confidencialWeb(BuildContext context) {
+    return Center(child: Container(
+      width: 400, padding: const EdgeInsets.all(32),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 16)]),
+      child: Column(children: [
+        Container(width: 64, height: 64,
+          decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(16)),
+          child: const Icon(CupertinoIcons.lock_shield_fill, size: 28, color: Color(0xFF64748B))),
+        const SizedBox(height: 16),
+        const Text('Private database access', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Color(0xFF1E293B))),
+        const SizedBox(height: 6),
+        const Text('Private database access to access your permissions.', textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: Color(0xFF94A3B8))),
+        const SizedBox(height: 20),
+        Container(
+          width: double.infinity, padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(gradient: const LinearGradient(colors: [Color(0xFFF97316), Color(0xFFE2860B)]), borderRadius: BorderRadius.circular(12)),
+          child: const Center(child: Text('Desbloquear acceso', style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700))),
+        ),
+      ]),
+    ));
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // MOBILE LAYOUT
+  // ═══════════════════════════════════════════════════════════════
+  Widget _mobileLayout(BuildContext context) {
+    final c = _demoCandidates[_mobilePitchIdx];
+    return CupertinoPageScaffold(
+      backgroundColor: context.bgColor,
+      child: SafeArea(child: CustomScrollView(
+        physics: const BouncingScrollPhysics(),
+        slivers: [
+          // Header
+          CupertinoSliverNavigationBar(
+            transitionBetweenRoutes: false,
+            largeTitle: Text('Candidatos', style: TextStyle(color: context.textPrimary, fontFamily: '.SF Pro Display', letterSpacing: -0.5, fontWeight: FontWeight.w900)),
+            backgroundColor: context.bgColor,
+            border: null,
+          ),
+          // ── Pendientes header with arrows ──
+          SliverToBoxAdapter(child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Row(children: [
+              Text('Pendientes', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: context.textPrimary)),
+              const Spacer(),
+              GestureDetector(
+                onTap: () => setState(() => _mobilePitchIdx = (_mobilePitchIdx - 1).clamp(0, _demoCandidates.length - 1)),
+                child: Container(width: 32, height: 32, decoration: BoxDecoration(color: context.cardColor, borderRadius: BorderRadius.circular(8), boxShadow: context.cardShadow),
+                  child: Icon(CupertinoIcons.chevron_left, size: 14, color: context.textSecondary))),
+              const SizedBox(width: 6),
+              GestureDetector(
+                onTap: () => setState(() => _mobilePitchIdx = (_mobilePitchIdx + 1).clamp(0, _demoCandidates.length - 1)),
+                child: Container(width: 32, height: 32, decoration: BoxDecoration(color: context.cardColor, borderRadius: BorderRadius.circular(8), boxShadow: context.cardShadow),
+                  child: Icon(CupertinoIcons.chevron_right, size: 14, color: context.textSecondary))),
+            ]),
+          )),
+          // ── Video Pitch Card ──
+          SliverToBoxAdapter(child: _mobilePitchCard(context, c)),
+          // ── Accept / Reject ──
+          SliverToBoxAdapter(child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            child: Row(children: [
+              Expanded(child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                decoration: BoxDecoration(color: const Color(0xFF10B981).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
+                child: const Center(child: Text('Aceptar', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF10B981)))),
+              )),
+              const SizedBox(width: 10),
+              Expanded(child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                decoration: BoxDecoration(color: const Color(0xFFEF4444).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
+                child: const Center(child: Text('Rechazar', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFFEF4444)))),
+              )),
+            ]),
+          )),
+          // ── Ver Todos los Contactos ──
+          SliverToBoxAdapter(child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            child: Container(
+              width: double.infinity, padding: const EdgeInsets.symmetric(vertical: 12),
+              decoration: BoxDecoration(color: const Color(0xFF1E293B), borderRadius: BorderRadius.circular(12)),
+              child: const Center(child: Text('Ver Todos los Contactos', style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700))),
+            ),
+          )),
+          // ── Badges row ──
+          SliverToBoxAdapter(child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+            child: SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: [
+              _badgePill(CupertinoIcons.person_fill, 'Profile\nComplete', const Color(0xFFF97316)),
+              _badgePill(CupertinoIcons.checkmark_seal_fill, 'Skill\nBadge', const Color(0xFF10B981)),
+              _badgePill(CupertinoIcons.videocam_fill, 'Pitch\nRecibido', const Color(0xFF3B82F6)),
+              _badgePill(CupertinoIcons.sparkles, 'Skill\nPython', const Color(0xFF8B5CF6)),
+              _badgePill(CupertinoIcons.video_camera_solid, 'Video\nInterview', const Color(0xFFE91E63)),
+            ])),
+          )),
+          // ── Map ──
+          SliverToBoxAdapter(child: _mobileMap(context)),
+          const SliverToBoxAdapter(child: SizedBox(height: 100)),
+        ],
+      )),
+    );
+  }
+
+  Widget _mobilePitchCard(BuildContext context, _C c) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: const Color(0xFFFFFFFF),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFFF0F0F0), width: 1),
-          boxShadow: const [
-            BoxShadow(color: Color(0x08000000), blurRadius: 16, offset: Offset(0, 4)),
-            BoxShadow(color: Color(0x04000000), blurRadius: 4, offset: Offset(0, 1)),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Icon in colored circle
-            Container(
-              width: 44, height: 44,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: c.withValues(alpha: 0.10),
-              ),
-              child: Icon(icon, color: c, size: 22),
-            ),
-            const SizedBox(height: 14),
-            // Count value
-            Text(value, style: const TextStyle(color: Color(0xFF111827), fontSize: 28, fontWeight: FontWeight.w900, letterSpacing: -0.8)),
-            const SizedBox(height: 4),
-            // Label
-            Text(label, style: const TextStyle(color: Color(0xFF9CA3AF), fontSize: 13, fontWeight: FontWeight.w500)),
-            const SizedBox(height: 10),
-            // Sparkline trend indicator
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF059669).withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(CupertinoIcons.arrow_up_right, size: 11, color: Color(0xFF059669)),
-                      SizedBox(width: 2),
-                      Text('+12%', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF059669))),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 6),
-                const Text('vs mes anterior', style: TextStyle(fontSize: 10, color: Color(0xFFD1D5DB))),
-              ],
-            ),
-          ],
-        ),
+        height: 280,
+        decoration: BoxDecoration(borderRadius: BorderRadius.circular(20),
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.15), blurRadius: 16, offset: const Offset(0, 6))]),
+        clipBehavior: Clip.antiAlias,
+        child: Stack(children: [
+          // Background photo
+          Positioned.fill(child: CachedNetworkImage(imageUrl: c.photo.replaceAll('w=200&h=200', 'w=600&h=800'), fit: BoxFit.cover,
+            placeholder: (_, __) => Container(color: const Color(0xFF1E293B)),
+            errorWidget: (_, __, ___) => Container(color: const Color(0xFF1E293B)))),
+          // Gradient overlay
+          Positioned.fill(child: Container(decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter,
+            colors: [Colors.transparent, Colors.black.withValues(alpha: 0.8)])))),
+          // LIVE badge
+          if (c.hasVideo) Positioned(top: 12, right: 12, child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(color: const Color(0xFFFF3B30), borderRadius: BorderRadius.circular(6)),
+            child: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(CupertinoIcons.circle_fill, color: Colors.white, size: 6), SizedBox(width: 4), Text('LIVE', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w800))]),
+          )),
+          // Play button
+          Center(child: Container(width: 56, height: 56,
+            decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.25), shape: BoxShape.circle, border: Border.all(color: Colors.white.withValues(alpha: 0.5), width: 2)),
+            child: const Icon(CupertinoIcons.play_fill, color: Colors.white, size: 28))),
+          // Bottom info
+          Positioned(left: 14, right: 14, bottom: 14, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('${c.name} - ${c.pitchTitle}', style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 6),
+            // Skills
+            Wrap(spacing: 5, children: c.skills.map((s) => Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(6)),
+              child: Text(s, style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w600)),
+            )).toList()),
+          ])),
+          // Match badge
+          Positioned(top: 12, left: 12, child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10),
+              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 6)]),
+            child: Text('Coincidencia ${c.match}%', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFFF97316))),
+          )),
+        ]),
       ),
     );
   }
 
-  String _timeAgo(DateTime dt) {
-    final diff = DateTime.now().difference(dt);
-    if (diff.inMinutes < 60) return 'Hace ${diff.inMinutes}m';
-    if (diff.inHours < 24) return 'Hace ${diff.inHours}h';
-    if (diff.inDays < 7) return 'Hace ${diff.inDays}d';
-    return '${dt.day}/${dt.month}';
+  Widget _badgePill(IconData icon, String label, Color color) {
+    return Container(
+      margin: const EdgeInsets.only(right: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(color: color.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(12)),
+      child: Column(children: [
+        Icon(icon, color: color, size: 18),
+        const SizedBox(height: 4),
+        Text(label, textAlign: TextAlign.center, style: TextStyle(fontSize: 9, fontWeight: FontWeight.w600, color: color)),
+      ]),
+    );
+  }
+
+  Widget _mobileMap(BuildContext context) {
+    return Padding(padding: const EdgeInsets.fromLTRB(16, 20, 16, 0), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text('Map', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: context.textPrimary)),
+      const SizedBox(height: 10),
+      Container(height: 160, width: double.infinity,
+        decoration: BoxDecoration(color: const Color(0xFFE8F0FE), borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFFBBDEFB))),
+        child: Stack(children: [
+          ...List.generate(5, (i) => Positioned(top: i * 32.0 + 16, left: 0, right: 0, child: Container(height: 0.5, color: const Color(0xFFCFD8DC)))),
+          Positioned(top: 60, left: 120, child: Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(gradient: const LinearGradient(colors: [Color(0xFFF97316), Color(0xFFE2860B)]), borderRadius: BorderRadius.circular(10),
+              boxShadow: [BoxShadow(color: const Color(0xFFF97316).withValues(alpha: 0.3), blurRadius: 8)]),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              const Icon(CupertinoIcons.building_2_fill, color: Colors.white, size: 12),
+              const SizedBox(width: 4),
+              Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4)),
+                child: const Text('Company A', style: TextStyle(fontSize: 8, fontWeight: FontWeight.w700, color: Color(0xFFF97316)))),
+            ]),
+          )),
+          Positioned(top: 35, right: 60, child: _mapAvatar('https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&h=100&fit=crop&crop=face')),
+          Positioned(top: 90, left: 70, child: _mapAvatar('https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop&crop=face')),
+          // Navigation icon
+          Positioned(top: 10, right: 10, child: Container(width: 30, height: 30,
+            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 4)]),
+            child: const Icon(CupertinoIcons.location_fill, size: 14, color: Color(0xFF3B82F6)))),
+        ])),
+    ]));
+  }
+
+  Widget _mapAvatar(String url) {
+    return Container(
+      padding: const EdgeInsets.all(2),
+      decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white, boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 4)]),
+      child: ClipOval(child: CachedNetworkImage(imageUrl: url, width: 26, height: 26, fit: BoxFit.cover,
+        placeholder: (_, __) => Container(width: 26, height: 26, color: Colors.grey.shade200),
+        errorWidget: (_, __, ___) => Container(width: 26, height: 26, color: Colors.grey.shade300))),
+    );
   }
 }

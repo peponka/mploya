@@ -499,30 +499,21 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
                                         currentUser?.accountType == 'headhunter';
                                     Navigator.of(context).push(
                                       CupertinoPageRoute<void>(
-                                        builder: (_) => isCompany
-                                            ? const VacantesScreen()
-                                            : const JobsScreen(),
+                                        builder: (_) => const JobsScreen(),
                                       ),
                                     );
                                   },
-                                  child: const Icon(CupertinoIcons.briefcase, size: 20, color: Colors.white,
-                                      shadows: [Shadow(color: Colors.black, blurRadius: 8)]),
+                                  child: Container(
+                                    width: 40, height: 40,
+                                    decoration: BoxDecoration(
+                                      color: Colors.black.withValues(alpha: 0.45),
+                                      shape: BoxShape.circle,
+                                      border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
+                                    ),
+                                    child: const Icon(CupertinoIcons.briefcase_fill, size: 20, color: Colors.white),
+                                  ),
                                 ),
-                                const SizedBox(width: 18),
-                                // ── Mensajes (con contador de no leídos) ──
-                                CupertinoButton(
-                                  key: cmFeedMsgBtnKey,
-                                  padding: EdgeInsets.zero,
-                                  minimumSize: Size.zero,
-                                  onPressed: () {
-                                    HapticFeedback.selectionClick();
-                                    Navigator.of(context).push(
-                                      CupertinoPageRoute<void>(builder: (_) => const MessagingScreen()),
-                                    );
-                                  },
-                                  child: const _UnreadMessagesIcon(),
-                                ),
-                                const SizedBox(width: 18),
+                                const SizedBox(width: 12),
                                 // ── Bell ──
                                 CupertinoButton(
                                   key: cmFeedBellBtnKey,
@@ -544,8 +535,15 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
                                       return Stack(
                                         clipBehavior: Clip.none,
                                         children: [
-                                          const Icon(CupertinoIcons.bell, size: 20, color: Colors.white,
-                                              shadows: [Shadow(color: Colors.black, blurRadius: 8)]),
+                                          Container(
+                                            width: 40, height: 40,
+                                            decoration: BoxDecoration(
+                                              color: Colors.black.withValues(alpha: 0.45),
+                                              shape: BoxShape.circle,
+                                              border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
+                                            ),
+                                            child: const Icon(CupertinoIcons.bell_fill, size: 20, color: Colors.white),
+                                          ),
                                           if (unread > 0)
                                             Positioned(
                                               right: -6,
@@ -651,8 +649,15 @@ class _UnreadMessagesIconState extends State<_UnreadMessagesIcon> {
 
   @override
   Widget build(BuildContext context) {
-    const icon = Icon(CupertinoIcons.chat_bubble, size: 20, color: Colors.white,
-        shadows: [Shadow(color: Colors.black, blurRadius: 8)]);
+    final icon = Container(
+      width: 40, height: 40,
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.45),
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
+      ),
+      child: const Icon(CupertinoIcons.chat_bubble_fill, size: 20, color: Colors.white),
+    );
     if (_stream == null) return icon;
 
     return StreamBuilder<List<Map<String, dynamic>>>(

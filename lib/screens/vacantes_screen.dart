@@ -731,66 +731,187 @@ class _VacantesScreenState extends State<VacantesScreen> {
     final title = (job['title'] ?? 'Sin título').toString();
     final salary = (job['salary_range'] ?? 'A convenir').toString();
     final location = (job['location'] ?? 'Remoto').toString();
-    final hairline = context.dividerColor.withValues(alpha: 0.5);
+    final tags = (job['tags'] as List?)?.map((t) => t.toString()).take(5).toList() ?? [];
+    final createdAt = DateTime.tryParse(job['created_at']?.toString() ?? '');
+    final timeAgo = createdAt != null ? _timeAgo(createdAt) : '';
+    final isActive = job['status'] != 'paused';
+
     return WebCard(
       onTap: () => _showApplicantsSheet(job),
       borderColor: isStealth ? MployaTheme.brandAccent.withValues(alpha: 0.35) : null,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // ── Header: Avatar + Title + Badge ──
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                width: 42, height: 42,
-                decoration: BoxDecoration(color: MployaTheme.brandAccent.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(11)),
-                child: const Icon(CupertinoIcons.briefcase_fill, color: MployaTheme.brandAccent, size: 20),
+                width: 50, height: 50,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFFF97316), Color(0xFFFBBF24)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: [
+                    BoxShadow(color: const Color(0xFFF97316).withValues(alpha: 0.2), blurRadius: 10, offset: const Offset(0, 3)),
+                  ],
+                ),
+                child: Center(
+                  child: Text(
+                    title.isNotEmpty ? title[0].toUpperCase() : 'V',
+                    style: const TextStyle(color: CupertinoColors.white, fontSize: 22, fontWeight: FontWeight.w800),
+                  ),
+                ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 14),
               Expanded(
-                child: Text(title, maxLines: 2, overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: context.textPrimary, fontSize: 16, fontWeight: FontWeight.w700)),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, maxLines: 2, overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: context.textPrimary, fontSize: 16.5, fontWeight: FontWeight.w800, letterSpacing: -0.3)),
+                    const SizedBox(height: 4),
+                    Row(children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: isActive
+                              ? const Color(0xFF10B981).withValues(alpha: 0.12)
+                              : const Color(0xFFEF4444).withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          isActive ? 'Activa' : 'Pausada',
+                          style: TextStyle(
+                            color: isActive ? const Color(0xFF10B981) : const Color(0xFFEF4444),
+                            fontSize: 11, fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      if (timeAgo.isNotEmpty) ...[
+                        const SizedBox(width: 8),
+                        Text(timeAgo, style: TextStyle(color: context.textTertiary, fontSize: 11, fontWeight: FontWeight.w500)),
+                      ],
+                    ]),
+                  ],
+                ),
               ),
               if (isStealth)
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(color: MployaTheme.brandAccent.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
-                  child: const Text('C-Level', style: TextStyle(color: MployaTheme.brandAccent, fontSize: 10, fontWeight: FontWeight.w800)),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(colors: [Color(0xFFDAA520), Color(0xFFF59E0B)]),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Text('C-Level', style: TextStyle(color: CupertinoColors.white, fontSize: 10, fontWeight: FontWeight.w800)),
                 ),
             ],
           ),
           const SizedBox(height: 14),
-          Row(children: [
-            Icon(CupertinoIcons.money_dollar_circle, size: 15, color: context.textTertiary),
-            const SizedBox(width: 5),
-            Text(salary, style: TextStyle(color: context.textSecondary, fontSize: 13, fontWeight: FontWeight.w600)),
-            const SizedBox(width: 14),
-            Icon(CupertinoIcons.location, size: 15, color: context.textTertiary),
-            const SizedBox(width: 5),
-            Flexible(child: Text(location, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: context.textSecondary, fontSize: 13))),
-          ]),
+
+          // ── Salary + Location Row ──
+          Wrap(
+            spacing: 12,
+            runSpacing: 6,
+            children: [
+              _infoPill(CupertinoIcons.money_dollar_circle, salary, MployaTheme.brandAccent),
+              _infoPill(CupertinoIcons.location, location, context.textTertiary),
+            ],
+          ),
+
+          // ── Tags ──
+          if (tags.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: tags.map((tag) => Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: context.isDark ? NexTheme.darkSurface : const Color(0xFFF2F2F7),
+                  borderRadius: BorderRadius.circular(7),
+                ),
+                child: Text('#$tag', style: TextStyle(color: context.textSecondary, fontSize: 11, fontWeight: FontWeight.w600)),
+              )).toList(),
+            ),
+          ],
+
           const SizedBox(height: 14),
-          Divider(height: 0.5, thickness: 0.5, color: hairline),
-          const SizedBox(height: 12),
+          Divider(height: 0.5, thickness: 0.5, color: context.dividerColor.withValues(alpha: 0.5)),
+          const SizedBox(height: 14),
+
+          // ── Applicants Badge + CTA Button ──
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(color: MployaTheme.brandAccent.withValues(alpha: 0.10), borderRadius: BorderRadius.circular(7)),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: MployaTheme.brandAccent.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(9),
+                ),
                 child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  const Icon(CupertinoIcons.person_2_fill, color: MployaTheme.brandAccent, size: 13),
-                  const SizedBox(width: 5),
-                  Text(count == 0 ? 'Sin postulantes' : '$count postulante${count == 1 ? '' : 's'}',
-                      style: const TextStyle(color: MployaTheme.brandAccent, fontSize: 12, fontWeight: FontWeight.w700)),
+                  const Icon(CupertinoIcons.person_2_fill, color: MployaTheme.brandAccent, size: 14),
+                  const SizedBox(width: 6),
+                  Text(
+                    count == 0 ? 'Sin postulantes' : '$count postulante${count == 1 ? '' : 's'}',
+                    style: const TextStyle(color: MployaTheme.brandAccent, fontSize: 12, fontWeight: FontWeight.w700),
+                  ),
                 ]),
               ),
               const Spacer(),
-              Text('Ver candidatos', style: TextStyle(color: context.textSecondary, fontSize: 13, fontWeight: FontWeight.w600)),
-              const SizedBox(width: 4),
-              Icon(CupertinoIcons.chevron_right, size: 14, color: context.textTertiary),
+              // ── Premium CTA button ──
+              GestureDetector(
+                onTap: () => _showApplicantsSheet(job),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFFF97316), Color(0xFFE2860B), Color(0xFFD4740A)],
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(color: const Color(0xFFF97316).withValues(alpha: 0.25), blurRadius: 10, offset: const Offset(0, 3)),
+                    ],
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(CupertinoIcons.person_2, size: 14, color: CupertinoColors.white),
+                      SizedBox(width: 6),
+                      Text('Ver candidatos', style: TextStyle(color: CupertinoColors.white, fontSize: 13, fontWeight: FontWeight.w700)),
+                      SizedBox(width: 4),
+                      Icon(CupertinoIcons.chevron_right, size: 12, color: CupertinoColors.white),
+                    ],
+                  ),
+                ),
+              ),
             ],
           ),
         ],
       ),
     );
+  }
+
+  Widget _infoPill(IconData icon, String text, Color iconColor) {
+    return Row(mainAxisSize: MainAxisSize.min, children: [
+      Icon(icon, size: 14, color: iconColor),
+      const SizedBox(width: 5),
+      Flexible(child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis,
+          style: TextStyle(color: context.textSecondary, fontSize: 13, fontWeight: FontWeight.w600))),
+    ]);
+  }
+
+  String _timeAgo(DateTime dt) {
+    final diff = DateTime.now().difference(dt);
+    if (diff.inMinutes < 60) return 'Hace ${diff.inMinutes}min';
+    if (diff.inHours < 24) return 'Hace ${diff.inHours}h';
+    if (diff.inDays < 7) return 'Hace ${diff.inDays}d';
+    if (diff.inDays < 30) return 'Hace ${(diff.inDays / 7).floor()}sem';
+    return 'Hace ${(diff.inDays / 30).floor()}mes';
   }
 }
