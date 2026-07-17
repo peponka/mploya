@@ -6,6 +6,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:permission_handler/permission_handler.dart';
+import 'package:url_launcher/url_launcher.dart';
 // En web usa el iframe de Jitsi embebido; en móvil el stub (no se usa).
 import '../widgets/jitsi_web_view_stub.dart'
     if (dart.library.html) '../widgets/jitsi_web_view.dart';
@@ -174,10 +175,48 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
           // Video remoto
           Positioned.fill(
             child: _error != null
-                ? Center(child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Text(_error!, style: const TextStyle(color: Colors.white, fontSize: 14)),
-                  ))
+                ? Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          child: Text(
+                            _error!,
+                            style: const TextStyle(color: Colors.white70, fontSize: 14, decoration: TextDecoration.none),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        CupertinoButton(
+                          color: const Color(0xFFF97316),
+                          borderRadius: BorderRadius.circular(12),
+                          onPressed: () async {
+                            final url = Uri.parse(
+                              'https://meet.jit.si/${widget.channelName}'
+                              '#config.prejoinConfig.enabled=false'
+                              '&config.prejoinPageEnabled=false'
+                              '&userInfo.displayName="${Uri.encodeComponent(widget.displayName)}"',
+                            );
+                            if (await canLaunchUrl(url)) {
+                              await launchUrl(url, mode: LaunchMode.externalApplication);
+                            }
+                          },
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(CupertinoIcons.videocam_fill, color: Colors.white),
+                              SizedBox(width: 8),
+                              Text(
+                                'Unirse vía Jitsi (Alternativa)',
+                                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
                 : !_localVideoReady
                     ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
                         const CircularProgressIndicator(color: Colors.white),

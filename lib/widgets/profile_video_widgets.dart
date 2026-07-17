@@ -367,7 +367,12 @@ class _VideoPlayerModalState extends State<VideoPlayerModal> {
   @override
   void initState() {
     super.initState();
-    _controller = VideoPlayerController.networkUrl(Uri.parse(widget.videoUrl));
+    final url = widget.videoUrl;
+    if (url.startsWith('asset:')) {
+      _controller = VideoPlayerController.asset(url.replaceAll('asset:', ''));
+    } else {
+      _controller = VideoPlayerController.networkUrl(Uri.parse(url));
+    }
     _controller.initialize().then((_) {
       if (mounted) {
         setState(() => _isInitialized = true);

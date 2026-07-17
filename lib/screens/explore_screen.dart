@@ -2,6 +2,8 @@ import 'dart:ui';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import '../theme/app_theme.dart';
 import '../widgets/web_ui.dart';
 import '../screens/vacantes_screen.dart';
@@ -277,22 +279,65 @@ class _ExploreScreenState extends State<ExploreScreen> {
           height: 170,
           width: double.infinity,
           decoration: BoxDecoration(
-            color: const Color(0xFFE8F0FE),
             borderRadius: BorderRadius.circular(14),
             border: Border.all(color: const Color(0xFFBBDEFB)),
           ),
-          child: Stack(children: [
-            ...List.generate(6, (i) => Positioned(top: i * 28.0 + 10, left: 0, right: 0, child: Container(height: 0.5, color: const Color(0xFFCFD8DC)))),
-            ...List.generate(5, (i) => Positioned(left: i * 80.0 + 20, top: 0, bottom: 0, child: Container(width: 0.5, color: const Color(0xFFCFD8DC)))),
-            Positioned(top: 60, left: 130, child: _mapCompanyPin()),
-            Positioned(top: 35, left: 75, child: _mapUserPin(_demoUsers[0]['photo'] as String, const Color(0xFF3B82F6))),
-            Positioned(top: 95, left: 210, child: _mapUserPin(_demoUsers[1]['photo'] as String, const Color(0xFF10B981))),
-            Positioned(top: 28, right: 50, child: _mapUserPin(_demoUsers[4]['photo'] as String, const Color(0xFF8B5CF6))),
-          ]),
+          clipBehavior: Clip.antiAlias,
+          child: _buildMapWidget(context),
         ),
         const SizedBox(height: 12),
         _companyRow(),
       ]),
+    );
+  }
+
+  Widget _buildMapWidget(BuildContext context) {
+    const centerPoint = LatLng(-25.282, -57.635);
+    final alexPoint = LatLng(-25.284, -57.637);
+    final elenaPoint = LatLng(-25.280, -57.632);
+    final diegoPoint = LatLng(-25.279, -57.638);
+    final companyPoint = LatLng(-25.282, -57.635);
+
+    return FlutterMap(
+      options: const MapOptions(
+        initialCenter: centerPoint,
+        initialZoom: 14.5,
+        interactionOptions: InteractionOptions(flags: InteractiveFlag.all),
+      ),
+      children: [
+        TileLayer(
+          urlTemplate: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+          userAgentPackageName: 'com.mploya.ai',
+        ),
+        MarkerLayer(
+          markers: [
+            Marker(
+              point: companyPoint,
+              width: 44,
+              height: 44,
+              child: _mapCompanyPin(),
+            ),
+            Marker(
+              point: alexPoint,
+              width: 38,
+              height: 38,
+              child: _mapUserPin(_demoUsers[0]['photo'] as String, const Color(0xFF3B82F6)),
+            ),
+            Marker(
+              point: elenaPoint,
+              width: 38,
+              height: 38,
+              child: _mapUserPin(_demoUsers[1]['photo'] as String, const Color(0xFF10B981)),
+            ),
+            Marker(
+              point: diegoPoint,
+              width: 38,
+              height: 38,
+              child: _mapUserPin(_demoUsers[4]['photo'] as String, const Color(0xFF8B5CF6)),
+            ),
+          ],
+        ),
+      ],
     );
   }
 
@@ -525,15 +570,15 @@ class _ExploreScreenState extends State<ExploreScreen> {
       crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text('Map', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: context.textPrimary)),
         const SizedBox(height: 12),
-        Container(height: 170, width: double.infinity,
-          decoration: BoxDecoration(color: const Color(0xFFE8F0FE), borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFFBBDEFB))),
-          child: Stack(children: [
-            ...List.generate(5, (i) => Positioned(top: i * 34.0 + 16, left: 0, right: 0, child: Container(height: 0.5, color: const Color(0xFFCFD8DC)))),
-            Positioned(top: 60, left: 100, child: _mapUserPin(_demoUsers[0]['photo'] as String, const Color(0xFF3B82F6))),
-            Positioned(top: 40, right: 80, child: _mapUserPin(_demoUsers[1]['photo'] as String, const Color(0xFF10B981))),
-            Positioned(top: 75, left: 180, child: _mapCompanyPin()),
-            Positioned(top: 100, right: 50, child: _mapUserPin(_demoUsers[4]['photo'] as String, const Color(0xFF8B5CF6))),
-          ]),
+        Container(
+          height: 170,
+          width: double.infinity,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFBBDEFB)),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: _buildMapWidget(context),
         ),
       ],
     ));

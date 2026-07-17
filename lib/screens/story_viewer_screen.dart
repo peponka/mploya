@@ -62,17 +62,8 @@ class _StoryViewerScreenState extends State<StoryViewerScreen> {
   }
 
   Future<void> _loadStories() async {
-    // Intentar cargar historias reales
-    final storyUsers = await StoryService.instance.getStoryUsers();
-
-    if (storyUsers.isNotEmpty) {
-      setState(() {
-        _storyUsers = storyUsers;
-        _isLoading = false;
-      });
-      _loadVideoForIndex(0);
-    } else if (widget.users.isNotEmpty) {
-      // Fallback: usar los users pasados como parámetro (pitch videos)
+    if (widget.users.isNotEmpty) {
+      // Priorizar los users pasados como parámetro (pitch videos)
       setState(() {
         _storyUsers = widget.users
             .where((u) => u.videoUrl != null && u.videoUrl!.isNotEmpty)
@@ -92,7 +83,21 @@ class _StoryViewerScreenState extends State<StoryViewerScreen> {
             .toList();
         _isLoading = false;
       });
-      if (_storyUsers.isNotEmpty) _loadVideoForIndex(0);
+      if (_storyUsers.isNotEmpty) {
+        _loadVideoForIndex(_currentUserIndex.clamp(0, _storyUsers.length - 1));
+      }
+      return;
+    }
+
+    // Intentar cargar historias reales
+    final storyUsers = await StoryService.instance.getStoryUsers();
+
+    if (storyUsers.isNotEmpty) {
+      setState(() {
+        _storyUsers = storyUsers;
+        _isLoading = false;
+      });
+      _loadVideoForIndex(_currentUserIndex.clamp(0, _storyUsers.length - 1));
     } else {
       setState(() => _isLoading = false);
     }

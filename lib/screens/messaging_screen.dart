@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
+import 'dart:async';
 import 'package:flutter/cupertino.dart';
 // Material widgets (SliverAppBar, Colors, Icons) have no Cupertino equivalent
 import 'package:flutter/material.dart';
@@ -46,6 +47,106 @@ class _MessagingScreenState extends State<MessagingScreen> {
 
   final String? _currentUserId =
       Supabase.instance.client.auth.currentUser?.id;
+
+  List<Map<String, dynamic>>? _connectionsData;
+  List<Map<String, dynamic>>? _usersData;
+  List<Map<String, dynamic>>? _messagesData;
+
+  StreamSubscription? _connectionsSub;
+  StreamSubscription? _usersSub;
+  StreamSubscription? _messagesSub;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadInitialData();
+    _subscribeToStreams();
+  }
+
+  @override
+  void dispose() {
+    _connectionsSub?.cancel();
+    _usersSub?.cancel();
+    _messagesSub?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _loadInitialData() async {
+    try {
+      final connFut = Supabase.instance.client
+          .from('connections')
+          .select()
+          .limit(200);
+
+      final usersFut = Supabase.instance.client
+          .from('users')
+          .select()
+          .order('created_at', ascending: false)
+          .limit(100);
+
+      final msgFut = Supabase.instance.client
+          .from('messages')
+          .select()
+          .order('created_at', ascending: false)
+          .limit(200);
+
+      final results = await Future.wait([connFut, usersFut, msgFut]);
+      if (mounted) {
+        setState(() {
+          _connectionsData = List<Map<String, dynamic>>.from(results[0]);
+          _usersData = List<Map<String, dynamic>>.from(results[1]);
+          _messagesData = List<Map<String, dynamic>>.from(results[2]);
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading initial chat data: $e');
+    }
+  }
+
+  void _subscribeToStreams() {
+    try {
+      _connectionsSub = _connectionsStream.listen(
+        (data) {
+          if (mounted) {
+            setState(() {
+              _connectionsData = data;
+            });
+          }
+        },
+        onError: (err) {
+          debugPrint('Connections stream error (silently ignored): $err');
+        },
+      );
+
+      _usersSub = _usersStream.listen(
+        (data) {
+          if (mounted) {
+            setState(() {
+              _usersData = data;
+            });
+          }
+        },
+        onError: (err) {
+          debugPrint('Users stream error (silently ignored): $err');
+        },
+      );
+
+      _messagesSub = _messagesStreamGlobal.listen(
+        (data) {
+          if (mounted) {
+            setState(() {
+              _messagesData = data;
+            });
+          }
+        },
+        onError: (err) {
+          debugPrint('Messages stream error (silently ignored): $err');
+        },
+      );
+    } catch (e) {
+      debugPrint('Error subscribing to streams: $e');
+    }
+  }
 
   late final _usersStream = Supabase.instance.client
       .from('users')
@@ -328,20 +429,36 @@ class _MessagingScreenState extends State<MessagingScreen> {
                                 child: Row(
                                   children: [
                                     _demoUserChip('Elena García', '👩‍🎨', true),
-                                    const Spacer(),
+                                    const SizedBox(width: 10),
                                     // Video call button
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                                      decoration: BoxDecoration(
-                                        gradient: const LinearGradient(colors: [Color(0xFFF97316), Color(0xFFE2860B)]),
-                                        borderRadius: BorderRadius.circular(12),
-                                        boxShadow: [BoxShadow(color: const Color(0xFFF97316).withValues(alpha: 0.25), blurRadius: 8, offset: const Offset(0, 3))],
+                                    CupertinoButton(
+                                      padding: EdgeInsets.zero,
+                                      minSize: 0,
+                                      onPressed: () {
+                                        Navigator.push(
+                                          context,
+                                          CupertinoPageRoute(
+                                            builder: (_) => const AgoraCallScreen(
+                                              channelName: 'demo-room-elena',
+                                              displayName: 'Tú (Demo)',
+                                              otherName: 'Elena García',
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                        decoration: BoxDecoration(
+                                          gradient: const LinearGradient(colors: [Color(0xFFF97316), Color(0xFFE2860B)]),
+                                          borderRadius: BorderRadius.circular(12),
+                                          boxShadow: [BoxShadow(color: const Color(0xFFF97316).withValues(alpha: 0.25), blurRadius: 8, offset: const Offset(0, 3))],
+                                        ),
+                                        child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                                          Icon(CupertinoIcons.videocam_fill, color: CupertinoColors.white, size: 16),
+                                          SizedBox(width: 6),
+                                          Text('Video HD', style: TextStyle(color: CupertinoColors.white, fontSize: 12, fontWeight: FontWeight.w700)),
+                                        ]),
                                       ),
-                                      child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                                        Icon(CupertinoIcons.videocam_fill, color: CupertinoColors.white, size: 16),
-                                        SizedBox(width: 6),
-                                        Text('Video HD', style: TextStyle(color: CupertinoColors.white, fontSize: 12, fontWeight: FontWeight.w700)),
-                                      ]),
                                     ),
                                     const SizedBox(width: 10),
                                     Icon(CupertinoIcons.person_crop_circle, size: 28, color: context.textSecondary),
@@ -588,13 +705,13 @@ class _MessagingScreenState extends State<MessagingScreen> {
               child: Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: MployaTheme.brandAccent.withValues(alpha: 0.08),
+                  color: MployaTheme.brandAccent.withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                 ),
-                child: Icon(
-                  CupertinoIcons.pencil_ellipsis_rectangle,
-                  size: 22,
-                  color: context.brandAccent,
+                child: const Icon(
+                  CupertinoIcons.square_pencil,
+                  color: MployaTheme.brandAccent,
+                  size: 20,
                 ),
               ),
             ),
@@ -655,163 +772,156 @@ class _MessagingScreenState extends State<MessagingScreen> {
           ),
 
           // ── Contenido Real (Matches + Inbox) ──
-          StreamBuilder<List<Map<String, dynamic>>>(
-            stream: _connectionsStream,
-            builder: (ctx1, connSnap) {
-              return StreamBuilder<List<Map<String, dynamic>>>(
-                stream: _usersStream,
-                builder: (context, snap) {
-                  if (!snap.hasData || !connSnap.hasData) {
-                    return SliverToBoxAdapter(
-                      child: Padding(
-                        padding: const EdgeInsets.only(top: 24),
-                        child: _buildInboxSkeleton(),
-                      ),
-                    );
-                  }
-
-                  // Extraer IDs con las que conecté
-                  final validUserIds = connSnap.data!
-                      .where((c) => c['status'] == 'accepted')
-                      .map((c) => c['requester_id'] == _currentUserId ? c['addressee_id'] : c['requester_id'])
-                      .toSet();
-
-                  final allUsers = snap.data!
-                      .where((r) => validUserIds.contains(r['id']))
-                      .map((r) => NexUser.fromJson(r))
-                      .toList();
-
-                  // Aplicar filtro de búsqueda
-                  final users = _applySearch(allUsers);
-
-                  if (allUsers.isEmpty) {
-                    return _buildEmptyInbox(context);
-                  }
-
-                  if (users.isEmpty && _searchQuery.isNotEmpty) {
-                    return SliverToBoxAdapter(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 60, horizontal: 40),
-                        child: Column(
-                          children: [
-                            Icon(CupertinoIcons.search, size: 48, color: const Color(0xFFAEAEB2).withValues(alpha: 0.5)),
-                            const SizedBox(height: 16),
-                            Text(
-                              'Sin resultados para "$_searchQuery"',
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(fontSize: 16, color: Color(0xFF8E8E93), fontWeight: FontWeight.w600),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  }
-
-              return SliverList(
-                delegate: SliverChildListDelegate([
-                  // 1. Matches Horizontales (Bumble/Tinder style)
-                  _buildNuevosMatches(users, context),
-                  
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 24, 24, 12),
-                    child: Text(
-                      'Mensajes Recientes',
-                      style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w800,
-                        color: context.textPrimary,
-                        letterSpacing: -0.4,
-                      ),
-                    ),
-                  ),
-
-                  // 2. Lista Vertical de Chats
-                  StreamBuilder<List<Map<String, dynamic>>>(
-                    stream: _messagesStreamGlobal,
-                    builder: (context, msgSnap) {
-                      final allMsgs = msgSnap.data ?? [];
-
-                      // ── Filtro por chip (sobre datos reales) ──
-                      bool userHasUnread(NexUser u) => allMsgs.any((m) =>
-                          m['sender_id'] == u.id && m['receiver_id'] == _currentUserId && m['is_read'] != true);
-                      final visibleUsers = users.where((u) {
-                        switch (_convFilter) {
-                          case 'match':
-                            return u.isPremium || u.isVerified;
-                          case 'noleidos':
-                            return userHasUnread(u);
-                          default:
-                            return true;
-                        }
-                      }).toList();
-
-                      if (visibleUsers.isEmpty) {
-                        return Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 40),
-                          child: Center(
-                            child: Text(
-                              _convFilter == 'noleidos'
-                                  ? 'No tenés mensajes sin leer.'
-                                  : 'Sin conversaciones en este filtro.',
-                              style: TextStyle(fontSize: 13.5, color: context.textTertiary),
-                            ),
-                          ),
-                        );
-                      }
-
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: context.cardColor,
-                            borderRadius: BorderRadius.circular(30),
-                            boxShadow: const [
-                              BoxShadow(color: Color(0x08000000), blurRadius: 24, offset: Offset(0, 8))
-                            ],
-                          ),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(30),
-                            child: Column(
-                              children: visibleUsers.asMap().entries.map((entry) {
-                                final i = entry.key;
-                                final user = entry.value;
-
-                                // Extraer último mensaje
-                                final userMsgs = allMsgs.where((m) =>
-                                    (m['sender_id'] == _currentUserId && m['receiver_id'] == user.id) ||
-                                    (m['sender_id'] == user.id && m['receiver_id'] == _currentUserId));
-                                final lastMsg = userMsgs.isNotEmpty ? userMsgs.first : null;
-                                final unreadCount = userMsgs.where((m) => m['receiver_id'] == _currentUserId && m['is_read'] != true).length;
-                                final hasUnread = unreadCount > 0;
-                                final previewText = lastMsg != null
-                                    ? (lastMsg['text']?.toString() ?? lastMsg['content']?.toString() ?? '')
-                                    : (user.headline.isNotEmpty ? user.headline : 'Inicia la conversación...');
-                                final timeText = lastMsg != null ? timeAgo(lastMsg['created_at']) : '';
-
-                                return _ConversationTile(
-                                  user: user,
-                                  isLast: i == visibleUsers.length - 1,
-                                  previewText: previewText,
-                                  timeText: timeText,
-                                  hasUnread: hasUnread,
-                                  isSelected: selectedUser?.id == user.id,
-                                  onTap: () => onTapUser(user),
-                                );
-                              }).toList(),
-                            ),
-                          ),
-                        ),
-                      );
-                    }
-                  ),
-                  const SizedBox(height: 100),
-                ]),
-                  );
-                },
-              );
-            },
-          ),
+          _buildRealContentSliver(context, onTapUser: onTapUser, selectedUser: selectedUser),
         ],
+    );
+  }
+
+  Widget _buildRealContentSliver(BuildContext context, {required void Function(NexUser) onTapUser, NexUser? selectedUser}) {
+    if (_connectionsData == null || _usersData == null) {
+      return SliverToBoxAdapter(
+        child: Padding(
+          padding: const EdgeInsets.only(top: 24),
+          child: _buildInboxSkeleton(),
+        ),
+      );
+    }
+
+    // Extraer IDs con las que conecté
+    final validUserIds = _connectionsData!
+        .where((c) => c['status'] == 'accepted')
+        .map((c) => c['requester_id'] == _currentUserId ? c['addressee_id'] : c['requester_id'])
+        .toSet();
+
+    final allUsers = _usersData!
+        .where((r) => validUserIds.contains(r['id']))
+        .map((r) => NexUser.fromJson(r))
+        .toList();
+
+    // Aplicar filtro de búsqueda
+    final users = _applySearch(allUsers);
+
+    if (allUsers.isEmpty) {
+      return _buildEmptyInbox(context);
+    }
+
+    if (users.isEmpty && _searchQuery.isNotEmpty) {
+      return SliverToBoxAdapter(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 60, horizontal: 40),
+          child: Column(
+            children: [
+              Icon(CupertinoIcons.search, size: 48, color: const Color(0xFFAEAEB2).withValues(alpha: 0.5)),
+              const SizedBox(height: 16),
+              Text(
+                'Sin resultados para "$_searchQuery"',
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 16, color: Color(0xFF8E8E93), fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return SliverList(
+      delegate: SliverChildListDelegate([
+        // 1. Matches Horizontales (Bumble/Tinder style)
+        _buildNuevosMatches(users, context),
+        
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 24, 24, 12),
+          child: Text(
+            'Mensajes Recientes',
+            style: TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.w800,
+              color: context.textPrimary,
+              letterSpacing: -0.4,
+            ),
+          ),
+        ),
+
+        // 2. Lista Vertical de Chats
+        Builder(
+          builder: (context) {
+            final allMsgs = _messagesData ?? [];
+
+            // ── Filtro por chip (sobre datos reales) ──
+            bool userHasUnread(NexUser u) => allMsgs.any((m) =>
+                m['sender_id'] == u.id && m['receiver_id'] == _currentUserId && m['is_read'] != true);
+            final visibleUsers = users.where((u) {
+              switch (_convFilter) {
+                case 'match':
+                  return u.isPremium || u.isVerified;
+                case 'noleidos':
+                  return userHasUnread(u);
+                default:
+                  return true;
+              }
+            }).toList();
+
+            if (visibleUsers.isEmpty) {
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 40),
+                child: Center(
+                  child: Text(
+                    _convFilter == 'noleidos'
+                        ? 'No tenés mensajes sin leer.'
+                        : 'Sin conversaciones en este filtro.',
+                    style: TextStyle(fontSize: 13.5, color: context.textTertiary),
+                  ),
+                ),
+              );
+            }
+
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: context.cardColor,
+                  borderRadius: BorderRadius.circular(30),
+                  boxShadow: const [
+                    BoxShadow(color: Color(0x08000000), blurRadius: 24, offset: Offset(0, 8))
+                  ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(30),
+                  child: Column(
+                    children: visibleUsers.asMap().entries.map((entry) {
+                      final i = entry.key;
+                      final user = entry.value;
+
+                      // Extraer último mensaje
+                      final userMsgs = allMsgs.where((m) =>
+                          (m['sender_id'] == _currentUserId && m['receiver_id'] == user.id) ||
+                          (m['sender_id'] == user.id && m['receiver_id'] == _currentUserId));
+                      final lastMsg = userMsgs.isNotEmpty ? userMsgs.first : null;
+                      final unreadCount = userMsgs.where((m) => m['receiver_id'] == _currentUserId && m['is_read'] != true).length;
+                      final hasUnread = unreadCount > 0;
+                      final previewText = lastMsg != null
+                          ? (lastMsg['text']?.toString() ?? lastMsg['content']?.toString() ?? '')
+                          : (user.headline.isNotEmpty ? user.headline : 'Inicia la conversación...');
+                      final timeText = lastMsg != null ? timeAgo(lastMsg['created_at']) : '';
+
+                      return _ConversationTile(
+                        user: user,
+                        isLast: i == visibleUsers.length - 1,
+                        previewText: previewText,
+                        timeText: timeText,
+                        hasUnread: hasUnread,
+                        isSelected: selectedUser?.id == user.id,
+                        onTap: () => onTapUser(user),
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ),
+            );
+          }
+        ),
+        const SizedBox(height: 100),
+      ]),
     );
   }
 
@@ -843,43 +953,54 @@ class _MessagingScreenState extends State<MessagingScreen> {
 
   /// Demo user chip for the empty-state chat preview
   Widget _demoUserChip(String name, String emoji, bool active) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Stack(
-          children: [
-            Container(
-              width: 44, height: 44,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: LinearGradient(colors: [Colors.grey.shade200, Colors.grey.shade300]),
-                boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 8, offset: const Offset(0, 2))],
+    return Expanded(
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Stack(
+            children: [
+              Container(
+                width: 44, height: 44,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(colors: [Colors.grey.shade200, Colors.grey.shade300]),
+                  boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 8, offset: const Offset(0, 2))],
+                ),
+                child: Center(child: Text(emoji, style: const TextStyle(fontSize: 22))),
               ),
-              child: Center(child: Text(emoji, style: const TextStyle(fontSize: 22))),
-            ),
-            if (active)
-              Positioned(
-                bottom: 1, right: 1,
-                child: Container(
-                  width: 12, height: 12,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF34C759),
-                    shape: BoxShape.circle,
-                    border: Border.all(color: CupertinoColors.white, width: 2),
+              if (active)
+                Positioned(
+                  bottom: 1, right: 1,
+                  child: Container(
+                    width: 12, height: 12,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF34C759),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: CupertinoColors.white, width: 2),
+                    ),
                   ),
                 ),
-              ),
-          ],
-        ),
-        const SizedBox(width: 10),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(name, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: context.textPrimary)),
-            if (active) Text('Active Now', style: TextStyle(fontSize: 11, color: const Color(0xFF34C759), fontWeight: FontWeight.w600)),
-          ],
-        ),
-      ],
+            ],
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: context.textPrimary),
+                ),
+                if (active)
+                  const Text('Active Now', style: TextStyle(fontSize: 11, color: Color(0xFF34C759), fontWeight: FontWeight.w600)),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -3004,18 +3125,34 @@ class _DemoChatScreen extends StatelessWidget {
                       ],
                     ),
                   ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(colors: [Color(0xFFF97316), Color(0xFFE2860B)]),
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: [BoxShadow(color: const Color(0xFFF97316).withValues(alpha: 0.25), blurRadius: 8, offset: const Offset(0, 3))],
+                  CupertinoButton(
+                    padding: EdgeInsets.zero,
+                    minSize: 0,
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        CupertinoPageRoute(
+                          builder: (_) => const AgoraCallScreen(
+                            channelName: 'demo-room-elena',
+                            displayName: 'Tú (Demo)',
+                            otherName: 'Elena García',
+                          ),
+                        ),
+                      );
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(colors: [Color(0xFFF97316), Color(0xFFE2860B)]),
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [BoxShadow(color: const Color(0xFFF97316).withValues(alpha: 0.25), blurRadius: 8, offset: const Offset(0, 3))],
+                      ),
+                      child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                        Icon(CupertinoIcons.videocam_fill, color: CupertinoColors.white, size: 16),
+                        SizedBox(width: 5),
+                        Text('Video HD', style: TextStyle(color: CupertinoColors.white, fontSize: 12, fontWeight: FontWeight.w700)),
+                      ]),
                     ),
-                    child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                      Icon(CupertinoIcons.videocam_fill, color: CupertinoColors.white, size: 16),
-                      SizedBox(width: 5),
-                      Text('Video HD', style: TextStyle(color: CupertinoColors.white, fontSize: 12, fontWeight: FontWeight.w700)),
-                    ]),
                   ),
                 ],
               ),
