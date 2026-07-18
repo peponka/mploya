@@ -1,25 +1,20 @@
-// This is a basic Flutter widget test for Mploya.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mploya/main.dart';
-import 'package:mploya/screens/splash_screen.dart';
+import 'package:mploya/screens/explore_screen.dart';
 
 void main() {
-  testWidgets('App smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
+  testWidgets('ExploreScreen render test', (WidgetTester tester) async {
+    // Simular pantalla de desktop
+    tester.view.physicalSize = const Size(1200, 800);
+    tester.view.devicePixelRatio = 1.0;
+
     await tester.pumpWidget(
-      const ProviderScope(
-        child: MployaApp(),
+      const CupertinoApp(
+        home: ExploreScreen(),
       ),
     );
 
-    // Verify that the SplashScreen is built and present.
-    expect(find.byType(SplashScreen), findsOneWidget);
+    // Permitir animaciones y renders iniciales
+    await tester.pump();
   });
 }

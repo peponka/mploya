@@ -272,7 +272,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Widget _buildScaffold(BuildContext context, NexUser profile, bool isOwnProfile) {
     final wide = MediaQuery.of(context).size.width > 900;
-    final bg = context.isDark ? NexTheme.darkBg : const Color(0xFFF5F7FA);
+    final bg = const Color(0xFFF8FAFC);
 
     // ── Web: Premium Cards Grid ──
     if (wide) {
@@ -280,60 +280,49 @@ class _ProfileScreenState extends State<ProfileScreen> {
         backgroundColor: bg,
         child: SafeArea(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(24),
             child: Center(
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 1200),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // ── Top bar ──
+                    // ── Top bar (Navbar) ──
                     _buildWebTopBar(context, profile, isOwnProfile),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 24),
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Column 1 (Left): Profile Card, Video Pitch, Project Showcase
+                        // Column 1 (Left): Profile Card, About Me, Experience, Education
                         Expanded(
-                          flex: 4,
+                          flex: 5,
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               _buildWebProfileCard(context, profile, isOwnProfile),
                               const SizedBox(height: 16),
-                              _buildWebVideoPitchCard(context, profile, isOwnProfile),
+                              _buildWebAboutMeCard(context, profile),
                               const SizedBox(height: 16),
-                              _buildWebProjectShowcases(context, profile),
+                              _buildWebExperienceCard(context, profile),
+                              const SizedBox(height: 16),
+                              _buildWebEducationCard(context, profile),
                             ],
                           ),
                         ),
-                        const SizedBox(width: 16),
-                        // Column 2 (Middle): Core Stats, Advanced Analytics, Certifications & Awards
+                        const SizedBox(width: 20),
+                        // Column 2 (Right): Skills & Expertise, Featured Projects, Certifications, Quantum Insights
                         Expanded(
-                          flex: 4,
+                          flex: 5,
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              _buildWebCoreStats(context, profile),
+                              _buildWebSkillsCard(context, profile),
                               const SizedBox(height: 16),
-                              _buildWebAdvancedAnalytics(context, profile),
+                              _buildWebProjectsCard(context),
                               const SizedBox(height: 16),
-                              _buildWebCertifications(context),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        // Column 3 (Right): My Company, Skills Compatibility, Recommendations
-                        Expanded(
-                          flex: 4,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              _buildWebMyCompany(context, profile),
+                              _buildWebCertificationsCard(context),
                               const SizedBox(height: 16),
-                              _buildWebSkillsCompatibility(context, profile, isOwnProfile),
-                              const SizedBox(height: 16),
-                              _buildWebRecommendations(context),
+                              _buildWebQuantumInsightsCard(context),
                             ],
                           ),
                         ),
@@ -393,89 +382,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Column(
                   children: [
-                    _PremiumCard(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text('Core Stats', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF0F172A))),
-                                  Text('Performance trend', style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
-                                ],
-                              ),
-                              Icon(CupertinoIcons.chevron_up, size: 16, color: Color(0xFF94A3B8)),
-                            ],
-                          ),
-                          const SizedBox(height: 14),
-                          _buildCoreStatsContent(context, profile),
-                        ],
-                      ),
-                    ),
+                    _buildWebAboutMeCard(context, profile),
                     const SizedBox(height: 16),
-                    _PremiumCard(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text('Skills Compatibility', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF0F172A))),
-                              Icon(CupertinoIcons.chevron_up, size: 16, color: Color(0xFF94A3B8)),
-                            ],
-                          ),
-                          const SizedBox(height: 14),
-                          _buildSkillsCompatibilityContent(context, profile, isOwnProfile),
-                        ],
-                      ),
-                    ),
+                    _buildWebExperienceCard(context, profile),
                     const SizedBox(height: 16),
-                    _PremiumCard(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('Certifications & Awards', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF0F172A))),
-                          const SizedBox(height: 14),
-                          _buildCertificationsContent(context),
-                        ],
-                      ),
-                    ),
+                    _buildWebEducationCard(context, profile),
                     const SizedBox(height: 16),
-                    _PremiumCard(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('Recommendations', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF0F172A))),
-                          const SizedBox(height: 14),
-                          _buildRecommendationsContent(context),
-                        ],
-                      ),
-                    ),
+                    _buildWebSkillsCard(context, profile),
                     const SizedBox(height: 16),
-                    _PremiumCard(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('Video Pitch', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF0F172A))),
-                          const SizedBox(height: 14),
-                          _buildVideoPitchContent(context, profile, isOwnProfile),
-                        ],
-                      ),
-                    ),
+                    _buildWebProjectsCard(context),
                     const SizedBox(height: 16),
-                    _PremiumCard(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('Project Showcases', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF0F172A))),
-                          const SizedBox(height: 14),
-                          _buildProjectShowcasesContent(context, profile),
-                        ],
-                      ),
-                    ),
+                    _buildWebCertificationsCard(context),
+                    const SizedBox(height: 16),
+                    _buildWebQuantumInsightsCard(context),
                   ],
                 ),
               ),
@@ -492,204 +411,840 @@ class _ProfileScreenState extends State<ProfileScreen> {
   // ═══════════════════════════════════════════════════════════════════════════
 
   Widget _buildWebTopBar(BuildContext context, NexUser profile, bool isOwnProfile) {
-    return Row(
-      children: [
-        if (profile.isPremium || profile.isVerified)
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(colors: [Color(0xFFF97316), Color(0xFFEA580C)]),
-              borderRadius: BorderRadius.circular(999),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFFF97316).withValues(alpha: 0.25),
-                  blurRadius: 8,
-                  offset: const Offset(0, 3),
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x06000000),
+            blurRadius: 10,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF97316),
+                  borderRadius: BorderRadius.circular(8),
                 ),
-              ],
-            ),
-            child: const Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(CupertinoIcons.checkmark_seal_fill, size: 13, color: Colors.white),
-                SizedBox(width: 5),
-                Text('Premium', style: TextStyle(color: CupertinoColors.white, fontSize: 11, fontWeight: FontWeight.w900)),
-              ],
-            ),
+                child: const Center(
+                  child: Text(
+                    "m",
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
+                      height: 0.9,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Text(
+                "mploya.ai",
+                style: TextStyle(
+                  color: Color(0xFF0F172A),
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
           ),
-        const Spacer(),
-        CupertinoButton(
-          padding: EdgeInsets.zero,
-          minimumSize: Size.zero,
-          onPressed: () => ShareService.instance.shareProfile(
-            name: profile.name, headline: profile.headline,
-            userId: profile.id, accountType: profile.accountType,
+          const Spacer(),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildWebTabItem("Dashboard", CupertinoIcons.home, false),
+              const SizedBox(width: 24),
+              _buildWebTabItem("Profile", CupertinoIcons.person_fill, true),
+              const SizedBox(width: 24),
+              _buildWebTabItem("Matches", CupertinoIcons.person_2_fill, false),
+              const SizedBox(width: 24),
+              _buildWebTabItem("Alerts", CupertinoIcons.bell_fill, false),
+              const SizedBox(width: 24),
+              _buildWebTabItem("Messages", CupertinoIcons.envelope_fill, false),
+              const SizedBox(width: 24),
+              _buildWebTabItem("Vacancies", CupertinoIcons.briefcase_fill, false),
+            ],
           ),
-          child: Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.white,
+          const Spacer(),
+          Row(
+            children: [
+              const Icon(CupertinoIcons.bell, size: 20, color: Color(0xFF64748B)),
+              const SizedBox(width: 16),
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
+                  image: DecorationImage(
+                    image: (profile.avatarUrl != null && profile.avatarUrl!.isNotEmpty)
+                        ? NetworkImage(profile.avatarUrl!)
+                        : const AssetImage('assets/images/avatar_juan_perez.jpg') as ImageProvider,
+                    fit: BoxFit.cover,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWebTabItem(String label, IconData icon, bool isActive) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (isActive)
+          Container(
+            width: 4,
+            height: 4,
+            decoration: const BoxDecoration(
+              color: Color(0xFFF97316),
               shape: BoxShape.circle,
-              border: Border.all(color: const Color(0xFFE2E8F0)),
             ),
-            child: const Icon(CupertinoIcons.square_arrow_up, size: 18, color: CupertinoColors.systemGrey),
-          ),
-        ),
-        const SizedBox(width: 8),
-        CupertinoButton(
-          padding: EdgeInsets.zero,
-          minimumSize: Size.zero,
-          onPressed: () => _showSettingsSheet(context, profile),
-          child: Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              shape: BoxShape.circle,
-              border: Border.all(color: const Color(0xFFE2E8F0)),
+          )
+        else
+          const SizedBox(height: 4),
+        const SizedBox(height: 4),
+        Row(
+          children: [
+            Icon(
+              icon,
+              size: 16,
+              color: isActive ? const Color(0xFFF97316) : const Color(0xFF64748B),
             ),
-            child: const Icon(CupertinoIcons.ellipsis, size: 18, color: CupertinoColors.systemGrey),
-          ),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                color: isActive ? const Color(0xFF0F172A) : const Color(0xFF64748B),
+                fontSize: 13,
+                fontWeight: isActive ? FontWeight.bold : FontWeight.w500,
+              ),
+            ),
+          ],
         ),
       ],
     );
   }
 
+  Widget _contactPill(IconData icon, String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: const Color(0xFF64748B)),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF64748B),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildWebProfileCard(BuildContext context, NexUser profile, bool isOwnProfile) {
     return _PremiumCard(
-      child: Stack(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Positioned(
-            top: 0, right: 0,
+          GestureDetector(
+            onTap: isOwnProfile ? () => _pickAndUploadAvatar(profile) : null,
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              width: 90,
+              height: 90,
               decoration: BoxDecoration(
-                color: const Color(0xFFFEF3C7),
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: const Color(0xFFFDE68A)),
-              ),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(CupertinoIcons.sparkles, size: 10, color: Color(0xFFD97706)),
-                  SizedBox(width: 3),
-                  Text('Disponible', style: TextStyle(color: Color(0xFFD97706), fontSize: 10, fontWeight: FontWeight.w800)),
+                shape: BoxShape.circle,
+                border: Border.all(color: const Color(0xFFE2E8F0), width: 3),
+                boxShadow: const [
+                  BoxShadow(color: Color(0x1F000000), blurRadius: 12, offset: Offset(0, 4)),
                 ],
+                image: const DecorationImage(
+                  image: AssetImage('assets/images/avatar_juan_perez.jpg'),
+                  fit: BoxFit.cover,
+                ),
               ),
             ),
           ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              const SizedBox(height: 12),
-              GestureDetector(
-                onTap: isOwnProfile ? () => _pickAndUploadAvatar(profile) : null,
-                child: Container(
-                  width: 80, height: 80,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(color: const Color(0xFFE2E8F0), width: 3),
-                    boxShadow: const [
-                      BoxShadow(color: Color(0x1F000000), blurRadius: 12, offset: Offset(0, 4)),
-                    ],
-                    image: const DecorationImage(
-                      image: AssetImage('assets/images/avatar_juan_perez.jpg'),
-                      fit: BoxFit.cover,
-                    ),
-                  ),
+          const SizedBox(width: 20),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  profile.name,
+                  style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
                 ),
-              ),
-              const SizedBox(height: 14),
-              Text(
-                profile.name,
-                style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900, color: Color(0xFF0F172A)),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                profile.headline,
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
-              ),
-              const SizedBox(height: 14),
-              RichText(
-                textAlign: TextAlign.center,
-                maxLines: 4,
-                overflow: TextOverflow.ellipsis,
-                text: TextSpan(
-                  style: const TextStyle(fontSize: 12, color: Color(0xFF475569), height: 1.5, fontFamily: 'Arial'),
+                const SizedBox(height: 3),
+                Text(
+                  profile.headline,
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
+                ),
+                const SizedBox(height: 6),
+                Row(
                   children: [
-                    TextSpan(
-                      text: profile.about ?? 'Desarrollador Flutter Senior con más de 7 años de experiencia liderando equipos y construyendo arquitecturas móviles escalables y robustas. Especialista en optimización de rendimiento y clean architecture.',
-                    ),
-                    const TextSpan(
-                      text: ' ...read more',
-                      style: TextStyle(color: Color(0xFFD97706), fontWeight: FontWeight.bold),
+                    const Icon(CupertinoIcons.location_solid, size: 12, color: Color(0xFF64748B)),
+                    const SizedBox(width: 4),
+                    Text(
+                      profile.location ?? "São Paulo, Brazil",
+                      style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
                     ),
                   ],
                 ),
+                const SizedBox(height: 14),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _contactPill(CupertinoIcons.envelope_fill, "Email"),
+                    _contactPill(CupertinoIcons.link, "LinkedIn"),
+                    _contactPill(CupertinoIcons.phone_fill, "Phone"),
+                    _contactPill(CupertinoIcons.briefcase_fill, "Portfolio"),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWebAboutMeCard(BuildContext context, NexUser profile) {
+    return _PremiumCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            "About Me",
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF0F172A),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            profile.about ?? "Professional summary is professional. Experienced professional in company, engineering professional constative ues'mtener-toarsns combinated with more. In communication and professional retoutive constasot cnmarmence comminiations in wananianceding puintions.\n\nI am varanate dnontflq, uur ecalantnio customerotoozes and arigmenting proclintbing law and genraral experiential summary in creeding inimoviations in worning mahierts.",
+            style: const TextStyle(
+              fontSize: 13,
+              color: Color(0xFF475569),
+              height: 1.5,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWebExperienceCard(BuildContext context, NexUser profile) {
+    final list = profile.experience.isNotEmpty ? profile.experience : [
+      const Experience(
+        role: "Sarah Chen",
+        company: "Senior Engineering Lead",
+        duration: "2021 - June. 2026",
+        description: "• Accomplishmoted for flutrn 7 year, car tenosaliberatic tioer showafter manageipts and to customesiciem secams.\n• Accomplishmated as escurirave comptoses and comptinate wrier complet in communicial evalantes and sinar practions.",
+        location: "",
+        isCurrent: true,
+      ),
+      const Experience(
+        role: "Company Name",
+        company: "Senior Engineering Lead",
+        duration: "2025 - June. 2025",
+        description: "• Accomplishmoted demenud from ana cempaien and compounding Flutter and anenestlv miles and developement swtons.\n• Becomois neeeded to protimaxihin a cennor their postoin commentaring projects.",
+        location: "",
+        isCurrent: false,
+      ),
+      const Experience(
+        role: "Company Name",
+        company: "Senior Engineering Lead",
+        duration: "19/07 - 07/25 | June. 2026",
+        description: "• Accomplishmoted hirner Flintter engaosed wrrh vend tools and successdas in 2023.\n• Recomplishmented earrecnrevd comptarnied incoeunament and clients.\n• Recomplismoted as oitrosrsed and employes resumes.",
+        location: "",
+        isCurrent: false,
+      ),
+    ];
+
+    return _PremiumCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: const [
+              Text(
+                "Experience",
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF0F172A),
+                ),
               ),
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+              Icon(CupertinoIcons.ellipsis, size: 16, color: Color(0xFF94A3B8)),
+            ],
+          ),
+          const SizedBox(height: 16),
+          ListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: list.length,
+            itemBuilder: (ctx, index) {
+              final exp = list[index];
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _socialButton(CupertinoIcons.phone_fill, const Color(0xFF0F172A)),
-                  const SizedBox(width: 8),
-                  _socialButton(CupertinoIcons.envelope_fill, const Color(0xFF0F172A)),
-                  const SizedBox(width: 8),
-                  _socialButton(CupertinoIcons.settings, const Color(0xFF0F172A)),
-                  const SizedBox(width: 8),
-                  _socialButton(CupertinoIcons.globe, const Color(0xFF0F172A)),
-                ],
-              ),
-              const SizedBox(height: 18),
-              Row(
-                children: [
-                  Expanded(
-                    child: CupertinoButton(
-                      padding: EdgeInsets.zero,
-                      onPressed: () => Navigator.of(context).push(CupertinoPageRoute(builder: (_) => MisHerramientasScreen(profile: profile))),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 9),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF1F5F9),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: const Color(0xFFE2E8F0)),
-                        ),
-                        child: const Center(
-                          child: Text(
-                            '3 enlaces',
-                            style: TextStyle(color: Color(0xFF475569), fontSize: 12, fontWeight: FontWeight.w700),
-                          ),
+                  SizedBox(
+                    width: 100,
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(
+                        exp.duration,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF64748B),
                         ),
                       ),
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: CupertinoButton(
-                      padding: EdgeInsets.zero,
-                      onPressed: () {
-                        // Action for Descargar CV
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 9),
+                  Column(
+                    children: [
+                      Container(
+                        width: 8,
+                        height: 8,
                         decoration: BoxDecoration(
-                          gradient: const LinearGradient(colors: [Color(0xFFF97316), Color(0xFFEA580C)]),
-                          borderRadius: BorderRadius.circular(10),
-                          boxShadow: [
-                            BoxShadow(color: const Color(0xFFF97316).withValues(alpha: 0.2), blurRadius: 6, offset: const Offset(0, 2)),
-                          ],
-                        ),
-                        child: const Center(
-                          child: Text(
-                            'Descargar CV',
-                            style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700),
-                          ),
+                          color: index == 0 ? const Color(0xFFF97316) : const Color(0xFFCBD5E1),
+                          shape: BoxShape.circle,
                         ),
                       ),
+                      if (index < list.length - 1)
+                        Container(
+                          width: 2,
+                          height: 100,
+                          color: const Color(0xFFE2E8F0),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          exp.role,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF0F172A),
+                          ),
+                        ),
+                        Text(
+                          exp.company,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFFF97316),
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          exp.description ?? "",
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: Color(0xFF475569),
+                            height: 1.5,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
                     ),
                   ),
                 ],
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWebEducationCard(BuildContext context, NexUser profile) {
+    final list = profile.education.isNotEmpty ? profile.education : [
+      const Education(
+        school: "São Paulo, Brazil",
+        degree: "Senior Engineering Lead | Flutter & Architecture",
+        field: "Degree of Graduation | Company Science",
+        years: "Certification of Professional Camptics",
+      ),
+    ];
+
+    return _PremiumCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: const [
+              Text(
+                "Education",
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF0F172A),
+                ),
+              ),
+              Icon(CupertinoIcons.ellipsis, size: 16, color: Color(0xFF94A3B8)),
+            ],
+          ),
+          const SizedBox(height: 16),
+          ListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: list.length,
+            itemBuilder: (ctx, index) {
+              final edu = list[index];
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    edu.degree,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF0F172A),
+                    ),
+                  ),
+                  Text(
+                    edu.school,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF64748B),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    edu.field ?? "",
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Color(0xFF475569),
+                    ),
+                  ),
+                  Text(
+                    edu.years,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: Color(0xFF94A3B8),
+                    ),
+                  ),
+                  if (index < list.length - 1) ...[
+                    const SizedBox(height: 12),
+                    const Divider(color: Color(0xFFE2E8F0)),
+                    const SizedBox(height: 12),
+                  ],
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWebSkillsCard(BuildContext context, NexUser profile) {
+    return _PremiumCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: const [
+              Text(
+                "Skills & Expertise",
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF0F172A),
+                ),
+              ),
+              Icon(CupertinoIcons.ellipsis, size: 16, color: Color(0xFF94A3B8)),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      "Technical",
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF0F172A),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    _buildSkillProgressRow("Flutter", 0.45, "Low"),
+                    _buildSkillProgressRow("Dart", 0.90, "High"),
+                    _buildSkillProgressRow("Firebase", 0.35, "Low"),
+                    _buildSkillProgressRow("CI/CD", 0.85, "High"),
+                    _buildSkillProgressRow("CI/CD", 0.40, "Low"),
+                    _buildSkillProgressRow("Architecture", 0.95, "High"),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 24),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      "Skills",
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF0F172A),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    _buildSkillProgressRow("Prasis", 0.38, "Low"),
+                    _buildSkillProgressRow("Perbanate", 0.88, "High"),
+                    _buildSkillProgressRow("Network", 0.92, "High"),
+                    _buildSkillProgressRow("Portst", 0.80, "High"),
+                    _buildSkillProgressRow("Dnft", 0.70, "Level"),
+                  ],
+                ),
               ),
             ],
+          ),
+          const SizedBox(height: 20),
+          const Text(
+            "Soft Skills",
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF0F172A),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _buildSkillPill("Technology"),
+              _buildSkillPill("Architectoling"),
+              _buildSkillPill("Endorstanding"),
+              _buildSkillPill("Learning"),
+              _buildSkillPill("Manatitacturing"),
+              _buildSkillPill("Coacling"),
+            ],
+          ),
+          const SizedBox(height: 20),
+          const Text(
+            "Tools",
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF0F172A),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _buildSkillPill("Tools"),
+              _buildSkillPill("RP"),
+              _buildSkillPill("Porottaws"),
+              _buildSkillPill("Firebase"),
+              _buildSkillPill("CI/CD"),
+              _buildSkillPill("RSE"),
+              _buildSkillPill("SWF"),
+              _buildSkillPill("Powe"),
+              _buildSkillPill("Tools"),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSkillProgressRow(String name, double val, String levelText) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Expanded(
+            flex: 3,
+            child: Text(
+              name,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF334155),
+              ),
+            ),
+          ),
+          Expanded(
+            flex: 4,
+            child: Container(
+              height: 6,
+              decoration: BoxDecoration(
+                color: const Color(0xFFE2E8F0),
+                borderRadius: BorderRadius.circular(3),
+              ),
+              alignment: Alignment.centerLeft,
+              child: FractionallySizedBox(
+                widthFactor: val,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF97316),
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            flex: 2,
+            child: Text(
+              levelText,
+              style: const TextStyle(
+                fontSize: 10,
+                color: Color(0xFF64748B),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSkillPill(String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.bold,
+          color: Color(0xFF475569),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildWebProjectsCard(BuildContext context) {
+    final projects = [
+      {
+        "title": "Sarah Chen",
+        "desc": "Key projects shore sevenr tomder projects and commmonding amiantonsenier minostructess and tivy projects.",
+        "image": "https://images.unsplash.com/photo-1531403009284-440f080d1e12?w=120&h=80&fit=crop",
+      },
+      {
+        "title": "Curated Projects",
+        "desc": "Key projects are around game ans cresiors and smilemrewing projects and eclum to awand any projects.",
+        "image": "https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=120&h=80&fit=crop",
+      },
+      {
+        "title": "Projec Projects",
+        "desc": "Key projects chowown the projects and promoienr way projcots and cressod any projects.",
+        "image": "https://images.unsplash.com/photo-1542744094-3a31f103e35f?w=120&h=80&fit=crop",
+      },
+    ];
+
+    return _PremiumCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: const [
+              Text(
+                "Featured Projects",
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF0F172A),
+                ),
+              ),
+              Icon(CupertinoIcons.ellipsis, size: 16, color: Color(0xFF94A3B8)),
+            ],
+          ),
+          const SizedBox(height: 16),
+          ListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: projects.length,
+            itemBuilder: (ctx, index) {
+              final proj = projects[index];
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 80,
+                      height: 54,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                        image: DecorationImage(
+                          image: NetworkImage(proj["image"]!),
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            proj["title"]!,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF0F172A),
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            proj["desc"]!,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: Color(0xFF64748B),
+                              height: 1.4,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWebCertificationsCard(BuildContext context) {
+    final certs = [
+      "Professional Certifications",
+      "Professional Certifications",
+      "Certifications Certification",
+      "Professional Certifications (BCS)",
+    ];
+
+    return _PremiumCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            "Certifications",
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF0F172A),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: certs.map((cert) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                children: [
+                  const Icon(CupertinoIcons.checkmark_seal_fill, size: 14, color: Color(0xFFF97316)),
+                  const SizedBox(width: 8),
+                  Text(
+                    cert,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF334155),
+                    ),
+                  ),
+                ],
+              ),
+            )).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWebQuantumInsightsCard(BuildContext context) {
+    return _PremiumCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: const [
+              Text(
+                "Quantum Insights Summary",
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF0F172A),
+                ),
+              ),
+              Icon(CupertinoIcons.ellipsis, size: 16, color: Color(0xFF94A3B8)),
+            ],
+          ),
+          const SizedBox(height: 24),
+          SizedBox(
+            height: 220,
+            child: CustomPaint(
+              size: Size.infinite,
+              painter: ProfileRadarChartPainter(
+                values: const [0.85, 0.70, 0.65, 0.80, 0.90, 0.75],
+                labels: const [
+                  "Strategic Vision",
+                  "Organization",
+                  "Operational",
+                  "Cpendmama",
+                  "Innovation",
+                  "Team Size",
+                ],
+              ),
+            ),
           ),
         ],
       ),
@@ -3594,4 +4149,100 @@ class _PremiumCard extends StatelessWidget {
       child: child,
     );
   }
+}
+
+// ── Profile Radar Chart Painter ──
+class ProfileRadarChartPainter extends CustomPainter {
+  final List<double> values;
+  final List<String> labels;
+
+  ProfileRadarChartPainter({required this.values, required this.labels});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.width / 2 * 0.7;
+    final int count = values.length;
+
+    final paintLine = Paint()
+      ..color = const Color(0xFFE2E8F0).withOpacity(0.5)
+      ..strokeWidth = 1
+      ..style = PaintingStyle.stroke;
+
+    final paintGrid = Paint()
+      ..color = const Color(0xFFCBD5E1).withOpacity(0.3)
+      ..strokeWidth = 0.5
+      ..style = PaintingStyle.stroke;
+
+    final paintFill = Paint()
+      ..color = const Color(0xFFF97316).withOpacity(0.2)
+      ..style = PaintingStyle.fill;
+
+    final paintBorder = Paint()
+      ..color = const Color(0xFFF97316)
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke;
+
+    // Concentric polygons
+    for (int step = 1; step <= 3; step++) {
+      final r = radius * (step / 3);
+      final path = Path();
+      for (int i = 0; i < count; i++) {
+        final angle = (i * 2 * math.pi / count) - math.pi / 2;
+        final pt = Offset(center.dx + r * math.cos(angle), center.dy + r * math.sin(angle));
+        if (i == 0) {
+          path.moveTo(pt.dx, pt.dy);
+        } else {
+          path.lineTo(pt.dx, pt.dy);
+        }
+      }
+      path.close();
+      canvas.drawPath(path, paintGrid);
+    }
+
+    // Axes & Labels
+    for (int i = 0; i < count; i++) {
+      final angle = (i * 2 * math.pi / count) - math.pi / 2;
+      final pt = Offset(center.dx + radius * math.cos(angle), center.dy + radius * math.sin(angle));
+      canvas.drawLine(center, pt, paintLine);
+
+      if (labels.isNotEmpty && i < labels.length) {
+        final labelPt = Offset(
+          center.dx + (radius + 20) * math.cos(angle),
+          center.dy + (radius + 10) * math.sin(angle),
+        );
+        final textPainter = TextPainter(
+          text: TextSpan(
+            text: labels[i],
+            style: const TextStyle(color: Color(0xFF475569), fontSize: 8.5, fontWeight: FontWeight.bold),
+          ),
+          textDirection: TextDirection.ltr,
+        )..layout();
+        
+        textPainter.paint(
+          canvas,
+          Offset(labelPt.dx - textPainter.width / 2, labelPt.dy - textPainter.height / 2),
+        );
+      }
+    }
+
+    // Value shape
+    final pathValue = Path();
+    for (int i = 0; i < count; i++) {
+      final angle = (i * 2 * math.pi / count) - math.pi / 2;
+      final val = values[i].clamp(0.0, 1.0);
+      final pt = Offset(center.dx + radius * val * math.cos(angle), center.dy + radius * val * math.sin(angle));
+      if (i == 0) {
+        pathValue.moveTo(pt.dx, pt.dy);
+      } else {
+        pathValue.lineTo(pt.dx, pt.dy);
+      }
+    }
+    pathValue.close();
+    canvas.drawPath(pathValue, paintFill);
+    canvas.drawPath(pathValue, paintBorder);
+  }
+
+  @override
+  bool shouldRepaint(covariant ProfileRadarChartPainter oldDelegate) => true;
 }

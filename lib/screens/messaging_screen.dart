@@ -40,6 +40,82 @@ class _MessagingScreenState extends State<MessagingScreen> {
   // ── Panel maestro-detalle web: conversación seleccionada ──
   NexUser? _selectedUser;
 
+  static const List<NexUser> _demoUsers = [
+    NexUser(
+      id: 'demo_elena',
+      name: 'Elena García',
+      avatarUrl: '👩‍🎨',
+      headline: 'Motion Designer',
+      location: 'Madrid, Spain',
+    ),
+    NexUser(
+      id: 'demo_alex',
+      name: 'Alex Rivera',
+      avatarUrl: '👨‍💻',
+      headline: 'Product Designer',
+      location: 'CDMX, Mexico',
+    ),
+    NexUser(
+      id: 'demo_martin',
+      name: 'Martín López',
+      avatarUrl: '👨‍💼',
+      headline: 'Brand Manager',
+      location: 'Buenos Aires, Argentina',
+    ),
+    NexUser(
+      id: 'demo_camila',
+      name: 'Camila Ruiz',
+      avatarUrl: '👩‍🔬',
+      headline: 'Research Lead',
+      location: 'Santiago, Chile',
+    ),
+    NexUser(
+      id: 'demo_lucas',
+      name: 'Lucas Herrera',
+      avatarUrl: '👨‍¼',
+      headline: 'UX Specialist',
+      location: 'Bogotá, Colombia',
+    ),
+    NexUser(
+      id: 'demo_valentina',
+      name: 'Valentina Torres',
+      avatarUrl: '👩‍🚀',
+      headline: 'Tech Recruiter',
+      location: 'São Paulo, Brazil',
+    ),
+  ];
+
+  static final Map<String, List<Map<String, dynamic>>> _demoMessagesMap = {
+    'demo_elena': [
+      {'text': 'Hola Elena! Vi tu portafolio y me encantó tu estilo visual 🎨', 'isMe': true, 'time': '09:15'},
+      {'text': '¡Gracias! Me especializo en motion graphics para startups', 'isMe': false, 'time': '09:17'},
+      {'text': 'Perfecto. Estamos buscando alguien para nuestro pitch video', 'isMe': true, 'time': '09:19'},
+      {'text': '¿Viste el concepto para el corto?', 'isMe': false, 'time': '09:22'},
+      {'text': '¡Sí! Me encanta. ¿Grabamos hoy?', 'isMe': false, 'time': '09:25'},
+    ],
+    'demo_alex': [
+      {'text': 'Hola Alex, ¿cómo va el diseño de la app?', 'isMe': true, 'time': 'Ayer'},
+      {'text': 'Hola! Muy bien, ya tengo listos los wireframes de la sección de vacantes.', 'isMe': false, 'time': 'Ayer'},
+      {'text': 'Buenísimo, los revisamos en la reunión del lunes.', 'isMe': true, 'time': 'Ayer'},
+    ],
+    'demo_martin': [
+      {'text': 'Hola Martín, te envío el brief del proyecto.', 'isMe': false, 'time': '08:30'},
+      {'text': 'Recibido, lo reviso con el equipo de diseño y te comento.', 'isMe': true, 'time': '08:45'},
+    ],
+    'demo_camila': [
+      {'text': 'Hola Camila, ¿pudiste ver los resultados del test de usuario?', 'isMe': true, 'time': 'Ayer'},
+      {'text': '¡Sí! El video de la entrevista quedó increíble, el feedback es super positivo.', 'isMe': false, 'time': 'Ayer'},
+    ],
+    'demo_lucas': [
+      {'text': 'Hola Lucas, ¿cuándo agendamos la sesión de feedback?', 'isMe': false, 'time': 'Ayer'},
+      {'text': 'Dale, agendamos para el jueves por la mañana.', 'isMe': true, 'time': 'Ayer'},
+    ],
+    'demo_valentina': [
+      {'text': 'Hola Valentina, muchas gracias por la oportunidad.', 'isMe': false, 'time': 'Lun'},
+      {'text': '¡Gracias a ti por la entrevista! Te mantendré al tanto del proceso.', 'isMe': true, 'time': 'Lun'},
+    ],
+  };
+
   // ── Streams — Defense in depth: filtros explícitos + RLS ──────────────
   // Aunque RLS protege los datos en Supabase, agregamos filtros del lado
   // del cliente como segunda capa de seguridad. Si RLS falla por
@@ -281,395 +357,111 @@ class _MessagingScreenState extends State<MessagingScreen> {
         backgroundColor: context.isDark ? NexTheme.darkBg : const Color(0xFFF9F9FA),
         child: _buildListPane(
           context,
-          onTapUser: (u) => Navigator.of(context).push(
-            CupertinoPageRoute(builder: (_) => ChatDetailScreen(otherUser: u)),
-          ),
+          selectedUser: _selectedUser,
+          onTapUser: (u) {
+            setState(() => _selectedUser = u);
+            Navigator.of(context).push(
+              CupertinoPageRoute(builder: (_) => ChatDetailScreen(otherUser: u)),
+            );
+          },
         ),
       );
     }
 
-    // En web: si NO hay conversaciones, un solo estado vacío premium a todo el
-    // ancho (partir en 2 paneles vacíos no tiene sentido). Si SÍ hay, panel
-    // maestro-detalle real (lista angosta + "elegí una conversación"), como
-    // WhatsApp Web/Slack.
-    return StreamBuilder<List<Map<String, dynamic>>>(
-      stream: _connectionsStream,
-      builder: (ctx1, connSnap) {
-        return StreamBuilder<List<Map<String, dynamic>>>(
-          stream: _usersStream,
-          builder: (ctx2, snap) {
-            final loading = !snap.hasData || !connSnap.hasData;
-            bool hasConversations = true;
-            if (!loading) {
-              final validUserIds = connSnap.data!
-                  .where((c) => c['status'] == 'accepted')
-                  .map((c) => c['requester_id'] == _currentUserId ? c['addressee_id'] : c['requester_id'])
-                  .toSet();
-              hasConversations = snap.data!.any((r) => validUserIds.contains(r['id']));
-            }
+    final loading = _connectionsData == null || _usersData == null;
+    List<NexUser> allUsers = [];
+    if (!loading) {
+      final validUserIds = _connectionsData!
+          .where((c) => c['status'] == 'accepted')
+          .map((c) => c['requester_id'] == _currentUserId ? c['addressee_id'] : c['requester_id'])
+          .toSet();
+      allUsers = _usersData!
+          .where((r) => validUserIds.contains(r['id']))
+          .map((r) => NexUser.fromJson(r))
+          .toList();
+    }
 
-            if (!loading && !hasConversations) {
-              return CupertinoPageScaffold(
-                backgroundColor: const Color(0xFFF1F1F4),
-                child: SafeArea(
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
+    if (loading) {
+      return const CupertinoPageScaffold(
+        backgroundColor: Color(0xFFF1F1F4),
+        child: Center(child: CupertinoActivityIndicator()),
+      );
+    }
+
+    final selected = _selectedUser ?? (allUsers.isEmpty ? _demoUsers.first : null);
+
+    return CupertinoPageScaffold(
+      backgroundColor: const Color(0xFFF1F1F4),
+      child: SafeArea(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(
+              width: 400,
+              margin: const EdgeInsets.fromLTRB(16, 16, 0, 16),
+              decoration: BoxDecoration(
+                color: context.cardColor,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: const Color(0x0F000000), width: 0.5),
+                boxShadow: const [BoxShadow(color: Color(0x0A000000), blurRadius: 18, offset: Offset(0, 6))],
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: _buildListPane(
+                context,
+                selectedUser: selected,
+                onTapUser: (u) => setState(() => _selectedUser = u),
+              ),
+            ),
+            if (selected == null)
+              Expanded(
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      // ── LEFT: Demo Inbox ──
                       Container(
-                        width: 380,
-                        margin: const EdgeInsets.fromLTRB(16, 16, 0, 16),
-                        decoration: BoxDecoration(
-                          color: context.cardColor,
-                          borderRadius: BorderRadius.circular(18),
-                          border: Border.all(color: context.dividerColor.withValues(alpha: 0.3)),
-                          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 20, offset: const Offset(0, 6))],
-                        ),
-                        child: Column(
-                          children: [
-                            // Header
-                            Padding(
-                              padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-                              child: Row(
-                                children: [
-                                  Text('Mensajes', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: context.textPrimary)),
-                                  const Spacer(),
-                                  Container(
-                                    width: 36, height: 36,
-                                    decoration: BoxDecoration(
-                                      color: MployaTheme.brandAccent.withValues(alpha: 0.1),
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    child: Icon(CupertinoIcons.square_pencil, size: 18, color: MployaTheme.brandAccent),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            // Search
-                            Padding(
-                              padding: const EdgeInsets.fromLTRB(20, 14, 20, 10),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                                decoration: BoxDecoration(
-                                  color: context.isDark ? NexTheme.darkSurface : const Color(0xFFF2F2F7),
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
-                                child: Row(children: [
-                                  Icon(CupertinoIcons.search, size: 16, color: context.textTertiary),
-                                  const SizedBox(width: 8),
-                                  Text('Buscar conexiones, mensajes...', style: TextStyle(color: context.textTertiary, fontSize: 14)),
-                                ]),
-                              ),
-                            ),
-                            // Filter chips
-                            Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 20),
-                              child: Row(children: [
-                                _demoFilterChip('Todos', true),
-                                const SizedBox(width: 8),
-                                _demoFilterChip('Talento Match', false),
-                                const SizedBox(width: 8),
-                                _demoFilterChip('No leídos', false),
-                              ]),
-                            ),
-                            const SizedBox(height: 10),
-                            // Nuevos matches (horizontal avatars)
-                            SizedBox(
-                              height: 90,
-                              child: ListView(
-                                scrollDirection: Axis.horizontal,
-                                padding: const EdgeInsets.symmetric(horizontal: 20),
-                                children: [
-                                  _demoMatchAvatar('Sofía', '👩‍💼', true),
-                                  _demoMatchAvatar('Carlos', '👨‍🔬', true),
-                                  _demoMatchAvatar('Ana', '👩‍⚕️', false),
-                                  _demoMatchAvatar('Diego', '👨‍🎓', true),
-                                  _demoMatchAvatar('Lucía', '👩‍🏫', false),
-                                ],
-                              ),
-                            ),
-                            Divider(height: 1, color: context.dividerColor.withValues(alpha: 0.3)),
-                            // Conversation tiles
-                            Expanded(
-                              child: ListView(
-                                padding: const EdgeInsets.symmetric(vertical: 4),
-                                children: [
-                                  _demoConversationTile('Elena García', '👩‍🎨', '¡Sí! Me encanta. ¿Grabamos hoy?', '09:25', 2, true),
-                                  _demoConversationTile('Alex Rivera', '👨‍💻', '¿Viste el concepto para el corto?', '09:22', 0, false),
-                                  _demoConversationTile('Martín López', '👨‍💼', 'Perfecto, te mando el brief 📎', '08:45', 1, false),
-                                  _demoConversationTile('Camila Ruiz', '👩‍🔬', 'El video quedó increíble 🎬', 'Ayer', 0, false),
-                                  _demoConversationTile('Lucas Herrera', '👨‍🎨', 'Dale, agendamos para el jueves', 'Ayer', 0, false),
-                                  _demoConversationTile('Valentina Torres', '👩‍🚀', '¡Gracias por la entrevista!', 'Lun', 3, false),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
+                        width: 84, height: 84,
+                        decoration: BoxDecoration(color: MployaTheme.brandAccent.withValues(alpha: 0.10), borderRadius: BorderRadius.circular(24)),
+                        child: Icon(CupertinoIcons.chat_bubble_2_fill, size: 38, color: MployaTheme.brandAccent.withValues(alpha: 0.6)),
                       ),
-                      // ── CENTER: Demo Chat ──
-                      Expanded(
-                        child: Container(
-                          margin: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: context.cardColor.withValues(alpha: 0.85),
-                            borderRadius: BorderRadius.circular(18),
-                            border: Border.all(color: context.dividerColor.withValues(alpha: 0.2)),
-                            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 20, offset: const Offset(0, 6))],
-                          ),
-                          child: Column(
-                            children: [
-                              // ── Chat header ──
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                                decoration: BoxDecoration(
-                                  color: context.cardColor,
-                                  borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
-                                  border: Border(bottom: BorderSide(color: context.dividerColor.withValues(alpha: 0.2))),
-                                ),
-                                child: Row(
-                                  children: [
-                                    _demoUserChip('Elena García', '👩‍🎨', true),
-                                    const SizedBox(width: 10),
-                                    // Video call button
-                                    CupertinoButton(
-                                      padding: EdgeInsets.zero,
-                                      minSize: 0,
-                                      onPressed: () {
-                                        Navigator.push(
-                                          context,
-                                          CupertinoPageRoute(
-                                            builder: (_) => const AgoraCallScreen(
-                                              channelName: 'demo-room-elena',
-                                              displayName: 'Tú (Demo)',
-                                              otherName: 'Elena García',
-                                            ),
-                                          ),
-                                        );
-                                      },
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                                        decoration: BoxDecoration(
-                                          gradient: const LinearGradient(colors: [Color(0xFFF97316), Color(0xFFE2860B)]),
-                                          borderRadius: BorderRadius.circular(12),
-                                          boxShadow: [BoxShadow(color: const Color(0xFFF97316).withValues(alpha: 0.25), blurRadius: 8, offset: const Offset(0, 3))],
-                                        ),
-                                        child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                                          Icon(CupertinoIcons.videocam_fill, color: CupertinoColors.white, size: 16),
-                                          SizedBox(width: 6),
-                                          Text('Video HD', style: TextStyle(color: CupertinoColors.white, fontSize: 12, fontWeight: FontWeight.w700)),
-                                        ]),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 10),
-                                    Icon(CupertinoIcons.person_crop_circle, size: 28, color: context.textSecondary),
-                                  ],
-                                ),
-                              ),
-                              // ── Chat messages ──
-                              Expanded(
-                                child: ListView(
-                                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                                  children: [
-                                    _demoBubble('Hola Elena! Vi tu portafolio y me encantó tu estilo visual 🎨', true, '09:15', true),
-                                    _demoBubble('¡Gracias! Me especializo en motion graphics para startups', false, '09:17', false),
-                                    _demoBubble('Perfecto. Estamos buscando alguien para nuestro pitch video', true, '09:19', true),
-                                    _demoBubble('¿Viste el concepto para el corto?', false, '09:22', false),
-                                    _demoBubble('¡Sí! Me encanta. ¿Grabamos hoy?', true, '09:25', true),
-                                  ],
-                                ),
-                              ),
-                              // ── Input bar ──
-                              Container(
-                                margin: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                                decoration: BoxDecoration(
-                                  color: context.isDark ? NexTheme.darkSurface : const Color(0xFFF2F2F7),
-                                  borderRadius: BorderRadius.circular(22),
-                                  border: Border.all(color: context.dividerColor.withValues(alpha: 0.3)),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Icon(CupertinoIcons.plus_circle_fill, size: 24, color: context.textTertiary),
-                                    const SizedBox(width: 10),
-                                    Expanded(child: Text('Escribí un mensaje...', style: TextStyle(color: context.textTertiary, fontSize: 15))),
-                                    Icon(CupertinoIcons.mic_fill, size: 20, color: context.textTertiary),
-                                    const SizedBox(width: 12),
-                                    Container(
-                                      width: 36, height: 36,
-                                      decoration: BoxDecoration(
-                                        gradient: const LinearGradient(colors: [Color(0xFFF97316), Color(0xFFE2860B)]),
-                                        shape: BoxShape.circle,
-                                        boxShadow: [BoxShadow(color: const Color(0xFFF97316).withValues(alpha: 0.3), blurRadius: 8, offset: const Offset(0, 3))],
-                                      ),
-                                      child: const Icon(CupertinoIcons.arrow_up, size: 18, color: CupertinoColors.white),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Elegí una conversación',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: context.textPrimary, letterSpacing: -0.4, fontFamily: '.SF Pro Display'),
                       ),
-                      // ── RIGHT: Quick Actions Sidebar ──
-                      Container(
-                        width: 240,
-                        margin: const EdgeInsets.fromLTRB(0, 16, 16, 16),
-                        child: Column(
-                          children: [
-                            // Premium Camera
-                            Container(
-                              padding: const EdgeInsets.all(20),
-                              decoration: BoxDecoration(
-                                gradient: const LinearGradient(
-                                  colors: [Color(0xFFF97316), Color(0xFFE2860B), Color(0xFFD4740A)],
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                ),
-                                borderRadius: BorderRadius.circular(18),
-                                boxShadow: [BoxShadow(color: const Color(0xFFF97316).withValues(alpha: 0.3), blurRadius: 16, offset: const Offset(0, 6))],
-                              ),
-                              child: Column(
-                                children: [
-                                  const Icon(CupertinoIcons.videocam_circle_fill, color: CupertinoColors.white, size: 42),
-                                  const SizedBox(height: 8),
-                                  const Text('Premium Camera', style: TextStyle(color: CupertinoColors.white, fontSize: 15, fontWeight: FontWeight.w800)),
-                                  const SizedBox(height: 4),
-                                  Text('Videollamada HD', style: TextStyle(color: CupertinoColors.white.withValues(alpha: 0.8), fontSize: 12)),
-                                  const SizedBox(height: 4),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                    decoration: BoxDecoration(color: const Color(0xFFEF4444), borderRadius: BorderRadius.circular(6)),
-                                    child: const Text('LIVE', style: TextStyle(color: CupertinoColors.white, fontSize: 10, fontWeight: FontWeight.w800)),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            // Contact card
-                            Container(
-                              padding: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(
-                                color: context.cardColor,
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(color: context.dividerColor.withValues(alpha: 0.3)),
-                              ),
-                              child: Column(
-                                children: [
-                                  Container(
-                                    width: 56, height: 56,
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      gradient: LinearGradient(colors: [Colors.grey.shade200, Colors.grey.shade300]),
-                                    ),
-                                    child: const Center(child: Text('👩‍🎨', style: TextStyle(fontSize: 28))),
-                                  ),
-                                  const SizedBox(height: 10),
-                                  Text('Elena García', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: context.textPrimary)),
-                                  const SizedBox(height: 2),
-                                  Text('Motion Designer', style: TextStyle(fontSize: 12, color: context.textSecondary)),
-                                  const SizedBox(height: 4),
-                                  Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                                    Container(width: 8, height: 8, decoration: const BoxDecoration(color: Color(0xFF34C759), shape: BoxShape.circle)),
-                                    const SizedBox(width: 5),
-                                    Text('Active Now', style: TextStyle(fontSize: 11, color: const Color(0xFF34C759), fontWeight: FontWeight.w600)),
-                                  ]),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            // Quick actions
-                            _demoActionRow(CupertinoIcons.person_crop_circle, 'Ver Perfil'),
-                            const SizedBox(height: 6),
-                            _demoActionRow(CupertinoIcons.calendar, 'Agendar Entrevista'),
-                            const SizedBox(height: 6),
-                            _demoActionRow(CupertinoIcons.star, 'Guardar Perfil'),
-                            const SizedBox(height: 6),
-                            _demoActionRow(CupertinoIcons.doc_text, 'Enviar Brief'),
-                          ],
-                        ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Seleccioná un chat de la lista para ver los mensajes.',
+                        style: TextStyle(fontSize: 13, color: context.textTertiary),
                       ),
                     ],
                   ),
                 ),
-              );
-            }
-
-            // Si el usuario seleccionado ya no está en la lista (búsqueda, etc.),
-            // no lo perdemos — solo se deselecciona si de verdad desapareció.
-            final selected = _selectedUser;
-
-            // Con conversaciones (o mientras carga): panel maestro-detalle.
-            return CupertinoPageScaffold(
-              backgroundColor: const Color(0xFFF1F1F4),
-              child: SafeArea(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Container(
-                      width: 400,
-                      margin: const EdgeInsets.fromLTRB(16, 16, 0, 16),
-                      decoration: BoxDecoration(
-                        color: context.cardColor,
-                        borderRadius: BorderRadius.circular(18),
-                        border: Border.all(color: const Color(0x0F000000), width: 0.5),
-                        boxShadow: const [BoxShadow(color: Color(0x0A000000), blurRadius: 18, offset: Offset(0, 6))],
-                      ),
-                      clipBehavior: Clip.antiAlias,
-                      child: _buildListPane(
-                        context,
-                        selectedUser: selected,
-                        onTapUser: (u) => setState(() => _selectedUser = u),
-                      ),
-                    ),
-                    if (selected == null)
-                      Expanded(
-                        child: Center(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Container(
-                                width: 84, height: 84,
-                                decoration: BoxDecoration(color: MployaTheme.brandAccent.withValues(alpha: 0.10), borderRadius: BorderRadius.circular(24)),
-                                child: Icon(CupertinoIcons.chat_bubble_2_fill, size: 38, color: MployaTheme.brandAccent.withValues(alpha: 0.6)),
-                              ),
-                              const SizedBox(height: 20),
-                              Text('Elegí una conversación', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: context.textPrimary)),
-                              const SizedBox(height: 6),
-                              Text('Seleccioná un chat de la lista para ver los mensajes.',
-                                  style: TextStyle(fontSize: 13.5, color: context.textTertiary)),
-                            ],
-                          ),
-                        ),
-                      )
-                    else ...[
-                      Expanded(
-                        child: Container(
-                          margin: const EdgeInsets.fromLTRB(16, 16, 0, 16),
-                          decoration: BoxDecoration(
-                            color: context.cardColor,
-                            borderRadius: BorderRadius.circular(18),
-                            border: Border.all(color: const Color(0x0F000000), width: 0.5),
-                            boxShadow: const [BoxShadow(color: Color(0x0A000000), blurRadius: 18, offset: Offset(0, 6))],
-                          ),
-                          clipBehavior: Clip.antiAlias,
-                          child: ChatDetailScreen(key: ValueKey(selected.id), otherUser: selected),
-                        ),
-                      ),
-                      SizedBox(
-                        width: 260,
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-                          child: _quickActionsSidebar(context, selected),
-                        ),
-                      ),
-                    ],
-                  ],
+              )
+            else ...[
+              Expanded(
+                child: Container(
+                  margin: const EdgeInsets.fromLTRB(16, 16, 0, 16),
+                  decoration: BoxDecoration(
+                    color: context.cardColor,
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: const Color(0x0F000000), width: 0.5),
+                    boxShadow: const [BoxShadow(color: Color(0x0A000000), blurRadius: 18, offset: Offset(0, 6))],
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: ChatDetailScreen(key: ValueKey(selected.id), otherUser: selected),
                 ),
               ),
-            );
-          },
-        );
-      },
+              SizedBox(
+                width: 260,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+                  child: _quickActionsSidebar(context, selected),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 
@@ -802,7 +594,7 @@ class _MessagingScreenState extends State<MessagingScreen> {
     final users = _applySearch(allUsers);
 
     if (allUsers.isEmpty) {
-      return _buildEmptyInbox(context);
+      return _buildEmptyInbox(context, onTapUser: onTapUser, selectedUser: selectedUser);
     }
 
     if (users.isEmpty && _searchQuery.isNotEmpty) {
@@ -1212,7 +1004,17 @@ class _MessagingScreenState extends State<MessagingScreen> {
           WebCard(
             child: Column(
               children: [
-                NexAvatar(user: user, size: 52, showBadge: true),
+                user.id.startsWith('demo_')
+                    ? Container(
+                        width: 52,
+                        height: 52,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: LinearGradient(colors: [Colors.grey.shade200, Colors.grey.shade300]),
+                        ),
+                        child: Center(child: Text(user.avatarUrl ?? '👤', style: const TextStyle(fontSize: 26))),
+                      )
+                    : NexAvatar(user: user, size: 52, showBadge: true),
                 const SizedBox(height: 10),
                 Text(user.name, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: context.textPrimary), textAlign: TextAlign.center),
                 const SizedBox(height: 2),
@@ -1271,7 +1073,7 @@ class _MessagingScreenState extends State<MessagingScreen> {
     );
   }
 
-  Widget _buildEmptyInbox(BuildContext context) {
+  Widget _buildEmptyInbox(BuildContext context, {required void Function(NexUser) onTapUser, NexUser? selectedUser}) {
     return SliverToBoxAdapter(
       child: Column(
         children: [
@@ -1292,13 +1094,26 @@ class _MessagingScreenState extends State<MessagingScreen> {
             ),
           ),
           Divider(height: 1, color: context.dividerColor.withValues(alpha: 0.3)),
-          // ── Demo conversations ──
-          _demoConversationTile('Elena García', '👩‍🎨', '¡Sí! Me encanta. ¿Grabamos hoy?', '09:25', 2, true),
-          _demoConversationTile('Alex Rivera', '👨‍💻', '¿Viste el concepto para el corto?', '09:22', 0, false),
-          _demoConversationTile('Martín López', '👨‍💼', 'Perfecto, te mando el brief 📎', '08:45', 1, false),
-          _demoConversationTile('Camila Ruiz', '👩‍🔬', 'El video quedó increíble 🎬', 'Ayer', 0, false),
-          _demoConversationTile('Lucas Herrera', '👨‍🎨', 'Dale, agendamos para el jueves', 'Ayer', 0, false),
-          _demoConversationTile('Valentina Torres', '👩‍🚀', '¡Gracias por la entrevista!', 'Lun', 3, false),
+          // ── Demo conversations using actual _ConversationTile ──
+          ...List.generate(_demoUsers.length, (i) {
+            final user = _demoUsers[i];
+            final msgs = _demoMessagesMap[user.id] ?? [];
+            final lastMsg = msgs.isNotEmpty ? msgs.last : null;
+            final previewText = lastMsg != null ? lastMsg['text']?.toString() ?? '' : user.headline;
+            final timeText = lastMsg != null ? lastMsg['time']?.toString() ?? '' : '';
+            final unreadCount = i == 0 ? 2 : (i == 2 ? 1 : (i == 5 ? 3 : 0));
+            final hasUnread = unreadCount > 0;
+
+            return _ConversationTile(
+              user: user,
+              isLast: i == _demoUsers.length - 1,
+              previewText: previewText,
+              timeText: timeText,
+              hasUnread: hasUnread,
+              isSelected: selectedUser?.id == user.id,
+              onTap: () => onTapUser(user),
+            );
+          }),
         ],
       ),
     );
@@ -1559,7 +1374,17 @@ class _ConversationTile extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 14),
           child: Row(
             children: [
-              NexAvatar(user: user, size: 56, showBadge: true, heroTag: 'avatar_${user.id}'),
+              user.id.startsWith('demo_')
+                  ? Container(
+                      width: 56,
+                      height: 56,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: LinearGradient(colors: [Colors.grey.shade200, Colors.grey.shade300]),
+                      ),
+                      child: Center(child: Text(user.avatarUrl ?? '👤', style: const TextStyle(fontSize: 28))),
+                    )
+                  : NexAvatar(user: user, size: 56, showBadge: true, heroTag: 'avatar_${user.id}'),
               const SizedBox(width: 16),
               Expanded(
                 child: Column(
@@ -1672,6 +1497,16 @@ class ChatDetailScreenState extends State<ChatDetailScreen> {
       .order('created_at', ascending: false)
       .limit(200);
 
+  late final StreamController<List<Map<String, dynamic>>> _demoStreamController;
+  List<Map<String, dynamic>> _demoMessagesList = [];
+
+  Stream<List<Map<String, dynamic>>> get messagesStream {
+    if (widget.otherUser.id.startsWith('demo_')) {
+      return _demoStreamController.stream;
+    }
+    return _messagesStream;
+  }
+
   String? get _currentUserId =>
       Supabase.instance.client.auth.currentUser?.id;
 
@@ -1680,9 +1515,24 @@ class ChatDetailScreenState extends State<ChatDetailScreen> {
   @override
   void initState() {
     super.initState();
-    _setupTypingChannel();
-    _controller.addListener(_onTextChanged);
-    _loadMyName();
+    if (widget.otherUser.id.startsWith('demo_')) {
+      final initialMsgs = _MessagingScreenState._demoMessagesMap[widget.otherUser.id] ?? [];
+      _demoMessagesList = initialMsgs.map((m) => {
+        'id': 'demo_msg_${widget.otherUser.id}_${initialMsgs.indexOf(m)}',
+        'sender_id': m['isMe'] == true ? (_currentUserId ?? 'user_me') : widget.otherUser.id,
+        'receiver_id': m['isMe'] == true ? widget.otherUser.id : (_currentUserId ?? 'user_me'),
+        'content': m['text'],
+        'text': m['text'],
+        'created_at': DateTime.now().subtract(Duration(minutes: 10 - initialMsgs.indexOf(m))).toIso8601String(),
+        'is_read': true,
+      }).toList().reversed.toList();
+      _demoStreamController = StreamController<List<Map<String, dynamic>>>.broadcast();
+      _demoStreamController.add(_demoMessagesList);
+    } else {
+      _setupTypingChannel();
+      _controller.addListener(_onTextChanged);
+      _loadMyName();
+    }
   }
 
   Future<void> _loadMyName() async {
@@ -1818,32 +1668,47 @@ class ChatDetailScreenState extends State<ChatDetailScreen> {
     _controller.clear();
 
     try {
-      await Supabase.instance.client.from('messages').insert({
-        'sender_id': _currentUserId,
-        'receiver_id': _otherId,
-        'content': text,
-        'text': text,
-        'type': 'text',
-        'is_read': false,
-      });
-    } catch (e) {
-      debugPrint('Error enviando mensaje: $e');
-      if (mounted) {
-        showCupertinoDialog(
-          context: context,
-          builder: (context) => CupertinoAlertDialog(
-            title: const Text('Error DB'),
-            content: Text(e.toString()),
-            actions: [
-              CupertinoDialogAction(
-                child: const Text('OK'),
-                onPressed: () => Navigator.pop(context),
-              )
-            ],
-          ),
-        );
+      if (widget.otherUser.id.startsWith('demo_')) {
+        _demoMessagesList.insert(0, {
+          'id': 'demo_msg_user_${DateTime.now().millisecondsSinceEpoch}',
+          'sender_id': _currentUserId ?? 'user_me',
+          'receiver_id': widget.otherUser.id,
+          'content': text,
+          'text': text,
+          'created_at': DateTime.now().toIso8601String(),
+          'is_read': true,
+        });
+        _demoStreamController.add(List.from(_demoMessagesList));
+      } else {
+        try {
+          await Supabase.instance.client.from('messages').insert({
+            'sender_id': _currentUserId,
+            'receiver_id': _otherId,
+            'content': text,
+            'text': text,
+            'type': 'text',
+            'is_read': false,
+          });
+        } catch (e) {
+          debugPrint('Error enviando mensaje: $e');
+          if (mounted) {
+            showCupertinoDialog(
+              context: context,
+              builder: (context) => CupertinoAlertDialog(
+                title: const Text('Error DB'),
+                content: Text(e.toString()),
+                actions: [
+                  CupertinoDialogAction(
+                    child: const Text('OK'),
+                    onPressed: () => Navigator.pop(context),
+                  )
+                ],
+              ),
+            );
+          }
+          _controller.text = text;
+        }
       }
-      _controller.text = text;
     } finally {
       if (mounted) setState(() => _isSending = false);
     }
@@ -2064,10 +1929,14 @@ class ChatDetailScreenState extends State<ChatDetailScreen> {
 
   @override
   void dispose() {
-    _controller.removeListener(_onTextChanged);
+    if (widget.otherUser.id.startsWith('demo_')) {
+      _demoStreamController.close();
+    } else {
+      _controller.removeListener(_onTextChanged);
+      _typingChannel?.unsubscribe();
+    }
     _controller.dispose();
     _scrollController.dispose();
-    _typingChannel?.unsubscribe();
     super.dispose();
   }
 
@@ -2083,7 +1952,17 @@ class ChatDetailScreenState extends State<ChatDetailScreen> {
         middle: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            NexAvatar(user: widget.otherUser, size: 32),
+            widget.otherUser.id.startsWith('demo_')
+                ? Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: LinearGradient(colors: [Colors.grey.shade200, Colors.grey.shade300]),
+                    ),
+                    child: Center(child: Text(widget.otherUser.avatarUrl ?? '👤', style: const TextStyle(fontSize: 16))),
+                  )
+                : NexAvatar(user: widget.otherUser, size: 32),
             const SizedBox(width: 10),
             Column(
               mainAxisSize: MainAxisSize.min,
@@ -2150,7 +2029,8 @@ class ChatDetailScreenState extends State<ChatDetailScreen> {
             // ── Área de Mensajes ──
             Expanded(
               child: StreamBuilder<List<Map<String, dynamic>>>(
-                stream: _messagesStream,
+                initialData: widget.otherUser.id.startsWith('demo_') ? _demoMessagesList : null,
+                stream: messagesStream,
                 builder: (context, snap) {
                   if (!snap.hasData) {
                     return const Center(child: CupertinoActivityIndicator());
@@ -2159,13 +2039,15 @@ class ChatDetailScreenState extends State<ChatDetailScreen> {
                   final messages = _filterMessages(snap.data!);
 
                   // MARCAR MENSAJES RECIBIDOS COMO LEÍDOS
-                  final unreadMsgs = messages.where((m) => m['receiver_id'] == _currentUserId && m['is_read'] != true).toList();
-                  if (unreadMsgs.isNotEmpty) {
-                    Future.microtask(() {
-                      for (var m in unreadMsgs) {
-                        Supabase.instance.client.from('messages').update({'is_read': true}).eq('id', m['id']);
-                      }
-                    });
+                  if (!widget.otherUser.id.startsWith('demo_')) {
+                    final unreadMsgs = messages.where((m) => m['receiver_id'] == _currentUserId && m['is_read'] != true).toList();
+                    if (unreadMsgs.isNotEmpty) {
+                      Future.microtask(() {
+                        for (var m in unreadMsgs) {
+                          Supabase.instance.client.from('messages').update({'is_read': true}).eq('id', m['id']);
+                        }
+                      });
+                    }
                   }
 
                   if (messages.isEmpty) {
@@ -2407,7 +2289,17 @@ class _EmptyChat extends StatelessWidget {
                   color: context.isDark ? NexTheme.darkBg : const Color(0xFFF2F2F7),
                   shape: BoxShape.circle,
                 ),
-                child: NexAvatar(user: otherUser, size: 90, showBadge: false),
+                child: otherUser.id.startsWith('demo_')
+                    ? Container(
+                        width: 90,
+                        height: 90,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: LinearGradient(colors: [Colors.grey.shade200, Colors.grey.shade300]),
+                        ),
+                        child: Center(child: Text(otherUser.avatarUrl ?? '👤', style: const TextStyle(fontSize: 48))),
+                      )
+                    : NexAvatar(user: otherUser, size: 90, showBadge: false),
               ),
             ),
             const SizedBox(height: 24),

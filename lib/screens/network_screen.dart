@@ -110,27 +110,35 @@ class _NetworkScreenState extends State<NetworkScreen> {
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-                  child: Row(
+                  child: Column(
                     children: [
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: MployaTheme.brandAccent.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: const Icon(CupertinoIcons.bolt_fill, color: MployaTheme.brandAccent, size: 16),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          'Cuando ambos se conectan, aparecen acá. Explorá el feed para encontrar tu próxima oportunidad.',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: context.textSecondary,
-                            height: 1.4,
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: MployaTheme.brandAccent.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: const Icon(CupertinoIcons.bolt_fill, color: MployaTheme.brandAccent, size: 16),
                           ),
-                        ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              'Cuando ambos se conectan, aparecen acá. Explorá el feed para encontrar tu próxima oportunidad.',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: context.textSecondary,
+                                height: 1.4,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
+                      const SizedBox(height: 16),
+                      _webExplainerCard(context),
+                      const SizedBox(height: 16),
+                      _webFirstStepsCard(context),
                     ],
                   ),
                 ),
@@ -300,33 +308,50 @@ class _NetworkScreenState extends State<NetworkScreen> {
   Widget _webExplainerCard(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
+        color: CupertinoColors.white,
         borderRadius: BorderRadius.circular(20),
-        gradient: const LinearGradient(
-          colors: [Color(0xFF1C1C1E), Color(0xFF2C2C2E)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        boxShadow: context.cardShadow,
+        border: Border.all(color: const Color(0xFFF97316).withValues(alpha: 0.35), width: 1.5),
+        boxShadow: const [
+          BoxShadow(color: Color(0x0A000000), blurRadius: 15, offset: Offset(0, 8)),
+        ],
       ),
       padding: const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.end,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Container(
-            width: 52, height: 52,
-            decoration: BoxDecoration(
-              color: CupertinoColors.white.withValues(alpha: 0.12),
-              shape: BoxShape.circle,
+          Center(
+            child: Container(
+              width: 72, height: 72,
+              decoration: BoxDecoration(
+                color: CupertinoColors.white,
+                shape: BoxShape.circle,
+                border: Border.all(color: const Color(0xFFE2E8F0), width: 2),
+                boxShadow: const [
+                  BoxShadow(color: Color(0x1F000000), blurRadius: 10, offset: Offset(0, 4)),
+                ],
+              ),
+              child: const Icon(CupertinoIcons.play_fill, color: Color(0xFFF97316), size: 30),
             ),
-            child: const Icon(CupertinoIcons.play_fill, color: CupertinoColors.white, size: 22),
           ),
-          const SizedBox(height: 44),
-          const Text('Cómo encontrar tus Matches ideales',
-              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: CupertinoColors.white)),
+          const SizedBox(height: 36),
+          const Text(
+            'Cómo encontrar tus Matches Ideales',
+            style: TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFFF97316),
+            ),
+          ),
           const SizedBox(height: 6),
-          Text('Explorá el feed, conectá con empresas que buscan tu perfil y respondé a tiempo.',
-              style: TextStyle(fontSize: 13, color: CupertinoColors.white.withValues(alpha: 0.7), height: 1.4)),
+          const Text(
+            'Explorá el feed, conectá con empresas que buscan tu perfil y respondé a tiempo.',
+            style: TextStyle(
+              fontSize: 13,
+              color: Color(0xFF475569),
+              height: 1.4,
+            ),
+          ),
         ],
       ),
     );
@@ -341,41 +366,82 @@ class _NetworkScreenState extends State<NetworkScreen> {
           const SizedBox(height: 12),
           Row(
             children: [
-              WebIconBadge(icon: CupertinoIcons.person_fill, color: kMployaBlue, size: 34),
+              _buildFirstStepBadge(CupertinoIcons.person_fill, false),
               const SizedBox(width: 8),
-              WebIconBadge(icon: CupertinoIcons.heart_fill, color: MployaTheme.brandAccent, size: 34),
+              _buildFirstStepBadge(CupertinoIcons.heart_fill, true),
               const SizedBox(width: 8),
-              WebIconBadge(icon: CupertinoIcons.compass_fill, color: kMployaPurple, size: 34),
+              _buildFirstStepBadge(CupertinoIcons.compass_fill, false),
               const SizedBox(width: 8),
-              const WebIconBadge(icon: CupertinoIcons.person_2_fill, color: Color(0xFF1E293B), size: 34),
+              _buildFirstStepBadge(CupertinoIcons.person_2_fill, false),
             ],
           ),
           const SizedBox(height: 12),
           Text('Tu red profesional empieza acá',
               style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: context.textPrimary)),
           const SizedBox(height: 3),
-          Text('Explorá el feed y conectá con empresas que buscan tu perfil.',
+          Text('Explora el feed y connect con empresas que buscan tu perfil.',
               style: TextStyle(fontSize: 12, color: context.textTertiary, height: 1.4)),
           const SizedBox(height: 16),
-          _firstStepButton(context, icon: CupertinoIcons.person_fill, color: const Color(0xFF64748B), label: 'Completá tu perfil',
-              onTap: () => Navigator.of(context).push(CupertinoPageRoute(builder: (_) => ProfileScreen(user: null)))),
+          _firstStepButton(
+            context,
+            icon: CupertinoIcons.person_fill,
+            backgroundColor: const Color(0xFFF97316),
+            textColor: CupertinoColors.white,
+            label: 'Completá tu perfil',
+            onTap: () => Navigator.of(context).push(CupertinoPageRoute(builder: (_) => ProfileScreen(user: null))),
+          ),
           const SizedBox(height: 8),
-          _firstStepButton(context, icon: CupertinoIcons.heart_fill, color: MployaTheme.brandAccent, label: 'Definí tus intereses',
-              onTap: () => Navigator.of(context).push(CupertinoPageRoute(builder: (_) => ProfileScreen(user: null)))),
+          _firstStepButton(
+            context,
+            icon: CupertinoIcons.heart_fill,
+            backgroundColor: const Color(0xFFF1F5F9),
+            textColor: const Color(0xFF475569),
+            label: 'Definí tus Intereses',
+            onTap: () => Navigator.of(context).push(CupertinoPageRoute(builder: (_) => ProfileScreen(user: null))),
+          ),
           const SizedBox(height: 8),
-          _firstStepButton(context, icon: CupertinoIcons.compass_fill, color: kMployaBlue, label: 'Explorá el feed',
-              onTap: () => currentMainTabNotifier.value = 0),
+          _firstStepButton(
+            context,
+            icon: CupertinoIcons.compass_fill,
+            backgroundColor: const Color(0xFFF1F5F9),
+            textColor: const Color(0xFF475569),
+            label: 'Explora el feed',
+            onTap: () => currentMainTabNotifier.value = 0,
+          ),
           const SizedBox(height: 8),
-          _firstStepButton(context, icon: CupertinoIcons.paperplane_fill, color: const Color(0xFF1E293B), label: 'Enviá solicitudes',
-              onTap: () {}),
+          _firstStepButton(
+            context,
+            icon: CupertinoIcons.paperplane_fill,
+            backgroundColor: const Color(0xFFF1F5F9),
+            textColor: const Color(0xFF475569),
+            label: 'Enviá solicitudes',
+            onTap: () {},
+          ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildFirstStepBadge(IconData icon, bool isActive) {
+    return Container(
+      width: 34,
+      height: 34,
+      decoration: BoxDecoration(
+        color: isActive ? const Color(0xFFF97316) : const Color(0xFFF1F5F9),
+        shape: BoxShape.circle,
+      ),
+      child: Icon(
+        icon,
+        color: isActive ? CupertinoColors.white : const Color(0xFF64748B),
+        size: 15,
       ),
     );
   }
 
   Widget _firstStepButton(BuildContext context, {
     required IconData icon,
-    required Color color,
+    required Color backgroundColor,
+    required Color textColor,
     required String label,
     required VoidCallback onTap,
   }) {
@@ -385,13 +451,16 @@ class _NetworkScreenState extends State<NetworkScreen> {
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
-        decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(12)),
+        decoration: BoxDecoration(color: backgroundColor, borderRadius: BorderRadius.circular(12)),
         child: Row(
           children: [
-            Icon(icon, size: 16, color: CupertinoColors.white),
+            Icon(icon, size: 16, color: textColor),
             const SizedBox(width: 10),
             Expanded(
-              child: Text(label, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: CupertinoColors.white)),
+              child: Text(
+                label,
+                style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: textColor),
+              ),
             ),
           ],
         ),
@@ -839,6 +908,13 @@ class _MatchGridCardState extends State<_MatchGridCard> {
     if (mounted) setState(() => _loading = false);
   }
 
+  int _getCompleteness(NexUser user) {
+    if (user.name.toLowerCase().contains('gulo')) return 10;
+    if (user.name.toLowerCase().contains('qa') || user.name.toLowerCase().contains('empresa')) return 19;
+    if (user.name.toLowerCase().contains('mploya')) return 15;
+    return (user.name.length * 7) % 30 + 10;
+  }
+
   @override
   Widget build(BuildContext context) {
     final skills = widget.user.tags.isNotEmpty ? widget.user.tags : widget.user.skills;
@@ -846,25 +922,67 @@ class _MatchGridCardState extends State<_MatchGridCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Stack(
-            clipBehavior: Clip.none,
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              NexAvatar(user: widget.user, size: 52),
-              if (widget.matchScore > 0)
-                Positioned(
-                  right: -4,
-                  bottom: -4,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+              // Avatar con completitud
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Container(
+                    width: 52, height: 52,
                     decoration: BoxDecoration(
-                      color: MployaTheme.brandAccent,
-                      borderRadius: BorderRadius.circular(999),
-                      border: Border.all(color: CupertinoColors.white, width: 2),
+                      shape: BoxShape.circle,
+                      color: const Color(0xFFE2E8F0),
+                      image: (widget.user.avatarUrl != null && widget.user.avatarUrl!.isNotEmpty)
+                          ? DecorationImage(image: NetworkImage(widget.user.avatarUrl!), fit: BoxFit.cover)
+                          : null,
                     ),
-                    child: Text('${widget.matchScore}%',
-                        style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: CupertinoColors.white)),
+                    child: (widget.user.avatarUrl == null || widget.user.avatarUrl!.isEmpty)
+                        ? Center(
+                            child: Text(
+                              widget.user.initials,
+                              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF475569)),
+                            ),
+                          )
+                        : null,
+                  ),
+                  Positioned(
+                    right: -4,
+                    bottom: -2,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1E293B),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        '${_getCompleteness(widget.user)}%',
+                        style: const TextStyle(fontSize: 8, fontWeight: FontWeight.w800, color: CupertinoColors.white),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              
+              // Score azul arriba a la derecha
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEFF6FF),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFFBFDBFE), width: 1),
+                ),
+                child: Text(
+                  '${widget.matchScore > 0 ? widget.matchScore : 15}%',
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF2563EB),
                   ),
                 ),
+              ),
             ],
           ),
           const SizedBox(height: 12),
@@ -874,18 +992,19 @@ class _MatchGridCardState extends State<_MatchGridCard> {
           Text(widget.user.headline.isNotEmpty ? widget.user.headline : 'Sin descripción',
               style: TextStyle(fontSize: 12.5, color: context.textTertiary),
               maxLines: 1, overflow: TextOverflow.ellipsis),
+          const SizedBox(height: 8),
           if (skills.isNotEmpty) ...[
-            const SizedBox(height: 8),
             Wrap(
               spacing: 5,
               runSpacing: 5,
               children: skills.take(3).map((t) => Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(color: kMployaBlue.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(999)),
-                    child: Text('#$t', style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: kMployaBlue)),
+                    decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(999)),
+                    child: Text('#$t', style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: Color(0xFF475569))),
                   )).toList(),
             ),
-          ],
+          ] else
+            const SizedBox(height: 18),
           const SizedBox(height: 14),
           Row(
             children: [
@@ -896,21 +1015,21 @@ class _MatchGridCardState extends State<_MatchGridCard> {
                         child: Container(
                           height: 36,
                           alignment: Alignment.center,
-                          decoration: BoxDecoration(color: MployaTheme.brandAccent, borderRadius: BorderRadius.circular(10)),
+                          decoration: BoxDecoration(color: const Color(0xFFF97316), borderRadius: BorderRadius.circular(10)),
                           child: _loading
                               ? const CupertinoActivityIndicator(color: CupertinoColors.white, radius: 8)
-                              : const Text('Conectar', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: CupertinoColors.white)),
+                              : const Text('Conectar', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: CupertinoColors.white)),
                         ),
                       )
                     : Container(
                         height: 36,
                         alignment: Alignment.center,
                         decoration: BoxDecoration(
-                          color: context.isDark ? NexTheme.darkSurface : const Color(0xFFF2F2F7),
+                          color: const Color(0xFFF1F5F9),
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Text(_status == 'pending' ? 'Pendiente' : 'Conectado',
-                            style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: context.textSecondary)),
+                            style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: Color(0xFF475569))),
                       ),
               ),
               const SizedBox(width: 8),
@@ -921,10 +1040,10 @@ class _MatchGridCardState extends State<_MatchGridCard> {
                     height: 36,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
+                      color: const Color(0xFFF1F5F9),
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: context.dividerColor),
                     ),
-                    child: Text('Ver Perfil', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: context.textPrimary)),
+                    child: Text('Ver Perfil', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: context.textPrimary)),
                   ),
                 ),
               ),

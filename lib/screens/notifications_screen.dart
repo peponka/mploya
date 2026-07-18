@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/cupertino.dart';
 // Material widgets (SliverAppBar, Colors, Icons) have no Cupertino equivalent
 import 'package:flutter/material.dart';
@@ -25,7 +26,7 @@ class NotificationsScreen extends ConsumerStatefulWidget {
   ConsumerState<NotificationsScreen> createState() => _NotificationsScreenState();
 }
 
-class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
+class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with TickerProviderStateMixin {
   // ── IA Insights Data ──
   int _profileViews = 0;
   int _totalMatches = 0;
@@ -33,11 +34,24 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   bool _insightsLoaded = false;
   List<SmartNotification> _digests = [];
   bool _bannerDismissed = false;
+  int _selectedCandidateIndex = 0;
+  int _activeMobileTab = 0;
+  late AnimationController _animationController;
 
   @override
   void initState() {
     super.initState();
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 15),
+    )..repeat();
     _loadInsights();
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadInsights() async {
@@ -157,398 +171,884 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return CupertinoPageScaffold(
-      backgroundColor: context.isDark ? NexTheme.darkBg : CupertinoColors.white,
-      child: SafeArea(
-        child: Center(
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxWidth: MediaQuery.of(context).size.width > 900 ? 720 : double.infinity,
+    if (isWebWide(context)) {
+      return _buildWeb(context);
+    }
+    
+    return AnimatedBuilder(
+      animation: _animationController,
+      builder: (context, child) {
+        return Scaffold(
+          backgroundColor: const Color(0xFF0F172A),
+          appBar: AppBar(
+            backgroundColor: const Color(0xFF1E293B),
+            elevation: 0,
+            title: const Text(
+              'Notificaciones',
+              style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: Colors.white),
             ),
-            child: StreamBuilder<List<Map<String, dynamic>>>(
-          stream: NotificationService.instance.notificationsStream,
-          builder: (context, snapshot) {
-            if (snapshot.hasError) {
-              return Center(child: Text('Error: ${snapshot.error}', style: const TextStyle(color: CupertinoColors.destructiveRed)));
-            }
-            if (!snapshot.hasData) {
-              return ListView.builder(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                itemCount: 6,
-                itemBuilder: (_, __) => const Padding(
-                  padding: EdgeInsets.only(bottom: 12),
+          ),
+          body: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Top Tip Banner
+                if (!_bannerDismissed)
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 16),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFEF3C7),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(CupertinoIcons.lightbulb_fill, color: Color(0xFFD97706), size: 18),
+                        const SizedBox(width: 8),
+                        const Expanded(
+                          child: Text(
+                            "Completá tu perfil y grabá un video pitch.",
+                            style: TextStyle(color: Color(0xFF92400E), fontSize: 11.5, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                        GestureDetector(
+                          onTap: () => setState(() => _bannerDismissed = true),
+                          child: const Icon(CupertinoIcons.xmark, color: Color(0xFF92400E), size: 14),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                // Career Quantum Explorer Header Card
+                const Text(
+                  "Career Quantum Explorer",
+                  style: TextStyle(fontFamily: 'Georgia', fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+                ),
+                const SizedBox(height: 10),
+
+                // Selected Candidate Details Card
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1E293B),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFF475569).withOpacity(0.5)),
+                  ),
                   child: Row(
                     children: [
-                      SkeletonLoader(width: 44, height: 44, borderRadius: 22),
-                      SizedBox(width: 12),
-                      Expanded(
+                      Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          Container(
+                            width: 44, height: 44,
+                            decoration: const BoxDecoration(
+                              shape: BoxShape.circle,
+                              image: DecorationImage(
+                                image: NetworkImage("https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop"),
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                          ),
+                          Positioned(
+                            bottom: -2, right: -2,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF97316),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: const Text("10K", style: TextStyle(color: Colors.white, fontSize: 7, fontWeight: FontWeight.bold)),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(width: 10),
+                      const Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            SkeletonLoader(width: 180, height: 13),
-                            SizedBox(height: 6),
-                            SkeletonLoader(width: 120, height: 11),
+                            Text(
+                              "Gale / Senior Engineering Lead",
+                              style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                            ),
+                            SizedBox(height: 2),
+                            Text(
+                              "(Latinaics)",
+                              style: TextStyle(color: Color(0xFFF97316), fontSize: 10, fontWeight: FontWeight.bold),
+                            ),
                           ],
                         ),
                       ),
                     ],
                   ),
                 ),
-              );
-            }
 
-            final uid = Supabase.instance.client.auth.currentUser?.id;
-            final allNotifs = snapshot.data!;
-            final List<Map<String, dynamic>> myNotifs = allNotifs.where((n) => n['user_id']?.toString() == uid).toList();
+                const SizedBox(height: 16),
 
-            final currentUser = ref.watch(currentUserProvider).value;
-            if (currentUser != null && currentUser.accountType == 'confidencial') {
-              final stealthTip = NotificationService.instance.getStealthTip(currentUser);
-              if (stealthTip != null) {
-                myNotifs.insert(0, {
-                   'id': 'stealth-tip-${DateTime.now().toIso8601String().substring(0, 10)}',
-                   'type': 'profileView',
-                   'body': stealthTip,
-                   'is_read': false,
-                   'created_at': DateTime.now().toIso8601String(),
-                });
-              }
-            }
+                // Tab Selector
+                Row(
+                  children: [
+                    _buildTabButton("Quantum", 0),
+                    const SizedBox(width: 6),
+                    _buildTabButton("Mobility", 1),
+                    const SizedBox(width: 6),
+                    _buildTabButton("Suggestions", 2),
+                  ],
+                ),
 
-            final hasActivity = _profileViews > 0 || _totalMatches > 0 || _pitchesReceived > 0;
-            final unreadCount = myNotifs.where((n) => n['is_read'] != true).length;
+                const SizedBox(height: 16),
 
-            if (isWebWide(context)) {
-              return _buildWeb(context, myNotifs, hasActivity, unreadCount);
-            }
-
-            return CustomScrollView(
-              physics: const BouncingScrollPhysics(),
-              slivers: [
-                // ── Header ──
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+                // Tab Contents
+                if (_activeMobileTab == 0) ...[
+                  // Quantum Nexus & Radar skills chart
+                  Container(
+                    height: 220,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1E293B),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: CustomPaint(
+                      size: Size.infinite,
+                      painter: QuantumNexusPainter(animationValue: _animationController.value),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                     child: Row(
                       children: [
-                        Text(
-                          'Alertas',
-                          style: TextStyle(
-                            fontSize: 28,
-                            fontWeight: FontWeight.w900,
-                            color: context.textPrimary,
-                            fontFamily: '.SF Pro Display',
-                            letterSpacing: -0.8,
+                        const Text("Satinunics Skills", style: TextStyle(color: Color(0xFF1E293B), fontSize: 12, fontWeight: FontWeight.bold)),
+                        const Spacer(),
+                        SizedBox(
+                          width: 44, height: 44,
+                          child: CustomPaint(
+                            painter: RadarChartPainter(values: const [0.8, 0.75, 0.9, 0.65, 0.85, 0.7], labels: const []),
                           ),
                         ),
-                        const Spacer(),
-                        if (unreadCount > 0)
-                          GestureDetector(
-                            onTap: () => _markAllAsRead(myNotifs),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: MployaTheme.brandAccent.withValues(alpha: 0.08),
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                              child: Text(
-                                'Leer todas ($unreadCount)',
-                                style: const TextStyle(fontSize: 13, color: MployaTheme.brandAccent, fontWeight: FontWeight.w600),
-                              ),
-                            ),
-                          ),
+                        const SizedBox(width: 10),
+                        const Text("98%", style: TextStyle(color: Color(0xFFC2410C), fontSize: 14, fontWeight: FontWeight.w900)),
                       ],
                     ),
                   ),
-                ),
-
-                // ── Banner de visibilidad (mobile) ──
-                if (_insightsLoaded && !hasActivity && !_bannerDismissed)
-                  SliverToBoxAdapter(
-                    child: Container(
-                      margin: const EdgeInsets.fromLTRB(20, 0, 20, 16),
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFFFFF7ED), Color(0xFFFEF3C7)],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
+                ] else if (_activeMobileTab == 1) ...[
+                  // Mobility map
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1E293B),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text("Global Talent Mobility Map", style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 4),
+                        const Text("High demand detected in Santiago, Chile for Senior DevOps.", style: TextStyle(color: Color(0xFF94A3B8), fontSize: 10)),
+                        const SizedBox(height: 10),
+                        SizedBox(
+                          height: 180,
+                          child: CustomPaint(
+                            size: Size.infinite,
+                            painter: TalentMobilityMapPainter(animationValue: _animationController.value),
+                          ),
                         ),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: MployaTheme.brandAccent.withValues(alpha: 0.15)),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
+                      ],
+                    ),
+                  ),
+                ] else ...[
+                  // Network suggestions & Impact Score
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1E293B),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text("YOUR GLOBAL IMPACT SCORE", style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 10),
+                        SizedBox(
+                          height: 150,
+                          child: CustomPaint(
+                            size: Size.infinite,
+                            painter: GlobalImpactScorePainter(),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1E293B),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text("NETWORK SUGGESTIONS", style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 10),
+                        ..._suggestions.take(3).map((s) => Padding(
+                          padding: const EdgeInsets.only(bottom: 8.0),
+                          child: Row(
                             children: [
                               Container(
-                                width: 36, height: 36,
+                                width: 24, height: 24,
                                 decoration: BoxDecoration(
-                                  gradient: const LinearGradient(colors: [Color(0xFFF97316), Color(0xFFFB923C)]),
-                                  borderRadius: BorderRadius.circular(10),
+                                  shape: BoxShape.circle,
+                                  image: DecorationImage(image: NetworkImage(s["avatar"]!), fit: BoxFit.cover),
                                 ),
-                                child: const Icon(CupertinoIcons.rocket_fill, color: CupertinoColors.white, size: 16),
                               ),
-                              const SizedBox(width: 10),
+                              const SizedBox(width: 8),
                               Expanded(
-                                child: Text('Aumentá tu visibilidad',
-                                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: context.textPrimary)),
+                                child: Text(s["name"]!, style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
                               ),
-                              GestureDetector(
-                                onTap: () => setState(() => _bannerDismissed = true),
-                                child: Icon(CupertinoIcons.xmark, size: 14, color: context.textTertiary),
+                              const SizedBox(width: 4),
+                              Text(s["match"]!, style: const TextStyle(color: Color(0xFF3B82F6), fontSize: 10, fontWeight: FontWeight.bold)),
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF97316),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: const Text("Conectar", style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold)),
                               ),
                             ],
                           ),
-                          const SizedBox(height: 8),
-                          Text('Completá tu perfil y grabá un video pitch para destacarte ante los reclutadores.',
-                              style: TextStyle(fontSize: 12.5, color: context.textSecondary, height: 1.4)),
-                          const SizedBox(height: 12),
-                          GestureDetector(
-                            onTap: () => Navigator.of(context).maybePop(),
-                            child: Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.symmetric(vertical: 10),
-                              decoration: BoxDecoration(
-                                color: MployaTheme.brandAccent,
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: const Text('Grabar Video Pitch', textAlign: TextAlign.center,
-                                  style: TextStyle(color: CupertinoColors.white, fontSize: 13.5, fontWeight: FontWeight.w700)),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                // ── Weekly Summary (compact, only if there's data) ──
-                if (_insightsLoaded && hasActivity)
-                  SliverToBoxAdapter(
-                    child: Container(
-                      margin: const EdgeInsets.fromLTRB(20, 0, 20, 16),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                      decoration: BoxDecoration(
-                        color: MployaTheme.brandAccent.withValues(alpha: 0.04),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: MployaTheme.brandAccent.withValues(alpha: 0.1)),
-                      ),
-                      child: Row(
-                        children: [
-                          _CompactMetric(value: '$_profileViews', label: 'Vistas', icon: CupertinoIcons.eye_fill),
-                          Container(width: 1, height: 28, color: context.dividerColor),
-                          _CompactMetric(value: '$_totalMatches', label: 'Matches', icon: CupertinoIcons.bolt_fill),
-                          Container(width: 1, height: 28, color: context.dividerColor),
-                          _CompactMetric(value: '$_pitchesReceived', label: 'Replies', icon: CupertinoIcons.chat_bubble_fill),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                // ── Smart Digests ──
-                if (_digests.isNotEmpty)
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-                      child: Column(
-                        children: _digests.map((d) => GestureDetector(
-                          onTap: () async {
-                            await SmartNotificationService.instance.markRead(d.id);
-                            if (mounted) setState(() => _digests.removeWhere((x) => x.id == d.id));
-                          },
-                          child: Container(
-                            margin: const EdgeInsets.only(bottom: 8),
-                            padding: const EdgeInsets.all(14),
-                            decoration: BoxDecoration(
-                              color: context.isDark ? const Color(0xFF1A1F33) : const Color(0xFFF0F4FF),
-                              borderRadius: BorderRadius.circular(14),
-                              border: Border.all(color: context.isDark ? const Color(0xFF2E3A5C) : const Color(0xFFD6E4FF)),
-                            ),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Icon(CupertinoIcons.sparkles, color: Color(0xFF5856D6), size: 18),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(d.title, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: context.textPrimary)),
-                                      const SizedBox(height: 2),
-                                      Text(d.body, style: TextStyle(fontSize: 13, color: context.textSecondary, height: 1.3)),
-                                    ],
-                                  ),
-                                ),
-                                const Icon(CupertinoIcons.xmark_circle, size: 16, color: Color(0xFFAEAEB2)),
-                              ],
-                            ),
-                          ),
                         )).toList(),
-                      ),
+                      ],
                     ),
                   ),
-
-                // ── Cards Grid (2 columns on mobile) ──
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
-                    child: _buildMobileCardsGrid(context, myNotifs),
-                  ),
-                ),
-
-                const SliverToBoxAdapter(child: SizedBox(height: 100)),
+                ],
               ],
-            );
-          },
-        ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildTabButton(String text, int index) {
+    final isSelected = _activeMobileTab == index;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => _activeMobileTab = index),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: isSelected ? const Color(0xFFF97316) : const Color(0xFF1E293B),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: const Color(0xFF475569).withOpacity(0.3)),
+          ),
+          child: Text(
+            text,
+            style: TextStyle(
+              color: isSelected ? Colors.white : const Color(0xFF94A3B8),
+              fontSize: 10.5,
+              fontWeight: FontWeight.bold,
+            ),
           ),
         ),
       ),
     );
   }
 
-  // ── Mobile Cards Grid (2 columns) ──────────────────────────────────────────
-  Widget _buildMobileCardsGrid(BuildContext context, List<Map<String, dynamic>> myNotifs) {
-    final List<_AlertCardData> alertCards = myNotifs.map((n) {
-      final type = _parseType(n['type']?.toString() ?? 'like');
-      final isConnection = type == NotificationType.connection;
-      return _AlertCardData(
-        type: type,
-        title: n['body']?.toString() ?? n['title']?.toString() ?? '',
-        timeAgo: NotificationService.instance.timeAgo(n['created_at']),
-        isRead: n['is_read'] == true,
-        avatarUrl: n['avatar_url']?.toString(),
-        name: n['sender_name']?.toString(),
-        headline: n['sender_headline']?.toString(),
-        companyName: n['company_name']?.toString(),
-        onTap: () => _markAsRead(n),
-        onAccept: isConnection ? () => _handleAccept(n) : null,
-        onReject: isConnection ? () => _handleReject(n) : null,
-      );
-    }).toList();
 
-    final showDemo = alertCards.isEmpty;
-    final displayCards = showDemo ? _demoAlertCards() : alertCards;
+  // ── Layout web — Cards Grid ────────────────────────────────────────────────
+  final List<Map<String, String>> _suggestions = const [
+    {
+      "name": "James Ehon",
+      "match": "98%",
+      "title": "Matching",
+      "sub": "Skill stong",
+      "avatar": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop"
+    },
+    {
+      "name": "Poriard Threa",
+      "match": "96%",
+      "title": "Matching",
+      "sub": "Skill stong",
+      "avatar": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&h=100&fit=crop"
+    },
+    {
+      "name": "Ronnad Jones",
+      "match": "93%",
+      "title": "Matching",
+      "sub": "Skill stong",
+      "avatar": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&h=100&fit=crop"
+    },
+    {
+      "name": "Partsla Sehan",
+      "match": "58%",
+      "title": "Matching",
+      "sub": "Skill stong",
+      "avatar": "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100&h=100&fit=crop"
+    },
+    {
+      "name": "Harlard Staney",
+      "match": "85%",
+      "title": "Matching",
+      "sub": "Skill stong",
+      "avatar": "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop"
+    },
+  ];
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (showDemo)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 10, left: 4),
-            child: Row(
+  Widget _buildWeb(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _animationController,
+      builder: (context, child) {
+        return WebPage(
+          title: 'Notificaciones',
+          subtitle: 'Alertas y panel de control del Quantum Nexus',
+          child: Container(
+            width: double.infinity,
+            height: 980,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF0F172A).withOpacity(0.06),
+                  blurRadius: 24,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+            ),
+            padding: const EdgeInsets.all(28),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: MployaTheme.brandAccent.withValues(alpha: 0.10),
-                    borderRadius: BorderRadius.circular(999),
+                // Top Tip Banner
+                if (!_bannerDismissed)
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 24),
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFEF3C7),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFFDE68A)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(CupertinoIcons.lightbulb_fill, color: Color(0xFFD97706), size: 22),
+                        const SizedBox(width: 14),
+                        const Expanded(
+                          child: Text(
+                            "Completá tu perfil y grabá un video pitch para aumentar tu visibilidad.",
+                            style: TextStyle(
+                              color: Color(0xFF92400E),
+                              fontSize: 14.5,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        GestureDetector(
+                          onTap: () => setState(() => _bannerDismissed = true),
+                          child: const Icon(CupertinoIcons.xmark, color: Color(0xFF92400E), size: 18),
+                        ),
+                      ],
+                    ),
                   ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
+
+                // Main Dashboard Body
+                Expanded(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(CupertinoIcons.sparkles, size: 11, color: MployaTheme.brandAccent),
-                      SizedBox(width: 4),
-                      Text('Preview', style: TextStyle(color: MployaTheme.brandAccent, fontSize: 11, fontWeight: FontWeight.w700)),
+                      // Left Area: Quantum Nexus Graph & Mobility Map (flex 3.2)
+                      Expanded(
+                        flex: 32,
+                        child: Stack(
+                          children: [
+                            // Background Canvas for Quantum Nexus Graph
+                            Positioned.fill(
+                              child: CustomPaint(
+                                painter: QuantumNexusPainter(
+                                  animationValue: _animationController.value,
+                                ),
+                              ),
+                            ),
+
+                            // Overlay: Profile & Skill Cards (Top Left)
+                            Positioned(
+                              top: 15,
+                              left: 15,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    "Career Quantum Explorer",
+                                    style: TextStyle(
+                                      fontFamily: 'Georgia',
+                                      fontSize: 26,
+                                      fontWeight: FontWeight.w900,
+                                      color: Color(0xFF0F172A),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 14),
+                                  Row(
+                                    children: [
+                                      // Profile Card
+                                      Container(
+                                        width: 230,
+                                        padding: const EdgeInsets.all(14),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFF1F5F9).withOpacity(0.95),
+                                          borderRadius: BorderRadius.circular(16),
+                                          border: Border.all(color: const Color(0xFFCBD5E1)),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: Colors.black.withOpacity(0.04),
+                                              blurRadius: 10,
+                                              offset: const Offset(0, 4),
+                                            ),
+                                          ],
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Stack(
+                                              clipBehavior: Clip.none,
+                                              children: [
+                                                Container(
+                                                  width: 48,
+                                                  height: 48,
+                                                  decoration: const BoxDecoration(
+                                                    shape: BoxShape.circle,
+                                                    image: DecorationImage(
+                                                      image: NetworkImage("https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop"),
+                                                      fit: BoxFit.cover,
+                                                    ),
+                                                  ),
+                                                ),
+                                                Positioned(
+                                                  bottom: -2,
+                                                  right: -2,
+                                                  child: Container(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                                    decoration: BoxDecoration(
+                                                      color: const Color(0xFFF97316),
+                                                      borderRadius: BorderRadius.circular(4),
+                                                    ),
+                                                    child: const Text(
+                                                      "10K",
+                                                      style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                            const SizedBox(width: 12),
+                                            const Expanded(
+                                              child: Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    "Gale / Senior Engineering Lead",
+                                                    style: TextStyle(color: Color(0xFF0F172A), fontSize: 12, fontWeight: FontWeight.bold),
+                                                    maxLines: 1,
+                                                    overflow: TextOverflow.ellipsis,
+                                                  ),
+                                                  SizedBox(height: 3),
+                                                  Text(
+                                                    "(Latinaics)",
+                                                    style: TextStyle(color: Color(0xFFF97316), fontSize: 10, fontWeight: FontWeight.w800),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      const SizedBox(width: 14),
+
+                                      // Skills Match Radar Card
+                                      Container(
+                                        width: 240,
+                                        padding: const EdgeInsets.all(14),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white,
+                                          borderRadius: BorderRadius.circular(16),
+                                          border: Border.all(color: const Color(0xFFCBD5E1)),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: Colors.black.withOpacity(0.04),
+                                              blurRadius: 10,
+                                              offset: const Offset(0, 4),
+                                            ),
+                                          ],
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  const Text(
+                                                    "Satinunics",
+                                                    style: TextStyle(color: Color(0xFF0F172A), fontSize: 12, fontWeight: FontWeight.bold),
+                                                  ),
+                                                  const SizedBox(height: 6),
+                                                  SizedBox(
+                                                    width: 72,
+                                                    height: 72,
+                                                    child: CustomPaint(
+                                                      painter: RadarChartPainter(
+                                                        values: const [0.8, 0.75, 0.9, 0.65, 0.85, 0.7],
+                                                        labels: const [],
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            const SizedBox(width: 10),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFFFFF7ED),
+                                                borderRadius: BorderRadius.circular(8),
+                                                border: Border.all(color: const Color(0xFFFFEDD5)),
+                                              ),
+                                              child: const Text(
+                                                "98%",
+                                                style: TextStyle(color: Color(0xFFC2410C), fontSize: 15, fontWeight: FontWeight.w900),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 12),
+                                  Container(
+                                    width: 484,
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFF8FAFC).withOpacity(0.9),
+                                      borderRadius: BorderRadius.circular(10),
+                                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                                    ),
+                                    child: const Text(
+                                      "CURATED PREMIUM MATCH\n\nA new role with a skill factor has been curated for your ore-cur view. View detailed profile analysis.",
+                                      style: TextStyle(color: Color(0xFF475569), fontSize: 10, height: 1.4, fontWeight: FontWeight.w500),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+
+                            // Overlay: Global Talent Mobility Alert Map (Bottom Left)
+                            Positioned(
+                              bottom: 15,
+                              left: 15,
+                              child: Container(
+                                width: 340,
+                                height: 290,
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF8FAFC).withOpacity(0.95),
+                                  borderRadius: BorderRadius.circular(18),
+                                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.04),
+                                      blurRadius: 12,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ],
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      "Global Talent mobility alert",
+                                      style: TextStyle(color: Color(0xFF0F172A), fontSize: 14, fontWeight: FontWeight.bold),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    const Text(
+                                      "High demand detected in Santiago, Chile for Senior DevOps with LATAM expertise.",
+                                      style: TextStyle(color: Color(0xFF475569), fontSize: 10, height: 1.4),
+                                    ),
+                                    const SizedBox(height: 10),
+                                    Expanded(
+                                      child: Row(
+                                        children: [
+                                          // South America custom vector map
+                                          Expanded(
+                                            child: ClipRRect(
+                                              borderRadius: BorderRadius.circular(8),
+                                              child: CustomPaint(
+                                                size: Size.infinite,
+                                                painter: TalentMobilityMapPainter(
+                                                  animationValue: _animationController.value,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 12),
+                                          // Map Legend Scale
+                                          Column(
+                                            mainAxisAlignment: MainAxisAlignment.center,
+                                            children: [
+                                              const Text("High", style: TextStyle(color: Color(0xFFEF4444), fontSize: 8, fontWeight: FontWeight.bold)),
+                                              const SizedBox(height: 5),
+                                              Container(
+                                                width: 8,
+                                                height: 110,
+                                                decoration: BoxDecoration(
+                                                  borderRadius: BorderRadius.circular(4),
+                                                  gradient: const LinearGradient(
+                                                    colors: [Color(0xFFEF4444), Color(0xFFF97316), Color(0xFFCBD5E1)],
+                                                    begin: Alignment.topCenter,
+                                                    end: Alignment.bottomCenter,
+                                                  ),
+                                                ),
+                                              ),
+                                              const SizedBox(height: 5),
+                                              const Text("Low", style: TextStyle(color: Color(0xFF64748B), fontSize: 8, fontWeight: FontWeight.bold)),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+
+                            // Orbital Stage indicator overlay (Bottom center-ish)
+                            Positioned(
+                              bottom: 140,
+                              right: 210,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF97316),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: const Text(
+                                  "Stage 3",
+                                  style: TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.w900),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(width: 28),
+
+                      // Right Area: Impact Score & Network suggestions (flex 1.0)
+                      Expanded(
+                        flex: 10,
+                        child: Column(
+                          children: [
+                            // Card 1: YOUR GLOBAL IMPACT SCORE
+                            Container(
+                              height: 310,
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF8FAFC),
+                                borderRadius: BorderRadius.circular(18),
+                                border: Border.all(color: const Color(0xFFE2E8F0)),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.03),
+                                    blurRadius: 10,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ],
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    "YOUR GLOBAL IMPACT SCORE",
+                                    style: TextStyle(color: Color(0xFF0F172A), fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.2),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  Expanded(
+                                    child: CustomPaint(
+                                      size: Size.infinite,
+                                      painter: GlobalImpactScorePainter(),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  Container(
+                                    width: double.infinity,
+                                    padding: const EdgeInsets.symmetric(vertical: 10),
+                                    alignment: Alignment.center,
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFF1F5F9),
+                                      borderRadius: BorderRadius.circular(10),
+                                      border: Border.all(color: const Color(0xFFCBD5E1)),
+                                    ),
+                                    child: const Text(
+                                      "Interactive Contribution",
+                                      style: TextStyle(color: Color(0xFF334155), fontSize: 11.5, fontWeight: FontWeight.bold),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+
+                            const SizedBox(height: 20),
+
+                            // Card 2: IMMEDIATE NETWORK SUGGESTIONS
+                            Expanded(
+                              child: Container(
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF8FAFC),
+                                  borderRadius: BorderRadius.circular(18),
+                                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.03),
+                                      blurRadius: 10,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ],
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      "IMMEDIATE NETWORK SUGGESTIONS",
+                                      style: TextStyle(color: Color(0xFF0F172A), fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.2),
+                                    ),
+                                    const SizedBox(height: 12),
+
+                                    // Suggestions list
+                                    Expanded(
+                                      child: ListView.builder(
+                                        itemCount: _suggestions.length,
+                                        itemBuilder: (context, index) {
+                                          final s = _suggestions[index];
+                                          return Padding(
+                                            padding: const EdgeInsets.only(bottom: 10.0),
+                                            child: Row(
+                                              children: [
+                                                Container(
+                                                  width: 32,
+                                                  height: 32,
+                                                  decoration: BoxDecoration(
+                                                    shape: BoxShape.circle,
+                                                    image: DecorationImage(image: NetworkImage(s["avatar"]!), fit: BoxFit.cover),
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 10),
+                                                Expanded(
+                                                  child: Column(
+                                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                                    children: [
+                                                      Text(
+                                                        s["name"]!,
+                                                        style: const TextStyle(color: Color(0xFF0F172A), fontSize: 11.5, fontWeight: FontWeight.bold),
+                                                      ),
+                                                      Text(
+                                                        "${s["title"]!} - ${s["sub"]!}",
+                                                        style: const TextStyle(color: Color(0xFF475569), fontSize: 9.5),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 6),
+                                                Text(
+                                                  s["match"]!,
+                                                  style: const TextStyle(color: Color(0xFF2563EB), fontSize: 11, fontWeight: FontWeight.bold),
+                                                ),
+                                                const SizedBox(width: 10),
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                                  decoration: BoxDecoration(
+                                                    color: const Color(0xFFF97316),
+                                                    borderRadius: BorderRadius.circular(6),
+                                                  ),
+                                                  child: const Text(
+                                                    "Conectar",
+                                                    style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          );
+                                        },
+                                      ),
+                                    ),
+
+                                    // Video Prep widgets
+                                    Container(
+                                      height: 70,
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFF1F5F9),
+                                        borderRadius: BorderRadius.circular(10),
+                                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Container(
+                                            width: 54,
+                                            height: 54,
+                                            decoration: BoxDecoration(
+                                              color: Colors.black26,
+                                              borderRadius: BorderRadius.circular(8),
+                                              image: const DecorationImage(
+                                                image: NetworkImage("https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=100&h=100&fit=crop"),
+                                                fit: BoxFit.cover,
+                                              ),
+                                            ),
+                                            child: const Icon(CupertinoIcons.play_fill, color: Colors.white, size: 16),
+                                          ),
+                                          const SizedBox(width: 10),
+                                          const Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              mainAxisAlignment: MainAxisAlignment.center,
+                                              children: [
+                                                Text(
+                                                  "Quantum Senior Engineering",
+                                                  style: TextStyle(color: Color(0xFF0F172A), fontSize: 10, fontWeight: FontWeight.bold),
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                                SizedBox(height: 3),
+                                                Text(
+                                                  "Learn more",
+                                                  style: TextStyle(color: Color(0xFFF97316), fontSize: 9, fontWeight: FontWeight.bold),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ],
                   ),
                 ),
               ],
             ),
           ),
-        Wrap(
-          spacing: 10,
-          runSpacing: 10,
-          children: displayCards.map((card) => SizedBox(
-            width: (MediaQuery.of(context).size.width - 42) / 2,
-            child: _MobileAlertCard(data: card),
-          )).toList(),
-        ),
-      ],
-    );
-  }
-
-  String _getInsightTip() {
-    return NotificationService.instance.getInsightTip(
-      _pitchesReceived, _totalMatches, _profileViews,
-    );
-  }
-
-  // ── Layout web — Cards Grid ────────────────────────────────────────────────
-  Widget _buildWeb(BuildContext context, List<Map<String, dynamic>> myNotifs, bool hasActivity, int unreadCount) {
-    // Convertir notificaciones reales a alert cards
-    final List<_AlertCardData> alertCards = myNotifs.map((n) {
-      final type = _parseType(n['type']?.toString() ?? 'like');
-      final isConnection = type == NotificationType.connection;
-      return _AlertCardData(
-        type: type,
-        title: n['body']?.toString() ?? n['title']?.toString() ?? '',
-        timeAgo: NotificationService.instance.timeAgo(n['created_at']),
-        isRead: n['is_read'] == true,
-        avatarUrl: n['avatar_url']?.toString(),
-        name: n['sender_name']?.toString(),
-        headline: n['sender_headline']?.toString(),
-        companyName: n['company_name']?.toString(),
-        onTap: () => _markAsRead(n),
-        onAccept: isConnection ? () => _handleAccept(n) : null,
-        onReject: isConnection ? () => _handleReject(n) : null,
-      );
-    }).toList();
-
-    // Si no hay notifs reales, mostrar demo cards
-    final showDemo = alertCards.isEmpty;
-    final displayCards = showDemo ? _demoAlertCards() : alertCards;
-
-    return WebPage(
-      title: 'Alertas',
-      subtitle: hasActivity
-          ? '$_profileViews vistas · $_totalMatches matches · $_pitchesReceived respuestas'
-          : 'Coincidencias, vistas de perfil y oportunidades',
-      actions: [
-        if (unreadCount > 0)
-          WebButton(label: 'Leer todas ($unreadCount)', filled: false, onTap: () => _markAllAsRead(myNotifs)),
-      ],
-      child: ListView(
-        physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.only(bottom: 40),
-        children: [
-          // ── Banner de visibilidad ──
-          if (_insightsLoaded && !hasActivity && !_bannerDismissed) _webVisibilityBanner(context),
-          // ── Smart Digests ──
-          ..._digests.map((d) => _webDigestCard(context, d)),
-          // ── Grid de Alert Cards ──
-          if (showDemo)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: MployaTheme.brandAccent.withValues(alpha: 0.10),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(CupertinoIcons.sparkles, size: 13, color: MployaTheme.brandAccent),
-                        const SizedBox(width: 5),
-                        Text('Vista previa', style: TextStyle(color: MployaTheme.brandAccent, fontSize: 12, fontWeight: FontWeight.w700)),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Text('Así se verán tus alertas cuando tengas actividad',
-                      style: TextStyle(color: context.textTertiary, fontSize: 13)),
-                ],
-              ),
-            ),
-          WebGrid(
-            children: displayCards.map((card) => _AlertCardWidget(data: card)).toList(),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -1763,5 +2263,460 @@ class _MobileAlertCard extends StatelessWidget {
       case _AlertKind.generic: return 'Ver';
     }
   }
+}
+
+// ── Models and Custom widgets for the Premium Presentation Layout ──
+
+class AlertCandidate {
+  final String name;
+  final String role;
+  final String location;
+  final String avatarUrl;
+  final String views;
+  final List<String> tags;
+  final List<double> radarValues;
+  final List<String> radarLabels;
+  final List<Map<String, String>> timeline;
+  final String matchPercentage;
+
+  const AlertCandidate({
+    required this.name,
+    required this.role,
+    required this.location,
+    required this.avatarUrl,
+    required this.views,
+    required this.tags,
+    required this.radarValues,
+    required this.radarLabels,
+    required this.timeline,
+    required this.matchPercentage,
+  });
+}
+
+final List<AlertCandidate> _alertCandidates = [
+  const AlertCandidate(
+    name: "Galo",
+    role: "Senior Engineering Lead",
+    location: "Match mator",
+    avatarUrl: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=120&h=120&fit=crop",
+    views: "10K",
+    tags: ["LATINAMCS", "SCALABLE SYSTEMS", "GLOBAL SCOPE"],
+    radarValues: [0.90, 0.85, 0.75, 0.80, 0.85],
+    radarLabels: ["System Design", "Coding", "Velocity", "Teamwork", "Security"],
+    timeline: [
+      {"year": "2015", "title": "Standing", "desc": "Started career at MercadoLibre leading core platform services."},
+      {"year": "2020", "title": "Experience", "desc": "Architected high-throughput infrastructure at Globant."},
+      {"year": "2025", "title": "Education", "desc": "Stanford MSc in Distributed Systems & AI Cloud architectures."},
+      {"year": "2026", "title": "Digestive Timeline", "desc": "Liderando plataforma de escala masiva en Mploya."},
+    ],
+    matchPercentage: "15",
+  ),
+  const AlertCandidate(
+    name: "mploya",
+    role: "Ingeniero de Software Senior",
+    location: "Buenos Aires, AR",
+    avatarUrl: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=120&h=120&fit=crop",
+    views: "1.2K",
+    tags: ["FLUTTER", "DART", "SUPABASE", "RIVERPOD"],
+    radarValues: [0.75, 0.95, 0.90, 0.80, 0.70],
+    radarLabels: ["Frontend", "Coding", "Velocity", "API Design", "Testing"],
+    timeline: [
+      {"year": "2018", "title": "Junior Dev", "desc": "Construcción de apps móviles nativas en Android."},
+      {"year": "2021", "title": "Flutter Dev", "desc": "Migración completa de plataformas a Flutter Web."},
+      {"year": "2025", "title": "Senior Lead", "desc": "Liderando la arquitectura móvil multiplataforma."},
+    ],
+    matchPercentage: "16",
+  ),
+  const AlertCandidate(
+    name: "Questica Resas",
+    role: "Senior Product Designer",
+    location: "San Pablo, BR",
+    avatarUrl: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=120&h=120&fit=crop",
+    views: "2.3K",
+    tags: ["FIGMA", "DESIGN SYSTEMS", "UX RESEARCH"],
+    radarValues: [0.95, 0.70, 0.85, 0.90, 0.95],
+    radarLabels: ["UX Research", "UI Craft", "Systems", "Product", "User Flow"],
+    timeline: [
+      {"year": "2017", "title": "UI Designer", "desc": "Creación de interfaces y micro-interacciones."},
+      {"year": "2022", "title": "Product Lead", "desc": "Rediseño completo del flujo B2B SaaS corporativo."},
+      {"year": "2026", "title": "UX Principal", "desc": "Estrategia de diseño global centrado en el usuario."},
+    ],
+    matchPercentage: "18",
+  ),
+  const AlertCandidate(
+    name: "Sulo",
+    role: "Senior Recruiter Lead",
+    location: "Bogotá, CO",
+    avatarUrl: "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=120&h=120&fit=crop",
+    views: "1.5K",
+    tags: ["TALENT ACQUISITION", "SOURCING", "LATAM TECH"],
+    radarValues: [0.60, 0.50, 0.85, 0.95, 0.80],
+    radarLabels: ["Sourcing", "Interviewing", "Velocity", "HR Tech", "Negotiation"],
+    timeline: [
+      {"year": "2016", "title": "HR Associate", "desc": "Reclutamiento de perfiles IT junior en LATAM."},
+      {"year": "2021", "title": "Talent Lead", "desc": "Escalabilidad de equipos de ingeniería de 50 a 200 devs."},
+      {"year": "2026", "title": "Director", "desc": "Estrategia integral de contratación y marca empleadora."},
+    ],
+    matchPercentage: "14",
+  ),
+];
+
+class RadarChartPainter extends CustomPainter {
+  final List<double> values;
+  final List<String> labels;
+
+  RadarChartPainter({required this.values, required this.labels});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.width / 2 * 0.7;
+    final int count = values.length;
+
+    final paintLine = Paint()
+      ..color = const Color(0xFFE2E8F0).withOpacity(0.3)
+      ..strokeWidth = 1
+      ..style = PaintingStyle.stroke;
+
+    final paintGrid = Paint()
+      ..color = const Color(0xFFCBD5E1).withOpacity(0.2)
+      ..strokeWidth = 0.5
+      ..style = PaintingStyle.stroke;
+
+    final paintFill = Paint()
+      ..color = const Color(0xFFF97316).withOpacity(0.25)
+      ..style = PaintingStyle.fill;
+
+    final paintBorder = Paint()
+      ..color = const Color(0xFFF97316)
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke;
+
+    // Concentric polygons
+    for (int step = 1; step <= 3; step++) {
+      final r = radius * (step / 3);
+      final path = Path();
+      for (int i = 0; i < count; i++) {
+        final angle = (i * 2 * pi / count) - pi / 2;
+        final pt = Offset(center.dx + r * cos(angle), center.dy + r * sin(angle));
+        if (i == 0) {
+          path.moveTo(pt.dx, pt.dy);
+        } else {
+          path.lineTo(pt.dx, pt.dy);
+        }
+      }
+      path.close();
+      canvas.drawPath(path, paintGrid);
+    }
+
+    // Axes
+    for (int i = 0; i < count; i++) {
+      final angle = (i * 2 * pi / count) - pi / 2;
+      final pt = Offset(center.dx + radius * cos(angle), center.dy + radius * sin(angle));
+      canvas.drawLine(center, pt, paintLine);
+
+      // Draw axis labels
+      if (labels.isNotEmpty && i < labels.length) {
+        final labelAngle = angle;
+        // Place labels slightly outside the radius
+        final labelPt = Offset(
+          center.dx + (radius + 12) * cos(labelAngle),
+          center.dy + (radius + 6) * sin(labelAngle),
+        );
+        final textPainter = TextPainter(
+          text: TextSpan(
+            text: labels[i],
+            style: const TextStyle(color: Color(0xFF64748B), fontSize: 7, fontWeight: FontWeight.bold),
+          ),
+          textDirection: TextDirection.ltr,
+        )..layout();
+        
+        textPainter.paint(
+          canvas,
+          Offset(labelPt.dx - textPainter.width / 2, labelPt.dy - textPainter.height / 2),
+        );
+      }
+    }
+
+    // Value shape
+    final pathValue = Path();
+    for (int i = 0; i < count; i++) {
+      final angle = (i * 2 * pi / count) - pi / 2;
+      final val = values[i].clamp(0.0, 1.0);
+      final pt = Offset(center.dx + radius * val * cos(angle), center.dy + radius * val * sin(angle));
+      if (i == 0) {
+        pathValue.moveTo(pt.dx, pt.dy);
+      } else {
+        pathValue.lineTo(pt.dx, pt.dy);
+      }
+    }
+    pathValue.close();
+    canvas.drawPath(pathValue, paintFill);
+    canvas.drawPath(pathValue, paintBorder);
+  }
+
+  @override
+  bool shouldRepaint(covariant RadarChartPainter oldDelegate) => true;
+}
+
+class QuantumNexusPainter extends CustomPainter {
+  final double animationValue;
+  QuantumNexusPainter({required this.animationValue});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width * 0.52, size.height * 0.48);
+    final paint = Paint()
+      ..color = const Color(0xFFFDBA74).withOpacity(0.25)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2;
+
+    // 1. Draw tilted orbits (ellipses)
+    canvas.save();
+    canvas.translate(center.dx, center.dy);
+    canvas.rotate(-0.12);
+    canvas.translate(-center.dx, -center.dy);
+    
+    final rect1 = Rect.fromCenter(center: center, width: size.width * 0.88, height: size.height * 0.72);
+    final rect2 = Rect.fromCenter(center: center, width: size.width * 0.65, height: size.height * 0.54);
+    final rect3 = Rect.fromCenter(center: center, width: size.width * 0.42, height: size.height * 0.35);
+    
+    canvas.drawOval(rect1, paint);
+    canvas.drawOval(rect2, paint..color = const Color(0xFF94A3B8).withOpacity(0.2));
+    canvas.drawOval(rect3, paint..color = const Color(0xFF94A3B8).withOpacity(0.15));
+    canvas.restore();
+
+    // 2. Define wider satellite positions
+    final satellitePositions = [
+      Offset(center.dx - 180, center.dy - 70), // Company 3
+      Offset(center.dx - 80, center.dy - 120), // Jobs
+      Offset(center.dx + 50, center.dy - 130), // Company 2
+      Offset(center.dx + 170, center.dy - 50), // Company
+      Offset(center.dx - 150, center.dy + 65), // Company
+      Offset(center.dx - 50, center.dy + 110), // Skills
+      Offset(center.dx + 80, center.dy + 100), // Staffs
+      Offset(center.dx + 180, center.dy + 50), // Senior Company
+    ];
+
+    // Connection curved lines
+    final linePaint = Paint()
+      ..color = const Color(0xFFF97316).withOpacity(0.22)
+      ..strokeWidth = 1.5
+      ..style = PaintingStyle.stroke;
+
+    for (var pos in satellitePositions) {
+      final path = Path();
+      path.moveTo(center.dx, center.dy);
+      final ctrlX = (center.dx + pos.dx) / 2 + 12 * sin(animationValue * 2 * pi);
+      final ctrlY = (center.dy + pos.dy) / 2 - 12 * cos(animationValue * 2 * pi);
+      path.quadraticBezierTo(ctrlX, ctrlY, pos.dx, pos.dy);
+      canvas.drawPath(path, linePaint);
+
+      // Moving particle along the connection line
+      final t = (animationValue + pos.hashCode % 10 / 10.0) % 1.0;
+      final dotX = (1 - t) * (1 - t) * center.dx + 2 * (1 - t) * t * ctrlX + t * t * pos.dx;
+      final dotY = (1 - t) * (1 - t) * center.dy + 2 * (1 - t) * t * ctrlY + t * t * pos.dy;
+      canvas.drawCircle(Offset(dotX, dotY), 3.0, Paint()..color = const Color(0xFFF97316));
+    }
+
+    // 3. Draw Center Node (Dark orange fill with text on light theme)
+    final centerGlow = Paint()
+      ..color = const Color(0xFFFFF7ED)
+      ..style = PaintingStyle.fill;
+    
+    final glowRadius = 42.0 + 3.0 * sin(animationValue * 2 * pi);
+    canvas.drawCircle(center, glowRadius, Paint()..color = const Color(0xFFF97316).withOpacity(0.2));
+    canvas.drawCircle(center, 37.0, Paint()..color = const Color(0xFFF97316));
+    canvas.drawCircle(center, 33.5, centerGlow);
+
+    final textPainter = TextPainter(
+      textDirection: TextDirection.ltr,
+      textAlign: TextAlign.center,
+    );
+    textPainter.text = const TextSpan(
+      children: [
+        TextSpan(
+          text: "QUANTUM\n",
+          style: TextStyle(color: Color(0xFF0F172A), fontSize: 8.5, fontWeight: FontWeight.bold, height: 1.1),
+        ),
+        TextSpan(
+          text: "NEXUS",
+          style: TextStyle(color: Color(0xFFC2410C), fontSize: 9.5, fontWeight: FontWeight.w900),
+        ),
+      ],
+    );
+    textPainter.layout();
+    textPainter.paint(canvas, Offset(center.dx - textPainter.width / 2, center.dy - textPainter.height / 2));
+
+    // 4. Draw satellite nodes
+    final nodeLabels = [
+      "COMPANY 3",
+      "JOBS",
+      "COMPANY 2",
+      "COMPANY",
+      "COMPANY",
+      "SKILLS",
+      "STAFFS",
+      "SENIOR COMPANY",
+    ];
+
+    for (int i = 0; i < satellitePositions.length; i++) {
+      final pos = satellitePositions[i];
+      final label = nodeLabels[i];
+
+      canvas.drawCircle(pos, 16.0, Paint()..color = const Color(0xFFF97316).withOpacity(0.12));
+      canvas.drawCircle(pos, 12.0, Paint()..color = const Color(0xFFCBD5E1));
+      canvas.drawCircle(pos, 10.5, centerGlow);
+
+      final iconPaint = Paint()
+        ..color = const Color(0xFFF97316)
+        ..strokeWidth = 1.2
+        ..style = PaintingStyle.stroke;
+      
+      if (label == "JOBS" || label == "SKILLS") {
+        canvas.drawCircle(pos, 3.0, iconPaint);
+      } else {
+        canvas.drawRect(Rect.fromCenter(center: pos, width: 6, height: 6), iconPaint);
+      }
+
+      final labelPainter = TextPainter(
+        text: TextSpan(
+          text: label,
+          style: const TextStyle(color: Color(0xFF334155), fontSize: 8.5, fontWeight: FontWeight.bold),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      labelPainter.paint(canvas, Offset(pos.dx - labelPainter.width / 2, pos.dy - 18));
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant QuantumNexusPainter oldDelegate) => true;
+}
+
+class TalentMobilityMapPainter extends CustomPainter {
+  final double animationValue;
+  TalentMobilityMapPainter({required this.animationValue});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    // Stylized South America Map
+    final path = Path();
+    path.moveTo(size.width * 0.28, size.height * 0.15);
+    path.quadraticBezierTo(size.width * 0.45, size.height * 0.08, size.width * 0.65, size.height * 0.12);
+    path.quadraticBezierTo(size.width * 0.90, size.height * 0.25, size.width * 0.75, size.height * 0.52);
+    path.quadraticBezierTo(size.width * 0.60, size.height * 0.78, size.width * 0.52, size.height * 0.86);
+    path.lineTo(size.width * 0.48, size.height * 0.96);
+    path.lineTo(size.width * 0.45, size.height * 0.96);
+    path.quadraticBezierTo(size.width * 0.35, size.height * 0.68, size.width * 0.26, size.height * 0.48);
+    path.quadraticBezierTo(size.width * 0.18, size.height * 0.26, size.width * 0.28, size.height * 0.15);
+    path.close();
+
+    final mapPaint = Paint()
+      ..color = const Color(0xFFE2E8F0)
+      ..style = PaintingStyle.fill;
+    canvas.drawPath(path, mapPaint);
+
+    final borderPaint = Paint()
+      ..color = const Color(0xFF94A3B8)
+      ..strokeWidth = 1.2
+      ..style = PaintingStyle.stroke;
+    canvas.drawPath(path, borderPaint);
+
+    // Active flight paths/flows to Santiago
+    final santiago = Offset(size.width * 0.38, size.height * 0.78);
+    final buenosAires = Offset(size.width * 0.52, size.height * 0.80);
+    final bogota = Offset(size.width * 0.32, size.height * 0.24);
+
+    final flowPaint = Paint()
+      ..color = const Color(0xFFF97316).withOpacity(0.65)
+      ..strokeWidth = 1.5
+      ..style = PaintingStyle.stroke;
+
+    void drawFlow(Offset from, Offset to) {
+      final flowPath = Path();
+      flowPath.moveTo(from.dx, from.dy);
+      final ctrlX = (from.dx + to.dx) / 2 - 15;
+      final ctrlY = (from.dy + to.dy) / 2 - 20;
+      flowPath.quadraticBezierTo(ctrlX, ctrlY, to.dx, to.dy);
+      canvas.drawPath(flowPath, flowPaint);
+
+      final t = (animationValue + from.hashCode % 10 / 10.0) % 1.0;
+      final dotX = (1 - t) * (1 - t) * from.dx + 2 * (1 - t) * t * ctrlX + t * t * to.dx;
+      final dotY = (1 - t) * (1 - t) * from.dy + 2 * (1 - t) * t * ctrlY + t * t * to.dy;
+      canvas.drawCircle(Offset(dotX, dotY), 2.5, Paint()..color = const Color(0xFFEF4444));
+    }
+
+    drawFlow(buenosAires, santiago);
+    drawFlow(bogota, santiago);
+
+    // Pin markers
+    canvas.drawCircle(santiago, 5.0, Paint()..color = const Color(0xFFEF4444));
+    canvas.drawCircle(santiago, 9.0, Paint()..color = const Color(0xFFEF4444).withOpacity(0.35)..style = PaintingStyle.stroke..strokeWidth = 1.8);
+    
+    canvas.drawCircle(buenosAires, 4.0, Paint()..color = const Color(0xFF64748B));
+    canvas.drawCircle(bogota, 4.0, Paint()..color = const Color(0xFF64748B));
+  }
+
+  @override
+  bool shouldRepaint(covariant TalentMobilityMapPainter oldDelegate) => true;
+}
+
+class GlobalImpactScorePainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.width * 0.35;
+
+    final bgPaint = Paint()
+      ..color = const Color(0xFFCBD5E1)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.0;
+    
+    canvas.drawCircle(center, radius, bgPaint);
+    canvas.drawCircle(center, radius * 0.66, bgPaint);
+    canvas.drawCircle(center, radius * 0.33, bgPaint);
+
+    // Cross axes
+    canvas.drawLine(Offset(center.dx - radius, center.dy), Offset(center.dx + radius, center.dy), bgPaint);
+    canvas.drawLine(Offset(center.dx, center.dy - radius), Offset(center.dx, center.dy + radius), bgPaint);
+
+    // Blue Polygon (Flow Reach)
+    final bluePoints = [
+      Offset(center.dx, center.dy - radius * 0.75), // Top
+      Offset(center.dx + radius * 0.4, center.dy), // Right
+      Offset(center.dx, center.dy + radius * 0.55), // Bottom
+      Offset(center.dx - radius * 0.65, center.dy), // Left
+    ];
+
+    // Orange Polygon (Career Reach)
+    final orangePoints = [
+      Offset(center.dx, center.dy - radius * 0.45), // Top
+      Offset(center.dx + radius * 0.8, center.dy), // Right
+      Offset(center.dx, center.dy + radius * 0.7), // Bottom
+      Offset(center.dx - radius * 0.35, center.dy), // Left
+    ];
+
+    void drawPolygon(List<Offset> points, Color color) {
+      final path = Path()..moveTo(points[0].dx, points[0].dy);
+      for (int i = 1; i < points.length; i++) {
+        path.lineTo(points[i].dx, points[i].dy);
+      }
+      path.close();
+
+      canvas.drawPath(path, Paint()..color = color.withOpacity(0.22)..style = PaintingStyle.fill);
+      canvas.drawPath(path, Paint()..color = color..strokeWidth = 2.0..style = PaintingStyle.stroke);
+      
+      for (var pt in points) {
+        canvas.drawCircle(pt, 3.5, Paint()..color = color);
+      }
+    }
+
+    drawPolygon(bluePoints, const Color(0xFF2563EB));
+    drawPolygon(orangePoints, const Color(0xFFF97316));
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 

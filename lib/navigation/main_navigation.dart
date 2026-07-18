@@ -557,12 +557,12 @@ class _WebLayout extends StatelessWidget {
                 child: IndexedStack(
                   index: currentIndex,
                   children: [
-                    // Feed (0): ancho completo. El propio feed se centra a
-                    // 430px sobre fondo negro (estilo TikTok web).
                     screens[0],
-                    // Resto: área web ancha y centrada (no columna mobile).
+                    // Resto: área web ancha y centrada, a menos que sea ExploreScreen (mapa full-bleed).
                     for (int i = 1; i < screens.length; i++)
-                      _WebContentArea(child: screens[i]),
+                      screens[i] is ExploreScreen
+                          ? screens[i]
+                          : _WebContentArea(child: screens[i]),
                   ],
                 ),
               ),

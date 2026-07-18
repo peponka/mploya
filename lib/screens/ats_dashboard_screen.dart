@@ -8,6 +8,7 @@ import '../widgets/web_ui.dart';
 import '../services/ai_interview_service.dart';
 import 'interview_flow_screen.dart';
 import 'interview_report_screen.dart';
+import 'premium_paywall_screen.dart';
 
 // ═══════════════════════════════════════════════════════════════
 // DEMO DATA
@@ -40,6 +41,7 @@ class AtsDashboardScreen extends StatefulWidget {
 class _AtsDashboardScreenState extends State<AtsDashboardScreen> {
   int _tabIdx = 0; // 0=Pendientes, 1=Contactos, 2=Confidencial
   int _mobilePitchIdx = 0;
+  bool _confidencialUnlocked = false;
   final _tabs = ['Pendientes', 'Contactos', 'Confidencial'];
 
   @override
@@ -311,68 +313,367 @@ class _AtsDashboardScreenState extends State<AtsDashboardScreen> {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       const Text('Contactos', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Color(0xFF1E293B))),
       const SizedBox(height: 12),
-      Wrap(spacing: 12, runSpacing: 12, children: _demoCandidates.take(3).map((c) => _contactCard(c)).toList()),
+      Wrap(
+        spacing: 12,
+        runSpacing: 12,
+        children: _demoCandidates.map((c) => _contactCard(c)).toList(),
+      ),
     ]);
   }
 
   Widget _contactCard(_C c) {
     return Container(
-      width: 240, padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 3))],
-        border: Border.all(color: const Color(0xFFF1F5F9))),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          ClipOval(child: CachedNetworkImage(imageUrl: c.photo, width: 40, height: 40, fit: BoxFit.cover,
-            placeholder: (_, __) => Container(width: 40, height: 40, color: Colors.grey.shade200),
-            errorWidget: (_, __, ___) => Container(width: 40, height: 40, color: Colors.grey.shade300))),
-          const SizedBox(width: 10),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(c.name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF1E293B))),
-            Text(c.role, style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
-          ])),
-          const Icon(CupertinoIcons.ellipsis, size: 16, color: Color(0xFF94A3B8)),
-        ]),
-        const SizedBox(height: 10),
-        const Text('Rich profile with detailed experience summary, detailed professional summary...', maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
-        const SizedBox(height: 8),
-        Row(children: [
-          const Text('Matching History', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF1E293B))),
-          const Spacer(),
-          Text('Estado: Entrevista', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: const Color(0xFF10B981))),
-        ]),
-        const SizedBox(height: 8),
-        Container(
-          width: double.infinity, padding: const EdgeInsets.symmetric(vertical: 8),
-          decoration: BoxDecoration(color: const Color(0xFF1E293B), borderRadius: BorderRadius.circular(8)),
-          child: const Center(child: Text('Schedule Interview', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700))),
-        ),
-      ]),
+      width: 330,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          )
+        ],
+        border: Border.all(color: const Color(0xFFF1F5F9)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              ClipOval(
+                child: CachedNetworkImage(
+                  imageUrl: c.photo,
+                  width: 54,
+                  height: 54,
+                  fit: BoxFit.cover,
+                  placeholder: (_, __) => Container(width: 54, height: 54, color: Colors.grey.shade200),
+                  errorWidget: (_, __, ___) => Container(width: 54, height: 54, color: Colors.grey.shade300),
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      c.name,
+                      style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: Color(0xFF1E293B)),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      c.role,
+                      style: const TextStyle(fontSize: 13, color: Color(0xFF64748B), fontWeight: FontWeight.w500),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(CupertinoIcons.ellipsis, size: 20, color: Color(0xFF94A3B8)),
+            ],
+          ),
+          const SizedBox(height: 14),
+          // Skills
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: c.skills.map((s) => Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(8)),
+              child: Text(s, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF64748B))),
+            )).toList(),
+          ),
+          const SizedBox(height: 14),
+          const Text(
+            'Perfil completo con historial detallado de experiencia y evaluación de habilidades técnicas.',
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: 12, color: Color(0xFF64748B), height: 1.3),
+          ),
+          const SizedBox(height: 16),
+          Divider(height: 1, color: const Color(0xFFF1F5F9)),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              const Text(
+                'Coincidencia General',
+                style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Color(0xFF1E293B)),
+              ),
+              const Spacer(),
+              Text(
+                '${c.match}%',
+                style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: Color(0xFF10B981)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          // Buttons
+          CupertinoButton(
+            padding: EdgeInsets.zero,
+            onPressed: () {},
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1E293B),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Center(
+                child: Text(
+                  'Schedule Interview',
+                  style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w700),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          CupertinoButton(
+            padding: EdgeInsets.zero,
+            onPressed: () => _handleIAInterview(context),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFF7C3AED).withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Center(
+                child: Text(
+                  'Entrevista IA ✨',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF7C3AED),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
   // ── Confidencial tab ──
   Widget _confidencialWeb(BuildContext context) {
-    return Center(child: Container(
-      width: 400, padding: const EdgeInsets.all(32),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 16)]),
-      child: Column(children: [
-        Container(width: 64, height: 64,
-          decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(16)),
-          child: const Icon(CupertinoIcons.lock_shield_fill, size: 28, color: Color(0xFF64748B))),
-        const SizedBox(height: 16),
-        const Text('Private database access', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Color(0xFF1E293B))),
-        const SizedBox(height: 6),
-        const Text('Private database access to access your permissions.', textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: Color(0xFF94A3B8))),
-        const SizedBox(height: 20),
-        Container(
-          width: double.infinity, padding: const EdgeInsets.symmetric(vertical: 12),
-          decoration: BoxDecoration(gradient: const LinearGradient(colors: [Color(0xFFF97316), Color(0xFFE2860B)]), borderRadius: BorderRadius.circular(12)),
-          child: const Center(child: Text('Desbloquear acceso', style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700))),
+    if (!_confidencialUnlocked) {
+      return Center(
+        child: Container(
+          width: 400,
+          padding: const EdgeInsets.all(32),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 16,
+              ),
+            ],
+          ),
+          child: Column(
+            children: [
+              Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(16)),
+                child: const Icon(CupertinoIcons.lock_shield_fill, size: 28, color: Color(0xFF64748B)),
+              ),
+              const SizedBox(height: 16),
+              const Text('Private database access', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Color(0xFF1E293B))),
+              const SizedBox(height: 6),
+              const Text('Private database access to access your permissions.', textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: Color(0xFF94A3B8))),
+              const SizedBox(height: 20),
+              CupertinoButton(
+                padding: EdgeInsets.zero,
+                onPressed: () {
+                  Navigator.of(context).push(
+                    CupertinoPageRoute(builder: (_) => const PremiumPaywallScreen()),
+                  ).then((_) {
+                    setState(() => _confidencialUnlocked = true);
+                  });
+                },
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  decoration: BoxDecoration(gradient: const LinearGradient(colors: [Color(0xFFF97316), Color(0xFFE2860B)]), borderRadius: BorderRadius.circular(12)),
+                  child: const Center(child: Text('Desbloquear acceso', style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700))),
+                ),
+              ),
+            ],
+          ),
         ),
-      ]),
-    ));
+      );
+    }
+
+    // Unlocked view: show the confidential candidates!
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Candidatos Confidenciales',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Color(0xFF1E293B)),
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: List.generate(_demoCandidates.length, (index) {
+            final c = _demoCandidates[index];
+            return _confidencialCandidateCard(c, index);
+          }),
+        ),
+      ],
+    );
+  }
+
+  Widget _confidencialCandidateCard(_C c, int index) {
+    final confidentialId = 100 + index * 17;
+    return Container(
+      width: 330,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          )
+        ],
+        border: Border.all(color: const Color(0xFFF1F5F9)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              // Blurred or lock avatar
+              Container(
+                width: 54,
+                height: 54,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF1F5F9),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                child: const Icon(CupertinoIcons.eye_slash_fill, size: 22, color: Color(0xFF94A3B8)),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Talento Confidencial #$confidentialId',
+                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Color(0xFF1E293B)),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      c.role,
+                      style: const TextStyle(fontSize: 13, color: Color(0xFF94A3B8), fontWeight: FontWeight.w500),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF64748B).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(CupertinoIcons.lock_fill, size: 10, color: Color(0xFF64748B)),
+                    SizedBox(width: 4),
+                    Text('Premium', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF64748B))),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          // Skills
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: c.skills.map((s) => Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(8)),
+              child: Text(s, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF64748B))),
+            )).toList(),
+          ),
+          const SizedBox(height: 14),
+          const Text(
+            'Este candidato prefiere mantener su perfil en modo confidencial. Revisa su video pitch o solicita contacto directo.',
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: 12, color: Color(0xFF64748B), height: 1.3),
+          ),
+          const SizedBox(height: 16),
+          Divider(height: 1, color: const Color(0xFFF1F5F9)),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              const Text(
+                'Coincidencia por IA',
+                style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Color(0xFF1E293B)),
+              ),
+              const Spacer(),
+              Text(
+                '${c.match}%',
+                style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: Color(0xFF7C3AED)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          // Buttons
+          CupertinoButton(
+            padding: EdgeInsets.zero,
+            onPressed: () {},
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(colors: [Color(0xFFF97316), Color(0xFFE2860B)]),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Center(
+                child: Text(
+                  'Solicitar Identidad (Match)',
+                  style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w700),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          CupertinoButton(
+            padding: EdgeInsets.zero,
+            onPressed: () => _handleIAInterview(context),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFF7C3AED).withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Center(
+                child: Text(
+                  'Entrevista IA ✨',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF7C3AED),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   // ═══════════════════════════════════════════════════════════════
