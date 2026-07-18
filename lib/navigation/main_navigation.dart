@@ -217,6 +217,23 @@ class _MainNavigationState extends State<MainNavigation> {
         pendingConnections: _pendingConnections,
         unreadMessages: _unreadMessages,
         accountType: _accountType,
+        onToggleRole: () async {
+          final newType = _accountType == 'empresa' ? 'candidato' : 'empresa';
+          setState(() {
+            _accountType = newType;
+          });
+          try {
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setString('mploya_account_type', newType);
+            final uid = Supabase.instance.client.auth.currentUser?.id;
+            if (uid != null) {
+              await Supabase.instance.client
+                  .from('users')
+                  .update({'account_type': newType})
+                  .eq('id', uid);
+            }
+          } catch (_) {}
+        },
       );
     }
 
@@ -270,6 +287,7 @@ class _WebLayout extends StatelessWidget {
   final int pendingConnections;
   final int unreadMessages;
   final String accountType;
+  final VoidCallback onToggleRole;
 
   const _WebLayout({
     required this.currentIndex,
@@ -279,6 +297,7 @@ class _WebLayout extends StatelessWidget {
     required this.pendingConnections,
     required this.unreadMessages,
     required this.accountType,
+    required this.onToggleRole,
   });
 
   @override
@@ -491,6 +510,29 @@ class _WebLayout extends StatelessWidget {
                       ),
                     ),
                   ],
+                ),
+              ),
+              // Dev Role Toggle Button
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: CupertinoButton(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  color: const Color(0xFF7C3AED),
+                  borderRadius: BorderRadius.circular(8),
+                  onPressed: onToggleRole,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(CupertinoIcons.arrow_2_circlepath, size: 14, color: Colors.white),
+                      if (isExpanded) ...[
+                        const SizedBox(width: 8),
+                        Text(
+                          'Rol: ${accountType.toUpperCase()}',
+                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white),
+                        ),
+                      ],
+                    ],
+                  ),
                 ),
               ),
               // Bottom separator

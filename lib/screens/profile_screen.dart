@@ -1,4 +1,6 @@
 import 'dart:math' as math;
+import 'package:fl_chart/fl_chart.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
 // Material widgets (SliverAppBar, Colors, Icons) have no Cupertino equivalent
 import 'package:flutter/material.dart';
@@ -269,136 +271,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildScaffold(BuildContext context, NexUser profile, bool isOwnProfile) {
-    // En web, el perfil se centra en una columna cómoda (~720px) en vez de
-    // estirarse a todo el ancho como un celular gigante.
     final wide = MediaQuery.of(context).size.width > 900;
-    final sheet = context.isDark ? NexTheme.darkBg : CupertinoColors.white;
-    final bg = context.isDark ? NexTheme.darkBg : const Color(0xFFF1F1F4);
-    const physics = BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics());
-
-    // Barra de acciones (compartir / ajustes).
-    final navSliver = SliverToBoxAdapter(
-      child: Container(
-        color: sheet,
-        padding: EdgeInsets.only(top: wide ? 10 : MediaQuery.of(context).padding.top + 8, bottom: 4),
-        child: Row(
-          children: [
-            if (!isOwnProfile)
-              CupertinoButton(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                minimumSize: Size.zero,
-                onPressed: () => Navigator.of(context).pop(),
-                child: Icon(CupertinoIcons.back, size: 22, color: context.textPrimary),
-              )
-            else
-              const SizedBox(width: 16),
-            const Spacer(),
-            CupertinoButton(
-              padding: EdgeInsets.zero,
-              minimumSize: Size.zero,
-              onPressed: () => ShareService.instance.shareProfile(
-                name: profile.name,
-                headline: profile.headline,
-                userId: profile.id,
-                accountType: profile.accountType,
-              ),
-              child: Icon(CupertinoIcons.square_arrow_up, size: 20, color: context.textPrimary),
-            ),
-            const SizedBox(width: 16),
-            CupertinoButton(
-              padding: EdgeInsets.zero,
-              minimumSize: Size.zero,
-              onPressed: () => _showSettingsSheet(context, profile),
-              child: Icon(CupertinoIcons.ellipsis, size: 22, color: context.textPrimary),
-            ),
-            const SizedBox(width: 16),
-          ],
-        ),
-      ),
-    );
-
-    // Columna izquierda: identidad (avatar, nombre, badges, botones, stats).
-    final leftSlivers = <Widget>[
-      _buildProfileHeader(context, profile, isOwnProfile),
-      _buildNameSection(context, profile, isOwnProfile),
-    ];
-
-    // Columna derecha: progreso, herramientas, tabs y contenido.
-    final rightSlivers = <Widget>[
-      if (isOwnProfile)
-        SliverToBoxAdapter(
-          child: Container(
-            color: sheet,
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-            child: MployaProgressCard(profile: profile, onTap: () => _openEditProfile(context, profile)),
-          ),
-        ),
-      if (isOwnProfile && profile.accountType != 'empresa' && profile.accountType != 'headhunter')
-        SliverToBoxAdapter(
-          child: Container(
-            color: sheet,
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-            child: ConfidentialModeCard(profile: profile),
-          ),
-        ),
-      if (isOwnProfile && (profile.accountType == 'empresa' || profile.accountType == 'headhunter'))
-        SliverToBoxAdapter(child: _buildCompanyQuickTools(context)),
-      if (isOwnProfile) SliverToBoxAdapter(child: _buildToolsEntry(context, profile)),
-      if (isOwnProfile)
-        SliverToBoxAdapter(
-          child: Container(
-            color: sheet,
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-            child: Container(
-              padding: const EdgeInsets.all(4),
-              decoration: BoxDecoration(
-                color: context.isDark ? NexTheme.darkSurface : const Color(0xFFF2F2F7),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                children: [
-                  _SegTab(label: 'Sobre mí', isSelected: _selectedProfileTab == 0, onTap: () => setState(() => _selectedProfileTab = 0)),
-                  _SegTab(label: 'Portfolio', isSelected: _selectedProfileTab == 1, onTap: () => setState(() => _selectedProfileTab = 1)),
-                ],
-              ),
-            ),
-          ),
-        ),
-      if (!isOwnProfile || _selectedProfileTab == 0) ...[
-        SliverToBoxAdapter(child: _buildVideoPitchSection(context, profile)),
-        SliverToBoxAdapter(
-          child: ProfilePersonalitySection(userId: profile.id, isOwnProfile: isOwnProfile, headline: profile.headline, skills: profile.skills),
-        ),
-        if (profile.experience.isNotEmpty)
-          SliverToBoxAdapter(child: _buildExperienceClean(context, profile, isOwnProfile)),
-        SliverToBoxAdapter(child: _buildSkillsClean(context, profile, isOwnProfile)),
-      ],
-      if (!isOwnProfile || _selectedProfileTab == 1) ...[
-        SliverToBoxAdapter(child: PortfolioSection(userId: profile.id, isOwnProfile: isOwnProfile)),
-        SliverToBoxAdapter(child: _buildVideoReplies(context, profile, isOwnProfile)),
-        SliverToBoxAdapter(child: EmployerRatingSection(companyId: profile.id, companyAccountType: profile.accountType, isOwnProfile: isOwnProfile)),
-        SliverToBoxAdapter(child: SkillBadgesSection(userId: profile.id, isOwnProfile: isOwnProfile)),
-      ],
-    ];
-
-    Widget sheetColumn({required List<Widget> slivers, EdgeInsets? margin, double? width, bool shrink = false}) {
-      return Container(
-        width: width,
-        margin: margin,
-        decoration: BoxDecoration(
-          color: sheet,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: const Color(0x0F000000), width: 0.5),
-          boxShadow: const [BoxShadow(color: Color(0x0A000000), blurRadius: 18, offset: Offset(0, 6))],
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: CustomScrollView(
-          shrinkWrap: shrink,
-          physics: shrink ? const NeverScrollableScrollPhysics() : physics,
-          slivers: slivers,
-        ),
-      );
-    }
+    final bg = context.isDark ? NexTheme.darkBg : const Color(0xFFF5F7FA);
 
     // ── Web: Premium Cards Grid ──
     if (wide) {
@@ -409,53 +283,62 @@ class _ProfileScreenState extends State<ProfileScreen> {
             padding: const EdgeInsets.all(20),
             child: Center(
               child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 1140),
+                constraints: const BoxConstraints(maxWidth: 1200),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // ── Top bar ──
+                    _buildWebTopBar(context, profile, isOwnProfile),
+                    const SizedBox(height: 20),
                     Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        if (profile.isPremium || profile.isVerified)
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-                            decoration: BoxDecoration(
-                              color: MployaTheme.brandAccent,
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: const Text('Premium', style: TextStyle(color: CupertinoColors.white, fontSize: 12, fontWeight: FontWeight.w800)),
+                        // Column 1 (Left): Profile Card, Video Pitch, Project Showcase
+                        Expanded(
+                          flex: 4,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildWebProfileCard(context, profile, isOwnProfile),
+                              const SizedBox(height: 16),
+                              _buildWebVideoPitchCard(context, profile, isOwnProfile),
+                              const SizedBox(height: 16),
+                              _buildWebProjectShowcases(context, profile),
+                            ],
                           ),
-                        const Spacer(),
-                        CupertinoButton(
-                          padding: EdgeInsets.zero,
-                          minimumSize: Size.zero,
-                          onPressed: () => ShareService.instance.shareProfile(
-                            name: profile.name, headline: profile.headline,
-                            userId: profile.id, accountType: profile.accountType,
-                          ),
-                          child: Icon(CupertinoIcons.square_arrow_up, size: 20, color: context.textSecondary),
                         ),
-                        const SizedBox(width: 12),
-                        CupertinoButton(
-                          padding: EdgeInsets.zero,
-                          minimumSize: Size.zero,
-                          onPressed: () => _showSettingsSheet(context, profile),
-                          child: Icon(CupertinoIcons.ellipsis, size: 22, color: context.textSecondary),
+                        const SizedBox(width: 16),
+                        // Column 2 (Middle): Core Stats, Advanced Analytics, Certifications & Awards
+                        Expanded(
+                          flex: 4,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildWebCoreStats(context, profile),
+                              const SizedBox(height: 16),
+                              _buildWebAdvancedAnalytics(context, profile),
+                              const SizedBox(height: 16),
+                              _buildWebCertifications(context),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        // Column 3 (Right): My Company, Skills Compatibility, Recommendations
+                        Expanded(
+                          flex: 4,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildWebMyCompany(context, profile),
+                              const SizedBox(height: 16),
+                              _buildWebSkillsCompatibility(context, profile, isOwnProfile),
+                              const SizedBox(height: 16),
+                              _buildWebRecommendations(context),
+                            ],
+                          ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 16),
-                    // ── Row 1: Perfil + Empresa/Info + Acciones ──
-                    _buildWebRow1(context, profile, isOwnProfile),
-                    const SizedBox(height: 16),
-                    // ── Row 2: Video-Pitch + Skills + Info Mercado ──
-                    _buildWebRow2(context, profile, isOwnProfile),
-                    const SizedBox(height: 16),
-                    // ── Row 3: Herramientas ──
-                    if (isOwnProfile) _buildWebToolsCard(context, profile),
-                    const SizedBox(height: 16),
-                    // ── Tabs y contenido extra ──
-                    if (isOwnProfile) _buildWebTabsSection(context, profile),
                     const SizedBox(height: 40),
                   ],
                 ),
@@ -466,17 +349,140 @@ class _ProfileScreenState extends State<ProfileScreen> {
       );
     }
 
-    // ── Móvil: una sola columna ──
+    // ── Móvil: una sola columna con tarjetas completamente visibles y apiladas ──
     return CupertinoPageScaffold(
-      backgroundColor: sheet,
-      child: CustomScrollView(
-        physics: physics,
-        slivers: [
-          navSliver,
-          ...leftSlivers,
-          ...rightSlivers,
-          const SliverToBoxAdapter(child: SizedBox(height: 140)),
-        ],
+      backgroundColor: const Color(0xFFF8FAFC),
+      child: SafeArea(
+        child: SingleChildScrollView(
+          child: Column(
+            children: [
+              // Nav / Actions Bar
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                child: Row(
+                  children: [
+                    if (!isOwnProfile)
+                      CupertinoButton(
+                        padding: EdgeInsets.zero,
+                        onPressed: () => Navigator.of(context).pop(),
+                        child: const Icon(CupertinoIcons.chevron_back, size: 24, color: Color(0xFF0F172A)),
+                      ),
+                    const Spacer(),
+                    CupertinoButton(
+                      padding: EdgeInsets.zero,
+                      onPressed: () => ShareService.instance.shareProfile(
+                        name: profile.name, headline: profile.headline,
+                        userId: profile.id, accountType: profile.accountType,
+                      ),
+                      child: const Icon(CupertinoIcons.square_arrow_up, size: 22, color: Color(0xFF0F172A)),
+                    ),
+                    const SizedBox(width: 14),
+                    CupertinoButton(
+                      padding: EdgeInsets.zero,
+                      onPressed: () => _showSettingsSheet(context, profile),
+                      child: const Icon(CupertinoIcons.ellipsis, size: 22, color: Color(0xFF0F172A)),
+                    ),
+                  ],
+                ),
+              ),
+              // Header candidate info
+              _buildMobileHeader(context, profile, isOwnProfile),
+              const SizedBox(height: 12),
+              // Padding wrapper for mobile list
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Column(
+                  children: [
+                    _PremiumCard(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('Core Stats', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF0F172A))),
+                                  Text('Performance trend', style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
+                                ],
+                              ),
+                              Icon(CupertinoIcons.chevron_up, size: 16, color: Color(0xFF94A3B8)),
+                            ],
+                          ),
+                          const SizedBox(height: 14),
+                          _buildCoreStatsContent(context, profile),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    _PremiumCard(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text('Skills Compatibility', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF0F172A))),
+                              Icon(CupertinoIcons.chevron_up, size: 16, color: Color(0xFF94A3B8)),
+                            ],
+                          ),
+                          const SizedBox(height: 14),
+                          _buildSkillsCompatibilityContent(context, profile, isOwnProfile),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    _PremiumCard(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Certifications & Awards', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF0F172A))),
+                          const SizedBox(height: 14),
+                          _buildCertificationsContent(context),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    _PremiumCard(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Recommendations', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF0F172A))),
+                          const SizedBox(height: 14),
+                          _buildRecommendationsContent(context),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    _PremiumCard(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Video Pitch', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF0F172A))),
+                          const SizedBox(height: 14),
+                          _buildVideoPitchContent(context, profile, isOwnProfile),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    _PremiumCard(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Project Showcases', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF0F172A))),
+                          const SizedBox(height: 14),
+                          _buildProjectShowcasesContent(context, profile),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 140),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -485,456 +491,404 @@ class _ProfileScreenState extends State<ProfileScreen> {
   // WEB PREMIUM CARDS
   // ═══════════════════════════════════════════════════════════════════════════
 
-  Widget _buildWebRow1(BuildContext context, NexUser profile, bool isOwnProfile) {
+  Widget _buildWebTopBar(BuildContext context, NexUser profile, bool isOwnProfile) {
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // ── Card 1: Perfil ──
-        Expanded(child: _buildWebProfileCard(context, profile, isOwnProfile)),
-        const SizedBox(width: 16),
-        // ── Card 2: Empresa o Sobre mí ──
-        Expanded(child: _buildWebCompanyCard(context, profile, isOwnProfile)),
-        const SizedBox(width: 16),
-        // ── Card 3: Acciones rápidas ──
-        Expanded(child: _buildWebActionsCard(context, profile, isOwnProfile)),
+        if (profile.isPremium || profile.isVerified)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(colors: [Color(0xFFF97316), Color(0xFFEA580C)]),
+              borderRadius: BorderRadius.circular(999),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFFF97316).withValues(alpha: 0.25),
+                  blurRadius: 8,
+                  offset: const Offset(0, 3),
+                ),
+              ],
+            ),
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(CupertinoIcons.checkmark_seal_fill, size: 13, color: Colors.white),
+                SizedBox(width: 5),
+                Text('Premium', style: TextStyle(color: CupertinoColors.white, fontSize: 11, fontWeight: FontWeight.w900)),
+              ],
+            ),
+          ),
+        const Spacer(),
+        CupertinoButton(
+          padding: EdgeInsets.zero,
+          minimumSize: Size.zero,
+          onPressed: () => ShareService.instance.shareProfile(
+            name: profile.name, headline: profile.headline,
+            userId: profile.id, accountType: profile.accountType,
+          ),
+          child: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              shape: BoxShape.circle,
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+            ),
+            child: const Icon(CupertinoIcons.square_arrow_up, size: 18, color: CupertinoColors.systemGrey),
+          ),
+        ),
+        const SizedBox(width: 8),
+        CupertinoButton(
+          padding: EdgeInsets.zero,
+          minimumSize: Size.zero,
+          onPressed: () => _showSettingsSheet(context, profile),
+          child: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              shape: BoxShape.circle,
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+            ),
+            child: const Icon(CupertinoIcons.ellipsis, size: 18, color: CupertinoColors.systemGrey),
+          ),
+        ),
       ],
     );
   }
 
   Widget _buildWebProfileCard(BuildContext context, NexUser profile, bool isOwnProfile) {
-    return WebCard(
-      child: Column(
+    return _PremiumCard(
+      child: Stack(
         children: [
-          // Foto
-          GestureDetector(
-            onTap: isOwnProfile ? () => _pickAndUploadAvatar(profile) : null,
-            child: Stack(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: const BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: CupertinoColors.white,
-                    boxShadow: [BoxShadow(color: Color(0x22000000), blurRadius: 16, offset: Offset(0, 6))],
-                  ),
-                  child: NexAvatar(user: profile, size: 90, showBadge: true),
-                ),
-                if (isOwnProfile)
-                  Positioned(
-                    bottom: 2, right: 2,
-                    child: Container(
-                      width: 28, height: 28,
-                      decoration: BoxDecoration(
-                        color: CupertinoColors.white, shape: BoxShape.circle,
-                        border: Border.all(color: const Color(0x14000000)),
-                      ),
-                      child: const Icon(CupertinoIcons.camera_fill, color: MployaTheme.brandAccent, size: 13),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 14),
-          // Nombre + Headline
-          Text(profile.name, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: context.textPrimary, letterSpacing: -0.3), textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis),
-          const SizedBox(height: 3),
-          if (profile.isPremium || profile.isVerified)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 6),
-              child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                const Icon(CupertinoIcons.checkmark_seal_fill, size: 14, color: MployaTheme.brandAccent),
-                const SizedBox(width: 4),
-                Text('Premium', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: MployaTheme.brandAccent)),
-              ]),
-            ),
-          Text(profile.headline, style: TextStyle(fontSize: 13, color: context.textSecondary, height: 1.3), textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis),
-          const SizedBox(height: 18),
-          // Stats
-          Row(
-            children: [
-              Expanded(child: _webStatCard(context, '${profile.connections}', 'Conexiones')),
-              const SizedBox(width: 8),
-              Expanded(child: _webStatCard(context, '${profile.profileViews}', 'Vistas de Perfil\n(Premium)')),
-              const SizedBox(width: 8),
-              Expanded(child: _webStatCard(context, '${profile.matchPercentage.round()}', 'Matches')),
-            ],
-          ),
-          const SizedBox(height: 16),
-          // Botones
-          if (isOwnProfile)
-            Row(
-              children: [
-                Expanded(
-                  child: _webActionBtn(context, CupertinoIcons.pencil, 'Editar perfil', () => _openEditProfile(context, profile)),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _webActionBtn(context, CupertinoIcons.sparkles, 'Bio con IA', () => showGenerarBioSheet(context, profile), color: MployaTheme.aiAccent),
-                ),
-              ],
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _webStatCard(BuildContext context, String value, String label) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 10),
-      decoration: BoxDecoration(
-        color: context.isDark ? NexTheme.darkSurface : const Color(0xFFF7F7F8),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        children: [
-          Text(value, style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: context.textPrimary)),
-          const SizedBox(height: 2),
-          Text(label, style: TextStyle(fontSize: 10.5, color: context.textTertiary, height: 1.3), textAlign: TextAlign.center),
-        ],
-      ),
-    );
-  }
-
-  Widget _webActionBtn(BuildContext context, IconData icon, String label, VoidCallback onTap, {Color? color}) {
-    final c = color ?? MployaTheme.brandAccent;
-    return CupertinoButton(
-      padding: EdgeInsets.zero,
-      minimumSize: Size.zero,
-      onPressed: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 9),
-        decoration: BoxDecoration(
-          color: c.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: c.withValues(alpha: 0.2)),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 14, color: c),
-            const SizedBox(width: 5),
-            Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: c)),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildWebCompanyCard(BuildContext context, NexUser profile, bool isOwnProfile) {
-    final isCompany = profile.accountType == 'empresa' || profile.accountType == 'headhunter';
-    final companyName = profile.company ?? 'Mi Empresa';
-    final initial = companyName.isNotEmpty ? companyName[0].toUpperCase() : 'M';
-    return WebCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Logo
-          Center(
+          Positioned(
+            top: 0, right: 0,
             child: Container(
-              width: 70, height: 70,
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(
-                color: MployaTheme.brandAccent.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(18),
+                color: const Color(0xFFFEF3C7),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: const Color(0xFFFDE68A)),
               ),
-              child: Center(
-                child: Text(initial, style: const TextStyle(fontSize: 36, fontWeight: FontWeight.w900, color: MployaTheme.brandAccent)),
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Text(companyName, style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: context.textPrimary)),
-          const SizedBox(height: 4),
-          Text(
-            isCompany ? 'Atraer, evaluar y conectar con el mejor talento Senior.' : profile.about ?? 'Perfil profesional en Mploya',
-            style: TextStyle(fontSize: 13, color: context.textSecondary, height: 1.4),
-            maxLines: 3, overflow: TextOverflow.ellipsis,
-          ),
-          const SizedBox(height: 16),
-          if (isCompany) ...[
-            Text('Posiciones abiertas:', style: TextStyle(fontSize: 12, color: context.textTertiary)),
-            const SizedBox(height: 2),
-            Text('15', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: context.textPrimary)),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              decoration: BoxDecoration(
-                color: MployaTheme.brandAccent.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                const Icon(CupertinoIcons.checkmark_seal_fill, size: 14, color: MployaTheme.brandAccent),
-                const SizedBox(width: 5),
-                Text('Premium Employer', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: MployaTheme.brandAccent)),
-              ]),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildWebActionsCard(BuildContext context, NexUser profile, bool isOwnProfile) {
-    final isCompany = profile.accountType == 'empresa' || profile.accountType == 'headhunter';
-    return WebCard(
-      child: Column(
-        children: [
-          // Botones de acción rápida
-          Row(
-            children: [
-              Expanded(child: _webQuickAction(context, CupertinoIcons.chart_bar_fill, 'Analítica', () {
-                Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const ProfileAnalyticsDashboardScreen()));
-              })),
-              const SizedBox(width: 12),
-              Expanded(child: _webQuickAction(context, CupertinoIcons.person_2_fill, isCompany ? 'Candidatos' : 'Red', () {
-                // Navigate to network/candidates
-              })),
-            ],
-          ),
-          const SizedBox(height: 16),
-          // Info cards
-          _webInfoRow(context, CupertinoIcons.person_badge_plus_fill, '5 candidatos nuevos', MployaTheme.success),
-          const SizedBox(height: 10),
-          _webInfoRow(context, CupertinoIcons.calendar, '2 entrevistas programadas', MployaTheme.info),
-        ],
-      ),
-    );
-  }
-
-  Widget _webQuickAction(BuildContext context, IconData icon, String label, VoidCallback onTap) {
-    return CupertinoButton(
-      padding: EdgeInsets.zero,
-      minimumSize: Size.zero,
-      onPressed: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 18),
-        decoration: BoxDecoration(
-          color: context.isDark ? NexTheme.darkSurface : const Color(0xFFF7F7F8),
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: Column(
-          children: [
-            Icon(icon, size: 26, color: context.textPrimary),
-            const SizedBox(height: 6),
-            Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: context.textPrimary)),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _webInfoRow(BuildContext context, IconData icon, String text, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, size: 18, color: color),
-          const SizedBox(width: 10),
-          Expanded(child: Text(text, style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: context.textPrimary))),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildWebRow2(BuildContext context, NexUser profile, bool isOwnProfile) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Video-Pitch card
-        Expanded(child: _buildWebVideoPitchCard(context, profile, isOwnProfile)),
-        const SizedBox(width: 16),
-        // Skills card
-        Expanded(child: _buildWebSkillsCard(context, profile)),
-        const SizedBox(width: 16),
-        // Info Mercado card
-        Expanded(child: _buildWebMarketCard(context)),
-      ],
-    );
-  }
-
-  Widget _buildWebVideoPitchCard(BuildContext context, NexUser profile, bool isOwnProfile) {
-    final hasVideo = profile.videoUrl != null && profile.videoUrl!.isNotEmpty;
-    return WebCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Video-Pitch', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: context.textPrimary)),
-          const SizedBox(height: 12),
-          // Video thumbnail
-          GestureDetector(
-            onTap: () {
-              if (hasVideo) {
-                showCupertinoModalPopup<void>(context: context, builder: (_) => VideoPlayerModal(videoUrl: profile.videoUrl!, index: 0));
-              } else if (isOwnProfile) {
-                final isComp = profile.accountType == 'empresa' || profile.accountType == 'headhunter';
-                Navigator.of(context).push(CupertinoPageRoute(builder: (_) => OnboardingPitchScreen(isCompany: isComp)));
-              }
-            },
-            child: Container(
-              height: 130,
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(colors: [Color(0xFF1A1A2E), Color(0xFF16213E)]),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Stack(
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Waveform decoration
-                  Positioned(
-                    left: 16, right: 16, bottom: 20, top: 20,
-                    child: CustomPaint(painter: _WaveformPainter()),
-                  ),
-                  // Badge
-                  Positioned(
-                    top: 10, left: 10,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF1A1A2E).withValues(alpha: 0.85),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Row(mainAxisSize: MainAxisSize.min, children: [
-                        const Icon(CupertinoIcons.play_fill, size: 11, color: CupertinoColors.white),
-                        const SizedBox(width: 4),
-                        Text(hasVideo ? 'Video-Pitch' : 'Sin video', style: const TextStyle(color: CupertinoColors.white, fontSize: 11, fontWeight: FontWeight.w700)),
-                      ]),
-                    ),
-                  ),
-                  // Score badge
-                  if (hasVideo)
-                    Positioned(
-                      top: 10, right: 10,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: MployaTheme.brandAccent,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Text('Grabado · 97 pts', style: TextStyle(color: CupertinoColors.white, fontSize: 10, fontWeight: FontWeight.w800)),
-                      ),
-                    ),
-                  // Play button center
-                  Center(
-                    child: Container(
-                      width: 44, height: 44,
-                      decoration: BoxDecoration(
-                        color: MployaTheme.brandAccent,
-                        shape: BoxShape.circle,
-                        boxShadow: [BoxShadow(color: MployaTheme.brandAccent.withValues(alpha: 0.4), blurRadius: 16)],
-                      ),
-                      child: const Icon(CupertinoIcons.play_fill, color: CupertinoColors.white, size: 20),
-                    ),
-                  ),
+                  Icon(CupertinoIcons.sparkles, size: 10, color: Color(0xFFD97706)),
+                  SizedBox(width: 3),
+                  Text('Disponible', style: TextStyle(color: Color(0xFFD97706), fontSize: 10, fontWeight: FontWeight.w800)),
                 ],
               ),
             ),
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildWebSkillsCard(BuildContext context, NexUser profile) {
-    final skills = profile.skills.take(5).toList();
-    if (skills.isEmpty) {
-      return WebCard(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Skills compatibilidad', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: context.textPrimary)),
-            const SizedBox(height: 8),
-            Text('(Ejemplar)', style: TextStyle(fontSize: 12, color: context.textTertiary)),
-            const SizedBox(height: 16),
-            _webSkillBars(context, ['Progressive', 'UX', 'Liderazgo', 'UX', 'Agile']),
-          ],
-        ),
-      );
-    }
-    return WebCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Skills compatibilidad', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: context.textPrimary)),
-          const SizedBox(height: 16),
-          _webSkillBars(context, skills),
-        ],
-      ),
-    );
-  }
-
-  Widget _webSkillBars(BuildContext context, List<String> skills) {
-    final heights = [0.6, 0.8, 0.95, 0.7, 0.5];
-    return SizedBox(
-      height: 100,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: List.generate(skills.length, (i) {
-          return Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.end,
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              const SizedBox(height: 12),
+              GestureDetector(
+                onTap: isOwnProfile ? () => _pickAndUploadAvatar(profile) : null,
+                child: Container(
+                  width: 80, height: 80,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: const Color(0xFFE2E8F0), width: 3),
+                    boxShadow: const [
+                      BoxShadow(color: Color(0x1F000000), blurRadius: 12, offset: Offset(0, 4)),
+                    ],
+                    image: const DecorationImage(
+                      image: AssetImage('assets/images/avatar_juan_perez.jpg'),
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              Text(
+                profile.name,
+                style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900, color: Color(0xFF0F172A)),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                profile.headline,
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
+              ),
+              const SizedBox(height: 14),
+              RichText(
+                textAlign: TextAlign.center,
+                maxLines: 4,
+                overflow: TextOverflow.ellipsis,
+                text: TextSpan(
+                  style: const TextStyle(fontSize: 12, color: Color(0xFF475569), height: 1.5, fontFamily: 'Arial'),
+                  children: [
+                    TextSpan(
+                      text: profile.about ?? 'Desarrollador Flutter Senior con más de 7 años de experiencia liderando equipos y construyendo arquitecturas móviles escalables y robustas. Especialista en optimización de rendimiento y clean architecture.',
+                    ),
+                    const TextSpan(
+                      text: ' ...read more',
+                      style: TextStyle(color: Color(0xFFD97706), fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _socialButton(CupertinoIcons.phone_fill, const Color(0xFF0F172A)),
+                  const SizedBox(width: 8),
+                  _socialButton(CupertinoIcons.envelope_fill, const Color(0xFF0F172A)),
+                  const SizedBox(width: 8),
+                  _socialButton(CupertinoIcons.settings, const Color(0xFF0F172A)),
+                  const SizedBox(width: 8),
+                  _socialButton(CupertinoIcons.globe, const Color(0xFF0F172A)),
+                ],
+              ),
+              const SizedBox(height: 18),
+              Row(
                 children: [
                   Expanded(
-                    child: Align(
-                      alignment: Alignment.bottomCenter,
-                      child: FractionallySizedBox(
-                        heightFactor: heights[i % heights.length],
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: MployaTheme.brandAccent.withValues(alpha: 0.75 + (i * 0.05)),
-                            borderRadius: BorderRadius.circular(6),
+                    child: CupertinoButton(
+                      padding: EdgeInsets.zero,
+                      onPressed: () => Navigator.of(context).push(CupertinoPageRoute(builder: (_) => MisHerramientasScreen(profile: profile))),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 9),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF1F5F9),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: const Center(
+                          child: Text(
+                            '3 enlaces',
+                            style: TextStyle(color: Color(0xFF475569), fontSize: 12, fontWeight: FontWeight.w700),
                           ),
                         ),
                       ),
                     ),
                   ),
-                  const SizedBox(height: 6),
-                  Text(skills[i], style: TextStyle(fontSize: 9.5, color: context.textTertiary), overflow: TextOverflow.ellipsis),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: CupertinoButton(
+                      padding: EdgeInsets.zero,
+                      onPressed: () {
+                        // Action for Descargar CV
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 9),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(colors: [Color(0xFFF97316), Color(0xFFEA580C)]),
+                          borderRadius: BorderRadius.circular(10),
+                          boxShadow: [
+                            BoxShadow(color: const Color(0xFFF97316).withValues(alpha: 0.2), blurRadius: 6, offset: const Offset(0, 2)),
+                          ],
+                        ),
+                        child: const Center(
+                          child: Text(
+                            'Descargar CV',
+                            style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
                 ],
               ),
-            ),
-          );
-        }),
+            ],
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildWebMarketCard(BuildContext context) {
-    return WebCard(
+  Widget _socialButton(IconData icon, Color color) {
+    return Container(
+      width: 32, height: 32,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        shape: BoxShape.circle,
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Center(
+        child: Icon(icon, size: 14, color: color),
+      ),
+    );
+  }
+
+  Widget _buildWebMyCompany(BuildContext context, NexUser profile) {
+    return _PremiumCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          const Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Icon(CupertinoIcons.chart_bar_alt_fill, size: 22, color: MployaTheme.brandAccent),
-              const SizedBox(width: 8),
-              Container(
-                width: 28, height: 28,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF4285F4).withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Center(child: Text('G', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: const Color(0xFF4285F4)))),
-              ),
+              Text('My Company', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF0F172A))),
+              Icon(CupertinoIcons.ellipsis, size: 16, color: Color(0xFF94A3B8)),
             ],
           ),
-          const SizedBox(height: 16),
-          Text('Información de Mercado', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: context.textTertiary, letterSpacing: 0.5)),
-          const SizedBox(height: 8),
-          Text('Salarios de UX en auge', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: context.textPrimary)),
           const SizedBox(height: 12),
-          CupertinoButton(
-            padding: EdgeInsets.zero,
-            minimumSize: Size.zero,
-            onPressed: () {},
+          Container(
+            padding: const EdgeInsets.all(2),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF1F5F9),
+              borderRadius: BorderRadius.circular(8),
+            ),
             child: Row(
               children: [
-                Text('Ver datos completos', style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: MployaTheme.brandAccent)),
-                const SizedBox(width: 4),
-                Icon(CupertinoIcons.chevron_right, size: 14, color: MployaTheme.brandAccent),
+                Expanded(child: _miniTab('Team Size', true)),
+                Expanded(child: _miniTab('Sector', false)),
+                Expanded(child: _miniTab('Funding Status', false)),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          const SizedBox(
+            height: 100,
+            child: _ProfileBarChart(
+              values: [1200, 1800, 2500, 1500, 1000],
+              labels: ['Prog', 'UX', 'Unb', 'UI', 'Agro'],
+            ),
+          ),
+          const SizedBox(height: 14),
+          CupertinoButton(
+            padding: EdgeInsets.zero,
+            onPressed: () {},
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF1F5F9),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: const Center(
+                child: Text(
+                  'Internal Rules',
+                  style: TextStyle(color: Color(0xFF475569), fontSize: 11, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _miniTab(String label, bool active) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      decoration: BoxDecoration(
+        color: active ? Colors.white : Colors.transparent,
+        borderRadius: BorderRadius.circular(6),
+        boxShadow: active ? [const BoxShadow(color: Color(0x0A000000), blurRadius: 4)] : [],
+      ),
+      child: Center(
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 9.5,
+            fontWeight: FontWeight.bold,
+            color: active ? const Color(0xFF0F172A) : const Color(0xFF64748B),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildWebSkillsCompatibility(BuildContext context, NexUser profile, bool isOwnProfile) {
+    return _PremiumCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('Skills Compatibility', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF0F172A))),
+              Icon(CupertinoIcons.chevron_up, size: 14, color: Color(0xFF94A3B8)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _buildSkillsCompatibilityContent(context, profile, isOwnProfile),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWebRecommendations(BuildContext context) {
+    return _PremiumCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Recommendations', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF0F172A))),
+          const SizedBox(height: 12),
+          _buildRecommendationsContent(context),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWebVideoPitchCard(BuildContext context, NexUser profile, bool isOwnProfile) {
+    return _PremiumCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Video Pitch', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF0F172A))),
+          const SizedBox(height: 12),
+          _buildVideoPitchContent(context, profile, isOwnProfile),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWebProjectShowcases(BuildContext context, NexUser profile) {
+    return _PremiumCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('Project Showcases', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF0F172A))),
+              Icon(CupertinoIcons.chevron_right, size: 14, color: Color(0xFF64748B)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _buildProjectShowcasesContent(context, profile),
+        ],
+      ),
+    );
+  }
+
+  Widget _projectCardCompact(String title, String desc, ImageProvider image) {
+    return Container(
+      width: 180,
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Image(
+            image: image,
+            height: 80,
+            width: 180,
+            fit: BoxFit.cover,
+          ),
+          Padding(
+            padding: const EdgeInsets.all(8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                  maxLines: 1, overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  desc,
+                  style: const TextStyle(fontSize: 9.5, color: Color(0xFF64748B), height: 1.3),
+                  maxLines: 2, overflow: TextOverflow.ellipsis,
+                ),
               ],
             ),
           ),
@@ -943,48 +897,612 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildWebToolsCard(BuildContext context, NexUser profile) {
-    return WebCard(
-      onTap: () => Navigator.of(context).push(CupertinoPageRoute(builder: (_) => MisHerramientasScreen(profile: profile))),
+  Widget _buildWebCoreStats(BuildContext context, NexUser profile) {
+    return _PremiumCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Mis herramientas', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: context.textPrimary)),
-          const SizedBox(height: 16),
+          const Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Core Stats', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF0F172A))),
+                  Text('Performance trend', style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
+                ],
+              ),
+              Icon(CupertinoIcons.ellipsis, size: 16, color: Color(0xFF94A3B8)),
+            ],
+          ),
+          const SizedBox(height: 14),
+          _buildCoreStatsContent(context, profile),
+        ],
+      ),
+    );
+  }
+
+  Widget _coreStatMetric(String label, String value, bool showProgress, {bool isPositive = false}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: const TextStyle(fontSize: 10, color: Color(0xFF94A3B8), fontWeight: FontWeight.bold)),
+        const SizedBox(height: 3),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w900,
+            color: isPositive ? const Color(0xFF22C55E) : const Color(0xFF0F172A),
+          ),
+        ),
+        if (showProgress) ...[
+          const SizedBox(height: 4),
+          Container(
+            width: 50, height: 4,
+            decoration: BoxDecoration(color: const Color(0xFFE2E8F0), borderRadius: BorderRadius.circular(2)),
+            child: FractionallySizedBox(
+              alignment: Alignment.centerLeft,
+              widthFactor: 0.7,
+              child: Container(
+                decoration: BoxDecoration(color: const Color(0xFF22C55E), borderRadius: BorderRadius.circular(2)),
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildWebAdvancedAnalytics(BuildContext context, NexUser profile) {
+    return _PremiumCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Advanced Analytics', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF0F172A))),
+          const SizedBox(height: 12),
           Row(
             children: [
-              _webToolIcon('Li', const Color(0xFF0A66C2), 'LinkedIn'),
-              const SizedBox(width: 20),
-              _webToolIcon('C', const Color(0xFF006BFF), 'Calendly'),
-              const SizedBox(width: 20),
-              _webToolIcon('S', const Color(0xFF4A154B), 'Slack'),
-              const SizedBox(width: 20),
-              _webToolIcon('📝', null, 'CV Builder'),
-              const Spacer(),
-              Icon(CupertinoIcons.chevron_right, size: 18, color: context.textTertiary),
+              _analyticTab('Resume Growth', true),
+              const SizedBox(width: 6),
+              _analyticTab('Job Activity', false),
+              const SizedBox(width: 6),
+              _analyticTab('Interview', false),
             ],
+          ),
+          const SizedBox(height: 16),
+          const SizedBox(
+            height: 90,
+            child: _ProfileLineChart(
+              spots: [
+                FlSpot(0, 40),
+                FlSpot(1, 35),
+                FlSpot(2, 60),
+                FlSpot(3, 50),
+                FlSpot(4, 75),
+                FlSpot(5, 70),
+              ],
+              xLabels: ['Jan', 'Mar', 'May', 'Jul', 'Aug', 'Sep'],
+              lineColor: Color(0xFFF97316),
+              gradientColors: [Color(0xFFF97316), Color(0xFFFDBA74)],
+            ),
+          ),
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFF7ED),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: const Color(0xFFFFEDD5)),
+            ),
+            child: Row(
+              children: [
+                const Icon(CupertinoIcons.mic_fill, size: 12, color: Color(0xFFEA580C)),
+                const SizedBox(width: 6),
+                const Text('Speech analytics', style: TextStyle(color: Color(0xFFEA580C), fontSize: 10, fontWeight: FontWeight.bold)),
+                const Spacer(),
+                GestureDetector(
+                  onTap: () {},
+                  child: Text('Ver detalle', style: TextStyle(color: MployaTheme.brandAccent, fontSize: 10, fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _webToolIcon(String label, Color? bg, String name) {
-    final isBg = bg != null;
-    return Column(
-      children: [
-        Container(
-          width: 48, height: 48,
-          decoration: BoxDecoration(
-            color: isBg ? bg : const Color(0xFFF2F2F7),
-            borderRadius: BorderRadius.circular(14),
+  Widget _analyticTab(String label, bool active) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: active ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: active ? Colors.white : const Color(0xFF64748B),
+          fontSize: 9.5,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildWebCertifications(BuildContext context) {
+    return _PremiumCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Certifications & Awards', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF0F172A))),
+          const SizedBox(height: 14),
+          _buildCertificationsContent(context),
+        ],
+      ),
+    );
+  }
+
+  Widget _certificationBadge(IconData icon, String name, Color color) {
+    return Tooltip(
+      message: name,
+      child: Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          shape: BoxShape.circle,
+          border: Border.all(color: color.withValues(alpha: 0.3), width: 1.5),
+        ),
+        child: Icon(icon, size: 20, color: color),
+      ),
+    );
+  }
+
+  Widget _buildMobileHeader(BuildContext context, NexUser profile, bool isOwnProfile) {
+    return Container(
+      color: Colors.white,
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+      child: Column(
+        children: [
+          GestureDetector(
+            onTap: isOwnProfile ? () => _pickAndUploadAvatar(profile) : null,
+            child: Container(
+              width: 76, height: 76,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: const Color(0xFFE2E8F0), width: 3),
+                boxShadow: const [
+                  BoxShadow(color: Color(0x1A000000), blurRadius: 10, offset: Offset(0, 4)),
+                ],
+                image: const DecorationImage(
+                  image: AssetImage('assets/images/avatar_juan_perez.jpg'),
+                  fit: BoxFit.cover,
+                ),
+              ),
+            ),
           ),
-          child: Center(
-            child: Text(label, style: TextStyle(fontSize: isBg ? 20 : 22, fontWeight: FontWeight.w800, color: isBg ? CupertinoColors.white : null)),
+          const SizedBox(height: 12),
+          Text(
+            profile.name,
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Color(0xFF0F172A)),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            profile.headline,
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              _socialButton(CupertinoIcons.phone_fill, const Color(0xFF0F172A)),
+              const SizedBox(width: 8),
+              _socialButton(CupertinoIcons.envelope_fill, const Color(0xFF0F172A)),
+              const SizedBox(width: 8),
+              _socialButton(CupertinoIcons.settings, const Color(0xFF0F172A)),
+              const SizedBox(width: 8),
+              _socialButton(CupertinoIcons.globe, const Color(0xFF0F172A)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          RichText(
+            textAlign: TextAlign.center,
+            maxLines: 4,
+            overflow: TextOverflow.ellipsis,
+            text: TextSpan(
+              style: const TextStyle(fontSize: 12, color: Color(0xFF475569), height: 1.5, fontFamily: 'Arial'),
+              children: [
+                TextSpan(
+                  text: profile.about ?? 'Desarrollador Flutter Senior con más de 7 años de experiencia liderando equipos y construyendo arquitecturas móviles escalables y robustas. Especialista en optimización de rendimiento y clean architecture.',
+                ),
+                const TextSpan(
+                  text: ' ...read more',
+                  style: TextStyle(color: Color(0xFFD97706), fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCoreStatsContent(BuildContext context, NexUser profile) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(
+          height: 110,
+          child: _ProfileLineChart(
+            spots: [
+              FlSpot(0, 30),
+              FlSpot(1, 48),
+              FlSpot(2, 38),
+              FlSpot(3, 55),
+              FlSpot(4, 68),
+              FlSpot(5, 82),
+            ],
+            xLabels: ['Jan', 'Mar', 'May', 'Jul', 'Aug', 'Sep'],
+            lineColor: Color(0xFF0F172A),
+            gradientColors: [Color(0xFF0F172A), Colors.transparent],
           ),
         ),
-        const SizedBox(height: 6),
-        Text(name, style: const TextStyle(fontSize: 11, color: CupertinoColors.systemGrey)),
+        const SizedBox(height: 16),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            _coreStatMetric('Visualizaciones', '248', true),
+            _coreStatMetric('Descargas CV', '42 ↑', false, isPositive: true),
+            _coreStatMetric('Búsquedas', '1,200', false),
+          ],
+        ),
+        const SizedBox(height: 14),
+        CupertinoButton(
+          padding: EdgeInsets.zero,
+          onPressed: () {},
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: const Color(0xFF0F172A),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Center(
+              child: Text(
+                'Internal Anal.',
+                style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSkillsCompatibilityContent(BuildContext context, NexUser profile, bool isOwnProfile) {
+    final skillList = [
+      {'name': 'Flutter', 'rating': 5, 'icon': CupertinoIcons.sparkles, 'color': const Color(0xFF3B82F6)},
+      {'name': 'Dart', 'rating': 5, 'icon': CupertinoIcons.chevron_left_slash_chevron_right, 'color': const Color(0xFF0D9488)},
+      {'name': 'Firebase', 'rating': 4, 'icon': CupertinoIcons.cloud_fill, 'color': const Color(0xFFF59E0B)},
+      {'name': 'Clean Arch', 'rating': 4, 'icon': CupertinoIcons.layers_alt_fill, 'color': const Color(0xFF64748B)},
+      {'name': 'UI/UX', 'rating': 4, 'icon': CupertinoIcons.device_phone_portrait, 'color': const Color(0xFFEA580C)},
+      {'name': 'Kotlin', 'rating': 3, 'icon': CupertinoIcons.app_fill, 'color': const Color(0xFF8B5CF6)},
+      {'name': 'Swift', 'rating': 4, 'icon': CupertinoIcons.app_fill, 'color': const Color(0xFFEF4444)},
+      {'name': 'Unit Test', 'rating': 5, 'icon': CupertinoIcons.checkmark_seal_fill, 'color': const Color(0xFF10B981)},
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: skillList.map((skill) {
+            return Container(
+              width: 125,
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(skill['icon'] as IconData, size: 10, color: skill['color'] as Color),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          skill['name'] as String,
+                          style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                          maxLines: 1, overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: List.generate(5, (starIndex) {
+                      final rating = skill['rating'] as int;
+                      final active = starIndex < rating;
+                      return Icon(
+                        active ? CupertinoIcons.star_fill : CupertinoIcons.star,
+                        size: 9,
+                        color: active ? const Color(0xFFF97316) : const Color(0xFFCBD5E1),
+                      );
+                    }),
+                  ),
+                ],
+              ),
+            );
+          }).toList(),
+        ),
+        const SizedBox(height: 14),
+        CupertinoButton(
+          padding: EdgeInsets.zero,
+          onPressed: () {
+            Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const SkillAssessmentScreen()));
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: const Color(0xFF0F172A),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Center(
+              child: Text(
+                'Start Skill Assessment',
+                style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCertificationsContent(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        _certificationBadge(CupertinoIcons.shield_fill, 'AWS Expert', const Color(0xFF3B82F6)),
+        _certificationBadge(CupertinoIcons.rosette, 'Google Architect', const Color(0xFFD97706)),
+        _certificationBadge(CupertinoIcons.sparkles, 'Scrum Master', const Color(0xFF0D9488)),
+        _certificationBadge(CupertinoIcons.star_fill, 'Kotlin Expert', const Color(0xFF8B5CF6)),
+      ],
+    );
+  }
+
+  Widget _buildRecommendationsContent(BuildContext context) {
+    final recs = [
+      {'name': 'Alex T.', 'avatar': 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=80&h=80&fit=crop'},
+      {'name': 'Elena G.', 'avatar': 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=80&h=80&fit=crop'},
+      {'name': 'Carlos M.', 'avatar': 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=80&h=80&fit=crop'},
+    ];
+    return Row(
+      children: [
+        ...recs.map((rec) {
+          return Container(
+            margin: const EdgeInsets.only(right: 8),
+            child: Tooltip(
+              message: rec['name']!,
+              child: Container(
+                padding: const EdgeInsets.all(2),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: const Color(0xFFF97316), width: 1.5),
+                ),
+                child: ClipOval(
+                  child: CachedNetworkImage(
+                    imageUrl: rec['avatar']!,
+                    width: 28, height: 28,
+                    fit: BoxFit.cover,
+                    errorWidget: (_, __, ___) => const Icon(CupertinoIcons.person_solid),
+                  ),
+                ),
+              ),
+            ),
+          );
+        }),
+        const SizedBox(width: 4),
+        Container(
+          width: 32, height: 32,
+          decoration: const BoxDecoration(color: Color(0xFFF1F5F9), shape: BoxShape.circle),
+          child: const Icon(CupertinoIcons.plus, size: 14, color: Color(0xFF64748B)),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildVideoPitchContent(BuildContext context, NexUser profile, bool isOwnProfile) {
+    final hasVideo = profile.videoUrl != null && profile.videoUrl!.isNotEmpty;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          height: 150,
+          decoration: BoxDecoration(
+            color: const Color(0xFF0F172A),
+            borderRadius: BorderRadius.circular(14),
+            image: const DecorationImage(
+              image: AssetImage('assets/images/video_thumbnail_demo.jpg'),
+              fit: BoxFit.cover,
+            ),
+          ),
+          child: Stack(
+            children: [
+              Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(14),
+                  gradient: LinearGradient(
+                    colors: [Colors.black.withValues(alpha: 0.6), Colors.transparent],
+                    begin: Alignment.bottomCenter,
+                    end: Alignment.topCenter,
+                  ),
+                ),
+              ),
+              Positioned(
+                left: 16, right: 16, bottom: 24, top: 40,
+                child: CustomPaint(painter: _WaveformPainter()),
+              ),
+              Center(
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF97316),
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(color: const Color(0xFFF97316).withValues(alpha: 0.4), blurRadius: 12),
+                    ],
+                  ),
+                  child: const Icon(CupertinoIcons.play_fill, size: 20, color: Colors.white),
+                ),
+              ),
+              Positioned(
+                bottom: 10, left: 10, right: 10,
+                child: Row(
+                  children: [
+                    const Icon(CupertinoIcons.play_circle_fill, size: 13, color: Colors.white),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Container(
+                        height: 3,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.3),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                        child: FractionallySizedBox(
+                          alignment: Alignment.centerLeft,
+                          widthFactor: 0.15,
+                          child: Container(color: const Color(0xFFF97316)),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    const Text(
+                      '0:05 / 0:45',
+                      style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w600),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+        Row(
+          children: [
+            Expanded(
+              flex: 5,
+              child: CupertinoButton(
+                padding: EdgeInsets.zero,
+                onPressed: () {
+                  if (hasVideo) {
+                    showCupertinoModalPopup<void>(context: context, builder: (_) => VideoPlayerModal(videoUrl: profile.videoUrl!, index: 0));
+                  }
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0F172A),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Center(
+                    child: Text(
+                      'View Full Pitch',
+                      style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              flex: 4,
+              child: CupertinoButton(
+                padding: EdgeInsets.zero,
+                onPressed: () {
+                  if (isOwnProfile) {
+                    Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const CameraScreen()));
+                  }
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                  ),
+                  child: const Center(
+                    child: Text(
+                      'Record Pro',
+                      style: TextStyle(color: Color(0xFF475569), fontSize: 11, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              flex: 4,
+              child: CupertinoButton(
+                padding: EdgeInsets.zero,
+                onPressed: () {
+                  Navigator.of(context).push(CupertinoPageRoute(
+                    builder: (_) => InterviewPrepScreen(
+                      jobTitle: profile.headline,
+                      candidateSkills: profile.skills,
+                    ),
+                  ));
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                  ),
+                  child: const Center(
+                    child: Text(
+                      'Practice',
+                      style: TextStyle(color: Color(0xFF475569), fontSize: 11, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildProjectShowcasesContent(BuildContext context, NexUser profile) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              _projectCardCompact(
+                'Key project - Descriptions',
+                'Desarrollo de una arquitectura mobile escalable con micro-frontends en Flutter...',
+                const AssetImage('assets/images/project_showcase_1.jpg'),
+              ),
+              const SizedBox(width: 12),
+              _projectCardCompact(
+                'Keyless Projects',
+                'SDK criptográfico para inicio de sesión seguro biométrico e integraciones OAuth...',
+                const AssetImage('assets/images/project_showcase_2.jpg'),
+              ),
+            ],
+          ),
+        ),
       ],
     );
   }
@@ -2841,4 +3359,239 @@ class _WaveformPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+// ── Custom Line Chart for Premium Profile Stats ──
+class _ProfileLineChart extends StatelessWidget {
+  final List<FlSpot> spots;
+  final List<String> xLabels;
+  final Color lineColor;
+  final List<Color> gradientColors;
+
+  const _ProfileLineChart({
+    required this.spots,
+    required this.xLabels,
+    required this.lineColor,
+    required this.gradientColors,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return LineChart(
+      LineChartData(
+        gridData: const FlGridData(show: false),
+        titlesData: FlTitlesData(
+          bottomTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              reservedSize: 22,
+              interval: 1,
+              getTitlesWidget: (value, meta) {
+                final index = value.toInt();
+                if (index >= 0 && index < xLabels.length) {
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Text(
+                      xLabels[index],
+                      style: const TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 8),
+                    ),
+                  );
+                }
+                return const Text('');
+              },
+            ),
+          ),
+          leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+        ),
+        borderData: FlBorderData(show: false),
+        minX: 0,
+        maxX: (xLabels.length - 1).toDouble(),
+        minY: 0,
+        maxY: 100,
+        lineBarsData: [
+          LineChartBarData(
+            spots: spots,
+            isCurved: true,
+            color: lineColor,
+            barWidth: 3,
+            isStrokeCapRound: true,
+            dotData: const FlDotData(show: false),
+            belowBarData: BarAreaData(
+              show: true,
+              gradient: LinearGradient(
+                colors: gradientColors.map((color) => color.withValues(alpha: 0.15)).toList(),
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Custom Bar Chart for Team/Company Data ──
+class _ProfileBarChart extends StatelessWidget {
+  final List<double> values;
+  final List<String> labels;
+
+  const _ProfileBarChart({
+    required this.values,
+    required this.labels,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return BarChart(
+      BarChartData(
+        alignment: BarChartAlignment.spaceAround,
+        maxY: 3000,
+        barTouchData: BarTouchData(enabled: false),
+        titlesData: FlTitlesData(
+          show: true,
+          bottomTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              getTitlesWidget: (value, meta) {
+                final index = value.toInt();
+                if (index >= 0 && index < labels.length) {
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(
+                      labels[index],
+                      style: const TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 8),
+                    ),
+                  );
+                }
+                return const Text('');
+              },
+              reservedSize: 20,
+            ),
+          ),
+          leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+        ),
+        gridData: const FlGridData(show: false),
+        borderData: FlBorderData(show: false),
+        barGroups: List.generate(values.length, (index) {
+          return BarChartGroupData(
+            x: index,
+            barRods: [
+              BarChartRodData(
+                toY: values[index],
+                color: index == 2 ? const Color(0xFFF97316) : const Color(0xFF0F172A),
+                width: 12,
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ],
+          );
+        }),
+      ),
+    );
+  }
+}
+
+// ── Collapsible Card for Mobile Acordeones ──
+class _CollapsibleCard extends StatefulWidget {
+  final String title;
+  final Widget child;
+  final bool initiallyExpanded;
+
+  const _CollapsibleCard({
+    required this.title,
+    required this.child,
+    this.initiallyExpanded = false,
+  });
+
+  @override
+  State<_CollapsibleCard> createState() => _CollapsibleCardState();
+}
+
+class _CollapsibleCardState extends State<_CollapsibleCard> {
+  late bool _expanded;
+
+  @override
+  void initState() {
+    super.initState();
+    _expanded = widget.initiallyExpanded;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: const [
+          BoxShadow(color: Color(0x06000000), blurRadius: 8, offset: Offset(0, 4)),
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          CupertinoButton(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            onPressed: () => setState(() => _expanded = !_expanded),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  widget.title,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF0F172A),
+                  ),
+                ),
+                Icon(
+                  _expanded ? CupertinoIcons.chevron_up : CupertinoIcons.chevron_down,
+                  size: 16,
+                  color: const Color(0xFF64748B),
+                ),
+              ],
+            ),
+          ),
+          if (_expanded)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: widget.child,
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Premium Card for consistent mockup layout ──
+class _PremiumCard extends StatelessWidget {
+  final Widget child;
+
+  const _PremiumCard({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x06000000),
+            blurRadius: 10,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
 }

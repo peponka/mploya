@@ -180,6 +180,36 @@ class StorageService {
     }
   }
 
+  // ── Upload de Video de Entrevista IA ───────────────────────────────────────
+
+  /// Sube un video de respuesta de entrevista al bucket "videos" en la ruta `interviews/<interviewId>_<questionId>.<ext>`.
+  /// Detecta formato automáticamente (WebM en Chrome, MP4 en móvil).
+  Future<String?> uploadInterviewVideo(String interviewId, String questionId, XFile file) async {
+    _lastError = null;
+    try {
+      final bytes = await file.readAsBytes();
+      final fmt = _videoFormat(file, bytes);
+      final storagePath = 'interviews/${interviewId}_$questionId.${fmt.ext}';
+
+      await _client.storage.from('videos').uploadBinary(
+            storagePath,
+            bytes,
+            fileOptions: FileOptions(
+              contentType: fmt.contentType,
+              upsert: true,
+            ),
+          );
+
+      return _client.storage.from('videos').getPublicUrl(storagePath);
+    } on StorageException catch (e) {
+      _lastError = _translateStorageError(e.message, e.statusCode);
+      return null;
+    } catch (e) {
+      _lastError = _classifyNetworkError(e);
+      return null;
+    }
+  }
+
   // ─────────────────────────────────────────────────────────────────────────
   // Helpers privados
   // ─────────────────────────────────────────────────────────────────────────

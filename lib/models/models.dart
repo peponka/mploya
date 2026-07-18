@@ -1,3 +1,5 @@
+export 'ai_interview_models.dart';
+
 // ──── User Model ────
 class NexUser {
   final String id;
