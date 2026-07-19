@@ -800,15 +800,16 @@ class _CustomTabBar extends StatelessWidget {
               onTap: () => onTap(1),
             ),
           ),
+          // Vacantes: pieza que separa los roles. Empresa publica/gestiona vacantes;
+          // candidato busca y se postula (JobsScreen ya cambia el contenido por rol).
           Container(
             key: cmNavMatchKey,
             child: _TabItem(
-              icon: isCompanyAccount ? CupertinoIcons.compass_fill : CupertinoIcons.bolt_fill,
-              inactiveIcon: isCompanyAccount ? CupertinoIcons.compass : CupertinoIcons.bolt,
-              label: isCompanyAccount ? 'Explorar' : 'Matches',
-              badgeCount: pendingConnections,
-              isActive: currentIndex == 2,
-              onTap: () => onTap(2),
+              icon: CupertinoIcons.briefcase_fill,
+              inactiveIcon: CupertinoIcons.briefcase,
+              label: 'Vacantes',
+              isActive: currentIndex == 6,
+              onTap: () => onTap(6),
             ),
           ),
           Container(

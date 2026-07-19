@@ -689,7 +689,7 @@ class _AtsDashboardScreenState extends State<AtsDashboardScreen> {
           // Header
           CupertinoSliverNavigationBar(
             transitionBetweenRoutes: false,
-            largeTitle: Text('Candidatos', style: TextStyle(color: context.textPrimary, fontFamily: '.SF Pro Display', letterSpacing: -0.5, fontWeight: FontWeight.w900)),
+            largeTitle: Text('Candidatos', style: TextStyle(color: context.textPrimary, fontSize: 26, letterSpacing: -0.4, fontWeight: FontWeight.w800)),
             backgroundColor: context.bgColor,
             border: null,
           ),
@@ -766,7 +766,6 @@ class _AtsDashboardScreenState extends State<AtsDashboardScreen> {
             ])),
           )),
           // ── Map ──
-          SliverToBoxAdapter(child: _mobileMap(context)),
           const SliverToBoxAdapter(child: SizedBox(height: 100)),
         ],
       )),

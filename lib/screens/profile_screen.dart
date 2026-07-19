@@ -301,6 +301,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             children: [
                               _buildWebProfileCard(context, profile, isOwnProfile),
                               const SizedBox(height: 16),
+                              _buildWebVideoPitchCard(context, profile, isOwnProfile),
+                              const SizedBox(height: 16),
                               _buildWebAboutMeCard(context, profile),
                               const SizedBox(height: 16),
                               _buildWebExperienceCard(context, profile),
@@ -382,6 +384,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Column(
                   children: [
+                    _buildWebVideoPitchCard(context, profile, isOwnProfile),
+                    const SizedBox(height: 16),
                     _buildWebAboutMeCard(context, profile),
                     const SizedBox(height: 16),
                     _buildWebExperienceCard(context, profile),
@@ -464,17 +468,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              _buildWebTabItem("Dashboard", CupertinoIcons.home, false),
+              _buildWebTabItem("Panel", CupertinoIcons.home, false),
               const SizedBox(width: 24),
-              _buildWebTabItem("Profile", CupertinoIcons.person_fill, true),
+              _buildWebTabItem("Perfil", CupertinoIcons.person_fill, true),
               const SizedBox(width: 24),
-              _buildWebTabItem("Matches", CupertinoIcons.person_2_fill, false),
+              _buildWebTabItem("Candidatos", CupertinoIcons.person_2_fill, false),
               const SizedBox(width: 24),
-              _buildWebTabItem("Alerts", CupertinoIcons.bell_fill, false),
+              _buildWebTabItem("Alertas", CupertinoIcons.bell_fill, false),
               const SizedBox(width: 24),
-              _buildWebTabItem("Messages", CupertinoIcons.envelope_fill, false),
+              _buildWebTabItem("Mensajes", CupertinoIcons.envelope_fill, false),
               const SizedBox(width: 24),
-              _buildWebTabItem("Vacancies", CupertinoIcons.briefcase_fill, false),
+              _buildWebTabItem("Vacantes", CupertinoIcons.briefcase_fill, false),
             ],
           ),
           const Spacer(),
@@ -635,13 +639,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildWebAboutMeCard(BuildContext context, NexUser profile) {
+    final isCompany =
+        profile.accountType == 'empresa' || profile.accountType == 'headhunter';
+    final about = profile.about?.trim() ?? '';
     return _PremiumCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            "About Me",
-            style: TextStyle(
+          Text(
+            isCompany ? "Sobre la empresa" : "Sobre mí",
+            style: const TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
               color: Color(0xFF0F172A),
@@ -649,10 +656,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           const SizedBox(height: 12),
           Text(
-            profile.about ?? "Professional summary is professional. Experienced professional in company, engineering professional constative ues'mtener-toarsns combinated with more. In communication and professional retoutive constasot cnmarmence comminiations in wananianceding puintions.\n\nI am varanate dnontflq, uur ecalantnio customerotoozes and arigmenting proclintbing law and genraral experiential summary in creeding inimoviations in worning mahierts.",
-            style: const TextStyle(
+            about.isNotEmpty
+                ? about
+                : (isCompany
+                    ? "Esta empresa todavía no agregó una descripción."
+                    : "Todavía no agregaste una descripción. Editá tu perfil para contar sobre vos."),
+            style: TextStyle(
               fontSize: 13,
-              color: Color(0xFF475569),
+              color: about.isNotEmpty ? const Color(0xFF475569) : const Color(0xFF94A3B8),
               height: 1.5,
             ),
           ),
@@ -664,27 +675,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget _buildWebExperienceCard(BuildContext context, NexUser profile) {
     final list = profile.experience.isNotEmpty ? profile.experience : [
       const Experience(
-        role: "Sarah Chen",
-        company: "Senior Engineering Lead",
-        duration: "2021 - June. 2026",
-        description: "• Accomplishmoted for flutrn 7 year, car tenosaliberatic tioer showafter manageipts and to customesiciem secams.\n• Accomplishmated as escurirave comptoses and comptinate wrier complet in communicial evalantes and sinar practions.",
-        location: "",
+        role: "Senior Software Engineer",
+        company: "Globant",
+        duration: "2021 - Actualidad",
+        description: "• Lideré el desarrollo de features clave en apps de alto tráfico (+2M usuarios).\n• Coordiné un equipo de 5 ingenieros y mejoré el time-to-market un 30%.",
+        location: "Buenos Aires, AR",
         isCurrent: true,
       ),
       const Experience(
-        role: "Company Name",
-        company: "Senior Engineering Lead",
-        duration: "2025 - June. 2025",
-        description: "• Accomplishmoted demenud from ana cempaien and compounding Flutter and anenestlv miles and developement swtons.\n• Becomois neeeded to protimaxihin a cennor their postoin commentaring projects.",
-        location: "",
+        role: "Full Stack Developer",
+        company: "MercadoLibre",
+        duration: "2018 - 2021",
+        description: "• Desarrollé microservicios en Node.js y nuevas features en React.\n• Implementé CI/CD, reduciendo los errores en producción un 40%.",
+        location: "Buenos Aires, AR",
         isCurrent: false,
       ),
       const Experience(
-        role: "Company Name",
-        company: "Senior Engineering Lead",
-        duration: "19/07 - 07/25 | June. 2026",
-        description: "• Accomplishmoted hirner Flintter engaosed wrrh vend tools and successdas in 2023.\n• Recomplishmented earrecnrevd comptarnied incoeunament and clients.\n• Recomplismoted as oitrosrsed and employes resumes.",
-        location: "",
+        role: "Frontend Developer",
+        company: "Auth0",
+        duration: "2016 - 2018",
+        description: "• Construí componentes reutilizables y mejoré la performance del dashboard.\n• Colaboré con diseño para elevar la experiencia de usuario.",
+        location: "Remoto",
         isCurrent: false,
       ),
     ];
@@ -697,7 +708,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: const [
               Text(
-                "Experience",
+                "Experiencia",
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -795,10 +806,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget _buildWebEducationCard(BuildContext context, NexUser profile) {
     final list = profile.education.isNotEmpty ? profile.education : [
       const Education(
-        school: "São Paulo, Brazil",
-        degree: "Senior Engineering Lead | Flutter & Architecture",
-        field: "Degree of Graduation | Company Science",
-        years: "Certification of Professional Camptics",
+        school: "Universidad de Buenos Aires (UBA)",
+        degree: "Licenciatura en Ciencias de la Computación",
+        field: "Ingeniería de Software",
+        years: "2014 - 2018",
       ),
     ];
 
@@ -810,7 +821,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: const [
               Text(
-                "Education",
+                "Educación",
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -884,7 +895,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: const [
               Text(
-                "Skills & Expertise",
+                "Habilidades y experiencia",
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -895,58 +906,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ],
           ),
           const SizedBox(height: 16),
-          Row(
+          Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      "Technical",
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF0F172A),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    _buildSkillProgressRow("Flutter", 0.45, "Low"),
-                    _buildSkillProgressRow("Dart", 0.90, "High"),
-                    _buildSkillProgressRow("Firebase", 0.35, "Low"),
-                    _buildSkillProgressRow("CI/CD", 0.85, "High"),
-                    _buildSkillProgressRow("CI/CD", 0.40, "Low"),
-                    _buildSkillProgressRow("Architecture", 0.95, "High"),
-                  ],
+              const Text(
+                "Técnicas",
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF0F172A),
                 ),
               ),
-              const SizedBox(width: 24),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      "Skills",
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF0F172A),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    _buildSkillProgressRow("Prasis", 0.38, "Low"),
-                    _buildSkillProgressRow("Perbanate", 0.88, "High"),
-                    _buildSkillProgressRow("Network", 0.92, "High"),
-                    _buildSkillProgressRow("Portst", 0.80, "High"),
-                    _buildSkillProgressRow("Dnft", 0.70, "Level"),
-                  ],
-                ),
-              ),
+              const SizedBox(height: 8),
+              _buildSkillProgressRow("Flutter", 0.92, "Avanzado"),
+              _buildSkillProgressRow("React", 0.88, "Avanzado"),
+              _buildSkillProgressRow("Node.js", 0.85, "Avanzado"),
+              _buildSkillProgressRow("PostgreSQL", 0.78, "Intermedio"),
+              _buildSkillProgressRow("AWS", 0.70, "Intermedio"),
             ],
           ),
           const SizedBox(height: 20),
           const Text(
-            "Soft Skills",
+            "Habilidades blandas",
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.bold,
@@ -958,17 +939,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
             spacing: 8,
             runSpacing: 8,
             children: [
-              _buildSkillPill("Technology"),
-              _buildSkillPill("Architectoling"),
-              _buildSkillPill("Endorstanding"),
-              _buildSkillPill("Learning"),
-              _buildSkillPill("Manatitacturing"),
-              _buildSkillPill("Coacling"),
+              _buildSkillPill("Liderazgo"),
+              _buildSkillPill("Comunicación"),
+              _buildSkillPill("Trabajo en equipo"),
+              _buildSkillPill("Resolución de problemas"),
+              _buildSkillPill("Adaptabilidad"),
+              _buildSkillPill("Mentoría"),
             ],
           ),
           const SizedBox(height: 20),
           const Text(
-            "Tools",
+            "Herramientas",
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.bold,
@@ -980,15 +961,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
             spacing: 8,
             runSpacing: 8,
             children: [
-              _buildSkillPill("Tools"),
-              _buildSkillPill("RP"),
-              _buildSkillPill("Porottaws"),
+              _buildSkillPill("Figma"),
+              _buildSkillPill("GitHub"),
+              _buildSkillPill("Docker"),
               _buildSkillPill("Firebase"),
               _buildSkillPill("CI/CD"),
-              _buildSkillPill("RSE"),
-              _buildSkillPill("SWF"),
-              _buildSkillPill("Powe"),
-              _buildSkillPill("Tools"),
+              _buildSkillPill("Jira"),
+              _buildSkillPill("Slack"),
+              _buildSkillPill("Notion"),
+              _buildSkillPill("Linear"),
             ],
           ),
         ],
@@ -1070,18 +1051,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget _buildWebProjectsCard(BuildContext context) {
     final projects = [
       {
-        "title": "Sarah Chen",
-        "desc": "Key projects shore sevenr tomder projects and commmonding amiantonsenier minostructess and tivy projects.",
+        "title": "Rediseño de checkout",
+        "desc": "Reduje el abandono de carrito un 18% simplificando el flujo de pago a 2 pasos.",
         "image": "https://images.unsplash.com/photo-1531403009284-440f080d1e12?w=120&h=80&fit=crop",
       },
       {
-        "title": "Curated Projects",
-        "desc": "Key projects are around game ans cresiors and smilemrewing projects and eclum to awand any projects.",
+        "title": "Dashboard de analítica",
+        "desc": "Panel en tiempo real para el equipo comercial, con métricas de ventas y retención.",
         "image": "https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=120&h=80&fit=crop",
       },
       {
-        "title": "Projec Projects",
-        "desc": "Key projects chowown the projects and promoienr way projcots and cressod any projects.",
+        "title": "App de onboarding",
+        "desc": "Flujo de alta de usuarios que bajó el tiempo de activación de 6 a 2 minutos.",
         "image": "https://images.unsplash.com/photo-1542744094-3a31f103e35f?w=120&h=80&fit=crop",
       },
     ];
@@ -1094,7 +1075,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: const [
               Text(
-                "Featured Projects",
+                "Proyectos destacados",
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -1218,7 +1199,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: const [
               Text(
-                "Quantum Insights Summary",
+                "Resumen de perfil",
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -1236,12 +1217,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
               painter: ProfileRadarChartPainter(
                 values: const [0.85, 0.70, 0.65, 0.80, 0.90, 0.75],
                 labels: const [
-                  "Strategic Vision",
-                  "Organization",
-                  "Operational",
-                  "Cpendmama",
-                  "Innovation",
-                  "Team Size",
+                  "Visión estratégica",
+                  "Organización",
+                  "Ejecución",
+                  "Comunicación",
+                  "Innovación",
+                  "Liderazgo",
                 ],
               ),
             ),
@@ -1273,7 +1254,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           const Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('My Company', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF0F172A))),
+              Text('Mi Empresa', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF0F172A))),
               Icon(CupertinoIcons.ellipsis, size: 16, color: Color(0xFF94A3B8)),
             ],
           ),
@@ -1354,7 +1335,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           const Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Skills Compatibility', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF0F172A))),
+              Text('Compatibilidad de Skills', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF0F172A))),
               Icon(CupertinoIcons.chevron_up, size: 14, color: Color(0xFF94A3B8)),
             ],
           ),
@@ -1968,7 +1949,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   child: const Center(
                     child: Text(
-                      'View Full Pitch',
+                      'Ver Pitch Completo',
                       style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
                     ),
                   ),
@@ -1994,7 +1975,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   child: const Center(
                     child: Text(
-                      'Record Pro',
+                      'Regrabar',
                       style: TextStyle(color: Color(0xFF475569), fontSize: 11, fontWeight: FontWeight.bold),
                     ),
                   ),
@@ -2023,7 +2004,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   child: const Center(
                     child: Text(
-                      'Practice',
+                      'Practicar',
                       style: TextStyle(color: Color(0xFF475569), fontSize: 11, fontWeight: FontWeight.bold),
                     ),
                   ),

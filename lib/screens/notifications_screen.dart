@@ -175,6 +175,215 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
       return _buildWeb(context);
     }
     
+    return _buildMobileAlerts(context);
+  }
+
+  // Alertas mobile — lista de notificaciones REAL (tabla notifications), limpia y
+  // entendible. Reemplaza el mockup "Quantum Nexus / Global Impact Score" (nave
+  // espacial) que no significaba nada. El viejo layout quedó en _deadOldMobileAlerts.
+  Widget _buildMobileAlerts(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8F9FB),
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0.5,
+        centerTitle: false,
+        title: const Text('Notificaciones',
+            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 20, color: Color(0xFF0F172A))),
+      ),
+      body: StreamBuilder<List<Map<String, dynamic>>>(
+        stream: NotificationService.instance.notificationsStream,
+        builder: (context, snapshot) {
+          final notifs = snapshot.data ?? const <Map<String, dynamic>>[];
+          final loading = snapshot.connectionState == ConnectionState.waiting && notifs.isEmpty;
+          return ListView(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
+            children: [
+              if (!_bannerDismissed) ...[
+                _alertTipBanner(),
+                const SizedBox(height: 16),
+              ],
+              if (loading)
+                const Padding(
+                  padding: EdgeInsets.only(top: 80),
+                  child: Center(child: CupertinoActivityIndicator()),
+                )
+              else if (notifs.isEmpty)
+                _alertEmptyState()
+              else
+                ...notifs.map(_alertCard),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _alertTipBanner() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFEF3C7),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          const Icon(CupertinoIcons.lightbulb_fill, color: Color(0xFFD97706), size: 18),
+          const SizedBox(width: 8),
+          const Expanded(
+            child: Text(
+              'Completá tu perfil y grabá un video pitch.',
+              style: TextStyle(color: Color(0xFF92400E), fontSize: 12.5, fontWeight: FontWeight.w600),
+            ),
+          ),
+          GestureDetector(
+            onTap: () => setState(() => _bannerDismissed = true),
+            child: const Icon(CupertinoIcons.xmark, color: Color(0xFF92400E), size: 16),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _alertEmptyState() {
+    return Padding(
+      padding: const EdgeInsets.only(top: 80),
+      child: Column(
+        children: [
+          Container(
+            width: 72,
+            height: 72,
+            decoration: const BoxDecoration(color: Color(0xFFEEF2F7), shape: BoxShape.circle),
+            child: const Icon(CupertinoIcons.bell, size: 32, color: Color(0xFF94A3B8)),
+          ),
+          const SizedBox(height: 16),
+          const Text('No tenés notificaciones',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF334155))),
+          const SizedBox(height: 6),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 24),
+            child: Text('Acá vas a ver conexiones, mensajes y novedades de tus vacantes.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 13, color: Color(0xFF94A3B8))),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _alertCard(Map<String, dynamic> n) {
+    final title = (n['title'] ?? '').toString();
+    final body = (n['body'] ?? '').toString();
+    final type = (n['type'] ?? '').toString();
+    final isRead = n['is_read'] == true;
+    final when = _relativeTime(n['created_at']?.toString());
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: isRead ? Colors.white : const Color(0xFFF0F7FF),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE8EDF2)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+                color: _alertIconColor(type).withValues(alpha: 0.12), shape: BoxShape.circle),
+            child: Icon(_alertIconData(type), size: 20, color: _alertIconColor(type)),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (title.isNotEmpty)
+                  Text(title,
+                      style: const TextStyle(
+                          fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF1E293B))),
+                if (body.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(body,
+                      style: const TextStyle(fontSize: 13, color: Color(0xFF64748B), height: 1.3)),
+                ],
+                if (when.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text(when, style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
+                ],
+              ],
+            ),
+          ),
+          if (!isRead)
+            Container(
+              margin: const EdgeInsets.only(left: 8, top: 4),
+              width: 8,
+              height: 8,
+              decoration: const BoxDecoration(color: Color(0xFF3B82F6), shape: BoxShape.circle),
+            ),
+        ],
+      ),
+    );
+  }
+
+  IconData _alertIconData(String type) {
+    switch (type) {
+      case 'connection':
+      case 'connection_request':
+      case 'connection_accepted':
+        return CupertinoIcons.person_2_fill;
+      case 'message':
+        return CupertinoIcons.chat_bubble_2_fill;
+      case 'like':
+        return CupertinoIcons.heart_fill;
+      case 'jobAlert':
+      case 'job_application':
+        return CupertinoIcons.briefcase_fill;
+      case 'nexus':
+        return CupertinoIcons.sparkles;
+      default:
+        return CupertinoIcons.bell_fill;
+    }
+  }
+
+  Color _alertIconColor(String type) {
+    switch (type) {
+      case 'connection':
+      case 'connection_request':
+      case 'connection_accepted':
+        return const Color(0xFF3B82F6);
+      case 'message':
+        return const Color(0xFF10B981);
+      case 'like':
+        return const Color(0xFFEF4444);
+      case 'jobAlert':
+      case 'job_application':
+        return const Color(0xFFF97316);
+      case 'nexus':
+        return const Color(0xFF7C3AED);
+      default:
+        return const Color(0xFF64748B);
+    }
+  }
+
+  String _relativeTime(String? iso) {
+    if (iso == null || iso.isEmpty) return '';
+    final dt = DateTime.tryParse(iso);
+    if (dt == null) return '';
+    final diff = DateTime.now().difference(dt.toLocal());
+    if (diff.inMinutes < 1) return 'Ahora';
+    if (diff.inMinutes < 60) return 'Hace ${diff.inMinutes} min';
+    if (diff.inHours < 24) return 'Hace ${diff.inHours} h';
+    if (diff.inDays < 7) return 'Hace ${diff.inDays} d';
+    return '${dt.day}/${dt.month}/${dt.year}';
+  }
+
+  // ── VIEJO layout mobile (mockup Quantum Nexus). Ya no se usa; se deja como
+  //    referencia y para no romper los painters. No llamar. ──
+  // ignore: unused_element
+  Widget _deadOldMobileAlerts(BuildContext context) {
     return AnimatedBuilder(
       animation: _animationController,
       builder: (context, child) {
@@ -503,552 +712,55 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
   ];
 
   Widget _buildWeb(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _animationController,
-      builder: (context, child) {
-        return WebPage(
-          title: 'Notificaciones',
-          subtitle: 'Alertas y panel de control del Quantum Nexus',
-          child: Container(
-            width: double.infinity,
-            height: 980,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFF0F172A).withOpacity(0.06),
-                  blurRadius: 24,
-                  offset: const Offset(0, 8),
-                ),
-              ],
+    return WebPage(
+      title: 'Notificaciones',
+      subtitle: 'Alertas y actividad de tu cuenta',
+      child: Container(
+        width: double.infinity,
+        constraints: const BoxConstraints(minHeight: 600),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF0F172A).withOpacity(0.06),
+              blurRadius: 24,
+              offset: const Offset(0, 8),
             ),
-            padding: const EdgeInsets.all(28),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Top Tip Banner
-                if (!_bannerDismissed)
-                  Container(
-                    margin: const EdgeInsets.only(bottom: 24),
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFEF3C7),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFFFDE68A)),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(CupertinoIcons.lightbulb_fill, color: Color(0xFFD97706), size: 22),
-                        const SizedBox(width: 14),
-                        const Expanded(
-                          child: Text(
-                            "Completá tu perfil y grabá un video pitch para aumentar tu visibilidad.",
-                            style: TextStyle(
-                              color: Color(0xFF92400E),
-                              fontSize: 14.5,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                        GestureDetector(
-                          onTap: () => setState(() => _bannerDismissed = true),
-                          child: const Icon(CupertinoIcons.xmark, color: Color(0xFF92400E), size: 18),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                // Main Dashboard Body
-                Expanded(
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Left Area: Quantum Nexus Graph & Mobility Map (flex 3.2)
-                      Expanded(
-                        flex: 32,
-                        child: Stack(
-                          children: [
-                            // Background Canvas for Quantum Nexus Graph
-                            Positioned.fill(
-                              child: CustomPaint(
-                                painter: QuantumNexusPainter(
-                                  animationValue: _animationController.value,
-                                ),
-                              ),
-                            ),
-
-                            // Overlay: Profile & Skill Cards (Top Left)
-                            Positioned(
-                              top: 15,
-                              left: 15,
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text(
-                                    "Career Quantum Explorer",
-                                    style: TextStyle(
-                                      fontFamily: 'Georgia',
-                                      fontSize: 26,
-                                      fontWeight: FontWeight.w900,
-                                      color: Color(0xFF0F172A),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 14),
-                                  Row(
-                                    children: [
-                                      // Profile Card
-                                      Container(
-                                        width: 230,
-                                        padding: const EdgeInsets.all(14),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFFF1F5F9).withOpacity(0.95),
-                                          borderRadius: BorderRadius.circular(16),
-                                          border: Border.all(color: const Color(0xFFCBD5E1)),
-                                          boxShadow: [
-                                            BoxShadow(
-                                              color: Colors.black.withOpacity(0.04),
-                                              blurRadius: 10,
-                                              offset: const Offset(0, 4),
-                                            ),
-                                          ],
-                                        ),
-                                        child: Row(
-                                          children: [
-                                            Stack(
-                                              clipBehavior: Clip.none,
-                                              children: [
-                                                Container(
-                                                  width: 48,
-                                                  height: 48,
-                                                  decoration: const BoxDecoration(
-                                                    shape: BoxShape.circle,
-                                                    image: DecorationImage(
-                                                      image: NetworkImage("https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop"),
-                                                      fit: BoxFit.cover,
-                                                    ),
-                                                  ),
-                                                ),
-                                                Positioned(
-                                                  bottom: -2,
-                                                  right: -2,
-                                                  child: Container(
-                                                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-                                                    decoration: BoxDecoration(
-                                                      color: const Color(0xFFF97316),
-                                                      borderRadius: BorderRadius.circular(4),
-                                                    ),
-                                                    child: const Text(
-                                                      "10K",
-                                                      style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
-                                                    ),
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                            const SizedBox(width: 12),
-                                            const Expanded(
-                                              child: Column(
-                                                crossAxisAlignment: CrossAxisAlignment.start,
-                                                children: [
-                                                  Text(
-                                                    "Gale / Senior Engineering Lead",
-                                                    style: TextStyle(color: Color(0xFF0F172A), fontSize: 12, fontWeight: FontWeight.bold),
-                                                    maxLines: 1,
-                                                    overflow: TextOverflow.ellipsis,
-                                                  ),
-                                                  SizedBox(height: 3),
-                                                  Text(
-                                                    "(Latinaics)",
-                                                    style: TextStyle(color: Color(0xFFF97316), fontSize: 10, fontWeight: FontWeight.w800),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      const SizedBox(width: 14),
-
-                                      // Skills Match Radar Card
-                                      Container(
-                                        width: 240,
-                                        padding: const EdgeInsets.all(14),
-                                        decoration: BoxDecoration(
-                                          color: Colors.white,
-                                          borderRadius: BorderRadius.circular(16),
-                                          border: Border.all(color: const Color(0xFFCBD5E1)),
-                                          boxShadow: [
-                                            BoxShadow(
-                                              color: Colors.black.withOpacity(0.04),
-                                              blurRadius: 10,
-                                              offset: const Offset(0, 4),
-                                            ),
-                                          ],
-                                        ),
-                                        child: Row(
-                                          children: [
-                                            Expanded(
-                                              child: Column(
-                                                crossAxisAlignment: CrossAxisAlignment.start,
-                                                children: [
-                                                  const Text(
-                                                    "Satinunics",
-                                                    style: TextStyle(color: Color(0xFF0F172A), fontSize: 12, fontWeight: FontWeight.bold),
-                                                  ),
-                                                  const SizedBox(height: 6),
-                                                  SizedBox(
-                                                    width: 72,
-                                                    height: 72,
-                                                    child: CustomPaint(
-                                                      painter: RadarChartPainter(
-                                                        values: const [0.8, 0.75, 0.9, 0.65, 0.85, 0.7],
-                                                        labels: const [],
-                                                      ),
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                            const SizedBox(width: 10),
-                                            Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                              decoration: BoxDecoration(
-                                                color: const Color(0xFFFFF7ED),
-                                                borderRadius: BorderRadius.circular(8),
-                                                border: Border.all(color: const Color(0xFFFFEDD5)),
-                                              ),
-                                              child: const Text(
-                                                "98%",
-                                                style: TextStyle(color: Color(0xFFC2410C), fontSize: 15, fontWeight: FontWeight.w900),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 12),
-                                  Container(
-                                    width: 484,
-                                    padding: const EdgeInsets.all(12),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFF8FAFC).withOpacity(0.9),
-                                      borderRadius: BorderRadius.circular(10),
-                                      border: Border.all(color: const Color(0xFFE2E8F0)),
-                                    ),
-                                    child: const Text(
-                                      "CURATED PREMIUM MATCH\n\nA new role with a skill factor has been curated for your ore-cur view. View detailed profile analysis.",
-                                      style: TextStyle(color: Color(0xFF475569), fontSize: 10, height: 1.4, fontWeight: FontWeight.w500),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-
-                            // Overlay: Global Talent Mobility Alert Map (Bottom Left)
-                            Positioned(
-                              bottom: 15,
-                              left: 15,
-                              child: Container(
-                                width: 340,
-                                height: 290,
-                                padding: const EdgeInsets.all(16),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFF8FAFC).withOpacity(0.95),
-                                  borderRadius: BorderRadius.circular(18),
-                                  border: Border.all(color: const Color(0xFFE2E8F0)),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withOpacity(0.04),
-                                      blurRadius: 12,
-                                      offset: const Offset(0, 4),
-                                    ),
-                                  ],
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const Text(
-                                      "Global Talent mobility alert",
-                                      style: TextStyle(color: Color(0xFF0F172A), fontSize: 14, fontWeight: FontWeight.bold),
-                                    ),
-                                    const SizedBox(height: 6),
-                                    const Text(
-                                      "High demand detected in Santiago, Chile for Senior DevOps with LATAM expertise.",
-                                      style: TextStyle(color: Color(0xFF475569), fontSize: 10, height: 1.4),
-                                    ),
-                                    const SizedBox(height: 10),
-                                    Expanded(
-                                      child: Row(
-                                        children: [
-                                          // South America custom vector map
-                                          Expanded(
-                                            child: ClipRRect(
-                                              borderRadius: BorderRadius.circular(8),
-                                              child: CustomPaint(
-                                                size: Size.infinite,
-                                                painter: TalentMobilityMapPainter(
-                                                  animationValue: _animationController.value,
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                          const SizedBox(width: 12),
-                                          // Map Legend Scale
-                                          Column(
-                                            mainAxisAlignment: MainAxisAlignment.center,
-                                            children: [
-                                              const Text("High", style: TextStyle(color: Color(0xFFEF4444), fontSize: 8, fontWeight: FontWeight.bold)),
-                                              const SizedBox(height: 5),
-                                              Container(
-                                                width: 8,
-                                                height: 110,
-                                                decoration: BoxDecoration(
-                                                  borderRadius: BorderRadius.circular(4),
-                                                  gradient: const LinearGradient(
-                                                    colors: [Color(0xFFEF4444), Color(0xFFF97316), Color(0xFFCBD5E1)],
-                                                    begin: Alignment.topCenter,
-                                                    end: Alignment.bottomCenter,
-                                                  ),
-                                                ),
-                                              ),
-                                              const SizedBox(height: 5),
-                                              const Text("Low", style: TextStyle(color: Color(0xFF64748B), fontSize: 8, fontWeight: FontWeight.bold)),
-                                            ],
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-
-                            // Orbital Stage indicator overlay (Bottom center-ish)
-                            Positioned(
-                              bottom: 140,
-                              right: 210,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFF97316),
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                                child: const Text(
-                                  "Stage 3",
-                                  style: TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.w900),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-
-                      const SizedBox(width: 28),
-
-                      // Right Area: Impact Score & Network suggestions (flex 1.0)
-                      Expanded(
-                        flex: 10,
-                        child: Column(
-                          children: [
-                            // Card 1: YOUR GLOBAL IMPACT SCORE
-                            Container(
-                              height: 310,
-                              padding: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFF8FAFC),
-                                borderRadius: BorderRadius.circular(18),
-                                border: Border.all(color: const Color(0xFFE2E8F0)),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.03),
-                                    blurRadius: 10,
-                                    offset: const Offset(0, 4),
-                                  ),
-                                ],
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text(
-                                    "YOUR GLOBAL IMPACT SCORE",
-                                    style: TextStyle(color: Color(0xFF0F172A), fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.2),
-                                  ),
-                                  const SizedBox(height: 12),
-                                  Expanded(
-                                    child: CustomPaint(
-                                      size: Size.infinite,
-                                      painter: GlobalImpactScorePainter(),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 12),
-                                  Container(
-                                    width: double.infinity,
-                                    padding: const EdgeInsets.symmetric(vertical: 10),
-                                    alignment: Alignment.center,
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFF1F5F9),
-                                      borderRadius: BorderRadius.circular(10),
-                                      border: Border.all(color: const Color(0xFFCBD5E1)),
-                                    ),
-                                    child: const Text(
-                                      "Interactive Contribution",
-                                      style: TextStyle(color: Color(0xFF334155), fontSize: 11.5, fontWeight: FontWeight.bold),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-
-                            const SizedBox(height: 20),
-
-                            // Card 2: IMMEDIATE NETWORK SUGGESTIONS
-                            Expanded(
-                              child: Container(
-                                padding: const EdgeInsets.all(16),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFF8FAFC),
-                                  borderRadius: BorderRadius.circular(18),
-                                  border: Border.all(color: const Color(0xFFE2E8F0)),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withOpacity(0.03),
-                                      blurRadius: 10,
-                                      offset: const Offset(0, 4),
-                                    ),
-                                  ],
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const Text(
-                                      "IMMEDIATE NETWORK SUGGESTIONS",
-                                      style: TextStyle(color: Color(0xFF0F172A), fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.2),
-                                    ),
-                                    const SizedBox(height: 12),
-
-                                    // Suggestions list
-                                    Expanded(
-                                      child: ListView.builder(
-                                        itemCount: _suggestions.length,
-                                        itemBuilder: (context, index) {
-                                          final s = _suggestions[index];
-                                          return Padding(
-                                            padding: const EdgeInsets.only(bottom: 10.0),
-                                            child: Row(
-                                              children: [
-                                                Container(
-                                                  width: 32,
-                                                  height: 32,
-                                                  decoration: BoxDecoration(
-                                                    shape: BoxShape.circle,
-                                                    image: DecorationImage(image: NetworkImage(s["avatar"]!), fit: BoxFit.cover),
-                                                  ),
-                                                ),
-                                                const SizedBox(width: 10),
-                                                Expanded(
-                                                  child: Column(
-                                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                                    children: [
-                                                      Text(
-                                                        s["name"]!,
-                                                        style: const TextStyle(color: Color(0xFF0F172A), fontSize: 11.5, fontWeight: FontWeight.bold),
-                                                      ),
-                                                      Text(
-                                                        "${s["title"]!} - ${s["sub"]!}",
-                                                        style: const TextStyle(color: Color(0xFF475569), fontSize: 9.5),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                ),
-                                                const SizedBox(width: 6),
-                                                Text(
-                                                  s["match"]!,
-                                                  style: const TextStyle(color: Color(0xFF2563EB), fontSize: 11, fontWeight: FontWeight.bold),
-                                                ),
-                                                const SizedBox(width: 10),
-                                                Container(
-                                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                                                  decoration: BoxDecoration(
-                                                    color: const Color(0xFFF97316),
-                                                    borderRadius: BorderRadius.circular(6),
-                                                  ),
-                                                  child: const Text(
-                                                    "Conectar",
-                                                    style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          );
-                                        },
-                                      ),
-                                    ),
-
-                                    // Video Prep widgets
-                                    Container(
-                                      height: 70,
-                                      padding: const EdgeInsets.all(8),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFFF1F5F9),
-                                        borderRadius: BorderRadius.circular(10),
-                                        border: Border.all(color: const Color(0xFFE2E8F0)),
-                                      ),
-                                      child: Row(
-                                        children: [
-                                          Container(
-                                            width: 54,
-                                            height: 54,
-                                            decoration: BoxDecoration(
-                                              color: Colors.black26,
-                                              borderRadius: BorderRadius.circular(8),
-                                              image: const DecorationImage(
-                                                image: NetworkImage("https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=100&h=100&fit=crop"),
-                                                fit: BoxFit.cover,
-                                              ),
-                                            ),
-                                            child: const Icon(CupertinoIcons.play_fill, color: Colors.white, size: 16),
-                                          ),
-                                          const SizedBox(width: 10),
-                                          const Expanded(
-                                            child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
-                                              mainAxisAlignment: MainAxisAlignment.center,
-                                              children: [
-                                                Text(
-                                                  "Quantum Senior Engineering",
-                                                  style: TextStyle(color: Color(0xFF0F172A), fontSize: 10, fontWeight: FontWeight.bold),
-                                                  maxLines: 1,
-                                                  overflow: TextOverflow.ellipsis,
-                                                ),
-                                                SizedBox(height: 3),
-                                                Text(
-                                                  "Learn more",
-                                                  style: TextStyle(color: Color(0xFFF97316), fontSize: 9, fontWeight: FontWeight.bold),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+          ],
+        ),
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (!_bannerDismissed) ...[
+              _alertTipBanner(),
+              const SizedBox(height: 20),
+            ],
+            StreamBuilder<List<Map<String, dynamic>>>(
+              stream: NotificationService.instance.notificationsStream,
+              builder: (context, snapshot) {
+                final notifs = snapshot.data ?? const <Map<String, dynamic>>[];
+                final loading = snapshot.connectionState == ConnectionState.waiting && notifs.isEmpty;
+                if (loading) {
+                  return const Padding(
+                    padding: EdgeInsets.only(top: 80),
+                    child: Center(child: CupertinoActivityIndicator()),
+                  );
+                }
+                if (notifs.isEmpty) {
+                  return _alertEmptyState();
+                }
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: notifs.map(_alertCard).toList(),
+                );
+              },
             ),
-          ),
-        );
-      },
+          ],
+        ),
+      ),
     );
   }
 
