@@ -1,13 +1,18 @@
 import 'dart:ui';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart' show Colors, LinearProgressIndicator, AlwaysStoppedAnimation, CircularProgressIndicator;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:flutter_map_cancellable_tile_provider/flutter_map_cancellable_tile_provider.dart';
 import 'package:latlong2/latlong.dart';
 import '../theme/app_theme.dart';
 import '../widgets/web_ui.dart';
 import '../screens/vacantes_screen.dart';
 import 'explore_demo_data.dart';
+// Mapa web con Leaflet (flutter_map no pinta tiles en Flutter web/CanvasKit).
+import '../widgets/web_map_stub.dart'
+    if (dart.library.html) '../widgets/web_map.dart';
 
 // Pre-defined high-quality photos mapped to demo names or indices for premium look
 String _getItemPhoto(Map<String, dynamic> item) {
@@ -217,7 +222,46 @@ class _ExploreScreenState extends State<ExploreScreen> with TickerProviderStateM
   // ═══════════════════════════════════════════════════════════════
   // MAP BUILDER & MARKERS
   // ═══════════════════════════════════════════════════════════════
+  // Color del pin según tipo, en hex para Leaflet (web).
+  String _pinColorHex(Map<String, dynamic> item) {
+    final isCompany = item['type'] == 'empresa';
+    final hasVideo = item['video'] == true;
+    if (isCompany) return '#F97316';
+    return hasVideo ? '#2563EB' : '#6D48E5';
+  }
+
   Widget _buildMap() {
+    // En web, flutter_map no dibuja los tiles (CanvasKit). Usamos Leaflet nativo.
+    if (kIsWeb) {
+      final pins = _filteredItems
+          .map((item) => <String, dynamic>{
+                'id': item['name'],
+                'lat': (item['lat'] as num).toDouble(),
+                'lng': (item['lng'] as num).toDouble(),
+                'color': _pinColorHex(item),
+                'avatar': _getItemPhoto(item),
+              })
+          .toList();
+      return buildWebMap(
+        centerLat: _mapCenter.latitude,
+        centerLng: _mapCenter.longitude,
+        zoom: _mapZoom,
+        pins: pins,
+        selectedId: _selectedItem?['name'] as String?,
+        onPinTap: (id) {
+          final item = _filteredItems.firstWhere(
+            (e) => e['name'] == id,
+            orElse: () => <String, dynamic>{},
+          );
+          if (item.isEmpty) return;
+          setState(() {
+            _selectedItem = item;
+            _mapCenter = _getLatLng(item);
+            _mapZoom = 14.5;
+          });
+        },
+      );
+    }
     return FlutterMap(
       options: MapOptions(
         initialCenter: _mapCenter,
@@ -227,7 +271,13 @@ class _ExploreScreenState extends State<ExploreScreen> with TickerProviderStateM
       mapController: _mapController,
       children: [
         TileLayer(
-          urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+          // OSM (tile.openstreetmap.org) degrada/vacía los tiles en produccion
+          // por su politica de uso (bloqueo por Referer) → mapa gris. ArcGIS
+          // World_Street_Map sirve el tile completo. OJO: orden {z}/{y}/{x}.
+          urlTemplate:
+              'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+          userAgentPackageName: 'ai.mploya.app',
+          tileProvider: CancellableNetworkTileProvider(),
         ),
         MarkerLayer(
           markers: _filteredItems.map((item) {

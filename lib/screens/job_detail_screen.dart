@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart' show Divider, Colors, Icons;
 import 'package:flutter_map/flutter_map.dart';
+import 'package:flutter_map_cancellable_tile_provider/flutter_map_cancellable_tile_provider.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -910,7 +911,12 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
               ),
               children: [
                 TileLayer(
-                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  // ArcGIS World_Street_Map: OSM degrada tiles en prod por Referer.
+                  // OJO: orden {z}/{y}/{x}.
+                  urlTemplate:
+                      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+                  userAgentPackageName: 'ai.mploya.app',
+                  tileProvider: CancellableNetworkTileProvider(),
                 ),
                 MarkerLayer(markers: [
                   Marker(

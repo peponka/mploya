@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    html, body, #map { height: 100%; margin: 0; padding: 0; background: #F8F9FB; }
+    /* Quitar el recuadro blanco por defecto de los divIcon de Leaflet. */
+    .leaflet-div-icon { background: transparent; border: none; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <script>
+    var map = L.map('map', { zoomControl: false, attributionControl: false })
+      .setView([-34.6037, -58.3816], 13);
+    L.tileLayer(
+      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+      { maxZoom: 19 }
+    ).addTo(map);
+
+    var markers = [];
+    function setPins(pins, selectedId) {
+      markers.forEach(function (m) { map.removeLayer(m); });
+      markers = [];
+      (pins || []).forEach(function (p) {
+        var sel = (p.id === selectedId);
+        var size = sel ? 44 : 36;
+        var inner = p.avatar
+          ? '<img src="' + p.avatar + '" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display=\'none\'"/>'
+          : '';
+        var html =
+          '<div style="width:' + size + 'px;height:' + size + 'px;border-radius:50%;'
+          + 'border:' + (sel ? 3 : 2) + 'px solid ' + p.color + ';background:#fff;overflow:hidden;'
+          + 'box-shadow:0 2px 8px rgba(0,0,0,.35);">' + inner + '</div>';
+        var icon = L.divIcon({ html: html, className: '', iconSize: [size, size], iconAnchor: [size / 2, size / 2] });
+        var mk = L.marker([p.lat, p.lng], { icon: icon }).addTo(map);
+        mk.on('click', function () { parent.postMessage({ mployaPinTap: p.id }, '*'); });
+        markers.push(mk);
+      });
+    }
+
+    window.addEventListener('message', function (e) {
+      var d = e.data || {};
+      if (d.mployaSetView) {
+        map.setView([d.lat, d.lng], d.zoom, { animate: true });
+      }
+      if (d.mployaPins) {
+        setPins(d.mployaPins, d.selectedId || '');
+      }
+    });
+
+    // El div ya tiene tamaño cuando el iframe carga, pero por las dudas.
+    setTimeout(function () { map.invalidateSize(); }, 200);
+    // Avisar al padre (Flutter) que el mapa está listo para recibir pines.
+    parent.postMessage({ mployaMapReady: true }, '*');
+  </script>
+</body>
+</html>

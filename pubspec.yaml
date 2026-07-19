@@ -40,6 +40,9 @@ dependencies:
 
   # Map
   flutter_map: ^8.1.1
+  # Necesario en Flutter Web (CanvasKit): el NetworkTileProvider por defecto deja
+  # los tiles en blanco (tainted canvas). Este baja bytes por fetch y los decodifica.
+  flutter_map_cancellable_tile_provider: ^3.1.0
   latlong2: ^0.9.1
   geolocator: ^14.0.2
 
