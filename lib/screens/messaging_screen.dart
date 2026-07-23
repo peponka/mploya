@@ -12,6 +12,7 @@ import 'package:video_player/video_player.dart';
 import '../theme/app_theme.dart';
 import '../models/models.dart';
 import '../widgets/nex_avatar.dart';
+import '../widgets/mploya_toast.dart';
 import '../services/chat_service.dart';
 import '../services/content_moderation_service.dart';
 import '../utils/time_utils.dart';
@@ -822,7 +823,7 @@ class _MessagingScreenState extends State<MessagingScreen> {
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               gradient: isNew
-                  ? const LinearGradient(colors: [Color(0xFFF97316), Color(0xFFE2860B)])
+                  ? const LinearGradient(colors: [Color(0xFF185FA5), Color(0xFF0C447C)])
                   : null,
               border: isNew ? null : Border.all(color: context.dividerColor, width: 2),
             ),
@@ -911,7 +912,7 @@ class _MessagingScreenState extends State<MessagingScreen> {
             decoration: BoxDecoration(
               color: isMe ? null : (context.isDark ? NexTheme.darkSurface : const Color(0xFFF2F2F7)),
               gradient: isMe ? const LinearGradient(
-                colors: [Color(0xFFF97316), Color(0xFFE2860B)],
+                colors: [Color(0xFF185FA5), Color(0xFF0C447C)],
                 begin: Alignment.topLeft, end: Alignment.bottomRight,
               ) : null,
               borderRadius: BorderRadius.only(
@@ -921,7 +922,7 @@ class _MessagingScreenState extends State<MessagingScreen> {
                 bottomRight: Radius.circular(isMe ? 6 : 20),
               ),
               boxShadow: isMe
-                  ? [BoxShadow(color: const Color(0xFFF97316).withValues(alpha: 0.15), blurRadius: 8, offset: const Offset(0, 3))]
+                  ? [BoxShadow(color: const Color(0xFF185FA5).withValues(alpha: 0.15), blurRadius: 8, offset: const Offset(0, 3))]
                   : null,
             ),
             child: Text(text, style: TextStyle(
@@ -981,13 +982,13 @@ class _MessagingScreenState extends State<MessagingScreen> {
                   width: 80, height: 80,
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
-                      colors: [Color(0xFFF97316), Color(0xFFE2860B)],
+                      colors: [Color(0xFF185FA5), Color(0xFF0C447C)],
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                     ),
                     borderRadius: BorderRadius.circular(20),
                     boxShadow: [
-                      BoxShadow(color: const Color(0xFFF97316).withValues(alpha: 0.3), blurRadius: 16, offset: const Offset(0, 6)),
+                      BoxShadow(color: const Color(0xFF185FA5).withValues(alpha: 0.3), blurRadius: 16, offset: const Offset(0, 6)),
                     ],
                   ),
                   child: const Icon(CupertinoIcons.videocam_fill, size: 36, color: CupertinoColors.white),
@@ -1041,8 +1042,10 @@ class _MessagingScreenState extends State<MessagingScreen> {
                   onTap: () => Navigator.of(context).push(CupertinoPageRoute(builder: (_) => ProfileScreen(user: user)))),
                 _quickActionRow(context, icon: CupertinoIcons.calendar, label: 'Agendar Entrevista',
                   onTap: () => Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const SchedulingScreen(isCompany: true)))),
-                _quickActionRow(context, icon: CupertinoIcons.star_fill, label: 'Guardar contacto', onTap: () {}),
-                _quickActionRow(context, icon: CupertinoIcons.doc_on_doc_fill, label: 'Compartir CV', onTap: () {}),
+                _quickActionRow(context, icon: CupertinoIcons.star_fill, label: 'Guardar contacto',
+                  onTap: () => MployaToast.saved(context, 'Contacto guardado')),
+                _quickActionRow(context, icon: CupertinoIcons.doc_on_doc_fill, label: 'Compartir CV',
+                  onTap: () => MployaToast.info(context, 'Compartir CV estará disponible muy pronto')),
               ],
             ),
           ),
@@ -1290,7 +1293,7 @@ class _MatchAvatarHero extends StatelessWidget {
             shape: BoxShape.circle,
             gradient: isNew
                 ? const LinearGradient(
-                    colors: [Color(0xFFF97316), Color(0xFFE2860B)],
+                    colors: [Color(0xFF185FA5), Color(0xFF0C447C)],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   )
@@ -1299,7 +1302,7 @@ class _MatchAvatarHero extends StatelessWidget {
             boxShadow: isNew
                 ? [
                     BoxShadow(
-                      color: const Color(0xFFF97316).withValues(alpha: 0.3),
+                      color: const Color(0xFF185FA5).withValues(alpha: 0.3),
                       blurRadius: 12,
                       offset: const Offset(0, 4),
                     )
@@ -2185,7 +2188,7 @@ class ChatDetailScreenState extends State<ChatDetailScreen> {
                       CupertinoButton(
                         padding: EdgeInsets.zero,
                         minimumSize: Size.zero,
-                        onPressed: () {},
+                        onPressed: () => MployaToast.info(context, 'Los mensajes de voz estarán disponibles muy pronto'),
                         child: Icon(CupertinoIcons.mic_fill, size: 22, color: context.textTertiary),
                       ),
                       const SizedBox(width: 10),
@@ -2198,13 +2201,13 @@ class ChatDetailScreenState extends State<ChatDetailScreen> {
                           height: 40,
                           decoration: BoxDecoration(
                             gradient: const LinearGradient(
-                              colors: [Color(0xFFF97316), Color(0xFFE2860B)],
+                              colors: [Color(0xFF185FA5), Color(0xFF0C447C)],
                               begin: Alignment.topLeft,
                               end: Alignment.bottomRight,
                             ),
                             shape: BoxShape.circle,
                             boxShadow: [
-                              BoxShadow(color: const Color(0xFFF97316).withValues(alpha: 0.3), blurRadius: 12, offset: const Offset(0, 4))
+                              BoxShadow(color: const Color(0xFF185FA5).withValues(alpha: 0.3), blurRadius: 12, offset: const Offset(0, 4))
                             ],
                           ),
                           child: Center(
@@ -2278,9 +2281,9 @@ class _EmptyChat extends StatelessWidget {
               padding: const EdgeInsets.all(4),
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                gradient: const LinearGradient(colors: [Color(0xFFF97316), Color(0xFFE2860B)]),
+                gradient: const LinearGradient(colors: [Color(0xFF185FA5), Color(0xFF0C447C)]),
                 boxShadow: [
-                  BoxShadow(color: const Color(0xFFF97316).withValues(alpha: 0.3), blurRadius: 24, offset: const Offset(0, 8))
+                  BoxShadow(color: const Color(0xFF185FA5).withValues(alpha: 0.3), blurRadius: 24, offset: const Offset(0, 8))
                 ],
               ),
               child: Container(
@@ -2462,7 +2465,7 @@ class _MessageBubble extends StatelessWidget {
                     color: isMe ? null : context.cardColor,
                     gradient: isMe
                         ? const LinearGradient(
-                            colors: [Color(0xFFF97316), Color(0xFFE2860B)],
+                            colors: [Color(0xFF185FA5), Color(0xFF0C447C)],
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
                           )
@@ -2474,7 +2477,7 @@ class _MessageBubble extends StatelessWidget {
                       bottomRight: Radius.circular(isMe ? 6 : 22),
                     ),
                     boxShadow: isMe
-                        ? [BoxShadow(color: const Color(0xFFF97316).withValues(alpha: 0.2), blurRadius: 12, offset: const Offset(0, 4))]
+                        ? [BoxShadow(color: const Color(0xFF185FA5).withValues(alpha: 0.2), blurRadius: 12, offset: const Offset(0, 4))]
                         : const [BoxShadow(color: Color(0x08000000), blurRadius: 12, offset: Offset(0, 4))],
                   ),
                   child: Column(
@@ -3035,9 +3038,9 @@ class _DemoChatScreen extends StatelessWidget {
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
                       decoration: BoxDecoration(
-                        gradient: const LinearGradient(colors: [Color(0xFFF97316), Color(0xFFE2860B)]),
+                        gradient: const LinearGradient(colors: [Color(0xFF185FA5), Color(0xFF0C447C)]),
                         borderRadius: BorderRadius.circular(12),
-                        boxShadow: [BoxShadow(color: const Color(0xFFF97316).withValues(alpha: 0.25), blurRadius: 8, offset: const Offset(0, 3))],
+                        boxShadow: [BoxShadow(color: const Color(0xFF185FA5).withValues(alpha: 0.25), blurRadius: 8, offset: const Offset(0, 3))],
                       ),
                       child: const Row(mainAxisSize: MainAxisSize.min, children: [
                         Icon(CupertinoIcons.videocam_fill, color: CupertinoColors.white, size: 16),
@@ -3070,7 +3073,7 @@ class _DemoChatScreen extends StatelessWidget {
                           decoration: BoxDecoration(
                             color: isMe ? null : (context.isDark ? NexTheme.darkSurface : const Color(0xFFF2F2F7)),
                             gradient: isMe ? const LinearGradient(
-                              colors: [Color(0xFFF97316), Color(0xFFE2860B)],
+                              colors: [Color(0xFF185FA5), Color(0xFF0C447C)],
                               begin: Alignment.topLeft, end: Alignment.bottomRight,
                             ) : null,
                             borderRadius: BorderRadius.only(
@@ -3080,7 +3083,7 @@ class _DemoChatScreen extends StatelessWidget {
                               bottomRight: Radius.circular(isMe ? 6 : 20),
                             ),
                             boxShadow: isMe
-                                ? [BoxShadow(color: const Color(0xFFF97316).withValues(alpha: 0.15), blurRadius: 8, offset: const Offset(0, 3))]
+                                ? [BoxShadow(color: const Color(0xFF185FA5).withValues(alpha: 0.15), blurRadius: 8, offset: const Offset(0, 3))]
                                 : null,
                           ),
                           child: Text(text, style: TextStyle(
@@ -3124,9 +3127,9 @@ class _DemoChatScreen extends StatelessWidget {
                   Container(
                     width: 36, height: 36,
                     decoration: BoxDecoration(
-                      gradient: const LinearGradient(colors: [Color(0xFFF97316), Color(0xFFE2860B)]),
+                      gradient: const LinearGradient(colors: [Color(0xFF185FA5), Color(0xFF0C447C)]),
                       shape: BoxShape.circle,
-                      boxShadow: [BoxShadow(color: const Color(0xFFF97316).withValues(alpha: 0.3), blurRadius: 8, offset: const Offset(0, 3))],
+                      boxShadow: [BoxShadow(color: const Color(0xFF185FA5).withValues(alpha: 0.3), blurRadius: 8, offset: const Offset(0, 3))],
                     ),
                     child: const Icon(CupertinoIcons.arrow_up, size: 18, color: CupertinoColors.white),
                   ),

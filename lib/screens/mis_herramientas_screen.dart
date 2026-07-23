@@ -86,7 +86,7 @@ class MisHerramientasScreen extends StatelessWidget {
           tiles: [
             _ToolTile(
               icon: CupertinoIcons.videocam_fill,
-              color: const Color(0xFFF97316),
+              color: const Color(0xFF185FA5),
               title: 'Actualizar mi pitch',
               subtitle: 'Grabá o reemplazá tu video de 60s',
               onTap: () => _push(context, const OnboardingPitchScreen(isCompany: false)),

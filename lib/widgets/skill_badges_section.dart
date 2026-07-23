@@ -49,7 +49,7 @@ class _SkillBadgesSectionState extends State<SkillBadgesSection> {
               const Icon(CupertinoIcons.checkmark_seal_fill, color: Color(0xFFFFD700), size: 18),
               const SizedBox(width: 8),
               const Expanded(
-                child: Text('Skill Badges', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF1C1C1E))),
+                child: Text('Insignias de habilidades', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF1C1C1E))),
               ),
               if (widget.isOwnProfile)
                 CupertinoButton(

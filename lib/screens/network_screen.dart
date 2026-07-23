@@ -310,7 +310,7 @@ class _NetworkScreenState extends State<NetworkScreen> {
       decoration: BoxDecoration(
         color: CupertinoColors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFF97316).withValues(alpha: 0.35), width: 1.5),
+        border: Border.all(color: const Color(0xFF185FA5).withValues(alpha: 0.35), width: 1.5),
         boxShadow: const [
           BoxShadow(color: Color(0x0A000000), blurRadius: 15, offset: Offset(0, 8)),
         ],
@@ -331,7 +331,7 @@ class _NetworkScreenState extends State<NetworkScreen> {
                   BoxShadow(color: Color(0x1F000000), blurRadius: 10, offset: Offset(0, 4)),
                 ],
               ),
-              child: const Icon(CupertinoIcons.play_fill, color: Color(0xFFF97316), size: 30),
+              child: const Icon(CupertinoIcons.play_fill, color: Color(0xFF185FA5), size: 30),
             ),
           ),
           const SizedBox(height: 36),
@@ -340,7 +340,7 @@ class _NetworkScreenState extends State<NetworkScreen> {
             style: TextStyle(
               fontSize: 17,
               fontWeight: FontWeight.w800,
-              color: Color(0xFFF97316),
+              color: Color(0xFF185FA5),
             ),
           ),
           const SizedBox(height: 6),
@@ -385,7 +385,7 @@ class _NetworkScreenState extends State<NetworkScreen> {
           _firstStepButton(
             context,
             icon: CupertinoIcons.person_fill,
-            backgroundColor: const Color(0xFFF97316),
+            backgroundColor: const Color(0xFF185FA5),
             textColor: CupertinoColors.white,
             label: 'Completá tu perfil',
             onTap: () => Navigator.of(context).push(CupertinoPageRoute(builder: (_) => ProfileScreen(user: null))),
@@ -415,7 +415,7 @@ class _NetworkScreenState extends State<NetworkScreen> {
             backgroundColor: const Color(0xFFF1F5F9),
             textColor: const Color(0xFF475569),
             label: 'Enviá solicitudes',
-            onTap: () {},
+            onTap: () => currentMainTabNotifier.value = 1, // → Explorar (descubrir gente)
           ),
         ],
       ),
@@ -427,7 +427,7 @@ class _NetworkScreenState extends State<NetworkScreen> {
       width: 34,
       height: 34,
       decoration: BoxDecoration(
-        color: isActive ? const Color(0xFFF97316) : const Color(0xFFF1F5F9),
+        color: isActive ? const Color(0xFF185FA5) : const Color(0xFFF1F5F9),
         shape: BoxShape.circle,
       ),
       child: Icon(
@@ -1015,7 +1015,7 @@ class _MatchGridCardState extends State<_MatchGridCard> {
                         child: Container(
                           height: 36,
                           alignment: Alignment.center,
-                          decoration: BoxDecoration(color: const Color(0xFFF97316), borderRadius: BorderRadius.circular(10)),
+                          decoration: BoxDecoration(color: const Color(0xFF185FA5), borderRadius: BorderRadius.circular(10)),
                           child: _loading
                               ? const CupertinoActivityIndicator(color: CupertinoColors.white, radius: 8)
                               : const Text('Conectar', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: CupertinoColors.white)),

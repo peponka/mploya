@@ -7,28 +7,28 @@ import 'package:flutter/material.dart';
 // ─────────────────────────────────────────────────────────────────────────────
 
 class NexTheme {
-  // ──── Brand Colors (Warm Orange — refined #F97316) ────
-  static const Color brandAccent = Color(0xFFF97316); // Warm Orange (Tailwind 500)
-  static const Color brandAccentDark = Color(0xFFFB923C); // Lighter for dark mode
-  static const Color accentLight = Color(0xFFFFF7ED); // Orange-50 tint
-  static const Color accentDark = Color(0xFF9A3412); // Orange-800 deep
+  // ──── Brand Colors (Professional Blue — rediseño 23/7, antes naranja) ────
+  static const Color brandAccent = Color(0xFF185FA5); // Deep professional blue
+  static const Color brandAccentDark = Color(0xFF378ADD); // Lighter blue for dark mode
+  static const Color accentLight = Color(0xFFE6F1FB); // Blue-50 tint
+  static const Color accentDark = Color(0xFF0C447C); // Blue-800 deep
 
   // Premium gradient endpoints
-  static const Color premiumStart = Color(0xFFF97316);
-  static const Color premiumEnd = Color(0xFFFB923C);
+  static const Color premiumStart = Color(0xFF185FA5);
+  static const Color premiumEnd = Color(0xFF378ADD);
   static const Color premiumGold = Color(0xFFF59E0B);
   static const Color premiumGoldSoft = Color(0xFFFEF3C7);
-  static const Color premiumGoldBright = Color(0xFFEA580C);
+  static const Color premiumGoldBright = Color(0xFF0C447C);
 
   // Semantic
-  static const Color openToWork = Color(0xFFF97316);
+  static const Color openToWork = Color(0xFF185FA5);
   static const Color hiring = Color(0xFF3B82F6);
   static const Color danger = Color(0xFFEF4444);
   static const Color success = Color(0xFF10B981);
   static const Color info = Color(0xFF3B82F6);
 
   // Acento reservado para funciones con IA (Personalidad IA, Bio con IA, Coach).
-  // Regla de color de la app: naranja = marca/acción principal,
+  // Regla de color de la app: azul = marca/acción principal,
   // violeta = "esto lo hace la IA", gris = utilidad/secundario.
   static const Color aiAccent = Color(0xFF6C3FC8);
   static const Color aiAccentLight = Color(0xFF9B6FE8);
@@ -101,7 +101,7 @@ class NexTheme {
 
   // ──── Brand Gradient ────
   static LinearGradient get brandGradient => const LinearGradient(
-    colors: [Color(0xFFF97316), Color(0xFFFBBF24)],
+    colors: [Color(0xFF185FA5), Color(0xFF378ADD)],
     begin: Alignment.centerLeft,
     end: Alignment.centerRight,
   );

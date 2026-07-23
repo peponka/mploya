@@ -28,15 +28,17 @@ String _getItemPhoto(Map<String, dynamic> item) {
     if (name.contains('Despegar')) return 'https://images.unsplash.com/photo-1436491865332-7a61a109cc05?w=100&h=100&fit=crop';
     return 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=100&h=100&fit=crop'; // default building
   } else {
-    if (name.contains('Sofía')) return 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&h=100&fit=crop';
-    if (name.contains('Martín')) return 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&h=100&fit=crop';
-    if (name.contains('Mariano')) return 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop';
-    if (name.contains('Valentina')) return 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop';
-    if (name.contains('Lucía')) return 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=100&h=100&fit=crop';
-    if (name.contains('Franco')) return 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop';
-    if (name.contains('Camila')) return 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=100&h=100&fit=crop';
-    if (name.contains('Lucas')) return 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=100&h=100&fit=crop';
-    return 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop'; // default avatar
+    // Caras variadas (randomuser.me), género acorde al nombre. Números distintos
+    // a los del Dashboard de Candidatos para no repetir ninguna cara entre pantallas.
+    if (name.contains('Sofía')) return 'https://randomuser.me/api/portraits/women/20.jpg';
+    if (name.contains('Martín')) return 'https://randomuser.me/api/portraits/men/22.jpg';
+    if (name.contains('Mariano')) return 'https://randomuser.me/api/portraits/men/76.jpg';
+    if (name.contains('Valentina')) return 'https://randomuser.me/api/portraits/women/65.jpg';
+    if (name.contains('Lucía')) return 'https://randomuser.me/api/portraits/women/8.jpg';
+    if (name.contains('Franco')) return 'https://randomuser.me/api/portraits/men/11.jpg';
+    if (name.contains('Camila')) return 'https://randomuser.me/api/portraits/women/50.jpg';
+    if (name.contains('Lucas')) return 'https://randomuser.me/api/portraits/men/40.jpg';
+    return 'https://randomuser.me/api/portraits/men/40.jpg'; // default avatar
   }
 }
 
@@ -225,7 +227,7 @@ class _ExploreScreenState extends State<ExploreScreen> with TickerProviderStateM
   String _pinColorHex(Map<String, dynamic> item) {
     final isCompany = item['type'] == 'empresa';
     final hasVideo = item['video'] == true;
-    if (isCompany) return '#F97316';
+    if (isCompany) return '#185FA5';
     return hasVideo ? '#2563EB' : '#6D48E5';
   }
 
@@ -275,7 +277,10 @@ class _ExploreScreenState extends State<ExploreScreen> with TickerProviderStateM
           // World_Street_Map sirve el tile completo. OJO: orden {z}/{y}/{x}.
           urlTemplate:
               'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
-          userAgentPackageName: 'ai.mploya.app',
+          userAgentPackageName: 'com.mploya.mploya',
+          errorTileCallback: (tile, error, stackTrace) {
+            debugPrint('MAP_TILE_ERROR coords=${tile.coordinates} error=$error');
+          },
         ),
         MarkerLayer(
           markers: _filteredItems.map((item) {
@@ -296,7 +301,7 @@ class _ExploreScreenState extends State<ExploreScreen> with TickerProviderStateM
   Widget _buildMapPin(Map<String, dynamic> item, bool isSelected) {
     final isCompany = item['type'] == 'empresa';
     final hasVideo = item['video'] == true;
-    final color = isCompany ? const Color(0xFFF97316) : (hasVideo ? const Color(0xFF2563EB) : const Color(0xFF6D48E5));
+    final color = isCompany ? const Color(0xFF185FA5) : (hasVideo ? const Color(0xFF2563EB) : const Color(0xFF6D48E5));
 
     return GestureDetector(
       onTap: () {
@@ -437,7 +442,7 @@ class _ExploreScreenState extends State<ExploreScreen> with TickerProviderStateM
                 onTap: () => setState(() => _showCityDropdown = !_showCityDropdown),
                 child: Row(
                   children: [
-                    const Icon(CupertinoIcons.location_solid, size: 15, color: Color(0xFFF97316)),
+                    const Icon(CupertinoIcons.location_solid, size: 15, color: Color(0xFF185FA5)),
                     const SizedBox(width: 6),
                     Text(
                       _currentCityLabel.length > 20 ? '${_currentCityLabel.substring(0, 18)}...' : _currentCityLabel,
@@ -522,13 +527,13 @@ class _ExploreScreenState extends State<ExploreScreen> with TickerProviderStateM
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
             decoration: BoxDecoration(
-              color: active ? const Color(0xFFF97316) : Colors.white.withValues(alpha: 0.80),
+              color: active ? const Color(0xFF185FA5) : Colors.white.withValues(alpha: 0.80),
               border: Border.all(
-                color: active ? const Color(0xFFEA580C) : Colors.white.withValues(alpha: 0.4),
+                color: active ? const Color(0xFF0C447C) : Colors.white.withValues(alpha: 0.4),
                 width: 1,
               ),
               boxShadow: active ? [
-                BoxShadow(color: const Color(0xFFF97316).withValues(alpha: 0.25), blurRadius: 8, offset: const Offset(0, 2)),
+                BoxShadow(color: const Color(0xFF185FA5).withValues(alpha: 0.25), blurRadius: 8, offset: const Offset(0, 2)),
               ] : null,
             ),
             child: Row(
@@ -658,7 +663,7 @@ class _ExploreScreenState extends State<ExploreScreen> with TickerProviderStateM
     final item = _selectedItem!;
     final isCompany = item['type'] == 'empresa';
     final hasVideo = item['video'] == true;
-    final color = isCompany ? const Color(0xFFF97316) : (hasVideo ? const Color(0xFF2563EB) : const Color(0xFF6D48E5));
+    final color = isCompany ? const Color(0xFF185FA5) : (hasVideo ? const Color(0xFF2563EB) : const Color(0xFF6D48E5));
 
     return Positioned(
       bottom: 24,
@@ -841,7 +846,7 @@ class _ExploreScreenState extends State<ExploreScreen> with TickerProviderStateM
                     height: 42,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      border: Border.all(color: const Color(0xFFF97316), width: 2),
+                      border: Border.all(color: const Color(0xFF185FA5), width: 2),
                       boxShadow: const [
                         BoxShadow(color: Colors.black12, blurRadius: 6),
                       ],
@@ -877,7 +882,7 @@ class _ExploreScreenState extends State<ExploreScreen> with TickerProviderStateM
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(CupertinoIcons.location_solid, size: 13, color: Color(0xFFF97316)),
+                        const Icon(CupertinoIcons.location_solid, size: 13, color: Color(0xFF185FA5)),
                         const SizedBox(width: 4),
                         const Text(
                           'Ciudad: Buenos Aires, Argentina',
@@ -940,7 +945,7 @@ class _ExploreScreenState extends State<ExploreScreen> with TickerProviderStateM
     final item = _selectedItem!;
     final isCompany = item['type'] == 'empresa';
     final hasVideo = item['video'] == true;
-    final color = isCompany ? const Color(0xFFF97316) : (hasVideo ? const Color(0xFF2563EB) : const Color(0xFF6D48E5));
+    final color = isCompany ? const Color(0xFF185FA5) : (hasVideo ? const Color(0xFF2563EB) : const Color(0xFF6D48E5));
 
     return Positioned(
       bottom: 80, // Floating safely above the bottom navigation bar

@@ -117,7 +117,7 @@ class _MatchCelebrationScreenState extends State<MatchCelebrationScreen> with Si
                           height: 52,
                           alignment: Alignment.center,
                           decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(999)),
-                          child: const Text('Revisar perfil completo', style: TextStyle(color: Color(0xFF9A3412), fontSize: 16, fontWeight: FontWeight.w800)),
+                          child: const Text('Revisar perfil completo', style: TextStyle(color: Color(0xFF0C447C), fontSize: 16, fontWeight: FontWeight.w800)),
                         ),
                       ),
                       const SizedBox(height: 12),

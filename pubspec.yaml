@@ -1,7 +1,7 @@
 name: mploya
 description: "mploya - Plataforma de empleo impulsada por IA"
 publish_to: 'none'
-version: 1.0.10+10
+version: 1.0.10+16
 
 environment:
   sdk: '>=3.11.0 <4.0.0'

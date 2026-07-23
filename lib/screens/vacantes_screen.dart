@@ -303,7 +303,7 @@ class _VacantesScreenState extends State<VacantesScreen> {
                         const SizedBox(height: 24),
                         Divider(height: 0.5, thickness: 0.5, color: hairline),
                         const SizedBox(height: 20),
-                        sectionLabel('Sourcing'),
+                        sectionLabel('Búsqueda de talento'),
                         // ── Radar C-Level (tarjeta destacada con toggle) ──
                         GestureDetector(
                           onTap: () => setModalState(() => isConfidential = !isConfidential),
@@ -750,13 +750,13 @@ class _VacantesScreenState extends State<VacantesScreen> {
                 width: 50, height: 50,
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
-                    colors: [Color(0xFFF97316), Color(0xFFFBBF24)],
+                    colors: [Color(0xFF185FA5), Color(0xFF378ADD)],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
                   borderRadius: BorderRadius.circular(14),
                   boxShadow: [
-                    BoxShadow(color: const Color(0xFFF97316).withValues(alpha: 0.2), blurRadius: 10, offset: const Offset(0, 3)),
+                    BoxShadow(color: const Color(0xFF185FA5).withValues(alpha: 0.2), blurRadius: 10, offset: const Offset(0, 3)),
                   ],
                 ),
                 child: Center(
@@ -869,13 +869,13 @@ class _VacantesScreenState extends State<VacantesScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
-                      colors: [Color(0xFFF97316), Color(0xFFE2860B), Color(0xFFD4740A)],
+                      colors: [Color(0xFF185FA5), Color(0xFF0C447C), Color(0xFFD4740A)],
                       begin: Alignment.centerLeft,
                       end: Alignment.centerRight,
                     ),
                     borderRadius: BorderRadius.circular(12),
                     boxShadow: [
-                      BoxShadow(color: const Color(0xFFF97316).withValues(alpha: 0.25), blurRadius: 10, offset: const Offset(0, 3)),
+                      BoxShadow(color: const Color(0xFF185FA5).withValues(alpha: 0.25), blurRadius: 10, offset: const Offset(0, 3)),
                     ],
                   ),
                   child: const Row(

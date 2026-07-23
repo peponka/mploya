@@ -9,6 +9,7 @@ import '../widgets/mploya_shimmer.dart';
 import '../widgets/nex_avatar.dart';
 import '../models/models.dart';
 import '../providers/user_provider.dart';
+import 'job_detail_screen.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'profile_screen.dart';
 
@@ -606,7 +607,9 @@ class _SavedJobCard extends StatelessWidget {
       ),
       child: CupertinoButton(
         padding: EdgeInsets.zero,
-        onPressed: () {},
+        onPressed: () => Navigator.of(context).push(
+          CupertinoPageRoute(builder: (_) => JobDetailScreen(job: job)),
+        ),
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Row(

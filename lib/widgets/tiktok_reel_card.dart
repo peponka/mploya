@@ -923,35 +923,227 @@ class _TikTokReelCardState extends ConsumerState<TikTokReelCard>
     );
 
     // ── Web (TikTok web): video redondeado + acciones al costado, sobre blanco ──
-    // Margen vertical para que se vean las esquinas redondeadas (si no, el video
-    // ocupa todo el alto y las puntas quedan fuera del viewport).
-    final content = widget.webMode
-        ? Padding(
-            padding: const EdgeInsets.fromLTRB(8, 20, 8, 20),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Expanded(
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(18),
-                    child: stack,
-                  ),
-                ),
-                const SizedBox(width: 14),
-                Padding(
-                  key: widget.isFirstCard ? cmFeedActionsKey : null,
-                  padding: const EdgeInsets.only(bottom: 28),
-                  child: actionsBar,
-                ),
-              ],
-            ),
-          )
-        : stack;
+    // Rediseño 23/7: tarjeta CLARA con el video contenido arriba y la info +
+    // acciones debajo (antes: video full-bleed oscuro con overlays). Mismo layout
+    // en web y móvil. El paginado tipo reel (swipe vertical / flechas web) lo
+    // maneja el PageView de home_feed_screen — esto es solo la tarjeta de un reel.
+    // `actionsBar` y `stack` (layout viejo con overlays) quedan sin usar acá.
+    final content = _buildLightReelCard(context, author, matchScore, isLocked);
 
     return VisibilityDetector(
       key: Key('tiktok-${widget.post.id}'),
       onVisibilityChanged: _handleVisibility,
       child: content,
+    );
+  }
+
+  Widget _buildLightReelCard(BuildContext context, NexUser author, int matchScore, bool isLocked) {
+    const brand = Color(0xFF185FA5);
+    final playing = _controller?.value.isPlaying ?? false;
+    final bio = (author.about != null && author.about!.trim().isNotEmpty)
+        ? author.about!.trim()
+        : author.headline;
+    final tags = author.tags.take(3).toList();
+    final hasAvatar = author.avatarUrl != null && author.avatarUrl!.isNotEmpty;
+    final initials = author.name.trim().isNotEmpty
+        ? author.name.trim().split(' ').map((w) => w.isEmpty ? '' : w[0]).take(2).join().toUpperCase()
+        : '?';
+
+    Widget actionBtn(IconData icon, String? label, VoidCallback onTap, {bool filled = false}) {
+      return Expanded(
+        child: CupertinoButton(
+          padding: EdgeInsets.zero,
+          onPressed: onTap,
+          child: Container(
+            height: 40,
+            margin: const EdgeInsets.symmetric(horizontal: 3),
+            decoration: BoxDecoration(
+              color: filled ? brand : const Color(0xFFF1F5F9),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, size: 17, color: filled ? Colors.white : const Color(0xFF475569)),
+                if (label != null) ...[
+                  const SizedBox(width: 6),
+                  Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: filled ? Colors.white : const Color(0xFF475569))),
+                ],
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    final card = Container(
+      margin: const EdgeInsets.symmetric(vertical: 14, horizontal: 4),
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: const [BoxShadow(color: Color(0x0F000000), blurRadius: 18, offset: Offset(0, 8))],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // ── Video contenido ──
+          SizedBox(
+            height: 320,
+            width: double.infinity,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: isLocked ? _showStealthAlert : _togglePlayPause,
+                  child: ReelVideoBackground(
+                    author: author,
+                    controller: _controller,
+                    isInitialized: _isInitialized,
+                    hasError: _hasError,
+                  ),
+                ),
+                Positioned(
+                  top: 12,
+                  left: 12,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(color: const Color(0xFFE6F1FB), borderRadius: BorderRadius.circular(14)),
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      const Icon(CupertinoIcons.sparkles, size: 12, color: brand),
+                      const SizedBox(width: 4),
+                      Text('${matchScore > 0 ? matchScore : 90}% match',
+                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF0C447C))),
+                    ]),
+                  ),
+                ),
+                if (!playing)
+                  Center(
+                    child: Container(
+                      width: 58,
+                      height: 58,
+                      decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.28), shape: BoxShape.circle),
+                      child: const Icon(CupertinoIcons.play_fill, color: Colors.white, size: 26),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          // ── Info + acciones ──
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    GestureDetector(
+                      onTap: () => Navigator.of(context).push(
+                        CupertinoPageRoute(builder: (_) => ProfileScreen(user: author)),
+                      ),
+                      child: Container(
+                        width: 42, height: 42,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: const Color(0xFFE6F1FB),
+                          image: hasAvatar ? DecorationImage(image: NetworkImage(author.avatarUrl!), fit: BoxFit.cover) : null,
+                        ),
+                        alignment: Alignment.center,
+                        child: hasAvatar ? null : Text(initials, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF0C447C))),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(children: [
+                            Flexible(child: Text(author.name, maxLines: 1, overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Color(0xFF0F172A)))),
+                            const SizedBox(width: 5),
+                            const Icon(CupertinoIcons.checkmark_seal_fill, size: 15, color: brand),
+                          ]),
+                          Text(author.headline, maxLines: 1, overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 12.5, color: Color(0xFF94A3B8))),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    CupertinoButton(
+                      padding: EdgeInsets.zero,
+                      minimumSize: Size.zero,
+                      onPressed: () async {
+                        if (_connectionStatus == 'accepted' || _connectionStatus == 'pending') return;
+                        HapticFeedback.lightImpact();
+                        setState(() => _connectionStatus = 'pending');
+                        await SocialService.instance.sendConnectionRequest(author.id);
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        decoration: BoxDecoration(color: brand, borderRadius: BorderRadius.circular(16)),
+                        child: Text(_connectionStatus == 'pending' || _connectionStatus == 'accepted' ? 'Enviado' : 'Seguir',
+                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white)),
+                      ),
+                    ),
+                  ],
+                ),
+                if (bio.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 12),
+                    child: Text(bio, maxLines: 2, overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 13, color: Color(0xFF475569), height: 1.5)),
+                  ),
+                if (tags.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 10),
+                    child: Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: tags
+                          .map((t) => Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                decoration: BoxDecoration(color: const Color(0xFFE6F1FB), borderRadius: BorderRadius.circular(14)),
+                                child: Text(t.startsWith('#') ? t : '#$t',
+                                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF0C447C))),
+                              ))
+                          .toList(),
+                    ),
+                  ),
+                Padding(
+                  padding: const EdgeInsets.only(top: 14),
+                  child: Row(
+                    key: widget.isFirstCard ? cmFeedActionsKey : null,
+                    children: [
+                      actionBtn(_isMatched ? CupertinoIcons.star_fill : CupertinoIcons.star, 'Interesado',
+                          isLocked ? _showStealthAlert : _toggleMatch, filled: _isMatched),
+                      actionBtn(CupertinoIcons.videocam_fill, null, () {
+                        _controller?.pause();
+                        Navigator.of(context).push(CupertinoPageRoute(
+                          fullscreenDialog: true,
+                          builder: (_) => VideoReplyScreen(targetUser: author),
+                        )).then((_) {
+                          if (mounted && _controller != null && _isInitialized) _controller!.play();
+                        });
+                      }),
+                      actionBtn(_isBookmarked ? CupertinoIcons.bookmark_fill : CupertinoIcons.bookmark, null, _toggleBookmark),
+                      actionBtn(CupertinoIcons.arrowshape_turn_up_right, null, () => _shareProfile(author)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+
+    return Center(
+      child: SingleChildScrollView(
+        physics: const NeverScrollableScrollPhysics(),
+        child: card,
+      ),
     );
   }
 

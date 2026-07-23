@@ -4,6 +4,7 @@ import 'package:flutter/material.dart' show Colors;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../theme/app_theme.dart';
 import '../widgets/web_ui.dart';
+import '../widgets/mploya_toast.dart';
 import '../services/ai_match_service.dart';
 import 'nueva_vacante_screen.dart';
 import 'vacantes_screen.dart';
@@ -12,8 +13,11 @@ import 'profile_screen.dart';
 import '../models/models.dart';
 
 /// Panel de empresa — dashboard SaaS premium nivel inversor.
+/// `embedded` = true cuando se muestra dentro del hub "Panel" (sin su propio
+/// WebPage/título, porque el hub ya los provee).
 class EmpresaPanelScreen extends StatefulWidget {
-  const EmpresaPanelScreen({super.key});
+  final bool embedded;
+  const EmpresaPanelScreen({super.key, this.embedded = false});
   @override
   State<EmpresaPanelScreen> createState() => _EmpresaPanelScreenState();
 }
@@ -90,6 +94,31 @@ class _EmpresaPanelScreenState extends State<EmpresaPanelScreen>
   @override
   Widget build(BuildContext context) {
     final wide = isWebWide(context);
+    final content = _loading
+        ? const Center(child: CupertinoActivityIndicator())
+        : FadeTransition(
+            opacity: CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeOut),
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              padding: const EdgeInsets.only(bottom: 48),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                // Rediseño 23/7: Resumen a base de cards (KPIs 2x2, embudo,
+                // match del día, insight IA). El pipeline/candidatos viven en la
+                // pestaña "Pipeline" del hub.
+                _kpiGrid(context),
+                const SizedBox(height: 16),
+                _embudoCard(context),
+                const SizedBox(height: 16),
+                _matchDelDiaCard(context),
+                const SizedBox(height: 16),
+                _insightBanner(context),
+              ]),
+            ),
+          );
+
+    // Dentro del hub "Panel": sin WebPage/título propio (los provee el hub).
+    if (widget.embedded) return content;
+
     return WebPage(
       title: 'Panel',
       subtitle: 'Hola, $_companyName. Gestioná candidatos, contactos y vía rápida confidencial.',
@@ -98,37 +127,218 @@ class _EmpresaPanelScreenState extends State<EmpresaPanelScreen>
         const SizedBox(width: 8),
         _pill(context, CupertinoIcons.add, 'Nueva vacante', true, _openCreate),
       ],
-      child: _loading
-          ? const Center(child: CupertinoActivityIndicator())
-          : FadeTransition(
-              opacity: CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeOut),
-              child: SingleChildScrollView(
-                physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.only(bottom: 48),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                  _kpiRow(context),
-                  const SizedBox(height: 24),
-                  _pipelineSection(context),
-                  const SizedBox(height: 24),
-                  // ── Hero: Match del día ──
-                  _heroMatchCard(context),
-                  const SizedBox(height: 24),
-                  // ── AI Insight + CTA ──
-                  wide ? Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Expanded(flex: 2, child: _aiInsightCard(context)),
-                    const SizedBox(width: 16),
-                    Expanded(flex: 1, child: _ctaBanner(context)),
-                  ]) : Column(children: [_aiInsightCard(context), const SizedBox(height: 16), _ctaBanner(context)]),
-                  const SizedBox(height: 24),
-                  // ── Candidate columns + sidebar ──
-                  wide ? Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Expanded(flex: 3, child: _candidateColumns(context)),
-                    const SizedBox(width: 18),
-                    SizedBox(width: 230, child: _sidebar(context)),
-                  ]) : Column(children: [_candidateColumns(context), const SizedBox(height: 18), _sidebar(context)]),
-                ]),
+      child: content,
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  REDISEÑO 23/7 — Resumen a base de cards
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  static const _brand = Color(0xFF185FA5);
+  static const _brandTint = Color(0xFFE6F1FB);
+  static const _brandDeep = Color(0xFF0C447C);
+
+  Widget _kpiGrid(BuildContext ctx) {
+    return Column(
+      children: [
+        Row(children: [
+          Expanded(child: _metricCard(ctx, CupertinoIcons.person_badge_plus_fill, '$_postulantes', 'Nuevos postulantes', '+12%')),
+          const SizedBox(width: 10),
+          Expanded(child: _metricCard(ctx, CupertinoIcons.tray_fill, '$_entrevistas', 'Acciones pendientes', '+5%')),
+        ]),
+        const SizedBox(height: 10),
+        Row(children: [
+          Expanded(child: _metricCard(ctx, CupertinoIcons.bolt_fill, '$_contratados', 'Contactos directos', '+8%')),
+          const SizedBox(width: 10),
+          Expanded(child: _metricCard(ctx, CupertinoIcons.lock_fill, '5', 'Créditos confidenciales', 'Premium', premium: true)),
+        ]),
+      ],
+    );
+  }
+
+  Widget _metricCard(BuildContext ctx, IconData icon, String value, String label, String trend, {bool premium = false}) {
+    final tintBg = premium ? const Color(0xFFFAEEDA) : _brandTint;
+    final iconColor = premium ? const Color(0xFF854F0B) : _brand;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: ctx.cardColor,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: ctx.dividerColor.withValues(alpha: 0.4), width: 0.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Container(
+                width: 30, height: 30,
+                decoration: BoxDecoration(color: tintBg, borderRadius: BorderRadius.circular(8)),
+                child: Icon(icon, size: 16, color: iconColor),
               ),
+              Text(trend, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: premium ? const Color(0xFF854F0B) : const Color(0xFF10B981))),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(value, style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: ctx.textPrimary)),
+          const SizedBox(height: 2),
+          Text(label, style: TextStyle(fontSize: 12, color: ctx.textTertiary)),
+        ],
+      ),
+    );
+  }
+
+  Widget _embudoCard(BuildContext ctx) {
+    final applied = (_funnel['applied'] ?? 47).clamp(1, 9999);
+    final fav = (_funnel['interview'] ?? 18).clamp(0, 9999);
+    final ok = (_funnel['offer'] ?? 9).clamp(0, 9999);
+    final hired = (_funnel['hired'] ?? 4).clamp(0, 9999);
+    Widget seg(int flex, Color c) => flex <= 0 ? const SizedBox.shrink() : Expanded(flex: flex, child: Container(color: c));
+    Widget leg(Color c, String t, int n) => Row(mainAxisSize: MainAxisSize.min, children: [
+          Container(width: 8, height: 8, decoration: BoxDecoration(color: c, borderRadius: BorderRadius.circular(2))),
+          const SizedBox(width: 4),
+          Text('$t $n', style: TextStyle(fontSize: 11.5, color: ctx.textSecondary)),
+        ]);
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: ctx.cardColor,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: ctx.dividerColor.withValues(alpha: 0.4), width: 0.5),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('Embudo de contratación', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: ctx.textPrimary)),
+        const SizedBox(height: 12),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(6),
+          child: SizedBox(height: 10, child: Row(children: [
+            seg(applied, _brand),
+            seg(fav, const Color(0xFFEF9F27)),
+            seg(ok, const Color(0xFF378ADD)),
+            seg(hired, const Color(0xFF1D9E75)),
+          ])),
+        ),
+        const SizedBox(height: 12),
+        Wrap(spacing: 12, runSpacing: 8, children: [
+          leg(_brand, 'Postulantes', applied),
+          leg(const Color(0xFFEF9F27), 'Favoritos', fav),
+          leg(const Color(0xFF378ADD), 'Exitosos', ok),
+          leg(const Color(0xFF1D9E75), 'Contratados', hired),
+        ]),
+      ]),
+    );
+  }
+
+  Widget _matchDelDiaCard(BuildContext ctx) {
+    final useDemo = _topCandidates.isEmpty;
+    final name = useDemo ? _dN[0] : (_topCandidates[0]['name']?.toString() ?? 'Candidato');
+    final hl = useDemo ? _dH[0] : (_topCandidates[0]['headline']?.toString() ?? '');
+    final match = useDemo ? _dM[0] : (((_topCandidates[0]['match_percentage'] as num?)?.round()) ?? 90);
+    final skills = useDemo ? _dS[0] : (((_topCandidates[0]['skills'] as List?)?.map((e) => e.toString()).toList()) ?? const <String>[]);
+    final initials = name.trim().isNotEmpty ? name.trim().split(' ').map((w) => w.isEmpty ? '' : w[0]).take(2).join().toUpperCase() : '?';
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: ctx.cardColor,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: ctx.dividerColor.withValues(alpha: 0.4), width: 0.5),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(color: _brandTint, borderRadius: BorderRadius.circular(14)),
+            child: const Row(mainAxisSize: MainAxisSize.min, children: [
+              Icon(CupertinoIcons.rosette, size: 13, color: _brand),
+              SizedBox(width: 4),
+              Text('Match del día', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _brandDeep)),
+            ]),
+          ),
+          Text('Recomendado por IA', style: TextStyle(fontSize: 12, color: ctx.textTertiary)),
+        ]),
+        const SizedBox(height: 14),
+        Row(children: [
+          Container(
+            width: 52, height: 52,
+            decoration: const BoxDecoration(shape: BoxShape.circle, color: _brandTint),
+            alignment: Alignment.center,
+            child: Text(initials, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: _brandDeep)),
+          ),
+          const SizedBox(width: 12),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(name, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: ctx.textPrimary)),
+            const SizedBox(height: 2),
+            Text(hl, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12.5, color: ctx.textTertiary)),
+          ])),
+          Column(children: [
+            Text('$match%', style: const TextStyle(fontSize: 19, fontWeight: FontWeight.bold, color: _brand)),
+            Text('match', style: TextStyle(fontSize: 10, color: ctx.textTertiary)),
+          ]),
+        ]),
+        const SizedBox(height: 12),
+        Wrap(spacing: 6, runSpacing: 6, children: skills.take(3).map((s) => Container(
+          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+          decoration: BoxDecoration(color: _brandTint, borderRadius: BorderRadius.circular(13)),
+          child: Text(s, style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: _brandDeep)),
+        )).toList()),
+        const SizedBox(height: 14),
+        Row(children: [
+          Expanded(child: CupertinoButton(
+            padding: EdgeInsets.zero,
+            onPressed: () => MployaToast.info(ctx, 'Abriendo el video de $name'),
+            child: Container(
+              height: 38,
+              decoration: BoxDecoration(color: _brand, borderRadius: BorderRadius.circular(10)),
+              child: const Center(child: Text('Ver video', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white))),
             ),
+          )),
+          const SizedBox(width: 8),
+          _miniAction(ctx, CupertinoIcons.calendar, () => MployaToast.info(ctx, 'Agendar entrevista con $name')),
+          const SizedBox(width: 8),
+          _miniAction(ctx, CupertinoIcons.chat_bubble_2, () => MployaToast.info(ctx, 'Chat con $name')),
+        ]),
+      ]),
+    );
+  }
+
+  Widget _miniAction(BuildContext ctx, IconData icon, VoidCallback onTap) {
+    return CupertinoButton(
+      padding: EdgeInsets.zero,
+      minimumSize: Size.zero,
+      onPressed: onTap,
+      child: Container(
+        width: 44, height: 38,
+        decoration: BoxDecoration(
+          color: ctx.cardColor,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: ctx.dividerColor.withValues(alpha: 0.5), width: 0.5),
+        ),
+        child: Icon(icon, size: 17, color: ctx.textSecondary),
+      ),
+    );
+  }
+
+  Widget _insightBanner(BuildContext ctx) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(color: _brandTint, borderRadius: BorderRadius.circular(14)),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Container(
+          width: 32, height: 32,
+          decoration: BoxDecoration(color: _brand, borderRadius: BorderRadius.circular(8)),
+          child: const Icon(CupertinoIcons.sparkles, size: 17, color: Colors.white),
+        ),
+        const SizedBox(width: 12),
+        const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('Insight IA', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: _brandDeep)),
+          SizedBox(height: 2),
+          Text('Tenés 3 candidatos con +95% de match esperando respuesta. Los perfiles con video se contratan 4.2x más.',
+              style: TextStyle(fontSize: 12.5, color: _brandDeep, height: 1.5)),
+        ])),
+      ]),
     );
   }
 
@@ -143,7 +353,7 @@ class _EmpresaPanelScreenState extends State<EmpresaPanelScreen>
       final tw = (cons.maxWidth - gap * (cols - 1)) / cols;
       return Wrap(spacing: gap, runSpacing: gap, children: [
         SizedBox(width: tw, child: _kpiCompact(ctx, 'Nuevos Postulantes', '$_postulantes', '+12%', CupertinoIcons.person_badge_plus_fill, MployaTheme.brandAccent)),
-        SizedBox(width: tw, child: _kpiCompact(ctx, 'Acciones Pendientes', '$_entrevistas', '+5%', CupertinoIcons.tray_fill, const Color(0xFFEA580C))),
+        SizedBox(width: tw, child: _kpiCompact(ctx, 'Acciones Pendientes', '$_entrevistas', '+5%', CupertinoIcons.tray_fill, const Color(0xFF0C447C))),
         SizedBox(width: tw, child: _kpiCompact(ctx, 'Contactos Directos', '$_contratados', '+8%', CupertinoIcons.bolt_fill, kMployaBlue)),
         SizedBox(width: tw, child: _kpiCompact(ctx, 'Vacantes Activas', '$_vacantes', '+3%', CupertinoIcons.briefcase_fill, const Color(0xFF10B981))),
         SizedBox(width: tw, child: _creditKpi(ctx)),
@@ -205,7 +415,7 @@ class _EmpresaPanelScreenState extends State<EmpresaPanelScreen>
         Container(
           width: 40, height: 40,
           decoration: BoxDecoration(
-            gradient: const LinearGradient(colors: [Color(0xFFF97316), Color(0xFFFBBF24)]),
+            gradient: const LinearGradient(colors: [Color(0xFF185FA5), Color(0xFF378ADD)]),
             borderRadius: BorderRadius.circular(12),
           ),
           child: const Icon(CupertinoIcons.lock_shield_fill, color: Colors.white, size: 20),
@@ -298,7 +508,7 @@ class _EmpresaPanelScreenState extends State<EmpresaPanelScreen>
         gradient: LinearGradient(
           colors: ctx.isDark
               ? [const Color(0xFF1A1520), const Color(0xFF0F1117)]
-              : [const Color(0xFFFFF7ED), const Color(0xFFFFFBF5)],
+              : [const Color(0xFFE6F1FB), const Color(0xFFFFFBF5)],
           begin: Alignment.topLeft, end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(20),
@@ -313,7 +523,7 @@ class _EmpresaPanelScreenState extends State<EmpresaPanelScreen>
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
             decoration: BoxDecoration(
-              gradient: const LinearGradient(colors: [Color(0xFFF97316), Color(0xFFFBBF24)]),
+              gradient: const LinearGradient(colors: [Color(0xFF185FA5), Color(0xFF378ADD)]),
               borderRadius: BorderRadius.circular(999),
             ),
             child: const Row(mainAxisSize: MainAxisSize.min, children: [
@@ -339,7 +549,7 @@ class _EmpresaPanelScreenState extends State<EmpresaPanelScreen>
                 width: 72, height: 72,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  gradient: const LinearGradient(colors: [Color(0xFFF97316), Color(0xFFFBBF24)]),
+                  gradient: const LinearGradient(colors: [Color(0xFF185FA5), Color(0xFF378ADD)]),
                   boxShadow: [BoxShadow(color: MployaTheme.brandAccent.withValues(alpha: 0.3), blurRadius: 16, offset: const Offset(0, 4))],
                 ),
                 child: Container(
@@ -482,8 +692,8 @@ class _EmpresaPanelScreenState extends State<EmpresaPanelScreen>
         padding: const EdgeInsets.all(22),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(18),
-          gradient: const LinearGradient(colors: [Color(0xFFF97316), Color(0xFFFB923C), Color(0xFFF59E0B)], begin: Alignment.topLeft, end: Alignment.bottomRight),
-          boxShadow: [BoxShadow(color: const Color(0xFFF97316).withValues(alpha: 0.35), blurRadius: 24, offset: const Offset(0, 10))],
+          gradient: const LinearGradient(colors: [Color(0xFF185FA5), Color(0xFF378ADD), Color(0xFFF59E0B)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+          boxShadow: [BoxShadow(color: const Color(0xFF185FA5).withValues(alpha: 0.35), blurRadius: 24, offset: const Offset(0, 10))],
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
@@ -500,7 +710,7 @@ class _EmpresaPanelScreenState extends State<EmpresaPanelScreen>
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
             decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(999), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.15), blurRadius: 10, offset: const Offset(0, 4))]),
-            child: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(CupertinoIcons.sparkles, color: Color(0xFF9A3412), size: 14), SizedBox(width: 6), Text('Nueva vacante', style: TextStyle(color: Color(0xFF9A3412), fontSize: 13, fontWeight: FontWeight.w700))]),
+            child: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(CupertinoIcons.sparkles, color: Color(0xFF0C447C), size: 14), SizedBox(width: 6), Text('Nueva vacante', style: TextStyle(color: Color(0xFF0C447C), fontSize: 13, fontWeight: FontWeight.w700))]),
           ),
         ]),
       ),
@@ -633,7 +843,7 @@ class _EmpresaPanelScreenState extends State<EmpresaPanelScreen>
         ]),
         const SizedBox(height: 14),
         // Source
-        Text('Match application', style: TextStyle(color: ctx.textSecondary, fontSize: 11, fontWeight: FontWeight.w700)),
+        Text('Postulación por match', style: TextStyle(color: ctx.textSecondary, fontSize: 11, fontWeight: FontWeight.w700)),
         const SizedBox(height: 6),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
@@ -776,10 +986,10 @@ class _EmpresaPanelScreenState extends State<EmpresaPanelScreen>
       height: 42, padding: const EdgeInsets.symmetric(horizontal: 20),
       decoration: BoxDecoration(
         color: filled ? null : ctx.cardColor,
-        gradient: filled ? const LinearGradient(colors: [Color(0xFFF97316), Color(0xFFFB923C)]) : null,
+        gradient: filled ? const LinearGradient(colors: [Color(0xFF185FA5), Color(0xFF378ADD)]) : null,
         borderRadius: BorderRadius.circular(999),
         border: filled ? null : Border.all(color: ctx.dividerColor.withValues(alpha: 0.5)),
-        boxShadow: filled ? [BoxShadow(color: const Color(0xFFF97316).withValues(alpha: 0.3), blurRadius: 16, offset: const Offset(0, 5))] : null,
+        boxShadow: filled ? [BoxShadow(color: const Color(0xFF185FA5).withValues(alpha: 0.3), blurRadius: 16, offset: const Offset(0, 5))] : null,
       ),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
         Icon(ic, size: 16, color: filled ? Colors.white : ctx.textSecondary),

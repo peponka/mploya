@@ -510,10 +510,10 @@ class ReelInfoPanel extends StatelessWidget {
                     alignment: Alignment.center,
                     padding: const EdgeInsets.symmetric(vertical: 9),
                     decoration: BoxDecoration(
-                      gradient: const LinearGradient(colors: [Color(0xFFF97316), Color(0xFFFB923C)]),
+                      gradient: const LinearGradient(colors: [Color(0xFF185FA5), Color(0xFF378ADD)]),
                       borderRadius: BorderRadius.circular(20),
                       boxShadow: [
-                        BoxShadow(color: const Color(0xFFF97316).withValues(alpha: 0.4), blurRadius: 12, offset: const Offset(0, 4)),
+                        BoxShadow(color: const Color(0xFF185FA5).withValues(alpha: 0.4), blurRadius: 12, offset: const Offset(0, 4)),
                       ],
                     ),
                     child: Row(

@@ -33,7 +33,7 @@ class _SkillAssessmentScreenState extends State<SkillAssessmentScreen> {
   Widget build(BuildContext context) {
     return CupertinoPageScaffold(
       backgroundColor: const Color(0xFFF2F2F7),
-      navigationBar: const CupertinoNavigationBar(middle: Text('Skill Assessment'), previousPageTitle: 'Perfil'),
+      navigationBar: const CupertinoNavigationBar(middle: Text('Evaluación de habilidades'), previousPageTitle: 'Perfil'),
       child: _isLoading
           ? const Center(child: CupertinoActivityIndicator(radius: 16))
           : SafeArea(child: ListView(physics: const BouncingScrollPhysics(), padding: const EdgeInsets.all(16), children: [
@@ -42,7 +42,7 @@ class _SkillAssessmentScreenState extends State<SkillAssessmentScreen> {
               _howItWorksCard(),
               const SizedBox(height: 20),
               if (_myBadges.isNotEmpty) ...[
-                _section('Mis Badges'), const SizedBox(height: 8), _badgesRow(), const SizedBox(height: 24),
+                _section('Mis insignias'), const SizedBox(height: 8), _badgesRow(), const SizedBox(height: 24),
               ],
               _section('Tus Skills'), const SizedBox(height: 4),
               const Padding(padding: EdgeInsets.only(left: 4, bottom: 10),
@@ -72,18 +72,18 @@ class _SkillAssessmentScreenState extends State<SkillAssessmentScreen> {
           child: const Icon(CupertinoIcons.checkmark_seal_fill, color: Color(0xFFFFD700), size: 24)),
         const SizedBox(width: 14),
         const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Skill Assessment', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: -0.5)),
+          Text('Evaluación de habilidades', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: -0.5)),
           SizedBox(height: 2),
           Text('Verificá tus skills y destacá ante reclutadores', style: TextStyle(fontSize: 13, color: Colors.white70)),
         ])),
       ]),
       const SizedBox(height: 16),
       Row(children: [
-        _chip('${_myBadges.length}', 'Badges', const Color(0xFFFFD700)),
+        _chip('${_myBadges.length}', 'Insignias', const Color(0xFFFFD700)),
         const SizedBox(width: 10),
-        _chip('${_myBadges.where((b) => b.badgeLevel == 'gold').length}', 'Gold', const Color(0xFFFFD700)),
+        _chip('${_myBadges.where((b) => b.badgeLevel == 'gold').length}', 'Oro', const Color(0xFFFFD700)),
         const SizedBox(width: 10),
-        _chip('${_myBadges.where((b) => b.badgeLevel == 'silver').length}', 'Silver', const Color(0xFFC0C0C0)),
+        _chip('${_myBadges.where((b) => b.badgeLevel == 'silver').length}', 'Plata', const Color(0xFFC0C0C0)),
       ]),
     ]),
   );
@@ -319,7 +319,7 @@ class _QuizScreenState extends State<_QuizScreen> {
       Container(padding: const EdgeInsets.all(20), decoration: BoxDecoration(color: CupertinoColors.white, borderRadius: BorderRadius.circular(MployaTheme.radiusLG),
         boxShadow: const [BoxShadow(color: Color(0x08000000), blurRadius: 12, offset: Offset(0, 4))]),
         child: Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
-          _stat('${r.score}%', 'Score', c),
+          _stat('${r.score}%', 'Puntaje', c),
           Container(width: 0.5, height: 40, color: const Color(0xFFE5E5EA)),
           _stat('${r.questionsCorrect}/${r.questionsTotal}', 'Correctas', const Color(0xFF34C759)),
           Container(width: 0.5, height: 40, color: const Color(0xFFE5E5EA)),

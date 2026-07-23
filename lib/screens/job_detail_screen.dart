@@ -656,7 +656,7 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               const Text(
-                                'Details',
+                                'Detalles',
                                 style: TextStyle(
                                   fontFamily: 'Georgia',
                                   fontSize: 18,

@@ -360,7 +360,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
         return const Color(0xFFEF4444);
       case 'jobAlert':
       case 'job_application':
-        return const Color(0xFFF97316);
+        return const Color(0xFF185FA5);
       case 'nexus':
         return const Color(0xFF7C3AED);
       default:
@@ -464,7 +464,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
                             child: Container(
                               padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
                               decoration: BoxDecoration(
-                                color: const Color(0xFFF97316),
+                                color: const Color(0xFF185FA5),
                                 borderRadius: BorderRadius.circular(4),
                               ),
                               child: const Text("10K", style: TextStyle(color: Colors.white, fontSize: 7, fontWeight: FontWeight.bold)),
@@ -484,7 +484,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
                             SizedBox(height: 2),
                             Text(
                               "(Latinaics)",
-                              style: TextStyle(color: Color(0xFFF97316), fontSize: 10, fontWeight: FontWeight.bold),
+                              style: TextStyle(color: Color(0xFF185FA5), fontSize: 10, fontWeight: FontWeight.bold),
                             ),
                           ],
                         ),
@@ -625,7 +625,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFFF97316),
+                                  color: const Color(0xFF185FA5),
                                   borderRadius: BorderRadius.circular(4),
                                 ),
                                 child: const Text("Conectar", style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold)),
@@ -654,7 +654,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
           padding: const EdgeInsets.symmetric(vertical: 8),
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: isSelected ? const Color(0xFFF97316) : const Color(0xFF1E293B),
+            color: isSelected ? const Color(0xFF185FA5) : const Color(0xFF1E293B),
             borderRadius: BorderRadius.circular(8),
             border: Border.all(color: const Color(0xFF475569).withOpacity(0.3)),
           ),
@@ -770,7 +770,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
       margin: const EdgeInsets.only(bottom: 24),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFFFFF7ED), Color(0xFFFEF3C7)],
+          colors: [Color(0xFFE6F1FB), Color(0xFFFEF3C7)],
           begin: Alignment.centerLeft,
           end: Alignment.centerRight,
         ),
@@ -784,7 +784,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
             Container(
               width: 48, height: 48,
               decoration: BoxDecoration(
-                gradient: const LinearGradient(colors: [Color(0xFFF97316), Color(0xFFFB923C)]),
+                gradient: const LinearGradient(colors: [Color(0xFF185FA5), Color(0xFF378ADD)]),
                 borderRadius: BorderRadius.circular(14),
               ),
               child: const Icon(CupertinoIcons.rocket_fill, color: CupertinoColors.white, size: 22),
@@ -1747,7 +1747,7 @@ class _AlertCardWidget extends StatelessWidget {
       case 'S': return [const Color(0xFF00838F), const Color(0xFF4DD0E1)];
       case 'C': return [const Color(0xFF5F3DC4), const Color(0xFF9775FA)];
       case 'A': return [const Color(0xFF057642), const Color(0xFF38D9A9)];
-      default:  return [MployaTheme.brandAccent, const Color(0xFFFB923C)];
+      default:  return [MployaTheme.brandAccent, const Color(0xFF378ADD)];
     }
   }
 
@@ -1932,7 +1932,7 @@ class _MobileAlertCard extends StatelessWidget {
       case 'S': return [const Color(0xFF00838F), const Color(0xFF4DD0E1)];
       case 'C': return [const Color(0xFF5F3DC4), const Color(0xFF9775FA)];
       case 'A': return [const Color(0xFF057642), const Color(0xFF38D9A9)];
-      default:  return [MployaTheme.brandAccent, const Color(0xFFFB923C)];
+      default:  return [MployaTheme.brandAccent, const Color(0xFF378ADD)];
     }
   }
 
@@ -2096,11 +2096,11 @@ class RadarChartPainter extends CustomPainter {
       ..style = PaintingStyle.stroke;
 
     final paintFill = Paint()
-      ..color = const Color(0xFFF97316).withOpacity(0.25)
+      ..color = const Color(0xFF185FA5).withOpacity(0.25)
       ..style = PaintingStyle.fill;
 
     final paintBorder = Paint()
-      ..color = const Color(0xFFF97316)
+      ..color = const Color(0xFF185FA5)
       ..strokeWidth = 2
       ..style = PaintingStyle.stroke;
 
@@ -2179,7 +2179,7 @@ class QuantumNexusPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width * 0.52, size.height * 0.48);
     final paint = Paint()
-      ..color = const Color(0xFFFDBA74).withOpacity(0.25)
+      ..color = const Color(0xFF85B7EB).withOpacity(0.25)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.2;
 
@@ -2212,7 +2212,7 @@ class QuantumNexusPainter extends CustomPainter {
 
     // Connection curved lines
     final linePaint = Paint()
-      ..color = const Color(0xFFF97316).withOpacity(0.22)
+      ..color = const Color(0xFF185FA5).withOpacity(0.22)
       ..strokeWidth = 1.5
       ..style = PaintingStyle.stroke;
 
@@ -2228,17 +2228,17 @@ class QuantumNexusPainter extends CustomPainter {
       final t = (animationValue + pos.hashCode % 10 / 10.0) % 1.0;
       final dotX = (1 - t) * (1 - t) * center.dx + 2 * (1 - t) * t * ctrlX + t * t * pos.dx;
       final dotY = (1 - t) * (1 - t) * center.dy + 2 * (1 - t) * t * ctrlY + t * t * pos.dy;
-      canvas.drawCircle(Offset(dotX, dotY), 3.0, Paint()..color = const Color(0xFFF97316));
+      canvas.drawCircle(Offset(dotX, dotY), 3.0, Paint()..color = const Color(0xFF185FA5));
     }
 
     // 3. Draw Center Node (Dark orange fill with text on light theme)
     final centerGlow = Paint()
-      ..color = const Color(0xFFFFF7ED)
+      ..color = const Color(0xFFE6F1FB)
       ..style = PaintingStyle.fill;
     
     final glowRadius = 42.0 + 3.0 * sin(animationValue * 2 * pi);
-    canvas.drawCircle(center, glowRadius, Paint()..color = const Color(0xFFF97316).withOpacity(0.2));
-    canvas.drawCircle(center, 37.0, Paint()..color = const Color(0xFFF97316));
+    canvas.drawCircle(center, glowRadius, Paint()..color = const Color(0xFF185FA5).withOpacity(0.2));
+    canvas.drawCircle(center, 37.0, Paint()..color = const Color(0xFF185FA5));
     canvas.drawCircle(center, 33.5, centerGlow);
 
     final textPainter = TextPainter(
@@ -2276,12 +2276,12 @@ class QuantumNexusPainter extends CustomPainter {
       final pos = satellitePositions[i];
       final label = nodeLabels[i];
 
-      canvas.drawCircle(pos, 16.0, Paint()..color = const Color(0xFFF97316).withOpacity(0.12));
+      canvas.drawCircle(pos, 16.0, Paint()..color = const Color(0xFF185FA5).withOpacity(0.12));
       canvas.drawCircle(pos, 12.0, Paint()..color = const Color(0xFFCBD5E1));
       canvas.drawCircle(pos, 10.5, centerGlow);
 
       final iconPaint = Paint()
-        ..color = const Color(0xFFF97316)
+        ..color = const Color(0xFF185FA5)
         ..strokeWidth = 1.2
         ..style = PaintingStyle.stroke;
       
@@ -2341,7 +2341,7 @@ class TalentMobilityMapPainter extends CustomPainter {
     final bogota = Offset(size.width * 0.32, size.height * 0.24);
 
     final flowPaint = Paint()
-      ..color = const Color(0xFFF97316).withOpacity(0.65)
+      ..color = const Color(0xFF185FA5).withOpacity(0.65)
       ..strokeWidth = 1.5
       ..style = PaintingStyle.stroke;
 
@@ -2425,7 +2425,7 @@ class GlobalImpactScorePainter extends CustomPainter {
     }
 
     drawPolygon(bluePoints, const Color(0xFF2563EB));
-    drawPolygon(orangePoints, const Color(0xFFF97316));
+    drawPolygon(orangePoints, const Color(0xFF185FA5));
   }
 
   @override

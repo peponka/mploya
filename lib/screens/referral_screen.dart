@@ -34,7 +34,7 @@ class _ReferralScreenState extends State<ReferralScreen> {
           : SafeArea(child: Padding(padding: const EdgeInsets.all(20), child: Column(children: [
               // Header
               Container(padding: const EdgeInsets.all(24), decoration: BoxDecoration(
-                gradient: const LinearGradient(colors: [Color(0xFFFF6B35), Color(0xFFF97316)]),
+                gradient: const LinearGradient(colors: [Color(0xFFFF6B35), Color(0xFF185FA5)]),
                 borderRadius: BorderRadius.circular(MployaTheme.radiusLG),
                 boxShadow: [BoxShadow(color: MployaTheme.brandAccent.withValues(alpha: 0.3), blurRadius: 20, offset: const Offset(0, 8))]),
                 child: Column(children: [

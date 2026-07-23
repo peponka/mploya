@@ -437,7 +437,7 @@ class _SplashScreenState extends State<SplashScreen>
             child: Container(
               decoration: const BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [Color(0xFFFB923C), Color(0xFFEA580C)],
+                  colors: [Color(0xFF378ADD), Color(0xFF0C447C)],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
@@ -476,7 +476,7 @@ class _SplashScreenState extends State<SplashScreen>
                     'al instante y olvidate de los CVs.',
                     style: TextStyle(
                       fontSize: 17,
-                      color: Color(0xFFFFEDD5),
+                      color: Color(0xFFE6F1FB),
                       height: 1.5,
                       decoration: TextDecoration.none,
                       fontWeight: FontWeight.w400,
@@ -863,7 +863,7 @@ class _WebBrandStat extends StatelessWidget {
           style: const TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w500,
-            color: Color(0xFFFFEDD5),
+            color: Color(0xFFE6F1FB),
             decoration: TextDecoration.none,
             fontFamily: '.SF Pro Text',
           ),

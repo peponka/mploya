@@ -14,7 +14,7 @@ import '../screens/profile_screen.dart';
 import '../screens/ats_dashboard_screen.dart';
 import '../screens/jobs_screen.dart';
 import '../screens/messaging_screen.dart';
-import '../screens/empresa_panel_screen.dart';
+import '../screens/empresa_panel_hub_screen.dart';
 import '../services/revenuecat_service.dart';
 import '../services/connectivity_service.dart';
 import '../services/video_preload_manager.dart';
@@ -88,7 +88,7 @@ class _MainNavigationState extends State<MainNavigation> {
         _profile,            // 4
         _messages,           // 5
         const JobsScreen(),  // 6 (web sidebar only)
-        const EmpresaPanelScreen(), // 7 (web sidebar only, empresa)
+        const EmpresaPanelHubScreen(), // 7 (empresa) — hub: Resumen (Panel) + Pipeline (Dashboard)
       ];
 
   Future<void> _fetchAccountType() async {
@@ -341,8 +341,8 @@ class _WebLayout extends StatelessWidget {
                             decoration: BoxDecoration(
                               gradient: const LinearGradient(
                                 colors: [
-                                  Color(0xFFF97316),
-                                  Color(0xFFEA580C),
+                                  Color(0xFF185FA5),
+                                  Color(0xFF0C447C),
                                 ],
                                 begin: Alignment.topLeft,
                                 end: Alignment.bottomRight,
@@ -366,7 +366,7 @@ class _WebLayout extends StatelessWidget {
                             style: TextStyle(
                               fontSize: 20,
                               fontWeight: FontWeight.w800,
-                              color: Color(0xFFF97316),
+                              color: Color(0xFF185FA5),
                               letterSpacing: -0.5,
                             ),
                           ),
@@ -386,7 +386,7 @@ class _WebLayout extends StatelessWidget {
                         height: 36,
                         decoration: BoxDecoration(
                           gradient: const LinearGradient(
-                            colors: [Color(0xFFF97316), Color(0xFFEA580C)],
+                            colors: [Color(0xFF185FA5), Color(0xFF0C447C)],
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
                           ),
@@ -432,30 +432,29 @@ class _WebLayout extends StatelessWidget {
                         onTap: () => onTap(0),
                       ),
                     ),
-                    Container(
-                      key: cmNavExploreKey,
-                      child: _SidebarItem(
-                        icon: (accountType == 'empresa' || accountType == 'headhunter')
-                            ? CupertinoIcons.square_grid_2x2_fill
-                            : CupertinoIcons.compass_fill,
-                        inactiveIcon: (accountType == 'empresa' || accountType == 'headhunter')
-                            ? CupertinoIcons.square_grid_2x2
-                            : CupertinoIcons.compass,
-                        label: (accountType == 'empresa' || accountType == 'headhunter') ? 'Dashboard' : 'Explorar',
-                        isActive: currentIndex == 1,
-                        isExpanded: isExpanded,
-                        badgeCount: 0,
-                        onTap: () => onTap(1),
+                    // "Dashboard" ya no es un ítem propio para empresa: está dentro
+                    // del hub "Panel" (sub-pestaña Pipeline). El candidato sí ve "Explorar".
+                    if (accountType != 'empresa' && accountType != 'headhunter')
+                      Container(
+                        key: cmNavExploreKey,
+                        child: _SidebarItem(
+                          icon: CupertinoIcons.compass_fill,
+                          inactiveIcon: CupertinoIcons.compass,
+                          label: 'Explorar',
+                          isActive: currentIndex == 1,
+                          isExpanded: isExpanded,
+                          badgeCount: 0,
+                          onTap: () => onTap(1),
+                        ),
                       ),
-                    ),
                     Container(
                       key: cmNavMatchKey,
                       child: _SidebarItem(
                         icon: (accountType == 'empresa' || accountType == 'headhunter')
-                            ? CupertinoIcons.briefcase_fill
+                            ? CupertinoIcons.person_2_fill
                             : CupertinoIcons.bolt_fill,
                         inactiveIcon: (accountType == 'empresa' || accountType == 'headhunter')
-                            ? CupertinoIcons.briefcase
+                            ? CupertinoIcons.person_2
                             : CupertinoIcons.bolt,
                         label: (accountType == 'empresa' || accountType == 'headhunter') ? 'Candidatos' : 'Matches',
                         isActive: currentIndex == 2,
@@ -613,7 +612,7 @@ class _SidebarItemState extends State<_SidebarItem> {
     final hoverBg = isDark
         ? const Color(0xFF1A1A1A)
         : const Color(0xFFF9FAFB);
-    final activeBg = const Color(0xFFF97316).withValues(alpha: 0.10);
+    final activeBg = const Color(0xFF185FA5).withValues(alpha: 0.10);
 
     return MouseRegion(
       onEnter: (_) => setState(() => _hovering = true),
@@ -778,6 +777,10 @@ class _CustomTabBar extends StatelessWidget {
         ),
       ),
       padding: EdgeInsets.only(bottom: bottomPadding),
+      // Barra reducida a 5 pestañas (antes 7-8, con Panel/Dashboard/Candidatos
+      // que se solapaban). "Alertas" pasó a la campana del header del Feed.
+      // Empresa:   Feed · Panel · Candidatos · Mensajes · Perfil
+      // Candidato: Feed · Explorar · Matches · Mensajes · Perfil
       child: Row(
         children: [
           Container(
@@ -790,38 +793,43 @@ class _CustomTabBar extends StatelessWidget {
               onTap: () => onTap(0),
             ),
           ),
-          Container(
-            key: cmNavExploreKey,
-            child: _TabItem(
-              icon: isCompanyAccount ? CupertinoIcons.square_grid_2x2_fill : CupertinoIcons.compass_fill,
-              inactiveIcon: isCompanyAccount ? CupertinoIcons.square_grid_2x2 : CupertinoIcons.compass,
-              label: isCompanyAccount ? 'Dashboard' : 'Explorar',
-              isActive: currentIndex == 1,
-              onTap: () => onTap(1),
+          if (isCompanyAccount)
+            _TabItem(
+              icon: CupertinoIcons.chart_bar_square_fill,
+              inactiveIcon: CupertinoIcons.chart_bar_square,
+              label: 'Panel',
+              isActive: currentIndex == 7,
+              onTap: () => onTap(7),
+            )
+          else
+            Container(
+              key: cmNavExploreKey,
+              child: _TabItem(
+                icon: CupertinoIcons.compass_fill,
+                inactiveIcon: CupertinoIcons.compass,
+                label: 'Explorar',
+                isActive: currentIndex == 1,
+                onTap: () => onTap(1),
+              ),
             ),
-          ),
-          // Vacantes: pieza que separa los roles. Empresa publica/gestiona vacantes;
-          // candidato busca y se postula (JobsScreen ya cambia el contenido por rol).
           Container(
             key: cmNavMatchKey,
             child: _TabItem(
-              icon: CupertinoIcons.briefcase_fill,
-              inactiveIcon: CupertinoIcons.briefcase,
-              label: 'Vacantes',
-              isActive: currentIndex == 6,
-              onTap: () => onTap(6),
+              icon: isCompanyAccount ? CupertinoIcons.person_2_fill : CupertinoIcons.bolt_fill,
+              inactiveIcon: isCompanyAccount ? CupertinoIcons.person_2 : CupertinoIcons.bolt,
+              label: isCompanyAccount ? 'Candidatos' : 'Matches',
+              badgeCount: pendingConnections,
+              isActive: currentIndex == 2,
+              onTap: () => onTap(2),
             ),
           ),
-          Container(
-            key: cmNavAlertsKey,
-            child: _TabItem(
-              icon: CupertinoIcons.bell_fill,
-              inactiveIcon: CupertinoIcons.bell,
-              label: 'Alertas',
-              badgeCount: unreadNotifications,
-              isActive: currentIndex == 3,
-              onTap: () => onTap(3),
-            ),
+          _TabItem(
+            icon: CupertinoIcons.chat_bubble_2_fill,
+            inactiveIcon: CupertinoIcons.chat_bubble_2,
+            label: 'Mensajes',
+            badgeCount: unreadMessages,
+            isActive: currentIndex == 5,
+            onTap: () => onTap(5),
           ),
           Container(
             key: cmNavProfileKey,
@@ -832,14 +840,6 @@ class _CustomTabBar extends StatelessWidget {
               isActive: currentIndex == 4,
               onTap: () => onTap(4),
             ),
-          ),
-          _TabItem(
-            icon: CupertinoIcons.chat_bubble_2_fill,
-            inactiveIcon: CupertinoIcons.chat_bubble_2,
-            label: 'Mensajes',
-            badgeCount: unreadMessages,
-            isActive: currentIndex == 5,
-            onTap: () => onTap(5),
           ),
         ],
       ),
@@ -883,7 +883,7 @@ class _TabItem extends StatelessWidget {
               padding: const EdgeInsets.all(6),
               decoration: BoxDecoration(
                 color: isActive
-                    ? const Color(0xFFF97316).withValues(alpha: 0.12)
+                    ? const Color(0xFF185FA5).withValues(alpha: 0.12)
                     : Colors.transparent,
                 borderRadius: BorderRadius.circular(12),
               ),
@@ -905,13 +905,21 @@ class _TabItem extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 4),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
-                color: isActive ? activeColor : inactiveColor,
-                letterSpacing: -0.2,
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 2),
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  softWrap: false,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
+                    color: isActive ? activeColor : inactiveColor,
+                    letterSpacing: -0.2,
+                  ),
+                ),
               ),
             ),
             const SizedBox(height: 4),

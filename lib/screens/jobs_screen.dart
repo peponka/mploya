@@ -1229,13 +1229,13 @@ class _JobListCardState extends State<_JobListCard> {
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(999),
                   gradient: isApplied ? null : const LinearGradient(
-                    colors: [Color(0xFFF97316), Color(0xFFE2860B), Color(0xFFD4740A)],
+                    colors: [Color(0xFF185FA5), Color(0xFF0C447C), Color(0xFFD4740A)],
                     begin: Alignment.centerLeft,
                     end: Alignment.centerRight,
                   ),
                   color: isApplied ? CupertinoColors.systemGrey4 : null,
                   boxShadow: isApplied ? null : [
-                    BoxShadow(color: const Color(0xFFF97316).withValues(alpha: 0.3), blurRadius: 12, offset: const Offset(0, 4)),
+                    BoxShadow(color: const Color(0xFF185FA5).withValues(alpha: 0.3), blurRadius: 12, offset: const Offset(0, 4)),
                   ],
                 ),
                 child: Row(

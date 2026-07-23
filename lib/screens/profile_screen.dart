@@ -271,141 +271,111 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildScaffold(BuildContext context, NexUser profile, bool isOwnProfile) {
-    final wide = MediaQuery.of(context).size.width > 900;
-    final bg = const Color(0xFFF8FAFC);
-
-    // ── Web: Premium Cards Grid ──
-    if (wide) {
-      return CupertinoPageScaffold(
-        backgroundColor: bg,
-        child: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 1200),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // ── Top bar (Navbar) ──
-                    _buildWebTopBar(context, profile, isOwnProfile),
-                    const SizedBox(height: 24),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Column 1 (Left): Profile Card, About Me, Experience, Education
-                        Expanded(
-                          flex: 5,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              _buildWebProfileCard(context, profile, isOwnProfile),
-                              const SizedBox(height: 16),
-                              _buildWebVideoPitchCard(context, profile, isOwnProfile),
-                              const SizedBox(height: 16),
-                              _buildWebAboutMeCard(context, profile),
-                              const SizedBox(height: 16),
-                              _buildWebExperienceCard(context, profile),
-                              const SizedBox(height: 16),
-                              _buildWebEducationCard(context, profile),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 20),
-                        // Column 2 (Right): Skills & Expertise, Featured Projects, Certifications, Quantum Insights
-                        Expanded(
-                          flex: 5,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              _buildWebSkillsCard(context, profile),
-                              const SizedBox(height: 16),
-                              _buildWebProjectsCard(context),
-                              const SizedBox(height: 16),
-                              _buildWebCertificationsCard(context),
-                              const SizedBox(height: 16),
-                              _buildWebQuantumInsightsCard(context),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 40),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      );
-    }
-
-    // ── Móvil: una sola columna con tarjetas completamente visibles y apiladas ──
+    // ── Rediseño 23/7: UNA sola columna centrada, idéntica en web y móvil.
+    // Secciones limpias (header, video, sobre mí, experiencia, educación,
+    // habilidades en chips, herramientas). Se quitó el layout de 2 columnas del
+    // web, la top-bar redundante y las tarjetas recargadas (proyectos,
+    // certificaciones, insights, barras de skills) para un look profesional.
     return CupertinoPageScaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       child: SafeArea(
         child: SingleChildScrollView(
-          child: Column(
-            children: [
-              // Nav / Actions Bar
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                child: Row(
-                  children: [
-                    if (!isOwnProfile)
-                      CupertinoButton(
-                        padding: EdgeInsets.zero,
-                        onPressed: () => Navigator.of(context).pop(),
-                        child: const Icon(CupertinoIcons.chevron_back, size: 24, color: Color(0xFF0F172A)),
-                      ),
-                    const Spacer(),
-                    CupertinoButton(
-                      padding: EdgeInsets.zero,
-                      onPressed: () => ShareService.instance.shareProfile(
-                        name: profile.name, headline: profile.headline,
-                        userId: profile.id, accountType: profile.accountType,
-                      ),
-                      child: const Icon(CupertinoIcons.square_arrow_up, size: 22, color: Color(0xFF0F172A)),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 620),
+              child: Column(
+                children: [
+                  // ── Barra de acciones (volver / compartir / ajustes) ──
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    child: Row(
+                      children: [
+                        if (!isOwnProfile)
+                          CupertinoButton(
+                            padding: EdgeInsets.zero,
+                            onPressed: () => Navigator.of(context).pop(),
+                            child: const Icon(CupertinoIcons.chevron_back, size: 24, color: Color(0xFF0F172A)),
+                          ),
+                        const Spacer(),
+                        CupertinoButton(
+                          padding: EdgeInsets.zero,
+                          onPressed: () => ShareService.instance.shareProfile(
+                            name: profile.name, headline: profile.headline,
+                            userId: profile.id, accountType: profile.accountType,
+                          ),
+                          child: const Icon(CupertinoIcons.square_arrow_up, size: 22, color: Color(0xFF0F172A)),
+                        ),
+                        if (isOwnProfile) ...[
+                          const SizedBox(width: 14),
+                          CupertinoButton(
+                            padding: EdgeInsets.zero,
+                            onPressed: () => _showSettingsSheet(context, profile),
+                            child: const Icon(CupertinoIcons.ellipsis, size: 22, color: Color(0xFF0F172A)),
+                          ),
+                        ],
+                      ],
                     ),
-                    const SizedBox(width: 14),
-                    CupertinoButton(
-                      padding: EdgeInsets.zero,
-                      onPressed: () => _showSettingsSheet(context, profile),
-                      child: const Icon(CupertinoIcons.ellipsis, size: 22, color: Color(0xFF0F172A)),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Column(
+                      children: [
+                        _buildWebProfileCard(context, profile, isOwnProfile),
+                        const SizedBox(height: 16),
+                        _buildWebVideoPitchCard(context, profile, isOwnProfile),
+                        const SizedBox(height: 16),
+                        _buildWebAboutMeCard(context, profile),
+                        const SizedBox(height: 16),
+                        _buildWebExperienceCard(context, profile),
+                        const SizedBox(height: 16),
+                        _buildWebEducationCard(context, profile),
+                        const SizedBox(height: 16),
+                        _buildSkillsChipsCard(context, profile),
+                        if (isOwnProfile) ...[
+                          const SizedBox(height: 16),
+                          _buildToolsCard(context, profile),
+                        ],
+                        const SizedBox(height: 120),
+                      ],
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-              // Header candidate info
-              _buildMobileHeader(context, profile, isOwnProfile),
-              const SizedBox(height: 12),
-              // Padding wrapper for mobile list
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Column(
-                  children: [
-                    _buildWebVideoPitchCard(context, profile, isOwnProfile),
-                    const SizedBox(height: 16),
-                    _buildWebAboutMeCard(context, profile),
-                    const SizedBox(height: 16),
-                    _buildWebExperienceCard(context, profile),
-                    const SizedBox(height: 16),
-                    _buildWebEducationCard(context, profile),
-                    const SizedBox(height: 16),
-                    _buildWebSkillsCard(context, profile),
-                    const SizedBox(height: 16),
-                    _buildWebProjectsCard(context),
-                    const SizedBox(height: 16),
-                    _buildWebCertificationsCard(context),
-                    const SizedBox(height: 16),
-                    _buildWebQuantumInsightsCard(context),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 140),
-            ],
+            ),
           ),
         ),
+      ),
+    );
+  }
+
+  // Habilidades unificadas en chips (reemplaza la tarjeta con barras de progreso).
+  Widget _buildSkillsChipsCard(BuildContext context, NexUser profile) {
+    final skills = profile.skills.isNotEmpty
+        ? profile.skills
+        : const ['Flutter', 'Dart', 'Firebase', 'React', 'Node.js', 'AWS'];
+    return _PremiumCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Habilidades',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: skills
+                .map((s) => Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE6F1FB),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Text(s,
+                          style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF0C447C))),
+                    ))
+                .toList(),
+          ),
+        ],
       ),
     );
   }
@@ -438,7 +408,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 width: 32,
                 height: 32,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF97316),
+                  color: const Color(0xFF185FA5),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: const Center(
@@ -516,7 +486,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             width: 4,
             height: 4,
             decoration: const BoxDecoration(
-              color: Color(0xFFF97316),
+              color: Color(0xFF185FA5),
               shape: BoxShape.circle,
             ),
           )
@@ -528,7 +498,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             Icon(
               icon,
               size: 16,
-              color: isActive ? const Color(0xFFF97316) : const Color(0xFF64748B),
+              color: isActive ? const Color(0xFF185FA5) : const Color(0xFF64748B),
             ),
             const SizedBox(width: 6),
             Text(
@@ -571,52 +541,78 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  // Header rediseñado (23/7): cover azul + avatar montado encima + barra de stats,
+  // en vez de la fila plana anterior. Mismo look que la maqueta aprobada.
   Widget _buildWebProfileCard(BuildContext context, NexUser profile, bool isOwnProfile) {
-    return _PremiumCard(
-      child: Row(
+    const brand = Color(0xFF185FA5);
+    final avatar = (profile.avatarUrl != null && profile.avatarUrl!.isNotEmpty)
+        ? NetworkImage(profile.avatarUrl!)
+        : const AssetImage('assets/images/avatar_juan_perez.jpg') as ImageProvider;
+
+    return Container(
+      width: double.infinity,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: const [BoxShadow(color: Color(0x06000000), blurRadius: 10, offset: Offset(0, 4))],
+      ),
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          GestureDetector(
-            onTap: isOwnProfile ? () => _pickAndUploadAvatar(profile) : null,
-            child: Container(
-              width: 90,
-              height: 90,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(color: const Color(0xFFE2E8F0), width: 3),
-                boxShadow: const [
-                  BoxShadow(color: Color(0x1F000000), blurRadius: 12, offset: Offset(0, 4)),
-                ],
-                image: const DecorationImage(
-                  image: AssetImage('assets/images/avatar_juan_perez.jpg'),
-                  fit: BoxFit.cover,
+          // ── Cover + avatar montado ──
+          SizedBox(
+            height: 118,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Container(height: 74, color: brand),
+                Positioned(
+                  left: 20,
+                  top: 30,
+                  child: GestureDetector(
+                    onTap: isOwnProfile ? () => _pickAndUploadAvatar(profile) : null,
+                    child: Container(
+                      width: 84,
+                      height: 84,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 4),
+                        image: DecorationImage(image: avatar, fit: BoxFit.cover),
+                      ),
+                    ),
+                  ),
                 ),
-              ),
+              ],
             ),
           ),
-          const SizedBox(width: 20),
-          Expanded(
+          // ── Nombre / headline / ubicación ──
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  profile.name,
-                  style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(profile.name,
+                          style: const TextStyle(fontSize: 21, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+                    ),
+                    const SizedBox(width: 6),
+                    const Icon(CupertinoIcons.checkmark_seal_fill, size: 18, color: brand),
+                  ],
                 ),
-                const SizedBox(height: 3),
-                Text(
-                  profile.headline,
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
-                ),
+                const SizedBox(height: 2),
+                Text(profile.headline,
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF64748B))),
                 const SizedBox(height: 6),
                 Row(
                   children: [
-                    const Icon(CupertinoIcons.location_solid, size: 12, color: Color(0xFF64748B)),
+                    const Icon(CupertinoIcons.location_solid, size: 12, color: Color(0xFF94A3B8)),
                     const SizedBox(width: 4),
-                    Text(
-                      profile.location ?? "São Paulo, Brazil",
-                      style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
-                    ),
+                    Text(profile.location ?? "São Paulo, Brazil",
+                        style: const TextStyle(fontSize: 12.5, color: Color(0xFF94A3B8))),
                   ],
                 ),
                 const SizedBox(height: 14),
@@ -626,14 +622,45 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   children: [
                     _contactPill(CupertinoIcons.envelope_fill, "Email"),
                     _contactPill(CupertinoIcons.link, "LinkedIn"),
-                    _contactPill(CupertinoIcons.phone_fill, "Phone"),
+                    _contactPill(CupertinoIcons.phone_fill, "Teléfono"),
                     _contactPill(CupertinoIcons.briefcase_fill, "Portfolio"),
                   ],
                 ),
               ],
             ),
           ),
+          // ── Barra de stats ──
+          Container(
+            decoration: const BoxDecoration(
+              border: Border(top: BorderSide(color: Color(0xFFEDF1F5))),
+            ),
+            child: Row(
+              children: [
+                _headerStat('248', 'Vistas', false),
+                _headerStat('32', 'Matches', true),
+                _headerStat('92%', 'Perfil', true),
+              ],
+            ),
+          ),
         ],
+      ),
+    );
+  }
+
+  Widget _headerStat(String value, String label, bool divider) {
+    return Expanded(
+      child: Container(
+        decoration: divider
+            ? const BoxDecoration(border: Border(left: BorderSide(color: Color(0xFFEDF1F5))))
+            : null,
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Column(
+          children: [
+            Text(value, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+            const SizedBox(height: 2),
+            Text(label, style: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8))),
+          ],
+        ),
       ),
     );
   }
@@ -748,7 +775,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         width: 8,
                         height: 8,
                         decoration: BoxDecoration(
-                          color: index == 0 ? const Color(0xFFF97316) : const Color(0xFFCBD5E1),
+                          color: index == 0 ? const Color(0xFF185FA5) : const Color(0xFFCBD5E1),
                           shape: BoxShape.circle,
                         ),
                       ),
@@ -778,7 +805,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           style: const TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
-                            color: Color(0xFFF97316),
+                            color: Color(0xFF185FA5),
                           ),
                         ),
                         const SizedBox(height: 6),
@@ -1006,7 +1033,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 widthFactor: val,
                 child: Container(
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF97316),
+                    color: const Color(0xFF185FA5),
                     borderRadius: BorderRadius.circular(3),
                   ),
                 ),
@@ -1171,7 +1198,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               padding: const EdgeInsets.symmetric(vertical: 4),
               child: Row(
                 children: [
-                  const Icon(CupertinoIcons.checkmark_seal_fill, size: 14, color: Color(0xFFF97316)),
+                  const Icon(CupertinoIcons.checkmark_seal_fill, size: 14, color: Color(0xFF185FA5)),
                   const SizedBox(width: 8),
                   Text(
                     cert,
@@ -1232,20 +1259,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _socialButton(IconData icon, Color color) {
-    return Container(
-      width: 32, height: 32,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        shape: BoxShape.circle,
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      child: Center(
-        child: Icon(icon, size: 14, color: color),
-      ),
-    );
-  }
-
   Widget _buildWebMyCompany(BuildContext context, NexUser profile) {
     return _PremiumCard(
       child: Column(
@@ -1284,7 +1297,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
           const SizedBox(height: 14),
           CupertinoButton(
             padding: EdgeInsets.zero,
-            onPressed: () {},
+            onPressed: () => Navigator.of(context).push(
+              CupertinoPageRoute(builder: (_) => const ProfileAnalyticsDashboardScreen()),
+            ),
             child: Container(
               padding: const EdgeInsets.symmetric(vertical: 8),
               width: double.infinity,
@@ -1295,7 +1310,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
               child: const Center(
                 child: Text(
-                  'Internal Rules',
+                  'Ver detalle',
                   style: TextStyle(color: Color(0xFF475569), fontSize: 11, fontWeight: FontWeight.bold),
                 ),
               ),
@@ -1519,26 +1534,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 FlSpot(5, 70),
               ],
               xLabels: ['Jan', 'Mar', 'May', 'Jul', 'Aug', 'Sep'],
-              lineColor: Color(0xFFF97316),
-              gradientColors: [Color(0xFFF97316), Color(0xFFFDBA74)],
+              lineColor: Color(0xFF185FA5),
+              gradientColors: [Color(0xFF185FA5), Color(0xFF85B7EB)],
             ),
           ),
           const SizedBox(height: 14),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
-              color: const Color(0xFFFFF7ED),
+              color: const Color(0xFFE6F1FB),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: const Color(0xFFFFEDD5)),
+              border: Border.all(color: const Color(0xFFE6F1FB)),
             ),
             child: Row(
               children: [
-                const Icon(CupertinoIcons.mic_fill, size: 12, color: Color(0xFFEA580C)),
+                const Icon(CupertinoIcons.mic_fill, size: 12, color: Color(0xFF0C447C)),
                 const SizedBox(width: 6),
-                const Text('Speech analytics', style: TextStyle(color: Color(0xFFEA580C), fontSize: 10, fontWeight: FontWeight.bold)),
+                const Text('Análisis de voz', style: TextStyle(color: Color(0xFF0C447C), fontSize: 10, fontWeight: FontWeight.bold)),
                 const Spacer(),
                 GestureDetector(
-                  onTap: () {},
+                  onTap: () => Navigator.of(context).push(
+                    CupertinoPageRoute(builder: (_) => const ProfileAnalyticsDashboardScreen()),
+                  ),
                   child: Text('Ver detalle', style: TextStyle(color: MployaTheme.brandAccent, fontSize: 10, fontWeight: FontWeight.bold)),
                 ),
               ],
@@ -1595,75 +1612,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildMobileHeader(BuildContext context, NexUser profile, bool isOwnProfile) {
-    return Container(
-      color: Colors.white,
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
-      child: Column(
-        children: [
-          GestureDetector(
-            onTap: isOwnProfile ? () => _pickAndUploadAvatar(profile) : null,
-            child: Container(
-              width: 76, height: 76,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(color: const Color(0xFFE2E8F0), width: 3),
-                boxShadow: const [
-                  BoxShadow(color: Color(0x1A000000), blurRadius: 10, offset: Offset(0, 4)),
-                ],
-                image: const DecorationImage(
-                  image: AssetImage('assets/images/avatar_juan_perez.jpg'),
-                  fit: BoxFit.cover,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            profile.name,
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Color(0xFF0F172A)),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            profile.headline,
-            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              _socialButton(CupertinoIcons.phone_fill, const Color(0xFF0F172A)),
-              const SizedBox(width: 8),
-              _socialButton(CupertinoIcons.envelope_fill, const Color(0xFF0F172A)),
-              const SizedBox(width: 8),
-              _socialButton(CupertinoIcons.settings, const Color(0xFF0F172A)),
-              const SizedBox(width: 8),
-              _socialButton(CupertinoIcons.globe, const Color(0xFF0F172A)),
-            ],
-          ),
-          const SizedBox(height: 12),
-          RichText(
-            textAlign: TextAlign.center,
-            maxLines: 4,
-            overflow: TextOverflow.ellipsis,
-            text: TextSpan(
-              style: const TextStyle(fontSize: 12, color: Color(0xFF475569), height: 1.5, fontFamily: 'Arial'),
-              children: [
-                TextSpan(
-                  text: profile.about ?? 'Desarrollador Flutter Senior con más de 7 años de experiencia liderando equipos y construyendo arquitecturas móviles escalables y robustas. Especialista en optimización de rendimiento y clean architecture.',
-                ),
-                const TextSpan(
-                  text: ' ...read more',
-                  style: TextStyle(color: Color(0xFFD97706), fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildCoreStatsContent(BuildContext context, NexUser profile) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1696,7 +1644,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
         const SizedBox(height: 14),
         CupertinoButton(
           padding: EdgeInsets.zero,
-          onPressed: () {},
+          onPressed: () => Navigator.of(context).push(
+            CupertinoPageRoute(builder: (_) => const ProfileAnalyticsDashboardScreen()),
+          ),
           child: Container(
             padding: const EdgeInsets.symmetric(vertical: 8),
             width: double.infinity,
@@ -1706,7 +1656,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             child: const Center(
               child: Text(
-                'Internal Anal.',
+                'Ver analíticas',
                 style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
               ),
             ),
@@ -1722,7 +1672,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       {'name': 'Dart', 'rating': 5, 'icon': CupertinoIcons.chevron_left_slash_chevron_right, 'color': const Color(0xFF0D9488)},
       {'name': 'Firebase', 'rating': 4, 'icon': CupertinoIcons.cloud_fill, 'color': const Color(0xFFF59E0B)},
       {'name': 'Clean Arch', 'rating': 4, 'icon': CupertinoIcons.layers_alt_fill, 'color': const Color(0xFF64748B)},
-      {'name': 'UI/UX', 'rating': 4, 'icon': CupertinoIcons.device_phone_portrait, 'color': const Color(0xFFEA580C)},
+      {'name': 'UI/UX', 'rating': 4, 'icon': CupertinoIcons.device_phone_portrait, 'color': const Color(0xFF0C447C)},
       {'name': 'Kotlin', 'rating': 3, 'icon': CupertinoIcons.app_fill, 'color': const Color(0xFF8B5CF6)},
       {'name': 'Swift', 'rating': 4, 'icon': CupertinoIcons.app_fill, 'color': const Color(0xFFEF4444)},
       {'name': 'Unit Test', 'rating': 5, 'icon': CupertinoIcons.checkmark_seal_fill, 'color': const Color(0xFF10B981)},
@@ -1767,7 +1717,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       return Icon(
                         active ? CupertinoIcons.star_fill : CupertinoIcons.star,
                         size: 9,
-                        color: active ? const Color(0xFFF97316) : const Color(0xFFCBD5E1),
+                        color: active ? const Color(0xFF185FA5) : const Color(0xFFCBD5E1),
                       );
                     }),
                   ),
@@ -1791,7 +1741,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             child: const Center(
               child: Text(
-                'Start Skill Assessment',
+                'Comenzar evaluación',
                 style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
               ),
             ),
@@ -1830,7 +1780,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 padding: const EdgeInsets.all(2),
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  border: Border.all(color: const Color(0xFFF97316), width: 1.5),
+                  border: Border.all(color: const Color(0xFF185FA5), width: 1.5),
                 ),
                 child: ClipOval(
                   child: CachedNetworkImage(
@@ -1889,10 +1839,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 child: Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF97316),
+                    color: const Color(0xFF185FA5),
                     shape: BoxShape.circle,
                     boxShadow: [
-                      BoxShadow(color: const Color(0xFFF97316).withValues(alpha: 0.4), blurRadius: 12),
+                      BoxShadow(color: const Color(0xFF185FA5).withValues(alpha: 0.4), blurRadius: 12),
                     ],
                   ),
                   child: const Icon(CupertinoIcons.play_fill, size: 20, color: Colors.white),
@@ -1914,7 +1864,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         child: FractionallySizedBox(
                           alignment: Alignment.centerLeft,
                           widthFactor: 0.15,
-                          child: Container(color: const Color(0xFFF97316)),
+                          child: Container(color: const Color(0xFF185FA5)),
                         ),
                       ),
                     ),
@@ -2168,54 +2118,50 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  // ── Entrada a "Mis herramientas" (pantalla privada del usuario) ───────────
-  Widget _buildToolsEntry(BuildContext context, NexUser profile) {
-    return Container(
-      color: context.isDark ? NexTheme.darkBg : CupertinoColors.white,
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 4),
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: () => Navigator.of(context).push(
-          CupertinoPageRoute(builder: (_) => MisHerramientasScreen(profile: profile, isAdmin: _isAdmin)),
-        ),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          decoration: BoxDecoration(
-            color: context.isDark ? NexTheme.darkSurface : const Color(0xFFF7F8FA),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: context.isDark ? const Color(0xFF222222) : const Color(0xFFEDEFF2)),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(colors: [Color(0xFFF97316), Color(0xFFEA580C)]),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(CupertinoIcons.square_grid_2x2_fill, size: 19, color: CupertinoColors.white),
+  // ── Tarjeta "Mis herramientas" (hub privado: features secundarias) ─────────
+  // Es el menú "Más" de la app: impulsar perfil, estadísticas, guardados,
+  // validar skills, practicar entrevistas, retos, invitar, etc. Solo en el
+  // perfil propio. Estilo _PremiumCard para integrarse con el resto del perfil.
+  Widget _buildToolsCard(BuildContext context, NexUser profile) {
+    final isCompany = profile.accountType == 'empresa' || profile.accountType == 'headhunter';
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => Navigator.of(context).push(
+        CupertinoPageRoute(builder: (_) => MisHerramientasScreen(profile: profile, isAdmin: _isAdmin)),
+      ),
+      child: _PremiumCard(
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(colors: [Color(0xFF185FA5), Color(0xFF0C447C)]),
+                borderRadius: BorderRadius.circular(12),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Mis herramientas',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: context.textPrimary, letterSpacing: -0.2),
-                    ),
-                    const SizedBox(height: 1),
-                    Text(
-                      'Impulsar, estadísticas, entrevistas, cuenta y más',
-                      style: TextStyle(fontSize: 12.5, color: context.textSecondary),
-                    ),
-                  ],
-                ),
+              child: const Icon(CupertinoIcons.square_grid_2x2_fill, size: 22, color: CupertinoColors.white),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Mis herramientas',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    isCompany
+                        ? 'Impulsar, buscar talento, estadísticas, cuenta y más'
+                        : 'Impulsar perfil, validar skills, entrevistas, guardados y más',
+                    style: const TextStyle(fontSize: 12.5, color: Color(0xFF64748B)),
+                  ),
+                ],
               ),
-              Icon(CupertinoIcons.chevron_right, size: 16, color: context.textTertiary),
-            ],
-          ),
+            ),
+            const Icon(CupertinoIcons.chevron_right, size: 16, color: Color(0xFF94A3B8)),
+          ],
         ),
       ),
     );
@@ -2308,7 +2254,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         width: double.infinity,
         decoration: const BoxDecoration(
           gradient: LinearGradient(
-            colors: [Color(0xFFF97316), Color(0xFFC2410C)],
+            colors: [Color(0xFF185FA5), Color(0xFFC2410C)],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
@@ -3875,7 +3821,7 @@ class _WaveformPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = const Color(0xFFF97316).withValues(alpha: 0.35)
+      ..color = const Color(0xFF185FA5).withValues(alpha: 0.35)
       ..strokeWidth = 3
       ..strokeCap = StrokeCap.round;
     final midY = size.height / 2;
@@ -4019,7 +3965,7 @@ class _ProfileBarChart extends StatelessWidget {
             barRods: [
               BarChartRodData(
                 toY: values[index],
-                color: index == 2 ? const Color(0xFFF97316) : const Color(0xFF0F172A),
+                color: index == 2 ? const Color(0xFF185FA5) : const Color(0xFF0F172A),
                 width: 12,
                 borderRadius: BorderRadius.circular(4),
               ),
@@ -4156,11 +4102,11 @@ class ProfileRadarChartPainter extends CustomPainter {
       ..style = PaintingStyle.stroke;
 
     final paintFill = Paint()
-      ..color = const Color(0xFFF97316).withOpacity(0.2)
+      ..color = const Color(0xFF185FA5).withOpacity(0.2)
       ..style = PaintingStyle.fill;
 
     final paintBorder = Paint()
-      ..color = const Color(0xFFF97316)
+      ..color = const Color(0xFF185FA5)
       ..strokeWidth = 2
       ..style = PaintingStyle.stroke;
 

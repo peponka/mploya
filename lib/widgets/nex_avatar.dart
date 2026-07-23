@@ -34,7 +34,7 @@ class NexAvatar extends StatelessWidget {
       const Color(0xFF5F3DC4),
       const Color(0xFFC2185B),
       const Color(0xFF00838F),
-      const Color(0xFFEA580C),
+      const Color(0xFF0C447C),
       const Color(0xFF2E7D32),
     ];
     int hash = 0;

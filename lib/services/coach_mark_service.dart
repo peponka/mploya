@@ -209,7 +209,7 @@ class _CoachCard extends StatelessWidget {
             width: 32, height: 3,
             margin: const EdgeInsets.only(bottom: 12),
             decoration: BoxDecoration(
-              color: const Color(0xFFF97316),
+              color: const Color(0xFF185FA5),
               borderRadius: BorderRadius.circular(4),
             ),
           ),
@@ -252,7 +252,7 @@ class _CoachCard extends StatelessWidget {
               CupertinoButton(
                 padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 10),
                 minSize: 0,
-                color: const Color(0xFFF97316),
+                color: const Color(0xFF185FA5),
                 borderRadius: BorderRadius.circular(12),
                 onPressed: onNext,
                 child: const Text(

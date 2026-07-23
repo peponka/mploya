@@ -45,7 +45,7 @@ class _CompanyReviewScreenState extends State<CompanyReviewScreen> {
                   Row(mainAxisAlignment: MainAxisAlignment.center, children: List.generate(5, (i) =>
                     Icon(CupertinoIcons.star_fill, size: 20, color: i < _stats.averageRating.round() ? const Color(0xFFFFD700) : const Color(0xFFE5E5EA)))),
                   const SizedBox(height: 4),
-                  Text('${_stats.totalReviews} reviews', style: const TextStyle(fontSize: 13, color: Color(0xFF8E8E93))),
+                  Text('${_stats.totalReviews} reseñas', style: const TextStyle(fontSize: 13, color: Color(0xFF8E8E93))),
                   const SizedBox(height: 16),
                   Row(children: [
                     Expanded(child: _miniStat('Cultura', _stats.cultureRating, const Color(0xFF34C759))),
@@ -63,7 +63,7 @@ class _CompanyReviewScreenState extends State<CompanyReviewScreen> {
                     const Text('Sin reviews aún', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Color(0xFF8E8E93))),
                     if (!_hasReviewed) ...[const SizedBox(height: 12),
                       CupertinoButton(color: MployaTheme.brandAccent, borderRadius: BorderRadius.circular(12),
-                        onPressed: _showReviewSheet, child: const Text('Escribir Review', style: TextStyle(fontWeight: FontWeight.w700, color: Colors.white)))],
+                        onPressed: _showReviewSheet, child: const Text('Escribir reseña', style: TextStyle(fontWeight: FontWeight.w700, color: Colors.white)))],
                   ])))
               else
                 ...List.generate(_reviews.length, (i) {
@@ -128,7 +128,7 @@ class _CompanyReviewScreenState extends State<CompanyReviewScreen> {
         child: Container(color: CupertinoColors.systemBackground.resolveFrom(context),
           padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(ctx).padding.bottom + 20),
           child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text('Escribir Review', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+            const Text('Escribir reseña', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
             const SizedBox(height: 16),
             const Text('CALIFICACIÓN GENERAL', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 0.8, color: Color(0xFF8E8E93))),
             const SizedBox(height: 8),
@@ -152,7 +152,7 @@ class _CompanyReviewScreenState extends State<CompanyReviewScreen> {
                 if (err == null) _load();
                 prosCtrl.dispose(); consCtrl.dispose(); expCtrl.dispose();
               },
-              child: const Text('Enviar Review', style: TextStyle(fontWeight: FontWeight.w700, color: Colors.white)))),
+              child: const Text('Enviar reseña', style: TextStyle(fontWeight: FontWeight.w700, color: Colors.white)))),
           ]))))),
     );
   }

@@ -8,6 +8,8 @@ import 'package:visibility_detector/visibility_detector.dart';
 import '../theme/app_theme.dart';
 import '../models/models.dart';
 import '../navigation/main_navigation.dart';
+import '../services/share_service.dart';
+import 'mploya_toast.dart';
 import 'nex_avatar.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -953,19 +955,19 @@ class _SecondaryActions extends StatelessWidget {
           _SecBtn(
             icon: CupertinoIcons.chat_bubble_text,
             label: 'Aportar',
-            onTap: () {},
+            onTap: () => MployaToast.info(context, 'Los comentarios estarán disponibles muy pronto'),
           ),
           // Compartir
           _SecBtn(
             icon: CupertinoIcons.arrowshape_turn_up_right,
             label: 'Compartir',
-            onTap: () {},
+            onTap: () => ShareService.instance.shareInvite(),
           ),
           // Guardar
           _SecBtn(
             icon: CupertinoIcons.bookmark,
             label: 'Guardar',
-            onTap: () {},
+            onTap: () => MployaToast.saved(context, 'Publicación guardada'),
           ),
         ],
       ),

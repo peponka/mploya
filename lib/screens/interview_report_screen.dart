@@ -61,7 +61,7 @@ class _InterviewReportScreenState extends State<InterviewReportScreen> {
 
   Color _getScoreColor(int score) {
     if (score >= 80) return const Color(0xFF16A34A); // Green
-    if (score >= 60) return const Color(0xFFEA580C); // Orange
+    if (score >= 60) return const Color(0xFF0C447C); // Orange
     return const Color(0xFFDC2626); // Red
   }
 

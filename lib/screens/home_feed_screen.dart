@@ -133,8 +133,9 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
     final webMode = kIsWeb && MediaQuery.of(context).size.width > 700;
 
     return CupertinoPageScaffold(
-      // Web (TikTok web): fondo claro. Móvil: negro full-bleed.
-      backgroundColor: webMode ? const Color(0xFFF7F8FA) : Colors.black,
+      // Rediseño 23/7: fondo claro en web y móvil (antes el móvil era negro
+      // full-bleed). Ahora cada reel es una tarjeta clara contenida.
+      backgroundColor: const Color(0xFFF7F8FA),
       child: SizedBox.expand(
         child: Stack(
           children: [
@@ -169,10 +170,10 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
                                 Container(
                                   width: 60, height: 60,
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFFF97316).withValues(alpha: 0.18),
+                                    color: const Color(0xFF185FA5).withValues(alpha: 0.18),
                                     borderRadius: BorderRadius.circular(16),
                                   ),
-                                  child: const Icon(CupertinoIcons.bolt_fill, color: Color(0xFFF97316), size: 30),
+                                  child: const Icon(CupertinoIcons.bolt_fill, color: Color(0xFF185FA5), size: 30),
                                 ),
                                 const SizedBox(height: 18),
                                 const Text('AI Match', style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: 1.0)),

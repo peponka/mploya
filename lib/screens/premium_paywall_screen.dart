@@ -322,7 +322,7 @@ class _PremiumPaywallScreenState extends State<PremiumPaywallScreen> {
                             gradient: const LinearGradient(colors: [_green, _greenLight]),
                             borderRadius: BorderRadius.circular(14),
                             boxShadow: const [
-                              BoxShadow(color: Color(0x59F97316), blurRadius: 16, offset: Offset(0, 6)),
+                              BoxShadow(color: Color(0x59185FA5), blurRadius: 16, offset: Offset(0, 6)),
                             ],
                           ),
                           child: _isLoading

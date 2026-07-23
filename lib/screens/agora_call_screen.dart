@@ -189,7 +189,7 @@ class _AgoraCallScreenState extends State<AgoraCallScreen> {
                         ),
                         const SizedBox(height: 24),
                         CupertinoButton(
-                          color: const Color(0xFFF97316),
+                          color: const Color(0xFF185FA5),
                           borderRadius: BorderRadius.circular(12),
                           onPressed: () async {
                             final url = Uri.parse(
