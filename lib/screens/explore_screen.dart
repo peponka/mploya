@@ -7,7 +7,9 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import '../theme/app_theme.dart';
 import '../widgets/web_ui.dart';
+import '../models/models.dart';
 import '../screens/vacantes_screen.dart';
+import 'profile_screen.dart';
 import 'explore_demo_data.dart';
 // Mapa web con Leaflet (flutter_map no pinta tiles en Flutter web/CanvasKit).
 import '../widgets/web_map_stub.dart'
@@ -71,6 +73,22 @@ class _ExploreScreenState extends State<ExploreScreen> with TickerProviderStateM
     final lat = item['lat'] as num;
     final lng = item['lng'] as num;
     return LatLng(lat.toDouble(), lng.toDouble());
+  }
+
+  // Construye un NexUser desde los datos del pin del mapa (para abrir el perfil).
+  NexUser _userFromPin(Map<String, dynamic> item) {
+    final name = item['name']?.toString() ?? 'Candidato';
+    return NexUser(
+      id: name,
+      name: name,
+      headline: item['headline']?.toString() ?? '',
+      location: 'Buenos Aires, Argentina',
+      avatarUrl: _getItemPhoto(item),
+      latitude: (item['lat'] as num?)?.toDouble(),
+      longitude: (item['lng'] as num?)?.toDouble(),
+      isVerified: item['video'] == true,
+      accountType: item['type'] == 'empresa' ? 'empresa' : 'candidato',
+    );
   }
 
   @override
@@ -663,132 +681,95 @@ class _ExploreScreenState extends State<ExploreScreen> with TickerProviderStateM
     final item = _selectedItem!;
     final isCompany = item['type'] == 'empresa';
     final hasVideo = item['video'] == true;
-    final color = isCompany ? const Color(0xFF185FA5) : (hasVideo ? const Color(0xFF2563EB) : const Color(0xFF6D48E5));
-
+    final match = 80 + (item['name'].hashCode.abs() % 18);
     return Positioned(
       bottom: 24,
-      left: 24,
-      right: 24,
+      left: 0,
+      right: 0,
       child: Center(
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(20),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-            child: Container(
-              width: 500,
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.90),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.5), width: 1.5),
-                boxShadow: const [
-                  BoxShadow(color: Color(0x11000000), blurRadius: 20, offset: Offset(0, 10)),
-                ],
-              ),
-              child: Row(
-                children: [
-                  // Logo/Photo Avatar
-                  Container(
-                    width: 52,
-                    height: 52,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(color: color, width: 2),
-                    ),
-                    child: ClipOval(
-                      child: CachedNetworkImage(
-                        imageUrl: _getItemPhoto(item),
-                        fit: BoxFit.cover,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  
-                  // Text details
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          item['name'] as String,
-                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Color(0xFF0F172A)),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          item['headline'] as String,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 12, color: Color(0xFF64748B), fontWeight: FontWeight.w500),
-                        ),
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                              decoration: BoxDecoration(
-                                color: color.withValues(alpha: 0.1),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Text(
-                                isCompany ? 'EMPRESA' : (hasVideo ? 'CON VIDEO' : 'CANDIDATO'),
-                                style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: color),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            const Text(
-                              '📍 0 - 3 min',
-                              style: TextStyle(fontSize: 10, color: Color(0xFF94A3B8), fontWeight: FontWeight.bold),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  
-                  // Action Button
-                  CupertinoButton(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    color: color,
-                    borderRadius: BorderRadius.circular(10),
-                    onPressed: () {
-                      if (isCompany) {
-                        Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const VacantesScreen()));
-                      } else {
-                        // Open profile simulator or alert
-                        showCupertinoDialog(
-                          context: context,
-                          builder: (ctx) => CupertinoAlertDialog(
-                            title: Text(item['name'] as String),
-                            content: Text('${item['headline']}\n\n¿Quieres iniciar una conversación para coordinar una entrevista?'),
-                            actions: [
-                              CupertinoDialogAction(
-                                isDestructiveAction: true,
-                                onPressed: () => Navigator.pop(ctx),
-                                child: const Text('Cancelar'),
-                              ),
-                              CupertinoDialogAction(
-                                isDefaultAction: true,
-                                onPressed: () => Navigator.pop(ctx),
-                                child: const Text('Enviar Mensaje'),
-                              ),
-                            ],
-                          ),
-                        );
-                      }
-                    },
-                    child: Text(
-                      isCompany ? 'Ver Vacantes' : 'Ver Perfil',
-                      style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: Colors.white),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+        child: Container(
+          width: 460,
+          margin: const EdgeInsets.symmetric(horizontal: 16),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.12), blurRadius: 20, offset: const Offset(0, 10))],
           ),
+          child: _candidateCardBody(item, isCompany, hasVideo, match),
         ),
       ),
     );
+  }
+
+  // Cuerpo compartido de la tarjeta de candidato (web y móvil) — rediseño 24/7.
+  Widget _candidateCardBody(Map<String, dynamic> item, bool isCompany, bool hasVideo, int match) {
+    const brand = Color(0xFF185FA5);
+    return Column(mainAxisSize: MainAxisSize.min, children: [
+      Row(children: [
+        Stack(clipBehavior: Clip.none, children: [
+          Container(
+            width: 52, height: 52,
+            decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: const Color(0xFFE6F1FB), width: 2)),
+            child: ClipOval(child: CachedNetworkImage(imageUrl: _getItemPhoto(item), fit: BoxFit.cover)),
+          ),
+          if (hasVideo)
+            Positioned(bottom: -2, right: -2, child: Container(
+              width: 20, height: 20,
+              decoration: BoxDecoration(color: brand, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 2)),
+              child: const Icon(CupertinoIcons.play_fill, size: 9, color: Colors.white),
+            )),
+        ]),
+        const SizedBox(width: 12),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+          Row(children: [
+            Flexible(child: Text(item['name'] as String, maxLines: 1, overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Color(0xFF0F172A)))),
+            if (!isCompany) ...[const SizedBox(width: 5), const Icon(CupertinoIcons.checkmark_seal_fill, size: 15, color: brand)],
+          ]),
+          const SizedBox(height: 2),
+          Text(item['headline'] as String, maxLines: 1, overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 12.5, color: Color(0xFF94A3B8))),
+          const SizedBox(height: 6),
+          Row(children: [
+            if (hasVideo) ...[
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(color: const Color(0xFFE6F1FB), borderRadius: BorderRadius.circular(12)),
+                child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(CupertinoIcons.video_camera_solid, size: 11, color: Color(0xFF0C447C)),
+                  SizedBox(width: 3),
+                  Text('Con video', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF0C447C))),
+                ]),
+              ),
+              const SizedBox(width: 8),
+            ],
+            const Icon(CupertinoIcons.location_solid, size: 11, color: Color(0xFF94A3B8)),
+            const SizedBox(width: 2),
+            const Text('a 0-3 min', style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
+          ]),
+        ])),
+        const SizedBox(width: 8),
+        if (!isCompany) Column(children: [
+          Text('$match%', style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: brand)),
+          const Text('match', style: TextStyle(fontSize: 10, color: Color(0xFF94A3B8))),
+        ]),
+      ]),
+      const SizedBox(height: 12),
+      SizedBox(width: double.infinity, child: CupertinoButton(
+        padding: const EdgeInsets.symmetric(vertical: 11),
+        color: brand,
+        borderRadius: BorderRadius.circular(10),
+        onPressed: () {
+          if (isCompany) {
+            Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const VacantesScreen()));
+          } else {
+            Navigator.of(context).push(CupertinoPageRoute(builder: (_) => ProfileScreen(user: _userFromPin(item))));
+          }
+        },
+        child: Text(isCompany ? 'Ver vacantes' : 'Ver perfil', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white)),
+      )),
+    ]);
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -983,103 +964,7 @@ class _ExploreScreenState extends State<ExploreScreen> with TickerProviderStateM
               style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Color(0xFF0F172A)),
             ),
             const SizedBox(height: 10),
-            
-            // Card Content row
-            Row(
-              children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(color: color, width: 1.5),
-                  ),
-                  child: ClipOval(
-                    child: CachedNetworkImage(
-                      imageUrl: _getItemPhoto(item),
-                      fit: BoxFit.cover,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        item['name'] as String,
-                        style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        isCompany ? 'Tecnología · Fintech' : (item['headline'] as String),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 11.5, color: Color(0xFF64748B)),
-                      ),
-                      const SizedBox(height: 3),
-                      Row(
-                        children: [
-                          const Icon(CupertinoIcons.location_solid, size: 10, color: Color(0xFF94A3B8)),
-                          const SizedBox(width: 2),
-                          Expanded(
-                            child: Text(
-                              isCompany ? 'Avenida Corrientes 1200, CABA (3 min)' : 'Buenos Aires, AR (A 1.2 km)',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontSize: 10.5, color: Color(0xFF94A3B8), fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            
-            const SizedBox(height: 14),
-            
-            // Full Width Button
-            SizedBox(
-              width: double.infinity,
-              height: 44,
-              child: CupertinoButton(
-                padding: EdgeInsets.zero,
-                color: color,
-                borderRadius: BorderRadius.circular(12),
-                onPressed: () {
-                  if (isCompany) {
-                    Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const VacantesScreen()));
-                  } else {
-                    showCupertinoDialog(
-                      context: context,
-                      builder: (ctx) => CupertinoAlertDialog(
-                        title: Text(item['name'] as String),
-                        content: Text('${item['headline']}\n\n¿Quieres iniciar una conversación con el candidato?'),
-                        actions: [
-                          CupertinoDialogAction(
-                            isDestructiveAction: true,
-                            onPressed: () => Navigator.pop(ctx),
-                            child: const Text('Cancelar'),
-                          ),
-                          CupertinoDialogAction(
-                            isDefaultAction: true,
-                            onPressed: () => Navigator.pop(ctx),
-                            child: const Text('Contactar'),
-                          ),
-                        ],
-                      ),
-                    );
-                  }
-                },
-                child: Text(
-                  isCompany ? 'Ver Detalles' : 'Ver Detalles del Candidato',
-                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Colors.white),
-                ),
-              ),
-            ),
+            _candidateCardBody(item, isCompany, hasVideo, 80 + (item['name'].hashCode.abs() % 18)),
           ],
         ),
       ),
