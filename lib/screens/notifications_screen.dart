@@ -18,6 +18,7 @@ import '../widgets/web_ui.dart';
 import 'profile_screen.dart';
 import 'ats_dashboard_screen.dart';
 import 'scheduling_screen.dart';
+import '../navigation/main_navigation.dart';
 
 class NotificationsScreen extends ConsumerStatefulWidget {
   const NotificationsScreen({super.key});
@@ -36,6 +37,8 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
   bool _bannerDismissed = false;
   int _selectedCandidateIndex = 0;
   int _activeMobileTab = 0;
+  // Filtro activo de la lista de alertas (all/candidates/interviews/connections)
+  String _alertFilter = 'all';
   late AnimationController _animationController;
 
   @override
@@ -178,152 +181,474 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
     return _buildMobileAlerts(context);
   }
 
-  // Alertas mobile — lista de notificaciones REAL (tabla notifications), limpia y
-  // entendible. Reemplaza el mockup "Quantum Nexus / Global Impact Score" (nave
-  // espacial) que no significaba nada. El viejo layout quedó en _deadOldMobileAlerts.
+  // Alertas mobile — panel enmarcado con header, filtros y filas agrupadas por
+  // tiempo. Con notificaciones reales las muestra; si no hay, muestra contenido
+  // DEMO (intencional mientras no haya usuarios reales) para que se vea vivo.
   Widget _buildMobileAlerts(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FB),
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0.5,
-        centerTitle: false,
-        title: const Text('Notificaciones',
-            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 20, color: Color(0xFF0F172A))),
+      backgroundColor: const Color(0xFFF6F8FB),
+      body: SafeArea(
+        bottom: false,
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 100),
+          children: [_alertsPanel(context, webMode: false)],
+        ),
       ),
-      body: StreamBuilder<List<Map<String, dynamic>>>(
-        stream: NotificationService.instance.notificationsStream,
-        builder: (context, snapshot) {
-          final notifs = snapshot.data ?? const <Map<String, dynamic>>[];
-          final loading = snapshot.connectionState == ConnectionState.waiting && notifs.isEmpty;
-          return ListView(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
+    );
+  }
+
+  // ── Panel enmarcado compartido móvil/web ──
+  Widget _alertsPanel(BuildContext context, {required bool webMode}) {
+    return StreamBuilder<List<Map<String, dynamic>>>(
+      stream: NotificationService.instance.notificationsStream,
+      builder: (context, snapshot) {
+        final notifs = snapshot.data ?? const <Map<String, dynamic>>[];
+        final loading =
+            snapshot.connectionState == ConnectionState.waiting && notifs.isEmpty;
+        final useDemo = !loading && notifs.isEmpty;
+        final realUnread = notifs.where((n) => n['is_read'] != true).length;
+        final unread = useDemo ? 3 : realUnread;
+        return Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: const Color(0xFFE9EEF4)),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF0F172A).withValues(alpha: 0.05),
+                blurRadius: 20,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              if (!_bannerDismissed) ...[
-                _alertTipBanner(),
-                const SizedBox(height: 16),
-              ],
+              _panelHeader(unread, notifs, webMode: webMode, demo: useDemo),
+              _panelFilters(),
               if (loading)
                 const Padding(
-                  padding: EdgeInsets.only(top: 80),
+                  padding: EdgeInsets.symmetric(vertical: 60),
                   child: Center(child: CupertinoActivityIndicator()),
                 )
-              else if (notifs.isEmpty)
-                _alertEmptyState()
               else
-                ...notifs.map(_alertCard),
+                ..._renderGrouped(useDemo ? _demoRows() : _realRows(notifs)),
+              const SizedBox(height: 6),
             ],
-          );
-        },
-      ),
+          ),
+        );
+      },
     );
   }
 
-  Widget _alertTipBanner() {
+  Widget _panelHeader(int unread, List<Map<String, dynamic>> notifs,
+      {required bool webMode, required bool demo}) {
     return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFEF3C7),
-        borderRadius: BorderRadius.circular(12),
+      padding: const EdgeInsets.fromLTRB(18, 16, 16, 16),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xFFEAF3FC), Color(0xFFF7FBFF)],
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+        ),
+        border: Border(bottom: BorderSide(color: Color(0xFFE9EEF4))),
       ),
       child: Row(
         children: [
-          const Icon(CupertinoIcons.lightbulb_fill, color: Color(0xFFD97706), size: 18),
-          const SizedBox(width: 8),
-          const Expanded(
-            child: Text(
-              'Completá tu perfil y grabá un video pitch.',
-              style: TextStyle(color: Color(0xFF92400E), fontSize: 12.5, fontWeight: FontWeight.w600),
-            ),
-          ),
-          GestureDetector(
-            onTap: () => setState(() => _bannerDismissed = true),
-            child: const Icon(CupertinoIcons.xmark, color: Color(0xFF92400E), size: 16),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _alertEmptyState() {
-    return Padding(
-      padding: const EdgeInsets.only(top: 80),
-      child: Column(
-        children: [
-          Container(
-            width: 72,
-            height: 72,
-            decoration: const BoxDecoration(color: Color(0xFFEEF2F7), shape: BoxShape.circle),
-            child: const Icon(CupertinoIcons.bell, size: 32, color: Color(0xFF94A3B8)),
-          ),
-          const SizedBox(height: 16),
-          const Text('No tenés notificaciones',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF334155))),
-          const SizedBox(height: 6),
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 24),
-            child: Text('Acá vas a ver conexiones, mensajes y novedades de tus vacantes.',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 13, color: Color(0xFF94A3B8))),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _alertCard(Map<String, dynamic> n) {
-    final title = (n['title'] ?? '').toString();
-    final body = (n['body'] ?? '').toString();
-    final type = (n['type'] ?? '').toString();
-    final isRead = n['is_read'] == true;
-    final when = _relativeTime(n['created_at']?.toString());
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: isRead ? Colors.white : const Color(0xFFF0F7FF),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE8EDF2)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-                color: _alertIconColor(type).withValues(alpha: 0.12), shape: BoxShape.circle),
-            child: Icon(_alertIconData(type), size: 20, color: _alertIconColor(type)),
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(colors: [Color(0xFF185FA5), Color(0xFF378ADD)]),
+                  borderRadius: BorderRadius.circular(13),
+                ),
+                child: const Icon(CupertinoIcons.bell_fill, size: 21, color: Colors.white),
+              ),
+              if (unread > 0)
+                Positioned(
+                  top: -4,
+                  right: -4,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                    constraints: const BoxConstraints(minWidth: 18),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFD85A30),
+                      borderRadius: BorderRadius.circular(9),
+                      border: Border.all(color: Colors.white, width: 1.5),
+                    ),
+                    child: Text('$unread',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                            color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
+                  ),
+                ),
+            ],
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (title.isNotEmpty)
-                  Text(title,
-                      style: const TextStyle(
-                          fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF1E293B))),
-                if (body.isNotEmpty) ...[
-                  const SizedBox(height: 2),
-                  Text(body,
-                      style: const TextStyle(fontSize: 13, color: Color(0xFF64748B), height: 1.3)),
-                ],
-                if (when.isNotEmpty) ...[
-                  const SizedBox(height: 6),
-                  Text(when, style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
-                ],
+                if (!webMode)
+                  const Text('Novedades',
+                      style: TextStyle(
+                          fontSize: 19, fontWeight: FontWeight.w800, color: Color(0xFF0F172A))),
+                Text(unread > 0 ? 'Tenés $unread sin leer' : 'Estás al día',
+                    style: const TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.w500, color: Color(0xFF3A6EA5))),
               ],
             ),
           ),
-          if (!isRead)
-            Container(
-              margin: const EdgeInsets.only(left: 8, top: 4),
-              width: 8,
-              height: 8,
-              decoration: const BoxDecoration(color: Color(0xFF3B82F6), shape: BoxShape.circle),
+          if (unread > 0)
+            GestureDetector(
+              onTap: demo ? null : () => _markAllAsRead(notifs),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: const Color(0xFFCFE0F2)),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(CupertinoIcons.checkmark_alt, size: 14, color: Color(0xFF185FA5)),
+                    SizedBox(width: 4),
+                    Text('Marcar leídas',
+                        style: TextStyle(
+                            fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF185FA5))),
+                  ],
+                ),
+              ),
             ),
         ],
+      ),
+    );
+  }
+
+  Widget _panelFilters() {
+    const filters = <String, String>{
+      'all': 'Todas',
+      'candidates': 'Candidatos',
+      'interviews': 'Entrevistas',
+      'connections': 'Conexiones',
+    };
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: Color(0xFFF0F3F7))),
+      ),
+      child: SizedBox(
+        height: 32,
+        child: ListView(
+          scrollDirection: Axis.horizontal,
+          children: filters.entries.map((e) {
+            final active = _alertFilter == e.key;
+            return Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: GestureDetector(
+                onTap: () => setState(() => _alertFilter = e.key),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: active ? const Color(0xFF185FA5) : const Color(0xFFF4F6F9),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(
+                        color: active ? const Color(0xFF185FA5) : const Color(0xFFE8ECF1)),
+                  ),
+                  child: Text(e.value,
+                      style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                          color: active ? Colors.white : const Color(0xFF64748B))),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
+
+  // Inserta labels de grupo + divisores entre filas (mismo render para demo y real).
+  List<Widget> _renderGrouped(List<({String group, String cat, Widget row})> items) {
+    final visible = items.where((i) => _alertFilter == 'all' || i.cat == _alertFilter).toList();
+    if (visible.isEmpty) {
+      return [
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: 44),
+          child: Center(
+            child: Text('Nada por acá con este filtro.',
+                style: TextStyle(fontSize: 13, color: Color(0xFF94A3B8))),
+          ),
+        ),
+      ];
+    }
+    final widgets = <Widget>[];
+    String? current;
+    var firstInGroup = true;
+    for (final it in visible) {
+      if (it.group != current) {
+        current = it.group;
+        firstInGroup = true;
+        widgets.add(Padding(
+          padding: const EdgeInsets.fromLTRB(18, 16, 18, 8),
+          child: Text(it.group.toUpperCase(),
+              style: const TextStyle(
+                  fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 0.6, color: Color(0xFF9AA6B5))),
+        ));
+      }
+      if (!firstInGroup) {
+        widgets.add(const Divider(height: 1, thickness: 0.5, indent: 18, endIndent: 18, color: Color(0xFFF0F3F7)));
+      }
+      widgets.add(it.row);
+      firstInGroup = false;
+    }
+    return widgets;
+  }
+
+  // Fila "glam": acento lateral en no leídas, avatar temático, título con badge de
+  // match opcional, subtítulo con parte en azul, acciones inline y hora.
+  Widget _glamRow({
+    required Color color,
+    IconData? icon,
+    String? initials,
+    bool circle = false,
+    required String title,
+    String? subtitle,
+    String? linkText,
+    String? matchPct,
+    List<Widget>? actions,
+    required String time,
+    required bool unread,
+    VoidCallback? onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        decoration: BoxDecoration(
+          color: unread ? const Color(0xFFF6FAFE) : Colors.white,
+          border: Border(
+            left: BorderSide(color: unread ? color : Colors.transparent, width: 3),
+          ),
+        ),
+        padding: const EdgeInsets.fromLTRB(16, 13, 16, 13),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.12),
+                shape: circle ? BoxShape.circle : BoxShape.rectangle,
+                borderRadius: circle ? null : BorderRadius.circular(12),
+              ),
+              child: initials != null
+                  ? Center(
+                      child: Text(initials,
+                          style: TextStyle(color: color, fontWeight: FontWeight.w800, fontSize: 15)))
+                  : Icon(icon, color: color, size: 21),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(title,
+                            style: const TextStyle(
+                                fontSize: 15, fontWeight: FontWeight.w700, color: Color(0xFF1E293B))),
+                      ),
+                      if (matchPct != null) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                              color: const Color(0xFFE1F5EE), borderRadius: BorderRadius.circular(999)),
+                          child: Text('$matchPct match',
+                              style: const TextStyle(
+                                  fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF0F6E56))),
+                        ),
+                      ],
+                    ],
+                  ),
+                  if (subtitle != null || linkText != null) ...[
+                    const SizedBox(height: 3),
+                    Text.rich(TextSpan(
+                      style: const TextStyle(fontSize: 13, color: Color(0xFF64748B), height: 1.3),
+                      children: [
+                        if (subtitle != null) TextSpan(text: subtitle),
+                        if (linkText != null)
+                          TextSpan(
+                              text: linkText,
+                              style: const TextStyle(
+                                  color: Color(0xFF185FA5), fontWeight: FontWeight.w600)),
+                      ],
+                    )),
+                  ],
+                  if (actions != null) ...[
+                    const SizedBox(height: 10),
+                    Row(children: actions),
+                  ],
+                  const SizedBox(height: 7),
+                  Text(time, style: const TextStyle(fontSize: 11.5, color: Color(0xFF94A3B8))),
+                ],
+              ),
+            ),
+            if (unread)
+              Container(
+                margin: const EdgeInsets.only(left: 8, top: 4),
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Contenido de muestra (mientras no haya notificaciones reales).
+  List<({String group, String cat, Widget row})> _demoRows() {
+    return [
+      (
+        group: 'Hoy',
+        cat: 'candidates',
+        row: _glamRow(
+          color: const Color(0xFF639922),
+          initials: 'ML',
+          circle: true,
+          title: 'María López',
+          matchPct: '92%',
+          subtitle: 'Se postuló a ',
+          linkText: 'Senior UX Lead',
+          time: 'Hace 20 min',
+          unread: true,
+          actions: [
+            _miniBtn('Ver perfil', const Color(0xFF1C1C1E), Colors.white, () => currentMainTabNotifier.value = 2),
+            const SizedBox(width: 8),
+            _miniBtn('Guardar', const Color(0xFFF1F5F9), const Color(0xFF64748B), () {}),
+          ],
+        ),
+      ),
+      (
+        group: 'Hoy',
+        cat: 'interviews',
+        row: _glamRow(
+          color: const Color(0xFF534AB7),
+          icon: CupertinoIcons.calendar,
+          title: 'Entrevista confirmada',
+          subtitle: 'Carlos M. · mañana 15:00 · videollamada',
+          time: 'Hace 2 h',
+          unread: true,
+        ),
+      ),
+      (
+        group: 'Hoy',
+        cat: 'candidates',
+        row: _glamRow(
+          color: const Color(0xFFBA7517),
+          icon: CupertinoIcons.flame_fill,
+          title: 'Tu vacante está en llamas',
+          subtitle: 'Senior UX Lead recibió 8 vistas nuevas hoy',
+          time: 'Hace 4 h',
+          unread: true,
+        ),
+      ),
+      (
+        group: 'Esta semana',
+        cat: 'connections',
+        row: _glamRow(
+          color: const Color(0xFF185FA5),
+          initials: 'AR',
+          circle: true,
+          title: 'Ana R. quiere conectar',
+          subtitle: 'Product Designer en Globant',
+          time: 'Lun',
+          unread: false,
+          actions: [
+            _miniBtn('Aceptar', const Color(0xFF1C1C1E), Colors.white, () {}),
+            const SizedBox(width: 8),
+            _miniBtn('Rechazar', const Color(0xFFF1F5F9), const Color(0xFF64748B), () {}),
+          ],
+        ),
+      ),
+    ];
+  }
+
+  // Notificaciones reales → filas glam agrupadas por tiempo.
+  List<({String group, String cat, Widget row})> _realRows(List<Map<String, dynamic>> notifs) {
+    String catOf(String t) {
+      if (t.startsWith('connection')) return 'connections';
+      if (t.contains('interview') || t.contains('schedul')) return 'interviews';
+      if (t.contains('job') || t == 'jobAlert' || t == 'profileView' || t.contains('application')) {
+        return 'candidates';
+      }
+      return 'other';
+    }
+
+    String groupOf(String? iso) {
+      final dt = DateTime.tryParse(iso ?? '')?.toLocal();
+      if (dt == null) return 'Antes';
+      final now = DateTime.now();
+      if (dt.year == now.year && dt.month == now.month && dt.day == now.day) return 'Hoy';
+      if (now.difference(dt).inDays < 7) return 'Esta semana';
+      return 'Antes';
+    }
+
+    // Ordena por grupo (Hoy → Esta semana → Antes) para que _renderGrouped agrupe bien.
+    const order = {'Hoy': 0, 'Esta semana': 1, 'Antes': 2};
+    final sorted = [...notifs]..sort((a, b) {
+        final ga = order[groupOf(a['created_at']?.toString())] ?? 3;
+        final gb = order[groupOf(b['created_at']?.toString())] ?? 3;
+        return ga.compareTo(gb);
+      });
+
+    return sorted.map((n) {
+      final type = (n['type'] ?? '').toString();
+      final isRead = n['is_read'] == true;
+      final isConnection = type.startsWith('connection');
+      return (
+        group: groupOf(n['created_at']?.toString()),
+        cat: catOf(type),
+        row: _glamRow(
+          color: _alertIconColor(type),
+          icon: _alertIconData(type),
+          circle: isConnection,
+          title: (n['title'] ?? '').toString(),
+          subtitle: (n['body'] ?? '').toString().isEmpty ? null : (n['body'] ?? '').toString(),
+          time: _relativeTime(n['created_at']?.toString()),
+          unread: !isRead,
+          onTap: () => _markAsRead(n),
+          actions: (isConnection && !isRead)
+              ? [
+                  _miniBtn('Aceptar', const Color(0xFF1C1C1E), Colors.white, () => _handleAccept(n)),
+                  const SizedBox(width: 8),
+                  _miniBtn('Rechazar', const Color(0xFFF1F5F9), const Color(0xFF64748B),
+                      () => _handleReject(n)),
+                ]
+              : null,
+        ),
+      );
+    }).toList();
+  }
+
+  Widget _miniBtn(String label, Color bg, Color fg, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+        decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(9)),
+        child: Text(label,
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: fg)),
       ),
     );
   }
@@ -712,53 +1037,15 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
   ];
 
   Widget _buildWeb(BuildContext context) {
+    // Columna centrada (maxWidth 620) — misma lección de ancho que Perfil/Feed:
+    // en web ancha una lista tipo "columna" no se debe estirar a 1400px.
     return WebPage(
-      title: 'Notificaciones',
+      title: 'Novedades',
       subtitle: 'Alertas y actividad de tu cuenta',
-      child: Container(
-        width: double.infinity,
-        constraints: const BoxConstraints(minHeight: 600),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF0F172A).withOpacity(0.06),
-              blurRadius: 24,
-              offset: const Offset(0, 8),
-            ),
-          ],
-        ),
-        padding: const EdgeInsets.all(28),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (!_bannerDismissed) ...[
-              _alertTipBanner(),
-              const SizedBox(height: 20),
-            ],
-            StreamBuilder<List<Map<String, dynamic>>>(
-              stream: NotificationService.instance.notificationsStream,
-              builder: (context, snapshot) {
-                final notifs = snapshot.data ?? const <Map<String, dynamic>>[];
-                final loading = snapshot.connectionState == ConnectionState.waiting && notifs.isEmpty;
-                if (loading) {
-                  return const Padding(
-                    padding: EdgeInsets.only(top: 80),
-                    child: Center(child: CupertinoActivityIndicator()),
-                  );
-                }
-                if (notifs.isEmpty) {
-                  return _alertEmptyState();
-                }
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: notifs.map(_alertCard).toList(),
-                );
-              },
-            ),
-          ],
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 620),
+          child: _alertsPanel(context, webMode: true),
         ),
       ),
     );
