@@ -11,9 +11,12 @@ import '../models/models.dart';
 import '../screens/vacantes_screen.dart';
 import 'profile_screen.dart';
 import 'explore_demo_data.dart';
-// Mapa web con Leaflet (flutter_map no pinta tiles en Flutter web/CanvasKit).
+// Mapa Leaflet: flutter_map no pinta los tiles ni en web (CanvasKit) ni en móvil
+// (Android) → se usa Leaflet en iframe (web) o en WebView (móvil).
 import '../widgets/web_map_stub.dart'
     if (dart.library.html) '../widgets/web_map.dart';
+import '../widgets/mobile_map_stub.dart'
+    if (dart.library.io) '../widgets/mobile_map.dart';
 
 // Pre-defined high-quality photos mapped to demo names or indices for premium look
 String _getItemPhoto(Map<String, dynamic> item) {
@@ -250,69 +253,39 @@ class _ExploreScreenState extends State<ExploreScreen> with TickerProviderStateM
   }
 
   Widget _buildMap() {
-    // En web, flutter_map no dibuja los tiles (CanvasKit). Usamos Leaflet nativo.
-    if (kIsWeb) {
-      final pins = _filteredItems
-          .map((item) => <String, dynamic>{
-                'id': item['name'],
-                'lat': (item['lat'] as num).toDouble(),
-                'lng': (item['lng'] as num).toDouble(),
-                'color': _pinColorHex(item),
-                'avatar': _getItemPhoto(item),
-              })
-          .toList();
-      return buildWebMap(
-        centerLat: _mapCenter.latitude,
-        centerLng: _mapCenter.longitude,
-        zoom: _mapZoom,
-        pins: pins,
-        selectedId: _selectedItem?['name'] as String?,
-        onPinTap: (id) {
-          final item = _filteredItems.firstWhere(
-            (e) => e['name'] == id,
-            orElse: () => <String, dynamic>{},
-          );
-          if (item.isEmpty) return;
-          setState(() {
-            _selectedItem = item;
-            _mapCenter = _getLatLng(item);
-            _mapZoom = 14.5;
-          });
-        },
+    // flutter_map no pinta los tiles ni en web (CanvasKit) ni en Android
+    // (Impeller/Skia): los descarga pero no los dibuja → mapa gris con pines.
+    // Se usa el mismo mapa Leaflet en ambos: iframe (web) / WebView (móvil).
+    final pins = _filteredItems
+        .map((item) => <String, dynamic>{
+              'id': item['name'],
+              'lat': (item['lat'] as num).toDouble(),
+              'lng': (item['lng'] as num).toDouble(),
+              'color': _pinColorHex(item),
+              'avatar': _getItemPhoto(item),
+            })
+        .toList();
+    void handlePinTap(String id) {
+      final item = _filteredItems.firstWhere(
+        (e) => e['name'] == id,
+        orElse: () => <String, dynamic>{},
       );
+      if (item.isEmpty) return;
+      setState(() {
+        _selectedItem = item;
+        _mapCenter = _getLatLng(item);
+        _mapZoom = 14.5;
+      });
     }
-    return FlutterMap(
-      options: MapOptions(
-        initialCenter: _mapCenter,
-        initialZoom: _mapZoom,
-        interactionOptions: const InteractionOptions(flags: InteractiveFlag.all),
-      ),
-      mapController: _mapController,
-      children: [
-        TileLayer(
-          // OSM (tile.openstreetmap.org) degrada/vacía los tiles en produccion
-          // por su politica de uso (bloqueo por Referer) → mapa gris. ArcGIS
-          // World_Street_Map sirve el tile completo. OJO: orden {z}/{y}/{x}.
-          urlTemplate:
-              'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
-          userAgentPackageName: 'com.mploya.mploya',
-          errorTileCallback: (tile, error, stackTrace) {
-            debugPrint('MAP_TILE_ERROR coords=${tile.coordinates} error=$error');
-          },
-        ),
-        MarkerLayer(
-          markers: _filteredItems.map((item) {
-            final isSelected = _selectedItem != null && _selectedItem!['name'] == item['name'];
-            return Marker(
-              point: _getLatLng(item),
-              width: isSelected ? 160 : 42,
-              height: isSelected ? 110 : 42,
-              alignment: Alignment.bottomCenter,
-              child: _buildMapPin(item, isSelected),
-            );
-          }).toList(),
-        ),
-      ],
+
+    final builder = kIsWeb ? buildWebMap : buildMobileMap;
+    return builder(
+      centerLat: _mapCenter.latitude,
+      centerLng: _mapCenter.longitude,
+      zoom: _mapZoom,
+      pins: pins,
+      selectedId: _selectedItem?['name'] as String?,
+      onPinTap: handlePinTap,
     );
   }
 
