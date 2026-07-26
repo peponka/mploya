@@ -8,9 +8,6 @@ import '../widgets/mploya_toast.dart';
 import '../services/ai_match_service.dart';
 import 'nueva_vacante_screen.dart';
 import 'vacantes_screen.dart';
-import 'ats_kanban_screen.dart';
-import 'profile_screen.dart';
-import '../models/models.dart';
 
 /// Panel de empresa — dashboard SaaS premium nivel inversor.
 /// `embedded` = true cuando se muestra dentro del hub "Panel" (sin su propio

@@ -6,7 +6,6 @@ import 'package:flutter/services.dart';
 import '../theme/app_theme.dart';
 import '../models/models.dart';
 import '../screens/profile_screen.dart';
-import '../screens/search_screen.dart';
 import '../screens/trending_hashtags_screen.dart';
 import '../screens/micro_pitch_camera.dart';
 

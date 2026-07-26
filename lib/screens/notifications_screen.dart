@@ -7,11 +7,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../theme/app_theme.dart';
 import '../models/models.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../providers/user_provider.dart';
 import '../services/notification_service.dart';
 import '../services/social_service.dart';
 import '../services/error_handler.dart';
-import '../widgets/skeleton_loader.dart';
 import '../services/smart_notification_service.dart';
 import '../services/scheduling_service.dart';
 import '../widgets/web_ui.dart';
@@ -71,18 +69,6 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
     }
   }
 
-  NotificationType _parseType(String typeStr) {
-    switch (typeStr) {
-      case 'like': return NotificationType.like;
-      case 'comment': return NotificationType.comment;
-      case 'connection': return NotificationType.connection;
-      case 'jobAlert': return NotificationType.jobAlert;
-      case 'profileView': return NotificationType.profileView;
-      case 'mention': return NotificationType.mention;
-      default: return NotificationType.like;
-    }
-  }
-
   void _markAllAsRead(List<Map<String, dynamic>> unreadNotifs) async {
     final ids = unreadNotifs
         .where((n) => n['is_read'] != true && n['id'] != null)
@@ -136,40 +122,6 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
       errorMessage: 'No se pudo rechazar la solicitud',
     );
     if (result != null) _markAsRead(n);
-  }
-
-  IconData _iconForType(NotificationType type) {
-    switch (type) {
-      case NotificationType.like:
-        return CupertinoIcons.hand_thumbsup_fill;
-      case NotificationType.comment:
-        return CupertinoIcons.chat_bubble_fill;
-      case NotificationType.connection:
-        return CupertinoIcons.person_add_solid;
-      case NotificationType.jobAlert:
-        return CupertinoIcons.briefcase_fill;
-      case NotificationType.profileView:
-        return CupertinoIcons.eye_fill;
-      case NotificationType.mention:
-        return CupertinoIcons.at;
-    }
-  }
-
-  Color _colorForType(NotificationType type) {
-    switch (type) {
-      case NotificationType.like:
-        return MployaTheme.brandAccent;
-      case NotificationType.comment:
-        return const Color(0xFF057642);
-      case NotificationType.connection:
-        return const Color(0xFF5F3DC4);
-      case NotificationType.jobAlert:
-        return NexTheme.brandAccent;
-      case NotificationType.profileView:
-        return const Color(0xFF00838F);
-      case NotificationType.mention:
-        return const Color(0xFFC2185B);
-    }
   }
 
   @override
@@ -1239,10 +1191,7 @@ class _NotificationTile extends StatelessWidget {
     required this.timeAgo,
     required this.icon,
     required this.iconColor,
-    this.showQuickActions = false,
-    this.onAccept,
-    this.onReject,
-  });
+  }) : showQuickActions = false, onAccept = null, onReject = null;
 
   @override
   Widget build(BuildContext context) {
@@ -1684,15 +1633,10 @@ class _AlertCardData {
     this.name,
     this.headline,
     this.companyName,
-    this.avatarUrl,
     this.timeAgo = '',
-    this.isRead = false,
     this.compatibilityScore,
     this.skillTags,
-    this.onTap,
-    this.onAccept,
-    this.onReject,
-  }) : cardKind = cardKind ?? _inferKind(type);
+  }) : avatarUrl = null, isRead = false, onTap = null, onAccept = null, onReject = null, cardKind = cardKind ?? _inferKind(type);
 
   static _AlertKind _inferKind(NotificationType type) {
     switch (type) {

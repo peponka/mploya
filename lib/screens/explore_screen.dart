@@ -5,7 +5,6 @@ import 'package:flutter/material.dart' show Colors, LinearProgressIndicator, Alw
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
-import '../theme/app_theme.dart';
 import '../widgets/web_ui.dart';
 import '../models/models.dart';
 import '../screens/vacantes_screen.dart';

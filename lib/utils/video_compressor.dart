@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // VideoCompressor — Compresión de video antes de subir a Supabase Storage

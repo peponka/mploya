@@ -94,22 +94,6 @@ class _ChatInmailScreenState extends State<ChatInmailScreen> {
     );
   }
 
-  void _joinCall(String callerId) {
-    final myId = _supabase.auth.currentUser?.id;
-    if (myId == null || callerId.isEmpty) return;
-    final channelName = '${[myId, callerId]..sort()}'.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '').substring(0, 32);
-    Navigator.push(
-      context,
-      CupertinoPageRoute(
-        builder: (_) => AgoraCallScreen(
-          channelName: channelName,
-          displayName: _supabase.auth.currentUser?.userMetadata?['full_name']?.toString() ?? 'Usuario',
-          otherName: widget.targetUser?.name ?? 'Llamada',
-        ),
-      ),
-    );
-  }
-
   Future<void> _sendMessage() async {
     final text = _msgController.text.trim();
     if (text.isEmpty) return;

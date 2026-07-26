@@ -1,7 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart' show Colors, LinearProgressIndicator;
 import '../theme/app_theme.dart';
-import '../models/models.dart';
 import '../services/video_personality_service.dart';
 import '../screens/personality_result_screen.dart';
 

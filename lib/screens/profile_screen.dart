@@ -10,14 +10,12 @@ import '../theme/app_theme.dart';
 import '../models/models.dart';
 import '../widgets/nex_avatar.dart';
 import '../widgets/spring_interaction.dart';
-import '../widgets/profile_section_widgets.dart';
 import '../widgets/profile_video_widgets.dart';
 import 'messaging_screen.dart';
 import 'splash_screen.dart';
 import 'package:image_picker/image_picker.dart';
 import '../services/storage_service.dart';
 import '../services/profile_view_service.dart';
-import '../services/claude_ai_service.dart';
 import '../services/video_preload_manager.dart';
 import '../services/company_verification_service.dart';
 import 'profile_viewers_screen.dart';
@@ -37,9 +35,6 @@ import 'resume_builder_screen.dart';
 import 'scheduling_screen.dart';
 import 'company_review_screen.dart';
 import 'saved_profiles_screen.dart';
-import '../widgets/coach_mark.dart';
-import '../services/video_personality_service.dart';
-import 'personality_result_screen.dart';
 import '../widgets/profile_bio_generator.dart';
 import '../widgets/profile_personality_section.dart';
 import 'trending_hashtags_screen.dart';
@@ -50,9 +45,7 @@ import 'onboarding_pitch_screen.dart';
 import 'settings_screen.dart';
 import 'mis_herramientas_screen.dart';
 import 'ats_dashboard_screen.dart';
-import '../widgets/mploya_ui.dart';
 import '../widgets/web_ui.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 
 class ProfileScreen extends StatefulWidget {
   final NexUser? user;
@@ -3489,9 +3482,8 @@ class _ProfileTabButton extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.isSelected,
-    this.badge,
     required this.onTap,
-  });
+  }) : badge = null;
 
   @override
   Widget build(BuildContext context) {
@@ -3986,8 +3978,7 @@ class _CollapsibleCard extends StatefulWidget {
   const _CollapsibleCard({
     required this.title,
     required this.child,
-    this.initiallyExpanded = false,
-  });
+  }) : initiallyExpanded = false;
 
   @override
   State<_CollapsibleCard> createState() => _CollapsibleCardState();

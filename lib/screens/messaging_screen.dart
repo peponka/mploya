@@ -1,5 +1,4 @@
 import 'dart:ui';
-import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'dart:async';
 import 'package:flutter/cupertino.dart';
 // Material widgets (SliverAppBar, Colors, Icons) have no Cupertino equivalent
@@ -16,7 +15,6 @@ import '../widgets/mploya_toast.dart';
 import '../services/chat_service.dart';
 import '../services/content_moderation_service.dart';
 import '../utils/time_utils.dart';
-import '../navigation/main_navigation.dart';
 import '../widgets/web_ui.dart';
 import 'agora_call_screen.dart';
 import 'profile_screen.dart';
@@ -744,74 +742,6 @@ class _MessagingScreenState extends State<MessagingScreen> {
     );
   }
 
-  /// Demo user chip for the empty-state chat preview
-  Widget _demoUserChip(String name, String emoji, bool active) {
-    return Expanded(
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Stack(
-            children: [
-              Container(
-                width: 44, height: 44,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: LinearGradient(colors: [Colors.grey.shade200, Colors.grey.shade300]),
-                  boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 8, offset: const Offset(0, 2))],
-                ),
-                child: Center(child: Text(emoji, style: const TextStyle(fontSize: 22))),
-              ),
-              if (active)
-                Positioned(
-                  bottom: 1, right: 1,
-                  child: Container(
-                    width: 12, height: 12,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF34C759),
-                      shape: BoxShape.circle,
-                      border: Border.all(color: CupertinoColors.white, width: 2),
-                    ),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: context.textPrimary),
-                ),
-                if (active)
-                  const Text('Active Now', style: TextStyle(fontSize: 11, color: Color(0xFF34C759), fontWeight: FontWeight.w600)),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _demoFilterChip(String label, bool active) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-      decoration: BoxDecoration(
-        color: active ? MployaTheme.brandAccent : Colors.transparent,
-        borderRadius: BorderRadius.circular(20),
-        border: active ? null : Border.all(color: context.dividerColor.withValues(alpha: 0.5)),
-      ),
-      child: Text(label, style: TextStyle(
-        color: active ? CupertinoColors.white : context.textSecondary,
-        fontSize: 13, fontWeight: FontWeight.w600,
-      )),
-    );
-  }
-
   Widget _demoMatchAvatar(String name, String emoji, bool isNew) {
     return Padding(
       padding: const EdgeInsets.only(right: 16),
@@ -838,132 +768,6 @@ class _MessagingScreenState extends State<MessagingScreen> {
           ),
           const SizedBox(height: 4),
           Text(name, style: TextStyle(fontSize: 11, fontWeight: isNew ? FontWeight.w700 : FontWeight.w500, color: context.textSecondary)),
-        ],
-      ),
-    );
-  }
-
-  Widget _demoConversationTile(String name, String emoji, String lastMsg, String time, int unread, bool isSelected) {
-    return GestureDetector(
-      onTap: () {
-        Navigator.of(context).push(
-          CupertinoPageRoute(builder: (_) => _DemoChatScreen(name: name, emoji: emoji)),
-        );
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: isSelected ? MployaTheme.brandAccent.withValues(alpha: 0.08) : Colors.transparent,
-          border: Border(left: BorderSide(color: isSelected ? MployaTheme.brandAccent : Colors.transparent, width: 3)),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 48, height: 48,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: LinearGradient(colors: [Colors.grey.shade200, Colors.grey.shade300]),
-              ),
-              child: Center(child: Text(emoji, style: const TextStyle(fontSize: 24))),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(child: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis,
-                          style: TextStyle(fontSize: 14, fontWeight: unread > 0 ? FontWeight.w800 : FontWeight.w600, color: context.textPrimary))),
-                      Text(time, style: TextStyle(fontSize: 11, color: unread > 0 ? MployaTheme.brandAccent : context.textTertiary, fontWeight: unread > 0 ? FontWeight.w700 : FontWeight.w500)),
-                    ],
-                  ),
-                  const SizedBox(height: 3),
-                  Row(
-                    children: [
-                      Expanded(child: Text(lastMsg, maxLines: 1, overflow: TextOverflow.ellipsis,
-                          style: TextStyle(fontSize: 13, color: context.textTertiary, fontWeight: unread > 0 ? FontWeight.w600 : FontWeight.w400))),
-                      if (unread > 0)
-                        Container(
-                          width: 20, height: 20,
-                          decoration: const BoxDecoration(color: MployaTheme.brandAccent, shape: BoxShape.circle),
-                          child: Center(child: Text('$unread', style: const TextStyle(color: CupertinoColors.white, fontSize: 11, fontWeight: FontWeight.w800))),
-                        ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _demoBubble(String text, bool isMe, String time, bool isRead) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Column(
-        crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-        children: [
-          Container(
-            constraints: const BoxConstraints(maxWidth: 380),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: isMe ? null : (context.isDark ? NexTheme.darkSurface : const Color(0xFFF2F2F7)),
-              gradient: isMe ? const LinearGradient(
-                colors: [Color(0xFF185FA5), Color(0xFF0C447C)],
-                begin: Alignment.topLeft, end: Alignment.bottomRight,
-              ) : null,
-              borderRadius: BorderRadius.only(
-                topLeft: const Radius.circular(20),
-                topRight: const Radius.circular(20),
-                bottomLeft: Radius.circular(isMe ? 20 : 6),
-                bottomRight: Radius.circular(isMe ? 6 : 20),
-              ),
-              boxShadow: isMe
-                  ? [BoxShadow(color: const Color(0xFF185FA5).withValues(alpha: 0.15), blurRadius: 8, offset: const Offset(0, 3))]
-                  : null,
-            ),
-            child: Text(text, style: TextStyle(
-              fontSize: 14.5, fontWeight: FontWeight.w500,
-              color: isMe ? CupertinoColors.white : context.textPrimary,
-            )),
-          ),
-          const SizedBox(height: 4),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(time, style: TextStyle(fontSize: 11, color: context.textTertiary)),
-              if (isMe) ...[
-                const SizedBox(width: 4),
-                Icon(
-                  isRead ? CupertinoIcons.checkmark_alt_circle_fill : CupertinoIcons.checkmark_alt_circle,
-                  size: 13, color: isRead ? MployaTheme.brandAccent : context.textTertiary,
-                ),
-              ],
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _demoActionRow(IconData icon, String label) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: context.cardColor,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: context.dividerColor.withValues(alpha: 0.3)),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, size: 18, color: MployaTheme.brandAccent),
-          const SizedBox(width: 10),
-          Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: context.textPrimary)),
-          const Spacer(),
-          Icon(CupertinoIcons.chevron_right, size: 14, color: context.textTertiary),
         ],
       ),
     );
