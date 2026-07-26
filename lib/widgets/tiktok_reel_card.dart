@@ -944,37 +944,37 @@ class _TikTokReelCardState extends ConsumerState<TikTokReelCard>
         ? author.name.trim().split(' ').map((w) => w.isEmpty ? '' : w[0]).take(2).join().toUpperCase()
         : '?';
 
+    // Botón de acción de la tarjeta clara. Con label ("Interesado") es el primario:
+    // se envuelve en Expanded afuera para ocupar el ancho sobrante. Sin label es un
+    // cuadrado fijo (46px) para que los íconos queden uniformes y agrupados.
     Widget actionBtn(IconData icon, String? label, VoidCallback onTap, {bool filled = false}) {
-      // El botón con label ("Interesado") es el primario y ocupa más ancho (flex 3);
-      // los de solo ícono son angostos (flex 1). Así el texto no se desborda.
-      return Expanded(
-        flex: label != null ? 3 : 1,
-        child: CupertinoButton(
-          padding: EdgeInsets.zero,
-          onPressed: onTap,
-          child: Container(
-            height: 40,
-            margin: const EdgeInsets.symmetric(horizontal: 3),
-            decoration: BoxDecoration(
-              color: filled ? brand : const Color(0xFFF1F5F9),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(icon, size: 17, color: filled ? Colors.white : const Color(0xFF475569)),
-                if (label != null) ...[
-                  const SizedBox(width: 6),
-                  Flexible(
-                    child: Text(label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: filled ? Colors.white : const Color(0xFF475569))),
-                  ),
-                ],
+      return CupertinoButton(
+        padding: EdgeInsets.zero,
+        minimumSize: Size.zero,
+        onPressed: onTap,
+        child: Container(
+          height: 42,
+          width: label == null ? 46 : null,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: filled ? brand : const Color(0xFFF1F5F9),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 18, color: filled ? Colors.white : const Color(0xFF475569)),
+              if (label != null) ...[
+                const SizedBox(width: 7),
+                Flexible(
+                  child: Text(label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: filled ? Colors.white : const Color(0xFF475569))),
+                ),
               ],
-            ),
+            ],
           ),
         ),
       );
@@ -1120,8 +1120,11 @@ class _TikTokReelCardState extends ConsumerState<TikTokReelCard>
                   child: Row(
                     key: widget.isFirstCard ? cmFeedActionsKey : null,
                     children: [
-                      actionBtn(_isMatched ? CupertinoIcons.star_fill : CupertinoIcons.star, 'Interesado',
-                          isLocked ? _showStealthAlert : _toggleMatch, filled: _isMatched),
+                      Expanded(
+                        child: actionBtn(_isMatched ? CupertinoIcons.star_fill : CupertinoIcons.star, 'Interesado',
+                            isLocked ? _showStealthAlert : _toggleMatch, filled: _isMatched),
+                      ),
+                      const SizedBox(width: 8),
                       actionBtn(CupertinoIcons.videocam_fill, null, () {
                         _controller?.pause();
                         Navigator.of(context).push(CupertinoPageRoute(
@@ -1131,7 +1134,9 @@ class _TikTokReelCardState extends ConsumerState<TikTokReelCard>
                           if (mounted && _controller != null && _isInitialized) _controller!.play();
                         });
                       }),
+                      const SizedBox(width: 8),
                       actionBtn(_isBookmarked ? CupertinoIcons.bookmark_fill : CupertinoIcons.bookmark, null, _toggleBookmark),
+                      const SizedBox(width: 8),
                       actionBtn(CupertinoIcons.arrowshape_turn_up_right, null, () => _shareProfile(author)),
                     ],
                   ),
