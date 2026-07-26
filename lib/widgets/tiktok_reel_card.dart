@@ -945,7 +945,10 @@ class _TikTokReelCardState extends ConsumerState<TikTokReelCard>
         : '?';
 
     Widget actionBtn(IconData icon, String? label, VoidCallback onTap, {bool filled = false}) {
+      // El botón con label ("Interesado") es el primario y ocupa más ancho (flex 3);
+      // los de solo ícono son angostos (flex 1). Así el texto no se desborda.
       return Expanded(
+        flex: label != null ? 3 : 1,
         child: CupertinoButton(
           padding: EdgeInsets.zero,
           onPressed: onTap,
@@ -958,11 +961,17 @@ class _TikTokReelCardState extends ConsumerState<TikTokReelCard>
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(icon, size: 17, color: filled ? Colors.white : const Color(0xFF475569)),
                 if (label != null) ...[
                   const SizedBox(width: 6),
-                  Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: filled ? Colors.white : const Color(0xFF475569))),
+                  Flexible(
+                    child: Text(label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: filled ? Colors.white : const Color(0xFF475569))),
+                  ),
                 ],
               ],
             ),
