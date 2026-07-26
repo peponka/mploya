@@ -74,39 +74,6 @@ class ReelActionsBar extends StatelessWidget {
   List<Shadow> get _sh =>
       lightMode ? const [] : const [Shadow(color: Colors.black54, blurRadius: 6)];
 
-  Widget _buildActionButton({
-    required VoidCallback onTap,
-    required Widget icon,
-    String? countText,
-    String? semanticLabel,
-  }) {
-    return Semantics(
-      button: true,
-      label: semanticLabel,
-      child: GestureDetector(
-        onTap: onTap,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            icon,
-            if (countText != null) ...[
-              const SizedBox(height: 2),
-              Text(
-                countText,
-                style: TextStyle(
-                  color: _fg,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  shadows: _sh,
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Column(

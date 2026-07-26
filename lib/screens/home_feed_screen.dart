@@ -15,7 +15,6 @@ import '../widgets/onboarding_tour.dart';
 import '../theme/app_theme.dart';
 import 'notifications_screen.dart';
 
-import 'premium_paywall_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/user_provider.dart';
 import '../providers/feed_provider.dart';
@@ -99,12 +98,6 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
     super.dispose();
   }
 
-
-  void _showPremiumPaywall() {
-    Navigator.of(context).push(
-      CupertinoPageRoute(builder: (_) => const PremiumPaywallScreen()),
-    );
-  }
 
   Post _userToPost(Map<String, dynamic> data) {
     return FeedService.instance.userRowToPost(data, likedUserIds: _likedUserIds);
@@ -488,8 +481,6 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
                                   minimumSize: Size.zero,
                                   onPressed: () {
                                     HapticFeedback.selectionClick();
-                                    final isCompany = currentUser?.accountType == 'empresa' ||
-                                        currentUser?.accountType == 'headhunter';
                                     Navigator.of(context).push(
                                       CupertinoPageRoute<void>(
                                         builder: (_) => const JobsScreen(),

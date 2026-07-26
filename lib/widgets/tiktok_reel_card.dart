@@ -27,7 +27,6 @@ import '../services/claude_ai_service.dart';
 import '../services/hashtag_match_service.dart';
 import '../services/coach_mark_service.dart';
 import 'reel_card_moderation.dart';
-import 'reel_card_comments.dart';
 import 'reel_card_helpers.dart';
 import 'reel_card_video.dart';
 import 'reel_card_overlays.dart';
@@ -400,10 +399,6 @@ class _TikTokReelCardState extends ConsumerState<TikTokReelCard>
   void _showMoreOptions(NexUser author) {
     HapticFeedback.selectionClick();
     showMoreOptions(author);
-  }
-
-  void _openCommentsSheet(BuildContext ctx, NexUser author) {
-    openReelCommentsSheet(ctx, author, contactInfoChecker: containsContactInfo);
   }
 
   // ─── Claude AI Match ──────────────────────────────────────────────────────
@@ -1147,62 +1142,6 @@ class _TikTokReelCardState extends ConsumerState<TikTokReelCard>
     );
   }
 
-  // ── Badge "EXPERTISE: tag1 · tag2 · tag3" (glassmorphism, top-left) ──
-  Widget _expertiseBadge(List<String> tags) {
-    final label = tags.take(3).map((t) => t.isEmpty ? t : t[0].toUpperCase() + t.substring(1)).join('  ·  ');
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(20),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-          decoration: BoxDecoration(
-            color: Colors.black.withValues(alpha: 0.2),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
-          ),
-          child: Text.rich(
-            TextSpan(children: [
-              TextSpan(
-                text: 'EXPERTISE: ',
-                style: TextStyle(color: NexTheme.brandAccent, fontSize: 10.5, fontWeight: FontWeight.w900, letterSpacing: 0.5),
-              ),
-              TextSpan(text: label, style: const TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.w600)),
-            ]),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ── Badge "Top Talent" (premium gold gradient, top-right) ──
-  Widget _topTalentBadge() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFFF59E0B), Color(0xFFFBBF24)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.3), width: 0.5),
-        boxShadow: [
-          BoxShadow(color: const Color(0xFFF59E0B).withValues(alpha: 0.5), blurRadius: 14, offset: const Offset(0, 4)),
-        ],
-      ),
-      child: const Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(CupertinoIcons.sparkles, color: Colors.white, size: 12),
-          SizedBox(width: 5),
-          Text('Top Talent', style: TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.w800, letterSpacing: 0.3)),
-        ],
-      ),
-    );
-  }
 }
 
 // ── Extracted widgets now live in: ──

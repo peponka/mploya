@@ -55,52 +55,6 @@ class ReelTagPill extends StatelessWidget {
   }
 }
 
-/// Tag pill claro (fondo blanco/gris) para el panel de info en tarjeta blanca.
-class _WhiteTagPill extends StatelessWidget {
-  final String tag;
-  const _WhiteTagPill({required this.tag});
-
-  @override
-  Widget build(BuildContext context) {
-    final label = tag.isEmpty ? tag : tag[0].toUpperCase() + tag.substring(1);
-    return Semantics(
-      button: true,
-      label: 'Buscar hashtag $tag',
-      child: GestureDetector(
-        onTap: () {
-          Navigator.of(context).push(CupertinoPageRoute(
-            builder: (_) => TrendingHashtagsScreen(initialTag: tag),
-          ));
-        },
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-          decoration: BoxDecoration(
-            color: NexTheme.brandAccent.withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(MployaTheme.radiusPill),
-            border: Border.all(color: NexTheme.brandAccent.withValues(alpha: 0.12)),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(width: 7, height: 7, decoration: const BoxDecoration(color: NexTheme.brandAccent, shape: BoxShape.circle)),
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: const TextStyle(
-                  color: Color(0xFF1F2937),
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w600,
-                  decoration: TextDecoration.none,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 /// Glass tag pill for the transparent overlay panel.
 class _GlassTagPill extends StatelessWidget {
   final String tag;
