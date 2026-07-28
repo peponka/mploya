@@ -900,10 +900,12 @@ class _UsersTabState extends State<_UsersTab> {
   Future<void> _load() async {
     setState(() { _loading = true; _error = null; });
     try {
-      var q = _sb.from('users').select(
-          'id, name, email, account_type, is_verified, is_premium, location, video_url, created_at');
-      if (widget.accountFilter != null) q = q.eq('account_type', widget.accountFilter!);
-      final data = await q.order('created_at', ascending: false).limit(200);
+      // Vía RPC: `email` ya no es legible por `authenticated` (migración 022);
+      // admin_list_users valida is_admin() y es la única puerta al email.
+      final data = await _sb.rpc('admin_list_users', params: {
+        'p_account_type': widget.accountFilter,
+        'p_limit': 200,
+      });
       setState(() {
         _rows = List<Map<String, dynamic>>.from(data);
         _loading = false;
@@ -1190,12 +1192,8 @@ class _BoostsTabState extends State<_BoostsTab> {
   Future<void> _load() async {
     setState(() { _loading = true; _error = null; });
     try {
-      final now = DateTime.now().toUtc().toIso8601String();
-      final data = await _sb
-          .from('users')
-          .select('id, name, email, account_type, boost_ends_at')
-          .gt('boost_ends_at', now)
-          .order('boost_ends_at', ascending: false);
+      // Vía RPC por el mismo motivo que _load(): el email solo sale validando admin.
+      final data = await _sb.rpc('admin_list_boosted');
       setState(() {
         _rows = List<Map<String, dynamic>>.from(data);
         _loading = false;
