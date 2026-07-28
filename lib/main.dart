@@ -18,6 +18,7 @@ import 'firebase_options.dart';
 import 'services/deep_link_service.dart';
 import 'utils/supabase_config.dart';
 import 'services/connectivity_service.dart';
+import 'services/referral_service.dart';
 import 'services/block_user_service.dart';
 import 'services/auth_service.dart';
 import 'services/certificate_pinning.dart';
@@ -157,6 +158,11 @@ Future<void> _initDeferredServices() async {
   // Connectivity monitoring (no-blocking)
   ConnectivityService.instance.initialize();
 
+  // Código de referido del link de invitación (/app/?ref=CODE): se guarda ahora
+  // y se canjea cuando haya sesión (ver _redeemPendingReferral).
+  ReferralService.instance.captureCodeFromUrl();
+  _redeemPendingReferral();
+
   // Load blocked users cache for feed filtering
   BlockUserService.instance.loadBlockedUsers();
 
@@ -200,6 +206,22 @@ Future<void> _initDeferredServices() async {
   } catch (e) {
     debugPrint('Firebase/Crashlytics init: $e');
   }
+}
+
+/// Canjea el código de referido pendiente en cuanto haya sesión.
+///
+/// El flujo es: mploya.ai/invite/<code> → /app/?ref=<code> → se guarda el código
+/// → el usuario se registra → acá se canjea. Se escucha el stream de auth porque
+/// el registro puede tardar (onboarding, confirmación de mail, OAuth).
+void _redeemPendingReferral() {
+  // Si ya había sesión al abrir (p. ej. volvió por el link estando logueado).
+  ReferralService.instance.applyPendingCode();
+
+  Supabase.instance.client.auth.onAuthStateChange.listen((data) {
+    if (data.event == AuthChangeEvent.signedIn) {
+      ReferralService.instance.applyPendingCode();
+    }
+  });
 }
 
 class MployaApp extends StatelessWidget {

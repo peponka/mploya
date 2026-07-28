@@ -1,5 +1,6 @@
 {
   "rewrites": [
+    { "source": "/invite/:code", "destination": "/api/invite?code=:code" },
     { "source": "/p/:id", "destination": "/api/u?id=:id" },
     { "source": "/u/:id", "destination": "/api/u?id=:id" },
     { "source": "/app/(.*)", "destination": "/app/index.html" }
