@@ -568,16 +568,13 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
       final type = (n['type'] ?? '').toString();
       final isRead = n['is_read'] == true;
       final isConnection = type.startsWith('connection');
-      // La tabla `notifications` guarda el texto en `description` (no hay title/body).
-      // Se usa un título legible por tipo y la descripción como subtítulo; si algún
-      // día el backend agrega title/body, tienen prioridad.
-      final desc = (n['description'] ?? '').toString();
+      // La tabla real usa title/body (el schema.sql del repo está desactualizado
+      // y menciona `description`: no existe). Si el título viniera vacío, se cae
+      // a uno legible según el tipo.
       final rawTitle = (n['title'] ?? '').toString();
       final rawBody = (n['body'] ?? '').toString();
-      final title = rawTitle.isNotEmpty
-          ? rawTitle
-          : (desc.isNotEmpty ? _titleForType(type) : _titleForType(type));
-      final subtitle = rawBody.isNotEmpty ? rawBody : desc;
+      final title = rawTitle.isNotEmpty ? rawTitle : _titleForType(type);
+      final subtitle = rawBody;
       return (
         group: groupOf(n['created_at']?.toString()),
         cat: catOf(type),
@@ -604,7 +601,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
   }
 
   /// Título legible para cada `type` de la tabla `notifications`
-  /// (que solo guarda `description`, sin título propio).
+  /// Fallback para cuando la fila no trae `title`.
   String _titleForType(String type) {
     switch (type) {
       case 'connection':
