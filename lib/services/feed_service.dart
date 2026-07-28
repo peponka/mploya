@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../utils/user_columns.dart';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/models.dart';
@@ -80,7 +81,7 @@ class FeedService {
       } catch (viewError) {
         // feed_ranked no existe → fallback a tabla users directamente
         debugPrint('⚠️ feed_ranked no disponible, usando tabla users: $viewError');
-        var query = _db.from('users').select();
+        var query = _db.from('users').select(kUserColumns);
         if (_uid != null) query = query.neq('id', _uid!);
         
         // Filtro cruzado

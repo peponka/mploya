@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import '../utils/user_columns.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../theme/app_theme.dart';
 import '../models/models.dart';
@@ -68,7 +69,7 @@ class _NetworkScreenState extends State<NetworkScreen> {
         return;
       }
 
-      final users = await _supabase.from('users').select().inFilter('id', otherIds);
+      final users = await _supabase.from('users').select(kUserColumns).inFilter('id', otherIds);
       if (mounted) setState(() {
         _connections = users.map((r) => NexUser.fromJson(r)).toList();
         _loadingConnections = false;
@@ -483,7 +484,7 @@ class _NetworkScreenState extends State<NetworkScreen> {
         final userId = r['user_id']?.toString() ?? r['id']?.toString() ?? '';
         final affinity = (r['affinity_score'] as num?)?.toDouble() ?? 0;
         return FutureBuilder<Map<String, dynamic>?>(
-          future: _supabase.from('users').select().eq('id', userId).maybeSingle(),
+          future: _supabase.from('users').select(kUserColumns).eq('id', userId).maybeSingle(),
           builder: (context, snap) {
             if (!snap.hasData || snap.data == null) {
               return const WebCard(child: SizedBox(height: 220));
@@ -625,7 +626,7 @@ class _NetworkScreenState extends State<NetworkScreen> {
         final affinity = (r['affinity_score'] as num?)?.toDouble() ?? 0;
 
         return FutureBuilder<Map<String, dynamic>?>(
-          future: _supabase.from('users').select().eq('id', userId).maybeSingle(),
+          future: _supabase.from('users').select(kUserColumns).eq('id', userId).maybeSingle(),
           builder: (context, snap) {
             if (!snap.hasData || snap.data == null) {
               return const Padding(

@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import '../utils/user_columns.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../theme/app_theme.dart';
 import '../models/models.dart';
@@ -237,7 +238,7 @@ class _SearchScreenState extends State<SearchScreen> {
           ),
         ),
         FutureBuilder<List<Map<String, dynamic>>>(
-          future: Supabase.instance.client.from('users').select().limit(4),
+          future: Supabase.instance.client.from('users').select(kUserColumns).limit(4),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const Padding(padding: EdgeInsets.all(20), child: Center(child: CupertinoActivityIndicator()));
@@ -274,7 +275,7 @@ class _SearchScreenState extends State<SearchScreen> {
 
       if (searchUsers) {
         // Buscar por nombre/headline con texto libre
-        var queryBuilder = client.from('users').select().or('name.ilike.%$query%,headline.ilike.%$query%');
+        var queryBuilder = client.from('users').select(kUserColumns).or('name.ilike.%$query%,headline.ilike.%$query%');
         
         // Si el filtro es Empresas, forzamos que traiga empresas
         if (_selectedFilter == 3) {
@@ -293,7 +294,7 @@ class _SearchScreenState extends State<SearchScreen> {
         for (final q in {query, qLower, qUpper, qCapital}) {
           final rows = await client
               .from('users')
-              .select()
+              .select(kUserColumns)
               .contains('tags', [q]);
           tagRows.addAll(rows);
         }

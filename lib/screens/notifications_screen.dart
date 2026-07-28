@@ -1,4 +1,5 @@
 import 'dart:math';
+import '../utils/user_columns.dart';
 import 'package:flutter/cupertino.dart';
 // Material widgets (SliverAppBar, Colors, Icons) have no Cupertino equivalent
 import 'package:flutter/material.dart';
@@ -1162,7 +1163,7 @@ class _CompanyAlertsWebState extends State<_CompanyAlertsWeb> {
     final tags = (r['candidate_tags'] as List?)?.map((t) => t.toString()).toList() ?? [];
     return GestureDetector(
       onTap: () async {
-        final data = await _supabase.from('users').select().eq('id', r['candidate_id']).maybeSingle();
+        final data = await _supabase.from('users').select(kUserColumns).eq('id', r['candidate_id']).maybeSingle();
         if (data != null && mounted) {
           Navigator.of(context).push(CupertinoPageRoute(builder: (_) => ProfileScreen(user: NexUser.fromJson(data))));
         }
@@ -1170,7 +1171,7 @@ class _CompanyAlertsWebState extends State<_CompanyAlertsWeb> {
       child: WebCard(
         padding: const EdgeInsets.all(16),
         onTap: () async {
-          final data = await _supabase.from('users').select().eq('id', r['candidate_id']).maybeSingle();
+          final data = await _supabase.from('users').select(kUserColumns).eq('id', r['candidate_id']).maybeSingle();
           if (data != null && mounted) {
             Navigator.of(context).push(CupertinoPageRoute(builder: (_) => ProfileScreen(user: NexUser.fromJson(data))));
           }
