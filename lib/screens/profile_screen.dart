@@ -12,6 +12,7 @@ import '../widgets/nex_avatar.dart';
 import '../widgets/spring_interaction.dart';
 import '../widgets/profile_video_widgets.dart';
 import 'messaging_screen.dart';
+import 'chat_inmail_screen.dart';
 import 'splash_screen.dart';
 import 'package:image_picker/image_picker.dart';
 import '../services/storage_service.dart';
@@ -490,6 +491,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     _contactPill(CupertinoIcons.briefcase_fill, "Portfolio"),
                   ],
                 ),
+                // ── Acciones sobre el perfil de otra persona ──
+                if (!isOwnProfile) ...[
+                  const SizedBox(height: 16),
+                  _buildProfileActions(context, profile),
+                ],
               ],
             ),
           ),
@@ -508,6 +514,90 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  /// Acciones sobre el perfil de OTRA persona: conectar (con sus 3 estados) y
+  /// mandar mensaje. El rediseño del 23/7 había dejado el header sin acciones,
+  /// así que desde el perfil no se podía ni conectar ni escribir.
+  Widget _buildProfileActions(BuildContext context, NexUser profile) {
+    final connected = _connectionStatus == 'accepted';
+    final pending = _connectionStatus == 'pending';
+    final label = connected
+        ? 'Conectados'
+        : pending
+            ? 'Pendiente'
+            : 'Conectar';
+    final icon = connected
+        ? CupertinoIcons.checkmark_alt
+        : pending
+            ? CupertinoIcons.clock
+            : CupertinoIcons.person_add_solid;
+    final enabled = !connected && !pending && !_isLoadingConnection;
+
+    return Row(
+      children: [
+        Expanded(
+          child: CupertinoButton(
+            padding: EdgeInsets.zero,
+            minimumSize: Size.zero,
+            onPressed: enabled ? () => _handleConnect(profile.id) : null,
+            child: Container(
+              height: 42,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: enabled ? const Color(0xFF185FA5) : const Color(0xFFF1F5F9),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: _isLoadingConnection
+                  ? const CupertinoActivityIndicator(radius: 9)
+                  : Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(icon, size: 17, color: enabled ? Colors.white : const Color(0xFF64748B)),
+                        const SizedBox(width: 7),
+                        Flexible(
+                          child: Text(label,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                  fontSize: 13.5,
+                                  fontWeight: FontWeight.w600,
+                                  color: enabled ? Colors.white : const Color(0xFF64748B))),
+                        ),
+                      ],
+                    ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: CupertinoButton(
+            padding: EdgeInsets.zero,
+            minimumSize: Size.zero,
+            onPressed: () => Navigator.of(context).push(
+              CupertinoPageRoute(builder: (_) => ChatInmailScreen(targetUser: profile)),
+            ),
+            child: Container(
+              height: 42,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF1F5F9),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(CupertinoIcons.chat_bubble_fill, size: 17, color: Color(0xFF475569)),
+                  SizedBox(width: 7),
+                  Text('Mensaje',
+                      style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: Color(0xFF475569))),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
