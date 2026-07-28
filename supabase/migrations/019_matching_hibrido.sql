@@ -40,11 +40,15 @@ LANGUAGE sql IMMUTABLE AS $$
   SELECT CASE WHEN (SELECT c FROM u) = 0 THEN 0 ELSE (SELECT c FROM i) / (SELECT c FROM u) END;
 $$;
 
--- Estira el coseno crudo al rango útil [0.55, 0.90] → [0, 1].
+-- Estira el coseno crudo al rango útil [0.57, 0.72] → [0, 1].
 CREATE OR REPLACE FUNCTION public.rescale_similarity(sim DOUBLE PRECISION)
 RETURNS DOUBLE PRECISION
 LANGUAGE sql IMMUTABLE AS $$
-  SELECT GREATEST(0, LEAST(1, (COALESCE(sim, 0) - 0.55) / (0.90 - 0.55)));
+  -- Calibrado con la distribución REAL (300 pares vacante-candidato, 28/7/2026):
+  -- mediana 0.568 · p90 0.655 · p99 0.718 · máx 0.772. Un techo de 0.90 (elegido
+  -- a ojo) dejaba al mejor match en ~52%; con mediana→0 y p99→100 los buenos
+  -- llegan a 77% y los flojos quedan en 25-30%.
+  SELECT GREATEST(0, LEAST(1, (COALESCE(sim, 0) - 0.57) / (0.72 - 0.57)));
 $$;
 
 -- ── Candidatos para una vacante ─────────────────────────────────────────────
