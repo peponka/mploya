@@ -86,7 +86,6 @@ class _EmpresaPanelScreenState extends State<EmpresaPanelScreen>
 
   void _openCreate() { Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const NuevaVacanteScreen())).then((ok) { if (ok == true) _load(); }); }
   bool get _useDemo => _topCandidates.isEmpty;
-  int get _cnt => _useDemo ? _dN.length : _topCandidates.length;
 
   @override
   Widget build(BuildContext context) {
@@ -362,18 +361,3 @@ class _EmpresaPanelScreenState extends State<EmpresaPanelScreen>
 
 }
 
-class _Seg { final String label; final int count; final Color color; final double frac; _Seg(this.label, this.count, this.color, this.frac); }
-
-class _RingPainter extends CustomPainter {
-  final double progress; final Color color; final Color bg;
-  _RingPainter(this.progress, this.color, this.bg);
-  @override
-  void paint(Canvas canvas, Size size) {
-    final c = Offset(size.width / 2, size.height / 2);
-    final r = size.width / 2 - 4;
-    canvas.drawCircle(c, r, Paint()..color = bg..style = PaintingStyle.stroke..strokeWidth = 6);
-    canvas.drawArc(Rect.fromCircle(center: c, radius: r), -math.pi / 2, 2 * math.pi * progress, false, Paint()..color = color..style = PaintingStyle.stroke..strokeWidth = 6..strokeCap = StrokeCap.round);
-  }
-  @override
-  bool shouldRepaint(covariant _RingPainter o) => o.progress != progress;
-}

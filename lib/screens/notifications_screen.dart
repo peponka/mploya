@@ -568,6 +568,16 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
       final type = (n['type'] ?? '').toString();
       final isRead = n['is_read'] == true;
       final isConnection = type.startsWith('connection');
+      // La tabla `notifications` guarda el texto en `description` (no hay title/body).
+      // Se usa un título legible por tipo y la descripción como subtítulo; si algún
+      // día el backend agrega title/body, tienen prioridad.
+      final desc = (n['description'] ?? '').toString();
+      final rawTitle = (n['title'] ?? '').toString();
+      final rawBody = (n['body'] ?? '').toString();
+      final title = rawTitle.isNotEmpty
+          ? rawTitle
+          : (desc.isNotEmpty ? _titleForType(type) : _titleForType(type));
+      final subtitle = rawBody.isNotEmpty ? rawBody : desc;
       return (
         group: groupOf(n['created_at']?.toString()),
         cat: catOf(type),
@@ -575,8 +585,8 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
           color: _alertIconColor(type),
           icon: _alertIconData(type),
           circle: isConnection,
-          title: (n['title'] ?? '').toString(),
-          subtitle: (n['body'] ?? '').toString().isEmpty ? null : (n['body'] ?? '').toString(),
+          title: title,
+          subtitle: subtitle.isEmpty ? null : subtitle,
           time: _relativeTime(n['created_at']?.toString()),
           unread: !isRead,
           onTap: () => _markAsRead(n),
@@ -591,6 +601,39 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
         ),
       );
     }).toList();
+  }
+
+  /// Título legible para cada `type` de la tabla `notifications`
+  /// (que solo guarda `description`, sin título propio).
+  String _titleForType(String type) {
+    switch (type) {
+      case 'connection':
+      case 'connection_request':
+        return 'Nueva solicitud de conexión';
+      case 'connection_accepted':
+        return 'Conexión aceptada';
+      case 'message':
+        return 'Mensaje nuevo';
+      case 'like':
+        return 'Le interesó tu perfil';
+      case 'comment':
+        return 'Nuevo comentario';
+      case 'mention':
+        return 'Te mencionaron';
+      case 'profileView':
+        return 'Vieron tu perfil';
+      case 'jobAlert':
+        return 'Vacante que te puede interesar';
+      case 'job_application':
+        return 'Nueva postulación';
+      case 'interview':
+      case 'interview_scheduled':
+        return 'Entrevista agendada';
+      case 'nexus':
+        return 'Sugerencia de Nexus';
+      default:
+        return 'Novedad';
+    }
   }
 
   Widget _miniBtn(String label, Color bg, Color fg, VoidCallback onTap) {
@@ -1003,298 +1046,11 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
     );
   }
 
-  /// Banner de visibilidad rediseñado con gradient y CTA prominente
-  Widget _webVisibilityBanner(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 24),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFFE6F1FB), Color(0xFFFEF3C7)],
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-        ),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: MployaTheme.brandAccent.withValues(alpha: 0.15)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Row(
-          children: [
-            Container(
-              width: 48, height: 48,
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(colors: [Color(0xFF185FA5), Color(0xFF378ADD)]),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: const Icon(CupertinoIcons.rocket_fill, color: CupertinoColors.white, size: 22),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Aumentá tu visibilidad',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: context.textPrimary)),
-                  const SizedBox(height: 3),
-                  Text('Completá tu perfil y grabá un video pitch para destacarte ante los reclutadores.',
-                      style: TextStyle(fontSize: 13, color: context.textSecondary, height: 1.4)),
-                ],
-              ),
-            ),
-            const SizedBox(width: 16),
-            WebButton(label: 'Grabar Video Pitch', onTap: () => Navigator.of(context).maybePop()),
-            const SizedBox(width: 10),
-            GestureDetector(
-              onTap: () => setState(() => _bannerDismissed = true),
-              child: Icon(CupertinoIcons.xmark, size: 16, color: context.textTertiary),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 
-  Widget _webDigestCard(BuildContext context, SmartNotification d) {
-    return GestureDetector(
-      onTap: () async {
-        await SmartNotificationService.instance.markRead(d.id);
-        if (mounted) setState(() => _digests.removeWhere((x) => x.id == d.id));
-      },
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 20),
-        child: WebCard(
-          borderColor: const Color(0xFFD6E4FF),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const WebIconBadge(icon: CupertinoIcons.sparkles, color: Color(0xFF5856D6), size: 36),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(d.title, style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: context.textPrimary)),
-                    const SizedBox(height: 3),
-                    Text(d.body, style: TextStyle(fontSize: 13, color: context.textSecondary, height: 1.4)),
-                  ],
-                ),
-              ),
-              const Icon(CupertinoIcons.xmark_circle, size: 18, color: Color(0xFFAEAEB2)),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 
-  /// Demo alert cards para cuando no hay notificaciones reales
-  List<_AlertCardData> _demoAlertCards() {
-    return [
-      _AlertCardData(
-        type: NotificationType.jobAlert,
-        cardKind: _AlertKind.talentMatch,
-        title: 'Senior UX Lead',
-        name: 'María López',
-        headline: 'HR Manager',
-        companyName: 'Google',
-        compatibilityScore: 0.87,
-        skillTags: ['Figma', 'Sketch', 'Research', 'UX', 'Strategy'],
-        timeAgo: 'Hace 2h',
-      ),
-      _AlertCardData(
-        type: NotificationType.profileView,
-        cardKind: _AlertKind.premiumView,
-        title: 'Vista de perfil',
-        name: 'Sarah J.',
-        headline: 'Senior Recruiter',
-        companyName: 'Google',
-        timeAgo: 'Hace 1 h',
-      ),
-      _AlertCardData(
-        type: NotificationType.like,
-        cardKind: _AlertKind.marketInfo,
-        title: 'Salarios de UX en auge',
-        subtitle: 'El mercado UX creció 23% en LatAm. Los salarios promedio subieron a USD 4.500/mes.',
-        timeAgo: 'Hace 3h',
-      ),
-      _AlertCardData(
-        type: NotificationType.like,
-        cardKind: _AlertKind.marketInfo,
-        title: 'Demanda de Flutter +40%',
-        subtitle: 'Las búsquedas de desarrolladores Flutter aumentaron significativamente este trimestre.',
-        timeAgo: 'Hace 5h',
-      ),
-      _AlertCardData(
-        type: NotificationType.connection,
-        cardKind: _AlertKind.connectionRequest,
-        title: 'Solicitud de conexión',
-        name: 'Carlos M.',
-        headline: 'Tech Lead en Mercado Libre',
-        timeAgo: 'Hace 30 min',
-      ),
-      _AlertCardData(
-        type: NotificationType.connection,
-        cardKind: _AlertKind.connectionRequest,
-        title: 'Solicitud de conexión',
-        name: 'Ana R.',
-        headline: 'Product Designer en Globant',
-        timeAgo: 'Hace 45 min',
-      ),
-    ];
-  }
 }
 
-// ── Compact Metric (inline row) ──
-class _CompactMetric extends StatelessWidget {
-  final String value;
-  final String label;
-  final IconData icon;
 
-  const _CompactMetric({required this.value, required this.label, required this.icon});
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, color: MployaTheme.brandAccent, size: 14),
-          const SizedBox(width: 6),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(value, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: context.textPrimary, fontFamily: '.SF Pro Display')),
-              Text(label, style: TextStyle(color: context.textSecondary, fontSize: 11, fontWeight: FontWeight.w500)),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ── Notification Tile (clean) ──
-class _NotificationTile extends StatelessWidget {
-  final bool isRead;
-  final String description;
-  final String timeAgo;
-  final IconData icon;
-  final Color iconColor;
-  final bool showQuickActions;
-  final VoidCallback? onAccept;
-  final VoidCallback? onReject;
-
-  const _NotificationTile({
-    required this.isRead,
-    required this.description,
-    required this.timeAgo,
-    required this.icon,
-    required this.iconColor,
-  }) : showQuickActions = false, onAccept = null, onReject = null;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-      decoration: BoxDecoration(
-        color: isRead ? Colors.transparent : MployaTheme.brandAccent.withValues(alpha: context.isDark ? 0.08 : 0.03),
-        border: Border(bottom: BorderSide(color: context.dividerColor.withValues(alpha: 0.6), width: 0.5)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: iconColor.withValues(alpha: 0.08),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, size: 18, color: iconColor),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  description,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: context.textPrimary,
-                    fontWeight: isRead ? FontWeight.w400 : FontWeight.w600,
-                    height: 1.4,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  timeAgo,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: context.textSecondary,
-                  ),
-                ),
-                // ── Quick Actions para conexiones ──
-                if (showQuickActions) ...[
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      GestureDetector(
-                        onTap: onAccept,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
-                          decoration: BoxDecoration(
-                            color: context.isDark ? CupertinoColors.white : const Color(0xFF1C1C1E),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Text(
-                            'Aceptar',
-                            style: TextStyle(
-                              color: context.isDark ? CupertinoColors.black : CupertinoColors.white,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      GestureDetector(
-                        onTap: onReject,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
-                          decoration: BoxDecoration(
-                            color: context.isDark ? NexTheme.darkSurface : const Color(0xFFF2F2F7),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Text(
-                            'Rechazar',
-                            style: TextStyle(color: context.textSecondary, fontSize: 13, fontWeight: FontWeight.w600),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          if (!isRead)
-            Container(
-              width: 8,
-              height: 8,
-              margin: const EdgeInsets.only(top: 6),
-              decoration: const BoxDecoration(
-                color: MployaTheme.brandAccent,
-                shape: BoxShape.circle,
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Panel de Alertas para empresas — dark, con postulantes nuevos reales
@@ -1608,605 +1364,16 @@ class _CompanyAlertsWebState extends State<_CompanyAlertsWeb> {
 
 enum _AlertKind { talentMatch, premiumView, marketInfo, connectionRequest, generic }
 
-class _AlertCardData {
-  final NotificationType type;
-  final _AlertKind cardKind;
-  final String title;
-  final String? subtitle;
-  final String? name;
-  final String? headline;
-  final String? companyName;
-  final String? avatarUrl;
-  final String timeAgo;
-  final bool isRead;
-  final double? compatibilityScore;
-  final List<String>? skillTags;
-  final VoidCallback? onTap;
-  final VoidCallback? onAccept;
-  final VoidCallback? onReject;
-
-  _AlertCardData({
-    required this.type,
-    _AlertKind? cardKind,
-    required this.title,
-    this.subtitle,
-    this.name,
-    this.headline,
-    this.companyName,
-    this.timeAgo = '',
-    this.compatibilityScore,
-    this.skillTags,
-  }) : avatarUrl = null, isRead = false, onTap = null, onAccept = null, onReject = null, cardKind = cardKind ?? _inferKind(type);
-
-  static _AlertKind _inferKind(NotificationType type) {
-    switch (type) {
-      case NotificationType.jobAlert:
-        return _AlertKind.talentMatch;
-      case NotificationType.profileView:
-        return _AlertKind.premiumView;
-      case NotificationType.connection:
-        return _AlertKind.connectionRequest;
-      default:
-        return _AlertKind.generic;
-    }
-  }
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Alert Card Widget — renders each card type with proper visuals
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _AlertCardWidget extends StatelessWidget {
-  final _AlertCardData data;
-  const _AlertCardWidget({required this.data});
-
-  @override
-  Widget build(BuildContext context) {
-    switch (data.cardKind) {
-      case _AlertKind.talentMatch:
-        return _buildTalentMatchCard(context);
-      case _AlertKind.premiumView:
-        return _buildPremiumViewCard(context);
-      case _AlertKind.marketInfo:
-        return _buildMarketInfoCard(context);
-      case _AlertKind.connectionRequest:
-        return _buildConnectionCard(context);
-      case _AlertKind.generic:
-        return _buildGenericCard(context);
-    }
-  }
-
-  // ── Coincidencia de Talento ──
-  Widget _buildTalentMatchCard(BuildContext context) {
-    return WebCard(
-      onTap: data.onTap,
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('COINCIDENCIA DE TALENTO',
-              style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: MployaTheme.brandAccent, letterSpacing: 0.8)),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              _avatar(data.name, data.avatarUrl, 52),
-              const SizedBox(width: 12),
-              if (data.companyName != null)
-                Container(
-                  width: 28, height: 28,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF4285F4).withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Center(
-                    child: Text(data.companyName![0], style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Color(0xFF4285F4))),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Text(data.title, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: context.textPrimary)),
-          const SizedBox(height: 14),
-          Text('Skills compatibilidad', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: context.textSecondary)),
-          const SizedBox(height: 8),
-          SizedBox(
-            height: 48,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: List.generate(
-                data.skillTags?.length ?? 5,
-                (i) {
-                  final heights = [0.85, 0.45, 0.65, 0.90, 0.55];
-                  final h = i < heights.length ? heights[i] : 0.5;
-                  return Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 2),
-                      child: Container(
-                        height: 48 * h,
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [MployaTheme.brandAccent.withValues(alpha: 0.6), MployaTheme.brandAccent],
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                          ),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-          ),
-          const SizedBox(height: 6),
-          if (data.skillTags != null)
-            Row(
-              children: data.skillTags!.map((t) => Expanded(
-                    child: Text(t, textAlign: TextAlign.center, style: TextStyle(fontSize: 8.5, color: context.textTertiary, fontWeight: FontWeight.w600)),
-                  )).toList(),
-            ),
-          const SizedBox(height: 14),
-          SizedBox(
-            width: double.infinity,
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 10),
-              decoration: BoxDecoration(
-                color: MployaTheme.brandAccent,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Text('Ver Coincidencia', textAlign: TextAlign.center,
-                  style: TextStyle(color: CupertinoColors.white, fontSize: 13.5, fontWeight: FontWeight.w700)),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ── Vista de Perfil Premium ──
-  Widget _buildPremiumViewCard(BuildContext context) {
-    return WebCard(
-      onTap: data.onTap,
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('VISTA DE PERFIL PREMIUM',
-              style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: Color(0xFF00838F), letterSpacing: 0.8)),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              _avatar(data.name, data.avatarUrl, 48),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(data.name ?? '', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: context.textPrimary)),
-                    Text(data.headline ?? '', style: TextStyle(fontSize: 12.5, color: context.textSecondary)),
-                  ],
-                ),
-              ),
-              if (data.companyName != null)
-                Container(
-                  width: 28, height: 28,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF4285F4).withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Center(
-                    child: Text(data.companyName![0], style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Color(0xFF4285F4))),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Divider(color: context.dividerColor.withValues(alpha: 0.4), height: 1),
-          const SizedBox(height: 10),
-          Text('Completá tu perfil: ${data.headline ?? "Recruiter"} con sempetaante aquí el argentino.',
-              style: TextStyle(fontSize: 12.5, color: context.textSecondary, height: 1.4)),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              const Spacer(),
-              Text('Visto ${data.timeAgo}', style: TextStyle(fontSize: 11.5, color: context.textTertiary, fontWeight: FontWeight.w500)),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ── Información de Mercado ──
-  Widget _buildMarketInfoCard(BuildContext context) {
-    return WebCard(
-      onTap: data.onTap,
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('INFORMACIÓN DE MERCADO',
-              style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: Color(0xFF057642), letterSpacing: 0.8)),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Container(
-                width: 36, height: 36,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF057642).withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(CupertinoIcons.chart_bar_fill, color: Color(0xFF057642), size: 18),
-              ),
-              const SizedBox(width: 8),
-              Container(
-                width: 36, height: 36,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF4285F4).withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Center(
-                  child: Text('G', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF4285F4))),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Text(data.title, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: context.textPrimary)),
-          if (data.subtitle != null) ...[
-            const SizedBox(height: 4),
-            Text(data.subtitle!, style: TextStyle(fontSize: 12.5, color: context.textSecondary, height: 1.4)),
-          ],
-          const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 10),
-              decoration: BoxDecoration(
-                color: MployaTheme.brandAccent,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Text('Explorar Datos', textAlign: TextAlign.center,
-                  style: TextStyle(color: CupertinoColors.white, fontSize: 13.5, fontWeight: FontWeight.w700)),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ── Solicitud de Conexión ──
-  Widget _buildConnectionCard(BuildContext context) {
-    return WebCard(
-      onTap: data.onTap,
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('SOLICITUD DE CONEXIÓN',
-              style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: Color(0xFF5F3DC4), letterSpacing: 0.8)),
-          const SizedBox(height: 14),
-          Center(child: _avatar(data.name, data.avatarUrl, 56)),
-          const SizedBox(height: 10),
-          Center(
-            child: Text(data.name ?? '', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: context.textPrimary)),
-          ),
-          if (data.headline != null)
-            Center(
-              child: Padding(
-                padding: const EdgeInsets.only(top: 2),
-                child: Text(data.headline!, textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: context.textSecondary)),
-              ),
-            ),
-          const SizedBox(height: 14),
-          SizedBox(
-            width: double.infinity,
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 10),
-              decoration: BoxDecoration(
-                color: MployaTheme.brandAccent,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Text('Aceptar', textAlign: TextAlign.center,
-                  style: TextStyle(color: CupertinoColors.white, fontSize: 13.5, fontWeight: FontWeight.w700)),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ── Genérica ──
-  Widget _buildGenericCard(BuildContext context) {
-    return WebCard(
-      onTap: data.onTap,
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              WebIconBadge(
-                icon: _iconForKind(data.type),
-                color: _colorForKind(data.type),
-                size: 36,
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(data.title, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: context.textPrimary), maxLines: 2, overflow: TextOverflow.ellipsis),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(data.timeAgo, style: TextStyle(fontSize: 11.5, color: context.textTertiary)),
-        ],
-      ),
-    );
-  }
-
-  // ── Helpers ──
-  Widget _avatar(String? name, String? url, double size) {
-    final initial = (name != null && name.isNotEmpty) ? name[0].toUpperCase() : '?';
-    final colors = _gradientForInitial(initial);
-    final fallback = Container(
-      width: size, height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: LinearGradient(colors: colors, begin: Alignment.topLeft, end: Alignment.bottomRight),
-        boxShadow: [BoxShadow(color: colors[0].withValues(alpha: 0.3), blurRadius: 8, offset: const Offset(0, 3))],
-      ),
-      child: Center(child: Text(initial, style: TextStyle(color: CupertinoColors.white, fontWeight: FontWeight.w800, fontSize: size * 0.38))),
-    );
-    if (url == null || url.isEmpty) return fallback;
-    return ClipOval(
-      child: SizedBox(
-        width: size, height: size,
-        child: Image.network(
-          url,
-          width: size, height: size,
-          fit: BoxFit.cover,
-          webHtmlElementStrategy: kIsWeb ? WebHtmlElementStrategy.prefer : WebHtmlElementStrategy.never,
-          errorBuilder: (_, __, ___) => fallback,
-        ),
-      ),
-    );
-  }
-
-  List<Color> _gradientForInitial(String initial) {
-    switch (initial) {
-      case 'M': return [const Color(0xFFE91E63), const Color(0xFFFF6090)];
-      case 'S': return [const Color(0xFF00838F), const Color(0xFF4DD0E1)];
-      case 'C': return [const Color(0xFF5F3DC4), const Color(0xFF9775FA)];
-      case 'A': return [const Color(0xFF057642), const Color(0xFF38D9A9)];
-      default:  return [MployaTheme.brandAccent, const Color(0xFF378ADD)];
-    }
-  }
-
-  IconData _iconForKind(NotificationType type) {
-    switch (type) {
-      case NotificationType.like: return CupertinoIcons.hand_thumbsup_fill;
-      case NotificationType.comment: return CupertinoIcons.chat_bubble_fill;
-      case NotificationType.connection: return CupertinoIcons.person_add_solid;
-      case NotificationType.jobAlert: return CupertinoIcons.briefcase_fill;
-      case NotificationType.profileView: return CupertinoIcons.eye_fill;
-      case NotificationType.mention: return CupertinoIcons.at;
-    }
-  }
-
-  Color _colorForKind(NotificationType type) {
-    switch (type) {
-      case NotificationType.like: return MployaTheme.brandAccent;
-      case NotificationType.comment: return const Color(0xFF057642);
-      case NotificationType.connection: return const Color(0xFF5F3DC4);
-      case NotificationType.jobAlert: return NexTheme.brandAccent;
-      case NotificationType.profileView: return const Color(0xFF00838F);
-      case NotificationType.mention: return const Color(0xFFC2185B);
-    }
-  }
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Mobile Alert Card — compact card for 2-column grid
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _MobileAlertCard extends StatelessWidget {
-  final _AlertCardData data;
-  const _MobileAlertCard({required this.data});
-
-  @override
-  Widget build(BuildContext context) {
-    final color = _cardColor();
-    final label = _cardLabel();
-    final icon = _cardIcon();
-
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: context.isDark ? NexTheme.darkCard : CupertinoColors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: context.dividerColor.withValues(alpha: 0.3), width: 0.5),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF000000).withValues(alpha: context.isDark ? 0.2 : 0.04),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // ── Header badge ──
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.10),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Text(label, style: TextStyle(fontSize: 8, fontWeight: FontWeight.w800, color: color, letterSpacing: 0.5)),
-          ),
-          const SizedBox(height: 10),
-
-          // ── Icon / Avatar ──
-          Row(
-            children: [
-              if (data.name != null && data.name!.isNotEmpty)
-                _buildAvatar(data.name, data.avatarUrl, 36)
-              else
-                Container(
-                  width: 36, height: 36,
-                  decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Icon(icon, color: color, size: 17),
-                ),
-              if (data.companyName != null) ...[
-                const SizedBox(width: 6),
-                Container(
-                  width: 22, height: 22,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF4285F4).withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Center(
-                    child: Text(data.companyName![0], style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Color(0xFF4285F4))),
-                  ),
-                ),
-              ],
-            ],
-          ),
-          const SizedBox(height: 8),
-
-          // ── Title ──
-          Text(
-            data.cardKind == _AlertKind.connectionRequest ? (data.name ?? data.title) : data.title,
-            style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: context.textPrimary, height: 1.3),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-
-          // ── Subtitle ──
-          if (data.headline != null || data.subtitle != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 2),
-              child: Text(
-                data.subtitle ?? data.headline ?? '',
-                style: TextStyle(fontSize: 10.5, color: context.textSecondary, height: 1.3),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-
-          const SizedBox(height: 10),
-
-          // ── CTA Buttons ──
-          Row(
-            children: [
-              Expanded(
-                child: GestureDetector(
-                  onTap: data.onTap ?? data.onAccept,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 7),
-                    decoration: BoxDecoration(
-                      color: MployaTheme.brandAccent,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(_ctaLabel(), textAlign: TextAlign.center,
-                        style: const TextStyle(color: CupertinoColors.white, fontSize: 11, fontWeight: FontWeight.w700)),
-                  ),
-                ),
-              ),
-              if (data.cardKind == _AlertKind.talentMatch) ...[
-                const SizedBox(width: 6),
-                GestureDetector(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 10),
-                    decoration: BoxDecoration(
-                      color: context.isDark ? NexTheme.darkSurface : const Color(0xFFF2F2F7),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text('Guardar', style: TextStyle(color: context.textSecondary, fontSize: 11, fontWeight: FontWeight.w600)),
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAvatar(String? name, String? url, double size) {
-    final initial = (name != null && name.isNotEmpty) ? name[0].toUpperCase() : '?';
-    final colors = _gradientColors(initial);
-    final fallback = Container(
-      width: size, height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: LinearGradient(colors: colors, begin: Alignment.topLeft, end: Alignment.bottomRight),
-      ),
-      child: Center(child: Text(initial, style: TextStyle(color: CupertinoColors.white, fontWeight: FontWeight.w800, fontSize: size * 0.38))),
-    );
-    if (url == null || url.isEmpty) return fallback;
-    return ClipOval(
-      child: SizedBox(
-        width: size, height: size,
-        child: Image.network(url, width: size, height: size, fit: BoxFit.cover, webHtmlElementStrategy: kIsWeb ? WebHtmlElementStrategy.prefer : WebHtmlElementStrategy.never, errorBuilder: (_, __, ___) => fallback),
-      ),
-    );
-  }
-
-  List<Color> _gradientColors(String initial) {
-    switch (initial) {
-      case 'M': return [const Color(0xFFE91E63), const Color(0xFFFF6090)];
-      case 'S': return [const Color(0xFF00838F), const Color(0xFF4DD0E1)];
-      case 'C': return [const Color(0xFF5F3DC4), const Color(0xFF9775FA)];
-      case 'A': return [const Color(0xFF057642), const Color(0xFF38D9A9)];
-      default:  return [MployaTheme.brandAccent, const Color(0xFF378ADD)];
-    }
-  }
-
-  Color _cardColor() {
-    switch (data.cardKind) {
-      case _AlertKind.talentMatch: return MployaTheme.brandAccent;
-      case _AlertKind.premiumView: return const Color(0xFF00838F);
-      case _AlertKind.marketInfo: return const Color(0xFF057642);
-      case _AlertKind.connectionRequest: return const Color(0xFF5F3DC4);
-      case _AlertKind.generic: return MployaTheme.brandAccent;
-    }
-  }
-
-  String _cardLabel() {
-    switch (data.cardKind) {
-      case _AlertKind.talentMatch: return 'NUEVO MATCH';
-      case _AlertKind.premiumView: return 'VISTA PREMIUM';
-      case _AlertKind.marketInfo: return 'INFO MERCADO';
-      case _AlertKind.connectionRequest: return 'CONEXIÓN';
-      case _AlertKind.generic: return 'ALERTA';
-    }
-  }
-
-  IconData _cardIcon() {
-    switch (data.cardKind) {
-      case _AlertKind.talentMatch: return CupertinoIcons.briefcase_fill;
-      case _AlertKind.premiumView: return CupertinoIcons.eye_fill;
-      case _AlertKind.marketInfo: return CupertinoIcons.chart_bar_fill;
-      case _AlertKind.connectionRequest: return CupertinoIcons.person_add_solid;
-      case _AlertKind.generic: return CupertinoIcons.bell_fill;
-    }
-  }
-
-  String _ctaLabel() {
-    switch (data.cardKind) {
-      case _AlertKind.talentMatch: return 'Ver Detalles';
-      case _AlertKind.premiumView: return 'Ver Perfil';
-      case _AlertKind.marketInfo: return 'Explorar Datos';
-      case _AlertKind.connectionRequest: return 'Aceptar';
-      case _AlertKind.generic: return 'Ver';
-    }
-  }
-}
 
 // ── Models and Custom widgets for the Premium Presentation Layout ──
 
@@ -2236,73 +1403,6 @@ class AlertCandidate {
   });
 }
 
-final List<AlertCandidate> _alertCandidates = [
-  const AlertCandidate(
-    name: "Galo",
-    role: "Senior Engineering Lead",
-    location: "Match mator",
-    avatarUrl: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=120&h=120&fit=crop",
-    views: "10K",
-    tags: ["LATINAMCS", "SCALABLE SYSTEMS", "GLOBAL SCOPE"],
-    radarValues: [0.90, 0.85, 0.75, 0.80, 0.85],
-    radarLabels: ["System Design", "Coding", "Velocity", "Teamwork", "Security"],
-    timeline: [
-      {"year": "2015", "title": "Standing", "desc": "Started career at MercadoLibre leading core platform services."},
-      {"year": "2020", "title": "Experience", "desc": "Architected high-throughput infrastructure at Globant."},
-      {"year": "2025", "title": "Education", "desc": "Stanford MSc in Distributed Systems & AI Cloud architectures."},
-      {"year": "2026", "title": "Digestive Timeline", "desc": "Liderando plataforma de escala masiva en Mploya."},
-    ],
-    matchPercentage: "15",
-  ),
-  const AlertCandidate(
-    name: "mploya",
-    role: "Ingeniero de Software Senior",
-    location: "Buenos Aires, AR",
-    avatarUrl: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=120&h=120&fit=crop",
-    views: "1.2K",
-    tags: ["FLUTTER", "DART", "SUPABASE", "RIVERPOD"],
-    radarValues: [0.75, 0.95, 0.90, 0.80, 0.70],
-    radarLabels: ["Frontend", "Coding", "Velocity", "API Design", "Testing"],
-    timeline: [
-      {"year": "2018", "title": "Junior Dev", "desc": "Construcción de apps móviles nativas en Android."},
-      {"year": "2021", "title": "Flutter Dev", "desc": "Migración completa de plataformas a Flutter Web."},
-      {"year": "2025", "title": "Senior Lead", "desc": "Liderando la arquitectura móvil multiplataforma."},
-    ],
-    matchPercentage: "16",
-  ),
-  const AlertCandidate(
-    name: "Questica Resas",
-    role: "Senior Product Designer",
-    location: "San Pablo, BR",
-    avatarUrl: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=120&h=120&fit=crop",
-    views: "2.3K",
-    tags: ["FIGMA", "DESIGN SYSTEMS", "UX RESEARCH"],
-    radarValues: [0.95, 0.70, 0.85, 0.90, 0.95],
-    radarLabels: ["UX Research", "UI Craft", "Systems", "Product", "User Flow"],
-    timeline: [
-      {"year": "2017", "title": "UI Designer", "desc": "Creación de interfaces y micro-interacciones."},
-      {"year": "2022", "title": "Product Lead", "desc": "Rediseño completo del flujo B2B SaaS corporativo."},
-      {"year": "2026", "title": "UX Principal", "desc": "Estrategia de diseño global centrado en el usuario."},
-    ],
-    matchPercentage: "18",
-  ),
-  const AlertCandidate(
-    name: "Sulo",
-    role: "Senior Recruiter Lead",
-    location: "Bogotá, CO",
-    avatarUrl: "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=120&h=120&fit=crop",
-    views: "1.5K",
-    tags: ["TALENT ACQUISITION", "SOURCING", "LATAM TECH"],
-    radarValues: [0.60, 0.50, 0.85, 0.95, 0.80],
-    radarLabels: ["Sourcing", "Interviewing", "Velocity", "HR Tech", "Negotiation"],
-    timeline: [
-      {"year": "2016", "title": "HR Associate", "desc": "Reclutamiento de perfiles IT junior en LATAM."},
-      {"year": "2021", "title": "Talent Lead", "desc": "Escalabilidad de equipos de ingeniería de 50 a 200 devs."},
-      {"year": "2026", "title": "Director", "desc": "Estrategia integral de contratación y marca empleadora."},
-    ],
-    matchPercentage: "14",
-  ),
-];
 
 class RadarChartPainter extends CustomPainter {
   final List<double> values;
@@ -2662,4 +1762,4 @@ class GlobalImpactScorePainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
-
+
