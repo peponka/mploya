@@ -99,8 +99,13 @@ class _MobileMapState extends State<_MobileMap> {
   void didUpdateWidget(covariant _MobileMap oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!_ready) return;
-    // Recentrar solo cuando cambió la selección (para no pelear con el paneo).
-    if (widget.selectedId != oldWidget.selectedId) _pushView();
+    // Recentrar cuando cambia la selección O el centro/zoom (cambio de ciudad,
+    // botón "Mi ubicación"). Antes solo miraba selectedId: al elegir otra ciudad
+    // el mapa se quedaba donde estaba aunque la etiqueta ya mostrara la nueva.
+    final movio = widget.centerLat != oldWidget.centerLat ||
+        widget.centerLng != oldWidget.centerLng ||
+        widget.zoom != oldWidget.zoom;
+    if (movio || widget.selectedId != oldWidget.selectedId) _pushView();
     _pushPins();
   }
 

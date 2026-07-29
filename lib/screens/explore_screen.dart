@@ -250,14 +250,30 @@ class _ExploreScreenState extends State<ExploreScreen> with TickerProviderStateM
         _avisar('Necesitamos permiso de ubicación para centrar el mapa.');
         return;
       }
-      final pos = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(accuracy: LocationAccuracy.medium),
-      );
+      // Un fix de GPS puede tardar; sin timeout la llamada queda colgada y
+      // terminaba en "no pudimos obtener tu ubicación". Si vence, se usa la
+      // última posición conocida, que para centrar un mapa alcanza.
+      Position? pos;
+      try {
+        pos = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.medium,
+            timeLimit: Duration(seconds: 10),
+          ),
+        );
+      } catch (_) {
+        pos = await Geolocator.getLastKnownPosition();
+      }
       if (!mounted) return;
+      if (pos == null) {
+        _avisar('No pudimos obtener tu ubicación. Revisá que el GPS esté activo '
+            'y volvé a intentar en unos segundos.');
+        return;
+      }
       _selectCity('Mi ubicación', LatLng(pos.latitude, pos.longitude));
     } catch (e) {
       debugPrint('GPS: $e');
-      _avisar('No pudimos obtener tu ubicación.');
+      if (mounted) _avisar('No pudimos obtener tu ubicación ($e).');
     }
   }
 
@@ -335,6 +351,9 @@ class _ExploreScreenState extends State<ExploreScreen> with TickerProviderStateM
       _searchQuery = val;
     });
     _applyFilters();
+    // El buscador principal también sugiere CIUDADES: es donde el usuario
+    // escribe naturalmente "Asunción" esperando que el mapa viaje ahí.
+    _onCityQueryChanged(val);
   }
 
   @override
@@ -868,8 +887,36 @@ class _ExploreScreenState extends State<ExploreScreen> with TickerProviderStateM
               ],
             ),
             
+            // Sugerencias de ciudad para lo que se escribe en el buscador de arriba.
+            if (_cityResults.isNotEmpty && _searchQuery.trim().length >= 3)
+              Container(
+                margin: const EdgeInsets.only(top: 6),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 10)],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Padding(
+                      padding: EdgeInsets.fromLTRB(16, 10, 16, 2),
+                      child: Text('IR A LA CIUDAD',
+                          style: TextStyle(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0.6,
+                              color: Color(0xFF9AA6B5))),
+                    ),
+                    ..._cityResults.take(4).map((c) => _cityOption(
+                        c['label'] as String, c['lat'] as double, c['lon'] as double)),
+                    const SizedBox(height: 4),
+                  ],
+                ),
+              ),
+
             const SizedBox(height: 8),
-            
+
             // Location Badge below Search
             Row(
               mainAxisAlignment: MainAxisAlignment.start,
