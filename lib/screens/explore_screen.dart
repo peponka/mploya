@@ -118,31 +118,19 @@ class _ExploreScreenState extends State<ExploreScreen> with TickerProviderStateM
     super.dispose();
   }
 
-  // Smooth custom map panning animation
-  void _animatedMapMove(LatLng destLocation, double destZoom) {
-    final latTween = Tween<double>(begin: _mapController.camera.center.latitude, end: destLocation.latitude);
-    final lngTween = Tween<double>(begin: _mapController.camera.center.longitude, end: destLocation.longitude);
-    final zoomTween = Tween<double>(begin: _mapController.camera.zoom, end: destZoom);
-
-    final controller = AnimationController(duration: const Duration(milliseconds: 700), vsync: this);
-    final animation = CurvedAnimation(parent: controller, curve: Curves.fastOutSlowIn);
-
-    controller.addListener(() {
-      if (mounted) {
-        _mapController.move(
-          LatLng(latTween.evaluate(animation), lngTween.evaluate(animation)),
-          zoomTween.evaluate(animation),
-        );
-      }
-    });
-
-    animation.addStatusListener((status) {
-      if (status == AnimationStatus.completed || status == AnimationStatus.dismissed) {
-        controller.dispose();
-      }
-    });
-
-    controller.forward();
+  /// Mueve el mapa. Solo actualiza el estado: tanto el mapa móvil (WebView) como
+  /// el web (iframe) reciben centro y zoom por props y hacen el paneo ellos
+  /// mismos (Leaflet anima con `setView`).
+  ///
+  /// OJO: antes esto animaba el `MapController` de flutter_map, pero desde que
+  /// el mapa se dibuja con Leaflet ese controller NUNCA se adjunta a un
+  /// FlutterMap, así que `_mapController.camera` LANZABA una excepción. Como se
+  /// llamaba dentro del `setState` de `_selectCity`, cortaba el setState a la
+  /// mitad: no se movía el mapa, no cambiaba la etiqueta de ciudad y no se
+  /// limpiaba el buscador. Ese era el "no me lleva a la ciudad".
+  void _moveMap(LatLng destino, double zoom) {
+    _mapCenter = destino;
+    _mapZoom = zoom;
   }
 
   void _applyFilters() {
@@ -319,7 +307,7 @@ class _ExploreScreenState extends State<ExploreScreen> with TickerProviderStateM
       _cityResults = [];
       _searchController.clear();
       _mapCenter = coords;
-      _animatedMapMove(coords, 13.0);
+      _moveMap(coords, 13.0);
       
       // Auto select the closest item in the new city
       _applyFilters();
@@ -340,7 +328,7 @@ class _ExploreScreenState extends State<ExploreScreen> with TickerProviderStateM
         }
         if (closest != null) {
           _selectedItem = closest;
-          _animatedMapMove(_getLatLng(closest), 14.5);
+          _moveMap(_getLatLng(closest), 14.5);
         }
       }
     });
@@ -519,7 +507,7 @@ class _ExploreScreenState extends State<ExploreScreen> with TickerProviderStateM
 
               // GPS Button
               _buildWebGlassButton(
-                onTap: () => _animatedMapMove(const LatLng(-34.6037, -58.3816), 13.5),
+                onTap: () => setState(() => _moveMap(const LatLng(-34.6037, -58.3816), 13.5)),
                 child: const Icon(CupertinoIcons.location_fill, size: 16, color: Color(0xFF64748B)),
               ),
               const SizedBox(width: 10),
@@ -865,7 +853,7 @@ class _ExploreScreenState extends State<ExploreScreen> with TickerProviderStateM
                 
                 // Profile Avatar (Top Right)
                 GestureDetector(
-                  onTap: () => _animatedMapMove(const LatLng(-34.6037, -58.3816), 13.5),
+                  onTap: () => setState(() => _moveMap(const LatLng(-34.6037, -58.3816), 13.5)),
                   child: Container(
                     width: 42,
                     height: 42,
