@@ -11,6 +11,7 @@ import '../services/feed_service.dart';
 import '../services/video_preload_manager.dart';
 import '../services/notification_service.dart';
 import '../widgets/tiktok_reel_card.dart';
+import '../widgets/story_row.dart';
 import '../widgets/onboarding_tour.dart';
 import '../theme/app_theme.dart';
 import 'notifications_screen.dart';
@@ -556,6 +557,25 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
                             ),
                           ],
                         ),
+                      ),
+                      // ── Historias ──
+                      // El widget existía pero no estaba montado en ninguna
+                      // pantalla, y consultaba la vista `active_story_users` que
+                      // no existía (creada en la migración 024). Solo se muestra
+                      // si hay historias vigentes: se esconde solo.
+                      Builder(
+                        builder: (context) {
+                          final items = ref.watch(feedProvider).items;
+                          if (items.isEmpty) return const SizedBox.shrink();
+                          final autores = items
+                              .map((r) => _userToPost(r).author)
+                              .toList();
+                          return StoryRow(
+                            users: autores,
+                            isDarkOverlay: true,
+                            currentAccountType: currentUser?.accountType ?? 'candidato',
+                          );
+                        },
                       ),
                     ],
                   ),
