@@ -1,5 +1,9 @@
+import 'dart:async';
+import 'dart:convert';
 import 'dart:ui';
 import 'package:flutter/cupertino.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart' show Colors, LinearProgressIndicator, AlwaysStoppedAnimation, CircularProgressIndicator;
 import 'package:cached_network_image/cached_network_image.dart';
@@ -108,6 +112,7 @@ class _ExploreScreenState extends State<ExploreScreen> with TickerProviderStateM
 
   @override
   void dispose() {
+    _cityDebounce?.cancel();
     _searchController.dispose();
     _mapController.dispose();
     super.dispose();
@@ -167,10 +172,136 @@ class _ExploreScreenState extends State<ExploreScreen> with TickerProviderStateM
     });
   }
 
+  // ── Búsqueda de ciudades (geocoding) ─────────────────────────────────────
+  // Antes el desplegable tenía 4 ciudades argentinas hardcodeadas y el buscador
+  // filtraba candidatos, no ciudades: escribir "Asunción" no daba nada. Ahora se
+  // consulta Nominatim (OpenStreetMap, sin API key) con debounce.
+
+  List<Map<String, dynamic>> _cityResults = [];
+  bool _searchingCity = false;
+  Timer? _cityDebounce;
+
+  void _onCityQueryChanged(String q) {
+    _cityDebounce?.cancel();
+    final query = q.trim();
+    if (query.length < 3) {
+      setState(() {
+        _cityResults = [];
+        _searchingCity = false;
+      });
+      return;
+    }
+    setState(() => _searchingCity = true);
+    // Nominatim pide máximo 1 consulta por segundo: se espera a que deje de tipear.
+    _cityDebounce = Timer(const Duration(milliseconds: 600), () => _searchCities(query));
+  }
+
+  Future<void> _searchCities(String query) async {
+    try {
+      final uri = Uri.https('nominatim.openstreetmap.org', '/search', {
+        'q': query,
+        'format': 'json',
+        'limit': '6',
+        'accept-language': 'es',
+        'featuretype': 'city',
+      });
+      // Nominatim exige identificar la app en el User-Agent.
+      final res = await http.get(uri, headers: {'User-Agent': 'Mploya/1.0 (contacto@mploya.ai)'});
+      if (res.statusCode != 200) {
+        if (mounted) setState(() => _searchingCity = false);
+        return;
+      }
+      final list = (jsonDecode(res.body) as List).map((e) {
+        final name = (e['display_name'] ?? '').toString();
+        final partes = name.split(',');
+        final corto = partes.length > 2
+            ? '${partes.first.trim()}, ${partes.last.trim()}'
+            : name;
+        return {
+          'label': corto,
+          'lat': double.tryParse(e['lat']?.toString() ?? '') ?? 0.0,
+          'lon': double.tryParse(e['lon']?.toString() ?? '') ?? 0.0,
+        };
+      }).where((m) => (m['lat'] as double) != 0.0).toList();
+      if (mounted) {
+        setState(() {
+          _cityResults = list;
+          _searchingCity = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Búsqueda de ciudad: $e');
+      if (mounted) setState(() => _searchingCity = false);
+    }
+  }
+
+  /// Centra el mapa en la ubicación real del dispositivo.
+  Future<void> _goToMyLocation() async {
+    try {
+      if (!await Geolocator.isLocationServiceEnabled()) {
+        _avisar('Activá el GPS del teléfono para usar esta función.');
+        return;
+      }
+      var permiso = await Geolocator.checkPermission();
+      if (permiso == LocationPermission.denied) {
+        permiso = await Geolocator.requestPermission();
+      }
+      if (permiso == LocationPermission.denied || permiso == LocationPermission.deniedForever) {
+        _avisar('Necesitamos permiso de ubicación para centrar el mapa.');
+        return;
+      }
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.medium),
+      );
+      if (!mounted) return;
+      _selectCity('Mi ubicación', LatLng(pos.latitude, pos.longitude));
+    } catch (e) {
+      debugPrint('GPS: $e');
+      _avisar('No pudimos obtener tu ubicación.');
+    }
+  }
+
+  /// Fila del desplegable de ciudades.
+  Widget _cityOption(String label, double lat, double lon) {
+    return CupertinoButton(
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+      alignment: Alignment.centerLeft,
+      onPressed: () => _selectCity(label, LatLng(lat, lon)),
+      child: Row(
+        children: [
+          const Icon(CupertinoIcons.location, size: 14, color: Color(0xFF94A3B8)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: Color(0xFF0F172A), fontSize: 13.5)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _avisar(String msg) {
+    if (!mounted) return;
+    showCupertinoDialog(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: const Text('Ubicación'),
+        content: Text(msg),
+        actions: [
+          CupertinoDialogAction(onPressed: () => Navigator.pop(ctx), child: const Text('OK')),
+        ],
+      ),
+    );
+  }
+
   void _selectCity(String name, LatLng coords) {
     setState(() {
       _currentCityLabel = name;
       _showCityDropdown = false;
+      _cityResults = [];
+      _searchController.clear();
       _mapCenter = coords;
       _animatedMapMove(coords, 13.0);
       
@@ -759,9 +890,14 @@ class _ExploreScreenState extends State<ExploreScreen> with TickerProviderStateM
                       children: [
                         const Icon(CupertinoIcons.location_solid, size: 13, color: Color(0xFF185FA5)),
                         const SizedBox(width: 4),
-                        const Text(
-                          'Ciudad: Buenos Aires, Argentina',
-                          style: TextStyle(color: Color(0xFF334155), fontSize: 11.5, fontWeight: FontWeight.w700),
+                        Flexible(
+                          child: Text(
+                            'Ciudad: $_currentCityLabel',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                color: Color(0xFF334155), fontSize: 11.5, fontWeight: FontWeight.w700),
+                          ),
                         ),
                         const SizedBox(width: 2),
                         const Icon(CupertinoIcons.chevron_down, size: 10, color: Color(0xFF64748B)),
@@ -769,10 +905,35 @@ class _ExploreScreenState extends State<ExploreScreen> with TickerProviderStateM
                     ),
                   ),
                 ),
+                const SizedBox(width: 8),
+                // Botón GPS: centra el mapa donde está el usuario.
+                GestureDetector(
+                  onTap: _goToMyLocation,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: const [
+                        BoxShadow(color: Color(0x06000000), blurRadius: 6, offset: Offset(0, 2)),
+                      ],
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(CupertinoIcons.location_north_fill, size: 13, color: Color(0xFF185FA5)),
+                        SizedBox(width: 4),
+                        Text('Mi ubicación',
+                            style: TextStyle(
+                                color: Color(0xFF334155), fontSize: 11.5, fontWeight: FontWeight.w700)),
+                      ],
+                    ),
+                  ),
+                ),
               ],
             ),
-            
-            // City drop down overlay for mobile
+
+            // Buscador de ciudades (cualquier ciudad del mundo, vía Nominatim)
             if (_showCityDropdown)
               Container(
                 margin: const EdgeInsets.only(top: 6),
@@ -780,33 +941,55 @@ class _ExploreScreenState extends State<ExploreScreen> with TickerProviderStateM
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(12),
-                  boxShadow: const [
-                    BoxShadow(color: Colors.black12, blurRadius: 10),
-                  ],
+                  boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 10)],
                 ),
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    'BUENOS AIRES',
-                    'ROSARIO',
-                    'CORDOBA',
-                    'MENDOZA',
-                  ].map((city) {
-                    return CupertinoButton(
-                      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-                      alignment: Alignment.centerLeft,
-                      onPressed: () {
-                        LatLng coords = const LatLng(-34.6037, -58.3816);
-                        if (city == 'ROSARIO') coords = const LatLng(-32.9468, -60.6393);
-                        if (city == 'CORDOBA') coords = const LatLng(-31.4201, -64.1888);
-                        if (city == 'MENDOZA') coords = const LatLng(-32.8895, -68.8458);
-                        _selectCity(city, coords);
-                      },
-                      child: Text(
-                        city,
-                        style: const TextStyle(color: Color(0xFF0F172A), fontSize: 13),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+                      child: CupertinoTextField(
+                        autofocus: true,
+                        placeholder: 'Buscar ciudad (ej: Asunción)',
+                        prefix: const Padding(
+                          padding: EdgeInsets.only(left: 10),
+                          child: Icon(CupertinoIcons.search, size: 16, color: Color(0xFF94A3B8)),
+                        ),
+                        suffix: _searchingCity
+                            ? const Padding(
+                                padding: EdgeInsets.only(right: 10),
+                                child: CupertinoActivityIndicator(radius: 8))
+                            : null,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF4F6F9),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                        style: const TextStyle(fontSize: 13.5),
+                        onChanged: _onCityQueryChanged,
                       ),
-                    );
-                  }).toList(),
+                    ),
+                    if (_cityResults.isEmpty && !_searchingCity)
+                      // Sin búsqueda todavía: atajos a las ciudades más usadas.
+                      ...const [
+                        {'label': 'Buenos Aires, Argentina', 'lat': -34.6037, 'lon': -58.3816},
+                        {'label': 'Córdoba, Argentina', 'lat': -31.4201, 'lon': -64.1888},
+                        {'label': 'Rosario, Argentina', 'lat': -32.9468, 'lon': -60.6393},
+                        {'label': 'Asunción, Paraguay', 'lat': -25.2637, 'lon': -57.5759},
+                        {'label': 'Montevideo, Uruguay', 'lat': -34.9011, 'lon': -56.1645},
+                        {'label': 'Santiago, Chile', 'lat': -33.4489, 'lon': -70.6693},
+                      ].map((c) => _cityOption(
+                          c['label'] as String, c['lat'] as double, c['lon'] as double))
+                    else
+                      ..._cityResults.map((c) => _cityOption(
+                          c['label'] as String, c['lat'] as double, c['lon'] as double)),
+                    if (_cityResults.isEmpty && _searchingCity)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 14),
+                        child: Center(child: CupertinoActivityIndicator()),
+                      ),
+                    const SizedBox(height: 6),
+                  ],
                 ),
               ),
           ],
