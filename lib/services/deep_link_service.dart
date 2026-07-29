@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../utils/user_columns.dart';
 import 'package:app_links/app_links.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -167,7 +168,7 @@ class DeepLinkService {
       // Fetch del perfil desde Supabase
       final data = await Supabase.instance.client
           .from('users')
-          .select()
+          .select(kUserColumns)
           .eq('id', userId)
           .maybeSingle();
 

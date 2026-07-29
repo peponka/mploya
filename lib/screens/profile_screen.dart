@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import '../utils/user_columns.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
@@ -76,7 +77,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (uid != null) {
         _ownFuture = Supabase.instance.client
             .from('users')
-            .select()
+            .select(kUserColumns)
             .eq('id', uid)
             .maybeSingle();
         _checkAdmin(uid);
@@ -156,7 +157,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         setState(() {
           _ownFuture = Supabase.instance.client
               .from('users')
-              .select()
+              .select(kUserColumns)
               .eq('id', uid)
               .maybeSingle();
         });

@@ -1,4 +1,5 @@
 import 'dart:ui';
+import '../utils/user_columns.dart';
 import 'dart:async';
 import 'package:flutter/cupertino.dart';
 // Material widgets (SliverAppBar, Colors, Icons) have no Cupertino equivalent
@@ -155,7 +156,7 @@ class _MessagingScreenState extends State<MessagingScreen> {
 
       final usersFut = Supabase.instance.client
           .from('users')
-          .select()
+          .select(kUserColumns)
           .order('created_at', ascending: false)
           .limit(100);
 

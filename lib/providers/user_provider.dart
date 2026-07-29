@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import '../utils/user_columns.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/models.dart';
@@ -44,7 +45,7 @@ final manualUserRefreshProvider = FutureProvider<NexUser?>((ref) async {
   try {
     final row = await Supabase.instance.client
         .from('users')
-        .select()
+        .select(kUserColumns)
         .eq('id', session.user.id)
         .maybeSingle();
     if (row == null) return null;

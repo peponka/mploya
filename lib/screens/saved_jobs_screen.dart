@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import '../utils/user_columns.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -145,7 +146,7 @@ class _SavedJobsScreenState extends ConsumerState<SavedJobsScreen> {
 
         final users = await Supabase.instance.client
             .from('users')
-            .select()
+            .select(kUserColumns)
             .inFilter('id', ids);
 
         final profiles = users.map<NexUser>((u) => NexUser.fromJson(u)).toList();

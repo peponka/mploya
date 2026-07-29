@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import '../utils/user_columns.dart';
 // Material widgets (SliverAppBar, Colors, Icons) have no Cupertino equivalent
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -59,7 +60,7 @@ class _SavedProfilesScreenState extends State<SavedProfilesScreen> {
       // Obtener datos de los usuarios guardados
       final users = await Supabase.instance.client
           .from('users')
-          .select()
+          .select(kUserColumns)
           .inFilter('id', savedIds);
 
       if (mounted) {

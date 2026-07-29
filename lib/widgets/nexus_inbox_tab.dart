@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import '../utils/user_columns.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:video_player/video_player.dart';
@@ -34,7 +35,7 @@ class _NexusInboxTabState extends State<NexusInboxTab> {
     try {
       final res = await Supabase.instance.client
           .from('users')
-          .select()
+          .select(kUserColumns)
           .eq('id', _uid!)
           .maybeSingle();
       if (res != null) return NexUser.fromJson(res);
@@ -52,7 +53,7 @@ class _NexusInboxTabState extends State<NexusInboxTab> {
     try {
       final senderData = await Supabase.instance.client
           .from('users')
-          .select()
+          .select(kUserColumns)
           .eq('id', signal['sender_id'])
           .maybeSingle();
 
@@ -210,7 +211,7 @@ class _NexusSignalCardState extends State<_NexusSignalCard> {
     try {
       final res = await Supabase.instance.client
           .from('users')
-          .select()
+          .select(kUserColumns)
           .eq('id', widget.signal['sender_id'])
           .maybeSingle();
       if (res != null && mounted) {

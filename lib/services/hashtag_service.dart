@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import '../utils/user_columns.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -132,7 +133,7 @@ class HashtagService {
       }) {
         final rows = await _db
             .from('users')
-            .select()
+            .select(kUserColumns)
             .contains('tags', [variant])
             .limit(30);
 

@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import '../utils/user_columns.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../theme/app_theme.dart';
@@ -168,7 +169,7 @@ class _ConversationTileState extends State<_ConversationTile> {
     try {
       final res = await _supabase
           .from('users')
-          .select()
+          .select(kUserColumns)
           .eq('id', widget.conv.partnerId)
           .maybeSingle();
       if (res != null && mounted) {
