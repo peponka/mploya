@@ -4,6 +4,7 @@ import 'dart:ui';
 import 'package:flutter/cupertino.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart' show Colors, LinearProgressIndicator, AlwaysStoppedAnimation, CircularProgressIndicator;
 import 'package:cached_network_image/cached_network_image.dart';
@@ -23,9 +24,13 @@ import '../widgets/mobile_map_stub.dart'
 
 // Pre-defined high-quality photos mapped to demo names or indices for premium look
 String _getItemPhoto(Map<String, dynamic> item) {
+  // Usuarios reales traen su foto; las de abajo son solo para los demo.
+  final real = item['avatar']?.toString();
+  if (real != null && real.isNotEmpty) return real;
+
   final name = item['name'] as String;
   final isCompany = item['type'] == 'empresa';
-  
+
   if (isCompany) {
     if (name.contains('Globant')) return 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=100&h=100&fit=crop';
     if (name.contains('MercadoLibre')) return 'https://images.unsplash.com/photo-1472851294608-062f824d29cc?w=100&h=100&fit=crop';
@@ -102,6 +107,7 @@ class _ExploreScreenState extends State<ExploreScreen> with TickerProviderStateM
     super.initState();
     _mapController = MapController();
     _applyFilters();
+    _loadRealPins();
 
     // Select the first company or candidate on load
     if (_filteredItems.isNotEmpty) {
@@ -133,9 +139,54 @@ class _ExploreScreenState extends State<ExploreScreen> with TickerProviderStateM
     _mapZoom = zoom;
   }
 
+  // ── Pines REALES del mapa ────────────────────────────────────────────────
+  // Hasta la auditoría del 29/7 esta pantalla no tocaba la base: todos los
+  // pines salían de `simCandidates` (inventados), así que un candidato real
+  // nunca aparecía. Ahora se consulta `get_explore_pins`, que ya existía en la
+  // BD sin que nadie la llamara. Si no hay usuarios reales en el radio se cae a
+  // los demo, para que el mapa no quede vacío mientras la base se puebla.
+  List<Map<String, dynamic>> _realItems = [];
+  bool _usandoDemo = true;
+
+  Future<void> _loadRealPins() async {
+    try {
+      final res = await Supabase.instance.client.rpc('get_explore_pins', params: {
+        'p_lat': _mapCenter.latitude,
+        'p_lng': _mapCenter.longitude,
+        'p_radius_km': 150.0,
+      });
+      final rows = List<Map<String, dynamic>>.from(res ?? []);
+      final items = rows.map((r) {
+        final tipo = (r['pin_type'] ?? 'candidato').toString();
+        return <String, dynamic>{
+          'id': r['pin_id'],
+          'name': (r['pin_name'] ?? 'Usuario').toString(),
+          'headline': (r['pin_headline'] ?? '').toString(),
+          'lat': (r['latitude'] as num?)?.toDouble() ?? 0.0,
+          'lng': (r['longitude'] as num?)?.toDouble() ?? 0.0,
+          'type': (tipo == 'empresa' || tipo == 'headhunter') ? 'empresa' : 'candidato',
+          'video': r['has_video'] == true,
+          'avatar': (r['avatar_url'] ?? '').toString(),
+          'distancia': (r['distance_km'] as num?)?.toDouble(),
+        };
+      }).where((m) => m['lat'] != 0.0).toList();
+
+      if (!mounted) return;
+      setState(() {
+        _realItems = items;
+        _usandoDemo = items.isEmpty;
+      });
+      debugPrint('🗺️ ${items.length} pines reales (demo=$_usandoDemo)');
+      _applyFilters();
+    } catch (e) {
+      debugPrint('get_explore_pins: $e');
+    }
+  }
+
   void _applyFilters() {
     final normQuery = normalizeQuery(_searchQuery);
-    List<Map<String, dynamic>> results = simCandidates;
+    List<Map<String, dynamic>> results =
+        _realItems.isNotEmpty ? _realItems : simCandidates;
 
     // Text search (by name, headline or city name)
     if (normQuery.isNotEmpty) {
@@ -308,9 +359,11 @@ class _ExploreScreenState extends State<ExploreScreen> with TickerProviderStateM
       _searchController.clear();
       _mapCenter = coords;
       _moveMap(coords, 13.0);
-      
+
       // Auto select the closest item in the new city
       _applyFilters();
+      // Traer los usuarios reales de la ciudad nueva (el radio es sobre el centro).
+      _loadRealPins();
       if (_filteredItems.isNotEmpty) {
         double minDistance = double.infinity;
         Map<String, dynamic>? closest;

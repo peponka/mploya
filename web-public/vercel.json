@@ -1,21 +1,63 @@
 {
   "rewrites": [
-    { "source": "/invite/:code", "destination": "/api/invite?code=:code" },
-    { "source": "/p/:id", "destination": "/api/u?id=:id" },
-    { "source": "/u/:id", "destination": "/api/u?id=:id" },
-    { "source": "/app/(.*)", "destination": "/app/index.html" }
+    {
+      "source": "/j/:id",
+      "destination": "/api/j?id=:id"
+    },
+    {
+      "source": "/privacy",
+      "destination": "/legal.html"
+    },
+    {
+      "source": "/privacy.html",
+      "destination": "/legal.html"
+    },
+    {
+      "source": "/terms",
+      "destination": "/legal.html"
+    },
+    {
+      "source": "/terms.html",
+      "destination": "/legal.html"
+    },
+    {
+      "source": "/help",
+      "destination": "/legal.html"
+    },
+    {
+      "source": "/invite/:code",
+      "destination": "/api/invite?code=:code"
+    },
+    {
+      "source": "/p/:id",
+      "destination": "/api/u?id=:id"
+    },
+    {
+      "source": "/u/:id",
+      "destination": "/api/u?id=:id"
+    },
+    {
+      "source": "/app/(.*)",
+      "destination": "/app/index.html"
+    }
   ],
   "headers": [
     {
       "source": "/app/(.*)",
       "headers": [
-        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, no-store, must-revalidate"
+        }
       ]
     },
     {
       "source": "/app/flutter_bootstrap.js",
       "headers": [
-        { "key": "Cache-Control", "value": "no-cache" }
+        {
+          "key": "Cache-Control",
+          "value": "no-cache"
+        }
       ]
     }
   ]

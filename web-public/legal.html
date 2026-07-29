@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Legal · Mploya</title>
+<meta name="robots" content="index,follow"/>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+       background:#F6F8FB;color:#0F172A;line-height:1.65;padding:28px 16px 60px}
+  .wrap{max-width:760px;margin:0 auto}
+  .top{display:flex;align-items:center;gap:12px;margin-bottom:22px}
+  .logo{width:42px;height:42px;border-radius:12px;background:#185FA5;color:#fff;font-size:23px;
+        font-weight:800;display:flex;align-items:center;justify-content:center}
+  .top b{font-size:19px}
+  .tabs{display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap}
+  .tab{font-size:13.5px;font-weight:600;padding:8px 16px;border-radius:999px;text-decoration:none;
+       background:#fff;color:#475569;border:1px solid #E2E8F0}
+  .tab.on{background:#185FA5;color:#fff;border-color:#185FA5}
+  .card{background:#fff;border:1px solid #E9EEF4;border-radius:16px;padding:26px;margin-bottom:16px}
+  h1{font-size:22px;font-weight:800;margin-bottom:4px}
+  .fecha{color:#94A3B8;font-size:13px;margin-bottom:18px}
+  h2{font-size:15.5px;font-weight:800;margin:22px 0 8px;color:#185FA5}
+  h2:first-of-type{margin-top:0}
+  p,li{font-size:14.5px;color:#475569;margin-bottom:9px}
+  ul{padding-left:20px}
+  a{color:#185FA5}
+  .foot{text-align:center;color:#94A3B8;font-size:12.5px;margin-top:20px}
+  section{display:none}
+  section:target{display:block}
+  /* Sin ancla mostramos privacidad */
+  section#privacidad{display:block}
+  section:target ~ section#privacidad{display:none}
+  @media(prefers-color-scheme:dark){
+    body{background:#0B1220;color:#E8EDF5}
+    .card{background:#131C2B;border-color:#22304A}
+    p,li{color:#B7C4D6}.tab{background:#131C2B;color:#93A4BC;border-color:#22304A}
+    .tab.on{background:#185FA5;color:#fff}
+  }
+</style>
+</head>
+<body><div class="wrap">
+
+<div class="top"><div class="logo">m</div><b>Mploya</b></div>
+
+<div class="tabs">
+  <a class="tab" href="/privacy">Privacidad</a>
+  <a class="tab" href="/terms">Términos</a>
+  <a class="tab" href="/help">Ayuda</a>
+  <a class="tab" href="/">Inicio</a>
+</div>
+
+<!-- ══════════════ PRIVACIDAD ══════════════ -->
+<section id="privacidad"><div class="card">
+<h1>Política de privacidad</h1>
+<div class="fecha">Última actualización: 29 de julio de 2026</div>
+
+<p>Esta política explica qué datos recoge Mploya, para qué los usa y qué derechos tenés sobre ellos. Mploya es una plataforma donde candidatos y empresas se conectan mediante video-pitches.</p>
+
+<h2>Qué datos recogemos</h2>
+<ul>
+  <li><b>De tu cuenta:</b> email y contraseña (o tu identidad de Google si entrás con ese método).</li>
+  <li><b>De tu perfil:</b> nombre, titular, descripción, experiencia, educación, habilidades, foto, empresa y expectativa salarial si la cargás.</li>
+  <li><b>Tu video-pitch:</b> el video que grabás o subís, y su transcripción.</li>
+  <li><b>Ubicación:</b> ciudad y, si das permiso, coordenadas aproximadas para mostrarte oportunidades cercanas. Podés usar la app sin dar este permiso.</li>
+  <li><b>Uso de la app:</b> vistas de perfil, conexiones, mensajes, postulaciones y guardados.</li>
+  <li><b>Técnicos:</b> identificador del dispositivo para enviarte notificaciones, y reportes de errores.</li>
+</ul>
+
+<h2>Para qué los usamos</h2>
+<ul>
+  <li>Mostrar tu perfil a empresas y candidatos según lo que buscás.</li>
+  <li>Sugerir coincidencias mediante análisis automatizado de tu perfil y de las vacantes.</li>
+  <li>Permitir mensajes, videollamadas y postulaciones dentro de la plataforma.</li>
+  <li>Enviarte avisos de actividad relevante (podés desactivarlos en Configuración).</li>
+  <li>Detectar abusos y mantener el servicio funcionando.</li>
+</ul>
+
+<h2>Qué ve el resto</h2>
+<p>Tu nombre, titular, foto, descripción, habilidades, experiencia, educación y video-pitch son <b>visibles públicamente</b>, incluso para quien no tiene cuenta, si compartís el enlace de tu perfil.</p>
+<p><b>Tu email nunca es visible para otros usuarios.</b> Tampoco lo son tus coordenadas exactas ni tu expectativa salarial: solo se usan para calcular cercanía y coincidencias.</p>
+<p>Si usás el modo confidencial, tu identidad queda oculta hasta que vos decidas revelarla.</p>
+
+<h2>Con quién compartimos datos</h2>
+<p>No vendemos tus datos. Usamos proveedores que los procesan por nuestra cuenta:</p>
+<ul>
+  <li><b>Supabase</b> — base de datos, autenticación y almacenamiento de archivos.</li>
+  <li><b>Google Firebase</b> — notificaciones push y reportes de fallos.</li>
+  <li><b>Google Gemini</b> y <b>Anthropic Claude</b> — análisis de perfiles y vacantes para sugerir coincidencias.</li>
+  <li><b>Agora</b> — videollamadas dentro de la app.</li>
+  <li><b>OpenStreetMap</b> y <b>ArcGIS</b> — búsqueda de ciudades y mapas.</li>
+</ul>
+
+<h2>Cuánto tiempo los guardamos</h2>
+<p>Mientras tu cuenta esté activa. Si la eliminás, borramos tu perfil, tu video y tus datos personales; podemos conservar registros mínimos si una ley lo exige.</p>
+
+<h2>Tus derechos</h2>
+<p>Podés acceder, corregir, descargar o eliminar tus datos, y retirar permisos (ubicación, notificaciones) cuando quieras. Desde la app: <b>Configuración → Cuenta</b>. También podés escribirnos y lo resolvemos nosotros.</p>
+
+<h2>Menores de edad</h2>
+<p>Mploya está dirigida a personas de 18 años o más. No recogemos datos de menores a sabiendas.</p>
+
+<h2>Cambios</h2>
+<p>Si cambiamos esta política, actualizamos la fecha de arriba y te avisamos dentro de la app cuando el cambio sea relevante.</p>
+
+<h2>Contacto</h2>
+<p>Dudas o pedidos sobre tus datos: <a href="mailto:hola@mploya.ai">hola@mploya.ai</a></p>
+</div></section>
+
+<!-- ══════════════ TÉRMINOS ══════════════ -->
+<section id="terminos"><div class="card">
+<h1>Términos y condiciones</h1>
+<div class="fecha">Última actualización: 29 de julio de 2026</div>
+
+<p>Al crear una cuenta en Mploya aceptás estos términos.</p>
+
+<h2>Qué es Mploya</h2>
+<p>Una plataforma que conecta candidatos y empresas mediante video-pitches. <b>No somos una agencia de empleo</b> ni participamos de la relación laboral: no garantizamos que consigas trabajo ni que un candidato sea contratado.</p>
+
+<h2>Tu cuenta</h2>
+<ul>
+  <li>Tenés que ser mayor de 18 años.</li>
+  <li>La información que cargues debe ser veraz y tuya.</li>
+  <li>Sos responsable de tu contraseña y de la actividad de tu cuenta.</li>
+  <li>Una persona o empresa, una cuenta.</li>
+</ul>
+
+<h2>Lo que subís</h2>
+<p>Seguís siendo dueño de tu video y de tu contenido. Al subirlo nos das permiso para mostrarlo dentro de la plataforma y en tu perfil público, con el único fin de hacer funcionar el servicio.</p>
+<p>No se permite contenido ofensivo, discriminatorio, falso, ajeno o ilegal, ni ofertas de trabajo engañosas o que pidan dinero al candidato.</p>
+
+<h2>Uso aceptable</h2>
+<ul>
+  <li>No extraer datos de forma masiva ni automatizada.</li>
+  <li>No suplantar a otra persona o empresa.</li>
+  <li>No usar la plataforma para acosar, estafar o hacer spam.</li>
+</ul>
+<p>Podemos suspender cuentas que incumplan estas reglas.</p>
+
+<h2>Funciones pagas</h2>
+<p>Algunas funciones pueden requerir pago. Precios y condiciones se informan antes de contratar. Si comprás desde una tienda de aplicaciones, aplican además sus reglas de cobro y reembolso.</p>
+
+<h2>Responsabilidad</h2>
+<p>El servicio se ofrece "tal cual". No respondemos por decisiones de contratación, por la conducta de otros usuarios ni por interrupciones del servicio. Nada de esto limita derechos que la ley te reconozca como consumidor.</p>
+
+<h2>Baja</h2>
+<p>Podés eliminar tu cuenta cuando quieras desde <b>Configuración → Cuenta</b>.</p>
+
+<h2>Ley aplicable</h2>
+<p>Estos términos se rigen por las leyes de la República Argentina.</p>
+
+<h2>Contacto</h2>
+<p><a href="mailto:hola@mploya.ai">hola@mploya.ai</a></p>
+</div></section>
+
+<!-- ══════════════ AYUDA ══════════════ -->
+<section id="ayuda"><div class="card">
+<h1>Centro de ayuda</h1>
+<div class="fecha">¿No encontrás lo que buscás? Escribinos a <a href="mailto:hola@mploya.ai">hola@mploya.ai</a></div>
+
+<h2>¿Cómo grabo mi video-pitch?</h2>
+<p>Entrá a tu perfil y tocá el espacio del video. Podés grabarlo con la cámara o subir un archivo. Dura hasta 60 segundos: contá quién sos, qué sabés hacer y qué estás buscando.</p>
+
+<h2>¿Por qué no aparezco en las búsquedas?</h2>
+<p>Revisá que tu perfil esté completo (titular, habilidades y video). Los perfiles con video se muestran mucho más.</p>
+
+<h2>¿Qué significa el porcentaje de match?</h2>
+<p>Es una estimación automática de qué tan bien encaja un perfil con una vacante. Combina el contenido del perfil con las habilidades pedidas. Es una guía, no una decisión.</p>
+
+<h2>¿Qué es el modo confidencial?</h2>
+<p>Te permite estar visible para empresas sin exponer tu identidad, útil si buscás trabajo mientras tenés uno.</p>
+
+<h2>¿Cómo desactivo las notificaciones?</h2>
+<p><b>Configuración → Notificaciones</b>. Podés elegir cuáles recibir.</p>
+
+<h2>¿Cómo elimino mi cuenta?</h2>
+<p><b>Configuración → Cuenta → Eliminar cuenta</b>. Se borran tu perfil, tu video y tus datos.</p>
+
+<h2>Quiero reportar a alguien</h2>
+<p>Usá el menú (···) en el perfil o la publicación, o escribinos a <a href="mailto:hola@mploya.ai">hola@mploya.ai</a>.</p>
+</div></section>
+
+<div class="foot">© 2026 Mploya · <a href="/">mploya.ai</a></div>
+</div>
+
+<script>
+  // Marca la pestaña activa y muestra la sección según la ruta (/privacy, /terms, /help).
+  (function () {
+    var p = location.pathname.replace(/\.html$/, '');
+    var mapa = { '/privacy': 'privacidad', '/terms': 'terminos', '/help': 'ayuda' };
+    var id = mapa[p] || 'privacidad';
+    document.querySelectorAll('section').forEach(function (s) {
+      s.style.display = (s.id === id) ? 'block' : 'none';
+    });
+    document.querySelectorAll('.tab').forEach(function (a) {
+      if (a.getAttribute('href') === p) a.classList.add('on');
+    });
+    var t = { privacidad: 'Política de privacidad', terminos: 'Términos y condiciones', ayuda: 'Ayuda' }[id];
+    document.title = t + ' · Mploya';
+  })();
+</script>
+</body>
+</html>
