@@ -44,6 +44,51 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
   bool _isRefreshing = false;
   double _overscrollTotal = 0;
 
+  // ── Categorías (rediseño 30/7) ──
+  // Reemplazan el patrón de "letras circulares confusas" del mockup de
+  // referencia por chips claras. Filtran client-side sobre lo ya traído del
+  // feed (headline/tags/skills contra un set de palabras clave por rubro) —
+  // no hay una taxonomía de categorías real en la base todavía, así que esto
+  // filtra de verdad en vez de ser una UI decorativa sin efecto.
+  String _selectedCategory = 'todos';
+
+  static const Map<String, String> _categoryLabels = {
+    'todos': 'Todos',
+    'tecnologia': 'Tecnología',
+    'ventas': 'Ventas',
+    'administracion': 'Administración',
+    'finanzas': 'Finanzas',
+    'marketing': 'Marketing',
+    'diseno': 'Diseño',
+  };
+
+  static const Map<String, List<String>> _categoryKeywords = {
+    'tecnologia': ['flutter', 'react', 'developer', 'dev', 'software', 'engineer',
+      'ingenier', 'backend', 'frontend', 'fullstack', 'devops', 'data', 'python',
+      'java', 'node', 'sql', 'aws', 'cloud', 'programad', 'tech', 'it '],
+    'ventas': ['ventas', 'sales', 'comercial', 'account manager', 'business dev'],
+    'administracion': ['administra', 'operaciones', 'rrhh', 'recursos humanos',
+      'hr ', 'people', 'talent'],
+    'finanzas': ['finanzas', 'contab', 'cfo', 'contador', 'financial', 'tesorer'],
+    'marketing': ['marketing', 'growth', 'seo', 'ads', 'contenido', 'social media',
+      'comunicaci'],
+    'diseno': ['diseñ', 'design', 'ux', 'ui', 'product designer', 'creativ'],
+  };
+
+  List<Map<String, dynamic>> _filterByCategory(List<Map<String, dynamic>> items) {
+    if (_selectedCategory == 'todos') return items;
+    final kws = _categoryKeywords[_selectedCategory] ?? const [];
+    return items.where((r) {
+      final haystack = [
+        (r['headline'] ?? '').toString(),
+        (r['about'] ?? '').toString(),
+        ...((r['tags'] as List?) ?? const []).map((e) => e.toString()),
+        ...((r['skills'] as List?) ?? const []).map((e) => e.toString()),
+      ].join(' ').toLowerCase();
+      return kws.any((k) => haystack.contains(k));
+    }).toList();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -283,10 +328,12 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
                   );
                 }
 
-                // El array de items ya viene 100% filtrado y ordenado
-                final rows = feedState.items;
+                // El array de items ya viene 100% filtrado y ordenado; acá se
+                // le suma el filtro de categoría (client-side, ver arriba).
+                final allRows = feedState.items;
+                final rows = _filterByCategory(allRows);
 
-                if (rows.isEmpty) {
+                if (allRows.isEmpty) {
                   return Center(
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 40),
@@ -297,7 +344,7 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
                               size: 56, color: Colors.white.withValues(alpha: 0.4)),
                           const SizedBox(height: 20),
                           Text(
-                            'SÃ© el primero en tu industria',
+                            'Sé el primero en tu industria',
                             style: TextStyle(
                                 color: Colors.white.withValues(alpha: 0.9),
                                 fontSize: 20,
@@ -305,7 +352,7 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
                           ),
                           const SizedBox(height: 10),
                           Text(
-                            'Los candidatos con Video-Pitch reciben 3x mÃ¡s contactos de empresas.',
+                            'Los candidatos con Video-Pitch reciben 3x más contactos de empresas.',
                             textAlign: TextAlign.center,
                             style: TextStyle(
                                 color: Colors.white.withValues(alpha: 0.5),
@@ -328,6 +375,55 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
                                   fontSize: 17,
                                 ),
                               ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }
+
+                // Hay feed, pero ninguno matchea la categoría elegida: no
+                // mostrar la pantalla vacía genérica de arriba (esa es para
+                // "no hay nadie en la base todavía"), sino invitar a volver a
+                // "Todos" — la categoría filtró de más, no falta contenido.
+                if (rows.isEmpty) {
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 40),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(CupertinoIcons.search,
+                              size: 48, color: Colors.white.withValues(alpha: 0.35)),
+                          const SizedBox(height: 16),
+                          Text(
+                            'Sin resultados en ${_categoryLabels[_selectedCategory]}',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.9),
+                                fontSize: 17,
+                                fontWeight: FontWeight.w700),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Todavía no hay candidatos en esta categoría.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.55),
+                                fontSize: 13.5),
+                          ),
+                          const SizedBox(height: 20),
+                          GestureDetector(
+                            onTap: () => setState(() => _selectedCategory = 'todos'),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF185FA5),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: const Text('Ver todos',
+                                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 14.5)),
                             ),
                           ),
                         ],
@@ -576,6 +672,41 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
                             currentAccountType: currentUser?.accountType ?? 'candidato',
                           );
                         },
+                      ),
+                      // ── Categorías ──
+                      // Reemplaza las "letras circulares confusas" del mockup
+                      // de referencia por chips claras y legibles; filtran de
+                      // verdad sobre el feed (_filterByCategory arriba).
+                      SizedBox(
+                        height: 34,
+                        child: ListView(
+                          scrollDirection: Axis.horizontal,
+                          padding: const EdgeInsets.fromLTRB(16, 2, 16, 8),
+                          children: _categoryLabels.entries.map((e) {
+                            final selected = _selectedCategory == e.key;
+                            return Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: GestureDetector(
+                                onTap: () => setState(() => _selectedCategory = e.key),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 15),
+                                  alignment: Alignment.center,
+                                  decoration: BoxDecoration(
+                                    color: selected ? const Color(0xFF185FA5) : Colors.white.withValues(alpha: 0.12),
+                                    borderRadius: BorderRadius.circular(999),
+                                    border: Border.all(
+                                        color: selected ? const Color(0xFF185FA5) : Colors.white.withValues(alpha: 0.25)),
+                                  ),
+                                  child: Text(e.value,
+                                      style: TextStyle(
+                                          fontSize: 12.5,
+                                          fontWeight: FontWeight.w600,
+                                          color: selected ? Colors.white : Colors.white.withValues(alpha: 0.9))),
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
                       ),
                     ],
                   ),

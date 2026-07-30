@@ -9,7 +9,6 @@ import 'package:visibility_detector/visibility_detector.dart';
 import '../theme/app_theme.dart';
 import '../models/models.dart';
 import '../screens/profile_screen.dart';
-import '../screens/match_celebration_screen.dart';
 import '../services/social_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -17,9 +16,6 @@ import '../providers/user_provider.dart';
 import '../navigation/main_navigation.dart';
 import '../screens/b2b_paywall_screen.dart';
 import '../services/revenuecat_service.dart';
-import '../services/nexus_service.dart';
-import '../screens/story_viewer_screen.dart';
-import '../screens/create_story_screen.dart';
 
 import '../services/error_handler.dart';
 import '../services/video_preload_manager.dart';
@@ -30,11 +26,6 @@ import 'reel_card_moderation.dart';
 import 'reel_card_helpers.dart';
 import 'reel_card_video.dart';
 import 'reel_card_overlays.dart';
-import 'reel_card_info.dart';
-import 'reel_card_actions.dart';
-import 'double_tap_heart.dart';
-import 'reel_card_subtitles.dart';
-import '../screens/video_reply_screen.dart';
 
 class TikTokReelCard extends ConsumerStatefulWidget {
   final Post post;
@@ -576,353 +567,12 @@ class _TikTokReelCardState extends ConsumerState<TikTokReelCard>
     final bool userIsPremium = (currentUser?.isPremium ?? false) || RevenueCatService.instance.isPremium || _premiumUnlocked;
     final bool isLocked = author.isConfidential && !userIsPremium;
     
-    // Compute insight for analytics badge
-    final myTags = (currentUser?.tags ?? []).map((t) => t.toLowerCase()).toSet();
-    final theirTags = author.tags.map((t) => t.toLowerCase()).toSet();
-    final shared = myTags.intersection(theirTags);
-    String insightText;
-    IconData insightIcon;
-    if (shared.isNotEmpty) {
-      insightText = shared.take(1).map((t) => t.startsWith('#') ? t : '#$t').join(', ');
-      insightIcon = CupertinoIcons.sparkles;
-    } else if (author.headline.toLowerCase().contains('senior') || author.headline.toLowerCase().contains('lead')) {
-      insightText = 'Senior'; insightIcon = CupertinoIcons.star_fill;
-    } else {
-      insightText = 'Activo'; insightIcon = CupertinoIcons.bolt_fill;
-    }
-
-    // Rail de acciones (reutilizable: overlay en móvil, columna lateral en web).
-    final actionsBar = ReelActionsBar(
-      author: author,
-      currentUser: currentUser,
-      isLocked: isLocked,
-      connectionStatus: _connectionStatus,
-      isMatched: _isMatched,
-      matchCount: _matchCount,
-      isBookmarked: _isBookmarked,
-      nexusSent: _nexusSent,
-      showReactions: _showReactions,
-      activeReaction: _activeReaction,
-      reactionCounts: _reactionCounts,
-      lightMode: widget.webMode,
-      onAvatarTap: () {
-        final me = ref.read(currentUserProvider).value;
-        if (author.accountType == 'confidencial' && me?.isPremium != true) {
-          Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const B2BPaywallScreen()));
-          return;
-        }
-        Navigator.of(context).push(CupertinoPageRoute(builder: (_) => ProfileScreen(user: author)));
-      },
-      onConnectTap: () async {
-        if (_connectionStatus == 'accepted' || _connectionStatus == 'pending') return;
-        final me = ref.read(currentUserProvider).value;
-        if (author.accountType == 'confidencial' && me?.isPremium != true) {
-          Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const B2BPaywallScreen()));
-          return;
-        }
-        HapticFeedback.lightImpact();
-        setState(() => _connectionStatus = 'pending');
-        await SocialService.instance.sendConnectionRequest(author.id);
-      },
-      onMatchToggle: _toggleMatch,
-      onReactionsToggle: () => setState(() => _showReactions = !_showReactions),
-      onReactionSelected: (emoji) {
-        setState(() {
-          _activeReaction = emoji;
-          _showReactions = false;
-          if (!_isMatched && emoji != null) _toggleMatch();
-        });
-        _saveReaction(emoji);
-      },
-      onCommentsTap: () {
-        _controller?.pause();
-        Navigator.of(context).push(
-          CupertinoPageRoute(
-            fullscreenDialog: true,
-            builder: (_) => VideoReplyScreen(targetUser: author),
-          ),
-        ).then((_) {
-          if (mounted && _controller != null && _isInitialized) _controller!.play();
-        });
-      },
-      onBookmarkTap: _toggleBookmark,
-      onShareTap: () => _shareProfile(author),
-      onNexusTap: () {
-        NexusService.instance.sendInterest(author.id).then((err) {
-          if (err == null && mounted) setState(() => _nexusSent = true);
-        });
-      },
-      onMoreTap: () => _showMoreOptions(author),
-    );
-
-    final stack = Stack(
-        fit: StackFit.expand,
-        children: [
-          // ── Video Background with double-tap heart animation ──
-          DoubleTapHeartOverlay(
-            onSingleTap: isLocked ? _showStealthAlert : _togglePlayPause,
-            enableDoubleTap: !widget.webMode,
-            onDoubleTap: () {
-              if (isLocked || _nexusSent) return;
-              HapticFeedback.heavyImpact();
-              NexusService.instance.sendInterest(author.id).then((err) {
-                if (err == null && mounted) {
-                  setState(() { _nexusSent = true; _showBoltAnimation = true; });
-                  Future.delayed(const Duration(milliseconds: 800), () {
-                    if (mounted) setState(() => _showBoltAnimation = false);
-                  });
-                  // Celebración "¡Nuevo Match!" (render #3)
-                  MatchCelebrationScreen.show(context, author, matchPct: matchScore > 0 ? matchScore : null);
-                }
-              });
-            },
-            child: ReelVideoBackground(
-              author: author,
-              controller: _controller,
-              isInitialized: _isInitialized,
-              hasError: _hasError,
-            ),
-          ),
-
-          // ── Web: capa de tap sobre el video (el <video> HTML no llega al
-          //    GestureDetector padre, así que la ponemos explícita encima). ──
-          if (kIsWeb)
-            Positioned.fill(
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: isLocked ? _showStealthAlert : _togglePlayPause,
-              ),
-            ),
-
-          // ── Stealth Overlay ──
-          if (isLocked)
-            ReelStealthOverlay(
-              author: author,
-              currentUser: currentUser,
-              onUnlockTap: _showStealthAlert,
-            ),
-
-          // ── Dark Gradient ──
-          const ReelBottomGradient(),
-
-          // ── Play/Pause Icon ──
-          if (_isInitialized && _controller != null && !_controller!.value.isPlaying && !isLocked)
-            const ReelPlayPauseOverlay(),
-
-          // ── Subtitles Overlay (center area, TikTok-style) ──
-          Positioned(
-            bottom: 200,
-            left: 24,
-            right: 24,
-            child: ReelSubtitleOverlay(
-              controller: _controller,
-              authorId: author.id,
-              isInitialized: _isInitialized,
-            ),
-          ),
-
-          // ── Info Panel (tarjeta blanca de ancho completo, estilo mockup) ──
-          Positioned(
-            bottom: 60,
-            left: 0,
-            right: 0,
-            child: ReelInfoPanel(
-              author: author,
-              postContent: widget.post.content,
-              isLocked: isLocked,
-              mutualConnections: _mutualConnections,
-              replyVideoUrl: _replyVideoUrl,
-              onPlayReply: _playReplyVideo,
-              matchScore: matchScore,
-              onMatchTap: () => _showMatchDetails(context, author, matchScore),
-            ),
-          ),
-
-          // ── Bolt Animation ──
-          if (_showBoltAnimation)
-            const ReelBoltAnimation(),
-
-          // ── Actions Bar (overlay solo en móvil, sobre el video, por encima
-          // de la tarjeta blanca de info; en web va al costado) ──
-          if (!widget.webMode)
-            Positioned(
-              right: 8,
-              bottom: 230,
-              child: ClipRRect(
-                key: widget.isFirstCard ? cmFeedActionsKey : null,
-                borderRadius: BorderRadius.circular(NexTheme.radiusXL),
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.18),
-                      borderRadius: BorderRadius.circular(NexTheme.radiusXL),
-                      border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.07),
-                        width: 0.5,
-                      ),
-                    ),
-                    child: actionsBar,
-                  ),
-                ),
-              ),
-            ),
-
-
-          // ── Match Badge (top right, glassmorphism pill) ──
-          if (matchScore > 0 && !isLocked)
-            Positioned(
-              top: 100,
-              right: 14,
-              child: GestureDetector(
-                key: widget.isFirstCard ? cmFeedMatchBadgeKey : null,
-                onTap: () => _showMatchDetails(context, author, matchScore),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(22),
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [NexTheme.brandAccent, NexTheme.brandAccent.withValues(alpha: 0.85)],
-                        ),
-                        borderRadius: BorderRadius.circular(22),
-                        border: Border.all(color: Colors.white.withValues(alpha: 0.25), width: 0.5),
-                        boxShadow: [
-                          BoxShadow(
-                            color: NexTheme.brandAccent.withValues(alpha: 0.5),
-                            blurRadius: 16,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(CupertinoIcons.sparkles, color: Colors.white, size: 14),
-                          const SizedBox(width: 5),
-                          Text(
-                            '✦ $matchScore% match',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: 0.3,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-
-          // ── Create Story Button (left of pill) ──
-          Positioned(
-            top: 100,
-            left: 14,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // + Create button
-                GestureDetector(
-                  onTap: () {
-                    HapticFeedback.selectionClick();
-                    Navigator.of(context).push(CupertinoPageRoute(
-                      fullscreenDialog: true,
-                      builder: (_) => const CreateStoryScreen(),
-                    ));
-                  },
-                  child: Container(
-                    width: 38,
-                    height: 38,
-                    decoration: BoxDecoration(
-                      color: NexTheme.brandAccent,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(color: NexTheme.brandAccent.withValues(alpha: 0.4), blurRadius: 10, offset: const Offset(0, 3)),
-                      ],
-                    ),
-                    child: const Icon(CupertinoIcons.add, color: Colors.white, size: 20),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                // Stories pill
-                GestureDetector(
-                  onTap: () {
-                    Navigator.of(context).push(CupertinoPageRoute(
-                      builder: (_) => const StoryViewerScreen(),
-                    ));
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.35),
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(color: Colors.white.withValues(alpha: 0.18), width: 1),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        SizedBox(
-                          width: 52,
-                          height: 24,
-                          child: Stack(
-                            clipBehavior: Clip.none,
-                            children: [
-                              for (var i = 0; i < 3; i++)
-                                Positioned(
-                                  left: i * 14.0,
-                                  child: Container(
-                                    width: 24,
-                                    height: 24,
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      color: [const Color(0xFF3B82F6), const Color(0xFFEC4899), const Color(0xFF22C55E)][i],
-                                      border: Border.all(color: Colors.black, width: 1.5),
-                                    ),
-                                    child: Center(
-                                      child: Text(
-                                        ['M', 'A', 'R'][i],
-                                        style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w800),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        const Text(
-                          'Historias',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            shadows: [Shadow(color: Colors.black, blurRadius: 6)],
-                          ),
-                        ),
-                        const SizedBox(width: 5),
-                        const Icon(CupertinoIcons.chevron_right, color: Colors.white, size: 14),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-    );
-
-    // ── Web (TikTok web): video redondeado + acciones al costado, sobre blanco ──
-    // Rediseño 23/7: tarjeta CLARA con el video contenido arriba y la info +
-    // acciones debajo (antes: video full-bleed oscuro con overlays). Mismo layout
-    // en web y móvil. El paginado tipo reel (swipe vertical / flechas web) lo
-    // maneja el PageView de home_feed_screen — esto es solo la tarjeta de un reel.
-    // `actionsBar` y `stack` (layout viejo con overlays) quedan sin usar acá.
+    // Rediseño 30/7: el video pasa a ser protagonista (llena casi toda la
+    // tarjeta) con la info del candidato sobre un degradado inferior, estilo
+    // TikTok — antes el video medía 320px fijos dentro de una card centrada
+    // con mucho espacio en blanco alrededor, y el nombre/bio iban en una
+    // sección blanca aparte debajo. Mismo layout en web y móvil; el paginado
+    // (swipe vertical / flechas web) lo maneja el PageView de home_feed_screen.
     final content = _buildLightReelCard(context, author, matchScore, isLocked);
 
     return VisibilityDetector(
@@ -935,30 +585,33 @@ class _TikTokReelCardState extends ConsumerState<TikTokReelCard>
   Widget _buildLightReelCard(BuildContext context, NexUser author, int matchScore, bool isLocked) {
     const brand = Color(0xFF185FA5);
     final playing = _controller?.value.isPlaying ?? false;
-    final bio = (author.about != null && author.about!.trim().isNotEmpty)
-        ? author.about!.trim()
-        : author.headline;
     final tags = author.tags.take(3).toList();
-    final hasAvatar = author.avatarUrl != null && author.avatarUrl!.isNotEmpty;
-    final initials = author.name.trim().isNotEmpty
-        ? author.name.trim().split(' ').map((w) => w.isEmpty ? '' : w[0]).take(2).join().toUpperCase()
-        : '?';
 
-    // Botón de acción de la tarjeta clara. Con label ("Interesado") es el primario:
-    // se envuelve en Expanded afuera para ocupar el ancho sobrante. Sin label es un
-    // cuadrado fijo (46px) para que los íconos queden uniformes y agrupados.
+    // Heurística de años (misma que usa _analyzeWithClaude para no introducir
+    // otra estimación distinta en la misma pantalla).
+    final int? years = author.experience.isNotEmpty ? author.experience.length * 2 : null;
+    final location = (author.location ?? '').trim();
+    final salary = (author.salaryExpectation ?? '').trim();
+
+    void openProfile() => Navigator.of(context).push(
+          CupertinoPageRoute(builder: (_) => ProfileScreen(user: author)),
+        );
+
+    // Botón de acción. Con label ("Me interesa") es el primario y se envuelve
+    // en Expanded afuera para ocupar el ancho sobrante; sin label es un
+    // cuadrado fijo (44px) para que los íconos secundarios queden uniformes.
     Widget actionBtn(IconData icon, String? label, VoidCallback onTap, {bool filled = false}) {
       return CupertinoButton(
         padding: EdgeInsets.zero,
         minimumSize: Size.zero,
         onPressed: onTap,
         child: Container(
-          height: 42,
-          width: label == null ? 46 : null,
+          height: 44,
+          width: label == null ? 44 : null,
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: filled ? brand : const Color(0xFFF1F5F9),
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(13),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -971,7 +624,7 @@ class _TikTokReelCardState extends ConsumerState<TikTokReelCard>
                   child: Text(label,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: filled ? Colors.white : const Color(0xFF475569))),
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: filled ? Colors.white : const Color(0xFF475569))),
                 ),
               ],
             ],
@@ -980,182 +633,272 @@ class _TikTokReelCardState extends ConsumerState<TikTokReelCard>
       );
     }
 
-    final card = Container(
-      margin: const EdgeInsets.symmetric(vertical: 14, horizontal: 4),
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-        boxShadow: const [BoxShadow(color: Color(0x0F000000), blurRadius: 18, offset: Offset(0, 8))],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // ── Video contenido ──
-          SizedBox(
-            height: 320,
-            width: double.infinity,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: isLocked ? _showStealthAlert : _togglePlayPause,
-                  child: ReelVideoBackground(
-                    author: author,
-                    controller: _controller,
-                    isInitialized: _isInitialized,
-                    hasError: _hasError,
+    // ── Match card: anillo de progreso + % + explicación breve ──
+    // Solo se muestra con un match real calculado (>0): mostrar un número
+    // inventado cuando no hay coincidencia sería el mismo problema que se
+    // corrigió en el matching del backend (un 0% real disfrazado de "90%").
+    final matchCard = (matchScore > 0 && !isLocked)
+        ? GestureDetector(
+            onTap: () => _showMatchDetails(context, author, matchScore),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.96),
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: const [BoxShadow(color: Color(0x1A000000), blurRadius: 10, offset: Offset(0, 3))],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    width: 28,
+                    height: 28,
+                    child: CustomPaint(painter: _MatchRingPainter(progress: matchScore / 100, color: brand)),
                   ),
-                ),
-                Positioned(
-                  top: 12,
-                  left: 12,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                    decoration: BoxDecoration(color: const Color(0xFFE6F1FB), borderRadius: BorderRadius.circular(14)),
-                    child: Row(mainAxisSize: MainAxisSize.min, children: [
-                      const Icon(CupertinoIcons.sparkles, size: 12, color: brand),
-                      const SizedBox(width: 4),
-                      Text('${matchScore > 0 ? matchScore : 90}% match',
-                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF0C447C))),
-                    ]),
-                  ),
-                ),
-                if (!playing)
-                  Center(
-                    child: Container(
-                      width: 58,
-                      height: 58,
-                      decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.28), shape: BoxShape.circle),
-                      child: const Icon(CupertinoIcons.play_fill, color: Colors.white, size: 26),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          // ── Info + acciones ──
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    GestureDetector(
-                      onTap: () => Navigator.of(context).push(
-                        CupertinoPageRoute(builder: (_) => ProfileScreen(user: author)),
-                      ),
-                      child: Container(
-                        width: 42, height: 42,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: const Color(0xFFE6F1FB),
-                          image: hasAvatar ? DecorationImage(image: NetworkImage(author.avatarUrl!), fit: BoxFit.cover) : null,
-                        ),
-                        alignment: Alignment.center,
-                        child: hasAvatar ? null : Text(initials, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF0C447C))),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(children: [
-                            Flexible(child: Text(author.name, maxLines: 1, overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Color(0xFF0F172A)))),
-                            const SizedBox(width: 5),
-                            const Icon(CupertinoIcons.checkmark_seal_fill, size: 15, color: brand),
-                          ]),
-                          Text(author.headline, maxLines: 1, overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontSize: 12.5, color: Color(0xFF94A3B8))),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    CupertinoButton(
-                      padding: EdgeInsets.zero,
-                      minimumSize: Size.zero,
-                      onPressed: () async {
-                        if (_connectionStatus == 'accepted' || _connectionStatus == 'pending') return;
-                        HapticFeedback.lightImpact();
-                        setState(() => _connectionStatus = 'pending');
-                        await SocialService.instance.sendConnectionRequest(author.id);
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        decoration: BoxDecoration(color: brand, borderRadius: BorderRadius.circular(16)),
-                        child: Text(_connectionStatus == 'pending' || _connectionStatus == 'accepted' ? 'Enviado' : 'Seguir',
-                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white)),
-                      ),
-                    ),
-                  ],
-                ),
-                if (bio.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 12),
-                    child: Text(bio, maxLines: 2, overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 13, color: Color(0xFF475569), height: 1.5)),
-                  ),
-                if (tags.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 10),
-                    child: Wrap(
-                      spacing: 6,
-                      runSpacing: 6,
-                      children: tags
-                          .map((t) => Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                                decoration: BoxDecoration(color: const Color(0xFFE6F1FB), borderRadius: BorderRadius.circular(14)),
-                                child: Text(t.startsWith('#') ? t : '#$t',
-                                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF0C447C))),
-                              ))
-                          .toList(),
-                    ),
-                  ),
-                Padding(
-                  padding: const EdgeInsets.only(top: 14),
-                  child: Row(
-                    key: widget.isFirstCard ? cmFeedActionsKey : null,
+                  const SizedBox(width: 8),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Expanded(
-                        child: actionBtn(_isMatched ? CupertinoIcons.star_fill : CupertinoIcons.star, 'Interesado',
-                            isLocked ? _showStealthAlert : _toggleMatch, filled: _isMatched),
-                      ),
-                      const SizedBox(width: 8),
-                      actionBtn(CupertinoIcons.videocam_fill, null, () {
-                        _controller?.pause();
-                        Navigator.of(context).push(CupertinoPageRoute(
-                          fullscreenDialog: true,
-                          builder: (_) => VideoReplyScreen(targetUser: author),
-                        )).then((_) {
-                          if (mounted && _controller != null && _isInitialized) _controller!.play();
-                        });
-                      }),
-                      const SizedBox(width: 8),
-                      actionBtn(_isBookmarked ? CupertinoIcons.bookmark_fill : CupertinoIcons.bookmark, null, _toggleBookmark),
-                      const SizedBox(width: 8),
-                      actionBtn(CupertinoIcons.arrowshape_turn_up_right, null, () => _shareProfile(author)),
+                      Text('$matchScore% match',
+                          style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: Color(0xFF0F172A))),
+                      const Text('Habilidades y experiencia',
+                          style: TextStyle(fontSize: 9.5, color: Color(0xFF64748B))),
                     ],
                   ),
+                ],
+              ),
+            ),
+          )
+        : const SizedBox.shrink();
+
+    // ── Pista visual de swipe (decorativa, el gesto real lo maneja el PageView) ──
+    const swipeHints = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(CupertinoIcons.chevron_up, color: Color(0xB3FFFFFF), size: 17),
+        SizedBox(height: 6),
+        _SwipeTrack(),
+        SizedBox(height: 6),
+        Icon(CupertinoIcons.chevron_down, color: Color(0xB3FFFFFF), size: 17),
+      ],
+    );
+
+    // ── Info del candidato sobre el degradado inferior del video ──
+    final infoOverlay = GestureDetector(
+      onTap: openProfile,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.fromLTRB(16, 60, 16, 14),
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Colors.transparent, Color(0x8C000000), Color(0xE0000000)],
+            stops: [0.0, 0.45, 1.0],
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                Flexible(
+                  child: Text(author.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.white)),
                 ),
+                const SizedBox(width: 5),
+                const Icon(CupertinoIcons.checkmark_seal_fill, size: 16, color: Color(0xFF5DCAA5)),
               ],
             ),
+            const SizedBox(height: 2),
+            Text(author.headline,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w500, color: Color(0xFFE2E8F0))),
+            if (years != null || location.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 7),
+                child: Text(
+                  [
+                    if (years != null) '$years años de experiencia',
+                    if (location.isNotEmpty) location,
+                  ].join(' · '),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 12, color: Color(0xFFCBD5E1)),
+                ),
+              ),
+            if (author.isOpenToWork)
+              Padding(
+                padding: const EdgeInsets.only(top: 5),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(width: 6, height: 6, decoration: const BoxDecoration(color: Color(0xFF5DCAA5), shape: BoxShape.circle)),
+                    const SizedBox(width: 6),
+                    const Text('Disponible inmediatamente', style: TextStyle(fontSize: 12, color: Color(0xFFCBD5E1))),
+                  ],
+                ),
+              ),
+            if (salary.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(salary, maxLines: 1, overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 12, color: Color(0xFFCBD5E1))),
+              ),
+            if (tags.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 9),
+                child: Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: tags
+                      .map((t) => Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.14), borderRadius: BorderRadius.circular(14)),
+                            child: Text(t.startsWith('#') ? t : '#$t',
+                                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.white)),
+                          ))
+                      .toList(),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+
+    final videoArea = ClipRRect(
+      borderRadius: BorderRadius.circular(20),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: isLocked ? _showStealthAlert : _togglePlayPause,
+            child: ReelVideoBackground(
+              author: author,
+              controller: _controller,
+              isInitialized: _isInitialized,
+              hasError: _hasError,
+            ),
           ),
+          // Web: el <video> HTML no deja pasar el tap al GestureDetector padre.
+          if (kIsWeb)
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: isLocked ? _showStealthAlert : _togglePlayPause,
+              ),
+            ),
+          // Perfil confidencial/stealth: blur + CTA de desbloqueo. Sin esto el
+          // video se veía sin difuminar aunque el tap ya estuviera bloqueado.
+          if (isLocked)
+            ReelStealthOverlay(
+              author: author,
+              currentUser: ref.read(currentUserProvider).value,
+              onUnlockTap: _showStealthAlert,
+            ),
+          if (!playing && !isLocked)
+            Center(
+              child: Container(
+                width: 58,
+                height: 58,
+                decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.28), shape: BoxShape.circle),
+                child: const Icon(CupertinoIcons.play_fill, color: Colors.white, size: 26),
+              ),
+            ),
+          Positioned(top: 12, left: 12, child: matchCard),
+          Positioned(right: 10, top: 0, bottom: 74, child: Center(child: swipeHints)),
+          Positioned(left: 0, right: 0, bottom: 0, child: infoOverlay),
         ],
       ),
     );
 
-    return Center(
-      child: SingleChildScrollView(
-        physics: const NeverScrollableScrollPhysics(),
-        child: card,
+    final footer = Padding(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      child: Row(
+        key: widget.isFirstCard ? cmFeedActionsKey : null,
+        children: [
+          Expanded(
+            child: actionBtn(_isMatched ? CupertinoIcons.star_fill : CupertinoIcons.star, 'Me interesa',
+                isLocked ? _showStealthAlert : _toggleMatch, filled: _isMatched),
+          ),
+          const SizedBox(width: 8),
+          // "Ver video completo": el pitch entero + Conectar/Mensaje viven en
+          // el perfil, no duplicados acá.
+          actionBtn(CupertinoIcons.play_circle, null, openProfile),
+          const SizedBox(width: 8),
+          actionBtn(_isBookmarked ? CupertinoIcons.bookmark_fill : CupertinoIcons.bookmark, null, _toggleBookmark),
+          const SizedBox(width: 8),
+          actionBtn(CupertinoIcons.arrowshape_turn_up_right, null, () => _shareProfile(author)),
+        ],
       ),
     );
+
+    final card = Container(
+      margin: const EdgeInsets.fromLTRB(6, 8, 6, 4),
+      padding: const EdgeInsets.all(6),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: const [BoxShadow(color: Color(0x14000000), blurRadius: 20, offset: Offset(0, 8))],
+      ),
+      child: Column(
+        children: [
+          Expanded(child: videoArea),
+          footer,
+        ],
+      ),
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return SizedBox(height: constraints.maxHeight, width: constraints.maxWidth, child: card);
+      },
+    );
+  }
+}
+
+/// Barrita vertical decorativa entre las flechas de swipe (pista de scroll).
+class _SwipeTrack extends StatelessWidget {
+  const _SwipeTrack();
+  @override
+  Widget build(BuildContext context) {
+    return Container(width: 3, height: 22, decoration: BoxDecoration(color: const Color(0x4DFFFFFF), borderRadius: BorderRadius.circular(2)));
+  }
+}
+
+/// Anillo de progreso del match, dibujado a mano (sin depender de
+/// CircularProgressIndicator, que trae semántica de "cargando").
+class _MatchRingPainter extends CustomPainter {
+  final double progress;
+  final Color color;
+  const _MatchRingPainter({required this.progress, required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.width / 2 - 2;
+    final bg = Paint()
+      ..color = const Color(0xFFE2E8F0)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3;
+    final fg = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3
+      ..strokeCap = StrokeCap.round;
+    canvas.drawCircle(center, radius, bg);
+    canvas.drawArc(Rect.fromCircle(center: center, radius: radius), -1.5708, progress.clamp(0, 1) * 6.2832, false, fg);
   }
 
+  @override
+  bool shouldRepaint(covariant _MatchRingPainter oldDelegate) =>
+      oldDelegate.progress != progress || oldDelegate.color != color;
 }
 
 // ── Extracted widgets now live in: ──
