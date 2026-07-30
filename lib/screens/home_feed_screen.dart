@@ -149,6 +149,51 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
     return FeedService.instance.userRowToPost(data, likedUserIds: _likedUserIds);
   }
 
+  // ── Sidebar de categorías (web) ──
+  // Columna izquierda del layout de 3 columnas del rediseño 30/7. Mismas
+  // categorías y misma lógica de filtro que la barra horizontal de móvil
+  // (_filterByCategory arriba) — es la versión ancha del mismo control, no un
+  // filtro nuevo/distinto.
+  Widget _buildWebCategorySidebar() {
+    return Padding(
+      padding: const EdgeInsets.only(top: 18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Padding(
+            padding: EdgeInsets.only(left: 4, bottom: 10),
+            child: Text('CATEGORÍAS',
+                style: TextStyle(
+                    fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 0.6, color: Color(0xFF94A3B8))),
+          ),
+          ..._categoryLabels.entries.map((e) {
+            final selected = _selectedCategory == e.key;
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: GestureDetector(
+                onTap: () => setState(() => _selectedCategory = e.key),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                  decoration: BoxDecoration(
+                    color: selected ? const Color(0xFF185FA5) : Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: selected ? const Color(0xFF185FA5) : const Color(0xFFE2E8F0)),
+                  ),
+                  child: Text(e.value,
+                      style: TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w600,
+                          color: selected ? Colors.white : const Color(0xFF334155))),
+                ),
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     ref.listen(feedProvider, (prev, next) {
@@ -172,10 +217,11 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
           children: [
             Center(
               child: ConstrainedBox(
-                // Móvil ocupa todo el ancho; en web deja lugar para video + acciones.
-                constraints: BoxConstraints(maxWidth: webMode ? 540 : 430),
-                child: Stack(
-            children: [
+                // Móvil ocupa todo el ancho; en web usa 3 columnas: categorías,
+                // video e info del candidato (antes quedaba angosto sin sidebar).
+                constraints: BoxConstraints(maxWidth: webMode ? 1120 : 430),
+                child: Builder(builder: (context) {
+                final stackChildren = <Widget>[
           // â”€â”€ Capa 1: Feed TikTok Infinito (Fondo) â”€â”€
           Positioned.fill(
             child: Builder(
@@ -716,8 +762,19 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
           ),
 
 
-            ],
-              ),   // Stack inner
+            ];
+                if (webMode) {
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      SizedBox(width: 188, child: _buildWebCategorySidebar()),
+                      const SizedBox(width: 18),
+                      Expanded(child: Stack(children: stackChildren)),
+                    ],
+                  );
+                }
+                return Stack(children: stackChildren);
+              }),
             ),     // ConstrainedBox
           ),       // Center
           if (webMode)

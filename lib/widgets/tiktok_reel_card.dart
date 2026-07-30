@@ -672,6 +672,169 @@ class _TikTokReelCardState extends ConsumerState<TikTokReelCard>
           )
         : const SizedBox.shrink();
 
+    // ── Layout web (rediseño 30/7): video sin overlay de texto (solo el
+    // badge de match) + panel derecho persistente con toda la info y las
+    // acciones — en vez de repetir el degradado tipo TikTok, que tiene más
+    // sentido en móvil que en una pantalla ancha de escritorio. ──
+    if (widget.webMode) {
+      final videoOnlyWeb = ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: isLocked ? _showStealthAlert : _togglePlayPause,
+              child: ReelVideoBackground(
+                author: author,
+                controller: _controller,
+                isInitialized: _isInitialized,
+                hasError: _hasError,
+              ),
+            ),
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: isLocked ? _showStealthAlert : _togglePlayPause,
+              ),
+            ),
+            if (isLocked)
+              ReelStealthOverlay(
+                author: author,
+                currentUser: ref.read(currentUserProvider).value,
+                onUnlockTap: _showStealthAlert,
+              ),
+            if (!playing && !isLocked)
+              Center(
+                child: Container(
+                  width: 58,
+                  height: 58,
+                  decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.28), shape: BoxShape.circle),
+                  child: const Icon(CupertinoIcons.play_fill, color: Colors.white, size: 26),
+                ),
+              ),
+            Positioned(top: 12, left: 12, child: matchCard),
+          ],
+        ),
+      );
+
+      final rightPanel = Container(
+        width: 264,
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+        ),
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              GestureDetector(
+                onTap: openProfile,
+                child: Row(
+                  children: [
+                    Flexible(
+                      child: Text(author.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: Color(0xFF0F172A))),
+                    ),
+                    const SizedBox(width: 5),
+                    const Icon(CupertinoIcons.checkmark_seal_fill, size: 15, color: brand),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(author.headline, style: const TextStyle(fontSize: 13.5, color: Color(0xFF64748B), fontWeight: FontWeight.w500)),
+              if (years != null || location.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 10),
+                  child: Text(
+                    [
+                      if (years != null) '$years años de experiencia',
+                      if (location.isNotEmpty) location,
+                    ].join(' · '),
+                    style: const TextStyle(fontSize: 12.5, color: Color(0xFF64748B)),
+                  ),
+                ),
+              if (author.isOpenToWork)
+                const Padding(
+                  padding: EdgeInsets.only(top: 7),
+                  child: Row(
+                    children: [
+                      _AvailabilityDot(),
+                      SizedBox(width: 7),
+                      Text('Disponible inmediatamente',
+                          style: TextStyle(fontSize: 12.5, color: Color(0xFF3B6D11), fontWeight: FontWeight.w600)),
+                    ],
+                  ),
+                ),
+              if (salary.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 7),
+                  child: Text(salary, style: const TextStyle(fontSize: 12.5, color: Color(0xFF64748B))),
+                ),
+              if (tags.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                const Text('HABILIDADES',
+                    style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, letterSpacing: 0.5, color: Color(0xFF94A3B8))),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: tags
+                      .map((t) => Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            decoration: BoxDecoration(color: const Color(0xFFE6F1FB), borderRadius: BorderRadius.circular(14)),
+                            child: Text(t.startsWith('#') ? t : '#$t',
+                                style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: Color(0xFF0C447C))),
+                          ))
+                      .toList(),
+                ),
+              ],
+              const SizedBox(height: 18),
+              SizedBox(
+                width: double.infinity,
+                child: actionBtn(_isMatched ? CupertinoIcons.star_fill : CupertinoIcons.star, 'Me interesa',
+                    isLocked ? _showStealthAlert : _toggleMatch, filled: _isMatched),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(child: actionBtn(CupertinoIcons.play_circle, 'Perfil', openProfile)),
+                  const SizedBox(width: 8),
+                  actionBtn(_isBookmarked ? CupertinoIcons.bookmark_fill : CupertinoIcons.bookmark, null, _toggleBookmark),
+                  const SizedBox(width: 8),
+                  actionBtn(CupertinoIcons.arrowshape_turn_up_right, null, () => _shareProfile(author)),
+                ],
+              ),
+            ],
+          ),
+        ),
+      );
+
+      return LayoutBuilder(
+        builder: (context, constraints) {
+          return SizedBox(
+            height: constraints.maxHeight,
+            width: constraints.maxWidth,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(child: videoOnlyWeb),
+                  const SizedBox(width: 16),
+                  rightPanel,
+                ],
+              ),
+            ),
+          );
+        },
+      );
+    }
+
     // ── Pista visual de swipe (decorativa, el gesto real lo maneja el PageView) ──
     const swipeHints = Column(
       mainAxisSize: MainAxisSize.min,
@@ -869,6 +1032,15 @@ class _SwipeTrack extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(width: 3, height: 22, decoration: BoxDecoration(color: const Color(0x4DFFFFFF), borderRadius: BorderRadius.circular(2)));
+  }
+}
+
+/// Puntito verde de "disponible" en el panel derecho del layout web.
+class _AvailabilityDot extends StatelessWidget {
+  const _AvailabilityDot();
+  @override
+  Widget build(BuildContext context) {
+    return Container(width: 7, height: 7, decoration: const BoxDecoration(color: Color(0xFF639922), shape: BoxShape.circle));
   }
 }
 
