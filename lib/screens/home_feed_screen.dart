@@ -258,6 +258,197 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
                 // video e info del candidato (antes quedaba angosto sin sidebar).
                 constraints: BoxConstraints(maxWidth: webMode ? 1120 : 430),
                 child: Builder(builder: (context) {
+            final mobileHeader =
+            Builder(
+              builder: (context) {
+                final currentUser = ref.watch(currentUserProvider).value;
+                final topPad = MediaQuery.of(context).padding.top;
+                // Rediseño 30/7: header con su propio espacio fijo (antes
+                // flotaba como overlay semitransparente ENCIMA del video, con
+                // degradado negro pensado para ese fondo oscuro). Ahora que
+                // vive arriba del video en una Column, pasa a fondo blanco
+                // liso — combina con la paleta clara del resto del rediseño
+                // y ya no compite visualmente con el badge de match del video.
+                return Container(
+                  color: Colors.white,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(height: topPad + 6),
+                      Padding(
+                        padding: const EdgeInsets.only(
+                          bottom: 6,
+                          left: 16,
+                          right: 14,
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            // ── Logo ──
+                            const Text(
+                              'MPLOYA',
+                              style: TextStyle(
+                                fontSize: 21,
+                                fontWeight: FontWeight.w800,
+                                color: Color(0xFF0F172A),
+                                letterSpacing: 2.4,
+                                height: 1.0,
+                              ),
+                            ),
+                            // ── Acciones: Empleos + Alertas ──
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                // ── Empleos / Vacantes ──
+                                CupertinoButton(
+                                  key: cmFeedJobsBtnKey,
+                                  padding: EdgeInsets.zero,
+                                  minimumSize: Size.zero,
+                                  onPressed: () {
+                                    HapticFeedback.selectionClick();
+                                    Navigator.of(context).push(
+                                      CupertinoPageRoute<void>(
+                                        builder: (_) => const JobsScreen(),
+                                      ),
+                                    );
+                                  },
+                                  child: Container(
+                                    width: 38, height: 38,
+                                    decoration: const BoxDecoration(
+                                      color: Color(0xFFF1F5F9),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(CupertinoIcons.briefcase_fill, size: 18, color: Color(0xFF475569)),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                // ── Bell ──
+                                CupertinoButton(
+                                  key: cmFeedBellBtnKey,
+                                  padding: EdgeInsets.zero,
+                                  minimumSize: Size.zero,
+                                  onPressed: () {
+                                    HapticFeedback.selectionClick();
+                                    Navigator.of(context).push(
+                                      CupertinoPageRoute(builder: (_) => const NotificationsScreen()),
+                                    );
+                                  },
+                                  child: StreamBuilder<List<Map<String, dynamic>>>(
+                                    stream: NotificationService.instance.notificationsStream,
+                                    builder: (context, snap) {
+                                      final uid = Supabase.instance.client.auth.currentUser?.id;
+                                      final unread = (snap.data ?? [])
+                                          .where((n) => n['user_id']?.toString() == uid && n['is_read'] != true)
+                                          .length;
+                                      return Stack(
+                                        clipBehavior: Clip.none,
+                                        children: [
+                                          Container(
+                                            width: 38, height: 38,
+                                            decoration: const BoxDecoration(
+                                              color: Color(0xFFF1F5F9),
+                                              shape: BoxShape.circle,
+                                            ),
+                                            child: const Icon(CupertinoIcons.bell_fill, size: 18, color: Color(0xFF475569)),
+                                          ),
+                                          if (unread > 0)
+                                            Positioned(
+                                              right: -4,
+                                              top: -3,
+                                              child: Container(
+                                                padding: const EdgeInsets.all(3),
+                                                constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                                                decoration: const BoxDecoration(
+                                                  color: Color(0xFFD85A30),
+                                                  shape: BoxShape.circle,
+                                                  border: Border.fromBorderSide(BorderSide(color: Colors.white, width: 1.5)),
+                                                ),
+                                                child: Center(
+                                                  child: Text(
+                                                    unread > 9 ? '9+' : '$unread',
+                                                    style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w800),
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                        ],
+                                      );
+                                    },
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      // ── Historias ──
+                      // El widget existía pero no estaba montado en ninguna
+                      // pantalla, y consultaba la vista `active_story_users` que
+                      // no existía (creada en la migración 024). Solo se muestra
+                      // si hay historias vigentes: se esconde solo.
+                      Builder(
+                        builder: (context) {
+                          final items = ref.watch(feedProvider).items;
+                          if (items.isEmpty) return const SizedBox.shrink();
+                          final autores = items
+                              .map((r) => _userToPost(r).author)
+                              .toList();
+                          return StoryRow(
+                            users: autores,
+                            isDarkOverlay: false,
+                            currentAccountType: currentUser?.accountType ?? 'candidato',
+                          );
+                        },
+                      ),
+                      // ── Categorías ──
+                      // Reemplaza las "letras circulares confusas" del mockup
+                      // de referencia por chips claras y legibles; filtran de
+                      // verdad sobre el feed (_filterByCategory arriba). Solo
+                      // se muestran las que tienen al menos 1 candidato real
+                      // (_visibleCategoryEntries) — con pocos usuarios, una
+                      // categoría siempre vacía es peor que no tenerla.
+                      Builder(
+                        builder: (context) {
+                          final items = ref.watch(feedProvider).items;
+                          return SizedBox(
+                            height: 34,
+                            child: ListView(
+                              scrollDirection: Axis.horizontal,
+                              padding: const EdgeInsets.fromLTRB(16, 2, 16, 8),
+                              children: _visibleCategoryEntries(items).map((e) {
+                            final selected = _selectedCategory == e.key;
+                            return Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: GestureDetector(
+                                onTap: () => setState(() => _selectedCategory = e.key),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 15),
+                                  alignment: Alignment.center,
+                                  decoration: BoxDecoration(
+                                    color: selected ? const Color(0xFF185FA5) : Colors.white,
+                                    borderRadius: BorderRadius.circular(999),
+                                    border: Border.all(
+                                        color: selected ? const Color(0xFF185FA5) : const Color(0xFFE2E8F0)),
+                                  ),
+                                  child: Text(e.value,
+                                      style: TextStyle(
+                                          fontSize: 12.5,
+                                          fontWeight: FontWeight.w600,
+                                          color: selected ? Colors.white : const Color(0xFF334155))),
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                );
+              },
+            );
+
                 final stackChildren = <Widget>[
           // â”€â”€ Capa 1: Feed TikTok Infinito (Fondo) â”€â”€
           Positioned.fill(
@@ -598,213 +789,6 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
             ),
           ),
 
-          // ── Header (oculto en web: el sidebar ya navega; look más limpio) ──
-          if (!webMode)
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: Builder(
-              builder: (context) {
-                final currentUser = ref.watch(currentUserProvider).value;
-                final topPad = MediaQuery.of(context).padding.top;
-                return Container(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        Colors.black.withValues(alpha: 0.85),
-                        Colors.black.withValues(alpha: 0.55),
-                        Colors.black.withValues(alpha: 0.2),
-                        Colors.transparent,
-                      ],
-                      stops: const [0.0, 0.4, 0.75, 1.0],
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                    ),
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      SizedBox(height: topPad + 6),
-                      Padding(
-                        padding: const EdgeInsets.only(
-                          bottom: 6,
-                          left: 16,
-                          right: 14,
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            // ── Logo ──
-                            const Text(
-                              'MPLOYA',
-                              style: TextStyle(
-                                fontSize: 22,
-                                fontWeight: FontWeight.w900,
-                                color: Colors.white,
-                                letterSpacing: 3.0,
-                                height: 1.0,
-                                shadows: [
-                                  Shadow(color: Colors.black, blurRadius: 10),
-                                  Shadow(color: Colors.black, blurRadius: 20),
-                                ],
-                              ),
-                            ),
-                            // ── Acciones: Empleos + Mensajes + Alertas ──
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                // ── Empleos / Vacantes ──
-                                CupertinoButton(
-                                  key: cmFeedJobsBtnKey,
-                                  padding: EdgeInsets.zero,
-                                  minimumSize: Size.zero,
-                                  onPressed: () {
-                                    HapticFeedback.selectionClick();
-                                    Navigator.of(context).push(
-                                      CupertinoPageRoute<void>(
-                                        builder: (_) => const JobsScreen(),
-                                      ),
-                                    );
-                                  },
-                                  child: Container(
-                                    width: 40, height: 40,
-                                    decoration: BoxDecoration(
-                                      color: Colors.black.withValues(alpha: 0.45),
-                                      shape: BoxShape.circle,
-                                      border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
-                                    ),
-                                    child: const Icon(CupertinoIcons.briefcase_fill, size: 20, color: Colors.white),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                // ── Bell ──
-                                CupertinoButton(
-                                  key: cmFeedBellBtnKey,
-                                  padding: EdgeInsets.zero,
-                                  minimumSize: Size.zero,
-                                  onPressed: () {
-                                    HapticFeedback.selectionClick();
-                                    Navigator.of(context).push(
-                                      CupertinoPageRoute(builder: (_) => const NotificationsScreen()),
-                                    );
-                                  },
-                                  child: StreamBuilder<List<Map<String, dynamic>>>(
-                                    stream: NotificationService.instance.notificationsStream,
-                                    builder: (context, snap) {
-                                      final uid = Supabase.instance.client.auth.currentUser?.id;
-                                      final unread = (snap.data ?? [])
-                                          .where((n) => n['user_id']?.toString() == uid && n['is_read'] != true)
-                                          .length;
-                                      return Stack(
-                                        clipBehavior: Clip.none,
-                                        children: [
-                                          Container(
-                                            width: 40, height: 40,
-                                            decoration: BoxDecoration(
-                                              color: Colors.black.withValues(alpha: 0.45),
-                                              shape: BoxShape.circle,
-                                              border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
-                                            ),
-                                            child: const Icon(CupertinoIcons.bell_fill, size: 20, color: Colors.white),
-                                          ),
-                                          if (unread > 0)
-                                            Positioned(
-                                              right: -6,
-                                              top: -4,
-                                              child: Container(
-                                                padding: const EdgeInsets.all(3),
-                                                constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
-                                                decoration: const BoxDecoration(
-                                                  color: Color(0xFFFF3B30),
-                                                  shape: BoxShape.circle,
-                                                ),
-                                                child: Center(
-                                                  child: Text(
-                                                    unread > 9 ? '9+' : '$unread',
-                                                    style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w800),
-                                                  ),
-                                                ),
-                                              ),
-                                            ),
-                                        ],
-                                      );
-                                    },
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                      // ── Historias ──
-                      // El widget existía pero no estaba montado en ninguna
-                      // pantalla, y consultaba la vista `active_story_users` que
-                      // no existía (creada en la migración 024). Solo se muestra
-                      // si hay historias vigentes: se esconde solo.
-                      Builder(
-                        builder: (context) {
-                          final items = ref.watch(feedProvider).items;
-                          if (items.isEmpty) return const SizedBox.shrink();
-                          final autores = items
-                              .map((r) => _userToPost(r).author)
-                              .toList();
-                          return StoryRow(
-                            users: autores,
-                            isDarkOverlay: true,
-                            currentAccountType: currentUser?.accountType ?? 'candidato',
-                          );
-                        },
-                      ),
-                      // ── Categorías ──
-                      // Reemplaza las "letras circulares confusas" del mockup
-                      // de referencia por chips claras y legibles; filtran de
-                      // verdad sobre el feed (_filterByCategory arriba). Solo
-                      // se muestran las que tienen al menos 1 candidato real
-                      // (_visibleCategoryEntries) — con pocos usuarios, una
-                      // categoría siempre vacía es peor que no tenerla.
-                      Builder(
-                        builder: (context) {
-                          final items = ref.watch(feedProvider).items;
-                          return SizedBox(
-                            height: 34,
-                            child: ListView(
-                              scrollDirection: Axis.horizontal,
-                              padding: const EdgeInsets.fromLTRB(16, 2, 16, 8),
-                              children: _visibleCategoryEntries(items).map((e) {
-                            final selected = _selectedCategory == e.key;
-                            return Padding(
-                              padding: const EdgeInsets.only(right: 8),
-                              child: GestureDetector(
-                                onTap: () => setState(() => _selectedCategory = e.key),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 15),
-                                  alignment: Alignment.center,
-                                  decoration: BoxDecoration(
-                                    color: selected ? const Color(0xFF185FA5) : Colors.white.withValues(alpha: 0.12),
-                                    borderRadius: BorderRadius.circular(999),
-                                    border: Border.all(
-                                        color: selected ? const Color(0xFF185FA5) : Colors.white.withValues(alpha: 0.25)),
-                                  ),
-                                  child: Text(e.value,
-                                      style: TextStyle(
-                                          fontSize: 12.5,
-                                          fontWeight: FontWeight.w600,
-                                          color: selected ? Colors.white : Colors.white.withValues(alpha: 0.9))),
-                                ),
-                              ),
-                            );
-                          }).toList(),
-                            ),
-                          );
-                        },
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
-          ),
 
 
             ];
@@ -818,7 +802,18 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
                     ],
                   );
                 }
-                return Stack(children: stackChildren);
+                // El header (logo + categorías) ahora ocupa su propio espacio
+                // fijo en vez de flotar como overlay encima del video: al
+                // hacer que el video llenara casi toda la pantalla, el header
+                // quedó tapando el badge de match (que vive arriba del video,
+                // en las mismas coordenadas). Con Column, cada uno tiene su
+                // alto real y no compiten por el mismo lugar.
+                return Column(
+                  children: [
+                    mobileHeader,
+                    Expanded(child: Stack(children: stackChildren)),
+                  ],
+                );
               }),
             ),     // ConstrainedBox
           ),       // Center
