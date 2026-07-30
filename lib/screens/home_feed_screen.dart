@@ -65,28 +65,65 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
   static const Map<String, List<String>> _categoryKeywords = {
     'tecnologia': ['flutter', 'react', 'developer', 'dev', 'software', 'engineer',
       'ingenier', 'backend', 'frontend', 'fullstack', 'devops', 'data', 'python',
-      'java', 'node', 'sql', 'aws', 'cloud', 'programad', 'tech', 'it '],
+      'java', 'node', 'sql', 'aws', 'cloud', 'programad', 'tech', 'it'],
     'ventas': ['ventas', 'sales', 'comercial', 'account manager', 'business dev'],
     'administracion': ['administra', 'operaciones', 'rrhh', 'recursos humanos',
-      'hr ', 'people', 'talent'],
+      'hr', 'people', 'talent'],
     'finanzas': ['finanzas', 'contab', 'cfo', 'contador', 'financial', 'tesorer'],
     'marketing': ['marketing', 'growth', 'seo', 'ads', 'contenido', 'social media',
       'comunicaci'],
     'diseno': ['diseñ', 'design', 'ux', 'ui', 'product designer', 'creativ'],
   };
 
-  List<Map<String, dynamic>> _filterByCategory(List<Map<String, dynamic>> items) {
-    if (_selectedCategory == 'todos') return items;
-    final kws = _categoryKeywords[_selectedCategory] ?? const [];
-    return items.where((r) {
-      final haystack = [
+  String _haystackFor(Map<String, dynamic> r) => [
         (r['headline'] ?? '').toString(),
         (r['about'] ?? '').toString(),
         ...((r['tags'] as List?) ?? const []).map((e) => e.toString()),
         ...((r['skills'] as List?) ?? const []).map((e) => e.toString()),
       ].join(' ').toLowerCase();
-      return kws.any((k) => haystack.contains(k));
+
+  /// Palabras de 3 letras o menos (ui, hr, it, dev, sql...) necesitan borde de
+  /// palabra: sin esto, "ui" matcheaba dentro de "equipo" (eq-UI-po) y un CFO
+  /// con la etiqueta "trabajo en equipo" aparecía listado en Diseño. Las
+  /// palabras más largas (diseñ, administra, programad...) son prefijos a
+  /// propósito para cubrir conjugaciones (diseñador/diseñadora/diseño) y sí
+  /// pueden matchear como substring.
+  bool _keywordMatch(String haystack, String kw) {
+    if (kw.length > 3) return haystack.contains(kw);
+    final re = RegExp('(^|[^a-záéíóúñ])${RegExp.escape(kw)}([^a-záéíóúñ]|\$)');
+    return re.hasMatch(haystack);
+  }
+
+  List<Map<String, dynamic>> _filterByCategory(List<Map<String, dynamic>> items) {
+    if (_selectedCategory == 'todos') return items;
+    final kws = _categoryKeywords[_selectedCategory] ?? const [];
+    return items.where((r) {
+      final haystack = _haystackFor(r);
+      return kws.any((k) => _keywordMatch(haystack, k));
     }).toList();
+  }
+
+  /// Categorías que tienen al menos un candidato real en el feed actual.
+  /// Con pocos usuarios (hoy: Ventas y Administración en 0), mostrar una
+  /// categoría siempre vacía es peor que no mostrarla — un reclutador que la
+  /// toca y ve "sin resultados" desconfía del producto. Al calcularse en cada
+  /// render, las categorías aparecen solas apenas haya un candidato real de
+  /// ese rubro, sin tocar código de nuevo.
+  Set<String> _categoriesWithData(List<Map<String, dynamic>> items) {
+    final present = <String>{};
+    for (final entry in _categoryKeywords.entries) {
+      final hasMatch = items.any((r) {
+        final haystack = _haystackFor(r);
+        return entry.value.any((k) => _keywordMatch(haystack, k));
+      });
+      if (hasMatch) present.add(entry.key);
+    }
+    return present;
+  }
+
+  Iterable<MapEntry<String, String>> _visibleCategoryEntries(List<Map<String, dynamic>> items) {
+    final present = _categoriesWithData(items);
+    return _categoryLabels.entries.where((e) => e.key == 'todos' || present.contains(e.key));
   }
 
   @override
@@ -166,7 +203,7 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
                 style: TextStyle(
                     fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 0.6, color: Color(0xFF94A3B8))),
           ),
-          ..._categoryLabels.entries.map((e) {
+          ..._visibleCategoryEntries(ref.watch(feedProvider).items).map((e) {
             final selected = _selectedCategory == e.key;
             return Padding(
               padding: const EdgeInsets.only(bottom: 6),
@@ -722,13 +759,19 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
                       // ── Categorías ──
                       // Reemplaza las "letras circulares confusas" del mockup
                       // de referencia por chips claras y legibles; filtran de
-                      // verdad sobre el feed (_filterByCategory arriba).
-                      SizedBox(
-                        height: 34,
-                        child: ListView(
-                          scrollDirection: Axis.horizontal,
-                          padding: const EdgeInsets.fromLTRB(16, 2, 16, 8),
-                          children: _categoryLabels.entries.map((e) {
+                      // verdad sobre el feed (_filterByCategory arriba). Solo
+                      // se muestran las que tienen al menos 1 candidato real
+                      // (_visibleCategoryEntries) — con pocos usuarios, una
+                      // categoría siempre vacía es peor que no tenerla.
+                      Builder(
+                        builder: (context) {
+                          final items = ref.watch(feedProvider).items;
+                          return SizedBox(
+                            height: 34,
+                            child: ListView(
+                              scrollDirection: Axis.horizontal,
+                              padding: const EdgeInsets.fromLTRB(16, 2, 16, 8),
+                              children: _visibleCategoryEntries(items).map((e) {
                             final selected = _selectedCategory == e.key;
                             return Padding(
                               padding: const EdgeInsets.only(right: 8),
@@ -752,7 +795,9 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
                               ),
                             );
                           }).toList(),
-                        ),
+                            ),
+                          );
+                        },
                       ),
                     ],
                   ),
