@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart'
-    show kIsWeb, kReleaseMode, defaultTargetPlatform, TargetPlatform;
+    show kDebugMode, kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'dart:ui' show PlatformDispatcher;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
@@ -11,6 +11,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'l10n/app_localizations.dart';
 import 'theme/app_theme.dart';
+import 'screens/empresa/empresa_sala_preview_screen.dart';
+import 'screens/profile_screen.dart';
 import 'screens/splash_screen.dart';
 import 'navigation/main_navigation.dart' show feedRouteObserver;
 import 'services/push_notification_service.dart';
@@ -136,7 +138,7 @@ Future<void> _initCore() async {
   final prefsFuture = SharedPreferences.getInstance();
   final supabaseFuture = Supabase.initialize(
     url: SupabaseConfig.url,
-    anonKey: SupabaseConfig.anonKey,
+    publishableKey: SupabaseConfig.anonKey,
   );
 
   final results = await Future.wait([prefsFuture, supabaseFuture]);
@@ -227,6 +229,16 @@ void _redeemPendingReferral() {
 class MployaApp extends StatelessWidget {
   const MployaApp({super.key});
 
+  Widget _resolveInitialScreen() {
+    if (kIsWeb && Uri.base.path == '/debug-candidate-profile') {
+      return const ProfileScreen();
+    }
+    if (kIsWeb && Uri.base.path == '/candidate/profile') {
+      return const ProfileScreen();
+    }
+    return const SplashScreen();
+  }
+
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder<bool>(
@@ -249,6 +261,19 @@ class MployaApp extends StatelessWidget {
           title: 'Mploya',
           debugShowCheckedModeBanner: false,
           theme: isDark ? MployaTheme.darkTheme : MployaTheme.lightTheme,
+          routes: {
+            '/candidate/profile': (_) => const ProfileScreen(),
+            '/debug-candidate-profile': (_) => const ProfileScreen(),
+            // PREVIEW DE LA SALA DE ENTREVISTA — sólo en debug.
+            //
+            // `kDebugMode` es una constante de compilación: en release esta
+            // entrada del mapa desaparece, la clase queda sin referencias y el
+            // compilador la elimina del bundle. Verificado buscando su texto en
+            // `main.dart.js` después de `flutter build web --release`.
+            if (kDebugMode)
+              rutaPreviewSalaEntrevista: (_) =>
+                  const EmpresaSalaPreviewScreen(),
+          },
           // ── Internationalization (ES/EN/PT) ──
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
@@ -295,7 +320,20 @@ class MployaApp extends StatelessWidget {
               ),
             );
           },
-          home: const SplashScreen(),
+          // Si la URL pide el preview de la sala, se entra DIRECTO.
+          //
+          // Registrarlo sólo como ruta no alcanzaba: la pantalla inicial
+          // resuelve la sesión y hace `pushReplacement`, que reemplaza la ruta
+          // de más arriba de la pila — o sea, el preview recién abierto. Se veía
+          // un instante y la app lo tapaba.
+          //
+          // Sigue detrás de `kDebugMode`: en release esta condición es una
+          // constante falsa y desaparece junto con la pantalla.
+          home: (kDebugMode &&
+                  kIsWeb &&
+                  Uri.base.fragment.startsWith(rutaPreviewSalaEntrevista))
+              ? const EmpresaSalaPreviewScreen()
+              : _resolveInitialScreen(),
         );
       },
     );

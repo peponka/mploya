@@ -372,7 +372,8 @@ class SocialAlgorithmService {
           .from('connections')
           .select('requester_id, addressee_id')
           .eq('status', 'accepted')
-          .or('requester_id.eq.$uid,addressee_id.eq.$uid');
+          .or('requester_id.eq.$uid,addressee_id.eq.$uid')
+          .timeout(const Duration(seconds: 8));
 
       _myConnections = {};
       for (final row in List<Map<String, dynamic>>.from(rows)) {
@@ -405,7 +406,8 @@ class SocialAlgorithmService {
           .select('pitch_owner_id')
           .eq('liker_id', uid)
           .order('created_at', ascending: false)
-          .limit(50);
+          .limit(50)
+          .timeout(const Duration(seconds: 8));
 
       final ownerIds = List<Map<String, dynamic>>.from(rows)
           .map((r) => r['pitch_owner_id']?.toString())
@@ -423,7 +425,8 @@ class SocialAlgorithmService {
           .from('users')
           .select('tags')
           .inFilter('id', ownerIds)
-          .limit(50);
+          .limit(50)
+          .timeout(const Duration(seconds: 8));
 
       _likedProfileTags = {};
       for (final row in List<Map<String, dynamic>>.from(userRows)) {

@@ -15,8 +15,31 @@ import '../services/scheduling_service.dart';
 import '../widgets/web_ui.dart';
 import 'profile_screen.dart';
 import 'ats_dashboard_screen.dart';
+import 'interview_flow_screen.dart';
 import 'scheduling_screen.dart';
 import '../navigation/main_navigation.dart';
+
+/// Id de la entrevista con IA a la que invita una notificación
+/// `interview_request`.
+///
+/// Viaja en `notifications.data` (JSONB), que es donde la empresa lo guarda al
+/// pedir la entrevista. Devuelve null si falta o si es un id de demostración:
+/// `AIInterviewService` responde con entrevistas, preguntas, respuestas y
+/// videos INVENTADOS para cualquier id que empiece con `demo-`, y a eso no se
+/// entra desde una notificación real.
+///
+/// Vive fuera de la pantalla para poder probarse sin montar la UI, que necesita
+/// sesión de Supabase.
+String? interviewIdDeNotificacion(Map<String, dynamic> n) {
+  if (n['type']?.toString() != 'interview_request') return null;
+
+  final data = n['data'];
+  if (data is! Map) return null;
+
+  final id = data['interview_id']?.toString().trim() ?? '';
+  if (id.isEmpty || id.startsWith('demo-')) return null;
+  return id;
+}
 
 class NotificationsScreen extends ConsumerStatefulWidget {
   const NotificationsScreen({super.key});
@@ -81,6 +104,42 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
   void _markAsRead(Map<String, dynamic> n) async {
     if (n['is_read'] == true) return;
     await NotificationService.instance.markAsRead(n['id'].toString());
+  }
+
+  /// Abre la entrevista con IA a la que invita la notificación.
+  ///
+  /// Reutiliza [InterviewFlowScreen] tal como existe: carga la entrevista y sus
+  /// preguntas reales, sube cada respuesta y, al terminar, dispara
+  /// `generate-interview-report` —que del lado del servidor persiste el informe
+  /// y marca la entrevista como `completed`—.
+  void _abrirEntrevista(Map<String, dynamic> n) {
+    final id = interviewIdDeNotificacion(n);
+    _markAsRead(n);
+
+    if (id == null) {
+      // Sin id no se adivina cuál es: se avisa en vez de abrir cualquiera.
+      showCupertinoDialog<void>(
+        context: context,
+        builder: (ctx) => CupertinoAlertDialog(
+          title: const Text('No pudimos abrir la entrevista'),
+          content: const Text(
+            'Esta invitación no tiene la entrevista asociada. Escribile a la '
+            'empresa para que te la vuelva a enviar.',
+          ),
+          actions: [
+            CupertinoDialogAction(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Entendido'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    Navigator.of(context).push(
+      CupertinoPageRoute(builder: (_) => InterviewFlowScreen(interviewId: id)),
+    );
   }
 
   /// Extrae el requester_id de una notificación de conexión.
@@ -586,7 +645,11 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
           subtitle: subtitle.isEmpty ? null : subtitle,
           time: _relativeTime(n['created_at']?.toString()),
           unread: !isRead,
-          onTap: () => _markAsRead(n),
+          // La invitación a entrevista con IA sí navega: es el único paso que
+          // le faltaba al circuito para cerrarse.
+          onTap: type == 'interview_request'
+              ? () => _abrirEntrevista(n)
+              : () => _markAsRead(n),
           actions: (isConnection && !isRead)
               ? [
                   _miniBtn('Aceptar', const Color(0xFF1C1C1E), Colors.white, () => _handleAccept(n)),
@@ -626,6 +689,8 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
       case 'interview':
       case 'interview_scheduled':
         return 'Entrevista agendada';
+      case 'interview_request':
+        return 'Entrevista con IA';
       case 'nexus':
         return 'Sugerencia de Nexus';
       default:

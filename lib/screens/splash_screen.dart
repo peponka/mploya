@@ -101,8 +101,11 @@ class _SplashScreenState extends State<SplashScreen>
     );
     _contentSlide =
         Tween<Offset>(begin: const Offset(0, 0.15), end: Offset.zero).animate(
-      CurvedAnimation(parent: _contentController, curve: Curves.easeOutCubic),
-    );
+          CurvedAnimation(
+            parent: _contentController,
+            curve: Curves.easeOutCubic,
+          ),
+        );
     _contentOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(parent: _contentController, curve: Curves.easeOut),
     );
@@ -114,42 +117,52 @@ class _SplashScreenState extends State<SplashScreen>
     });
 
     // ── Escuchar cambios de Auth State vía AuthService ──
-    _authSubscription =
-        AuthService.instance.authStateStream.listen((data) async {
-      if (!mounted || _hasNavigated) return;
-      if ((data.event == AuthChangeEvent.signedIn || data.event == AuthChangeEvent.initialSession) && data.session != null) {
-        if (mounted && _processingOAuth) {
-          setState(() => _processingOAuth = false);
-        }
-        // El trigger on_auth_user_created crea la fila en public.users.
-        // upsertUserProfile solo actúa de red de seguridad sin escribir name.
-        try {
-          await AuthService.instance.upsertUserProfile(data.session!.user);
-        } catch (e) {
-          final errorStr = e.toString().toLowerCase();
-          if (errorStr.contains('refresh_token') || errorStr.contains('already_used')) {
-            debugPrint('⚠️ Refresh token corrupto en authStateStream → forzando sign-out');
-            AuthService.instance.forceSignOutCorruptSession();
-            return; // Quedarse en login
+    _authSubscription = AuthService.instance.authStateStream.listen(
+      (data) async {
+        if (!mounted || _hasNavigated) return;
+        if ((data.event == AuthChangeEvent.signedIn ||
+                data.event == AuthChangeEvent.initialSession) &&
+            data.session != null) {
+          if (mounted && _processingOAuth) {
+            setState(() => _processingOAuth = false);
+          }
+          // El trigger on_auth_user_created crea la fila en public.users.
+          // upsertUserProfile solo actúa de red de seguridad sin escribir name.
+          try {
+            await AuthService.instance.upsertUserProfile(data.session!.user);
+          } catch (e) {
+            final errorStr = e.toString().toLowerCase();
+            if (errorStr.contains('refresh_token') ||
+                errorStr.contains('already_used')) {
+              debugPrint(
+                '⚠️ Refresh token corrupto en authStateStream → forzando sign-out',
+              );
+              AuthService.instance.forceSignOutCorruptSession();
+              return; // Quedarse en login
+            }
+          }
+          if (mounted && !_hasNavigated) {
+            _hasNavigated = true;
+            _navigateToHome();
           }
         }
-        if (mounted && !_hasNavigated) {
-          _hasNavigated = true;
-          _navigateToHome();
+      },
+      onError: (Object error) {
+        // Capturar errores del stream de auth (incluye refresh_token_already_used)
+        final errorStr = error.toString().toLowerCase();
+        debugPrint('⚠️ authStateStream onError: $error');
+        if (errorStr.contains('refresh_token') ||
+            errorStr.contains('already_used')) {
+          AuthService.instance.forceSignOutCorruptSession();
         }
-      }
-    }, onError: (Object error) {
-      // Capturar errores del stream de auth (incluye refresh_token_already_used)
-      final errorStr = error.toString().toLowerCase();
-      debugPrint('⚠️ authStateStream onError: $error');
-      if (errorStr.contains('refresh_token') || errorStr.contains('already_used')) {
-        AuthService.instance.forceSignOutCorruptSession();
-      }
-    });
+      },
+    );
 
     // ── Sesión ya activa al abrir la app ──
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (AuthService.instance.currentSession != null && mounted && !_hasNavigated) {
+      if (AuthService.instance.currentSession != null &&
+          mounted &&
+          !_hasNavigated) {
         // Verificar que la sesión sea válida antes de navegar.
         // Si el refresh token está corrupto (ya usado/expirado),
         // la sesión parece existir pero falla en cualquier query.
@@ -225,7 +238,7 @@ class _SplashScreenState extends State<SplashScreen>
         builder: (ctx) => CupertinoAlertDialog(
           title: const Text('Verifica tu Email'),
           content: const Text(
-            'Si acabas de crear tu cuenta, revisa tu bandeja de entrada y confirma tu email para poder entrar.'
+            'Si acabas de crear tu cuenta, revisa tu bandeja de entrada y confirma tu email para poder entrar.',
           ),
           actions: [
             CupertinoDialogAction(
@@ -236,7 +249,7 @@ class _SplashScreenState extends State<SplashScreen>
           ],
         ),
       );
-      return; 
+      return;
     }
 
     try {
@@ -258,11 +271,12 @@ class _SplashScreenState extends State<SplashScreen>
         final pendingRole = prefs.getString('pending_oauth_account_type');
         if (pendingRole != null) {
           await prefs.remove('pending_oauth_account_type');
+          await prefs.setString('mploya_account_type', pendingRole);
           try {
-            await Supabase.instance.client.from('users').update({
-              'account_type': pendingRole,
-              'onboarding_step': 1,
-            }).eq('id', user.id);
+            await Supabase.instance.client
+                .from('users')
+                .update({'account_type': pendingRole, 'onboarding_step': 1})
+                .eq('id', user.id);
           } catch (e) {
             debugPrint('Error applying pending OAuth role: $e');
           }
@@ -277,7 +291,9 @@ class _SplashScreenState extends State<SplashScreen>
           } else {
             form = const CandidateProfileFormScreen();
           }
-          Navigator.of(context).pushReplacement(CupertinoPageRoute(builder: (_) => form));
+          Navigator.of(
+            context,
+          ).pushReplacement(CupertinoPageRoute(builder: (_) => form));
           return;
         }
         Navigator.of(context).pushReplacement(
@@ -300,9 +316,9 @@ class _SplashScreenState extends State<SplashScreen>
         } else {
           form = const CandidateProfileFormScreen();
         }
-        Navigator.of(context).pushReplacement(
-          CupertinoPageRoute(builder: (_) => form),
-        );
+        Navigator.of(
+          context,
+        ).pushReplacement(CupertinoPageRoute(builder: (_) => form));
         return;
       }
 
@@ -310,7 +326,8 @@ class _SplashScreenState extends State<SplashScreen>
         final isCompany = (data?['account_type'] as String?) == 'empresa';
         Navigator.of(context).pushReplacement(
           CupertinoPageRoute(
-              builder: (_) => OnboardingPitchScreen(isCompany: isCompany)),
+            builder: (_) => OnboardingPitchScreen(isCompany: isCompany),
+          ),
         );
         return;
       }
@@ -318,8 +335,8 @@ class _SplashScreenState extends State<SplashScreen>
       // step >= 3: onboarding completo → check if tour was seen
       // Cuentas creadas hace más de 7 días nunca muestran el tour (reinstala / usuario existente)
       final createdAt = DateTime.tryParse(user.createdAt);
-      final isNewAccount = createdAt == null ||
-          DateTime.now().difference(createdAt).inDays <= 7;
+      final isNewAccount =
+          createdAt == null || DateTime.now().difference(createdAt).inDays <= 7;
       final hasSeenTour =
           !isNewAccount || await OnboardingTourScreen.hasSeenTour(user.id);
       if (!mounted) return;
@@ -327,7 +344,9 @@ class _SplashScreenState extends State<SplashScreen>
       if (!hasSeenTour) {
         final accountType = data?['account_type']?.toString();
         Navigator.of(context).pushReplacement(
-          CupertinoPageRoute(builder: (_) => OnboardingTourScreen(accountType: accountType)),
+          CupertinoPageRoute(
+            builder: (_) => OnboardingTourScreen(accountType: accountType),
+          ),
         );
       } else {
         Navigator.of(context).pushReplacement(
@@ -348,6 +367,7 @@ class _SplashScreenState extends State<SplashScreen>
       }
     }
   }
+
   /// Guarda el rol seleccionado y abre el bottom sheet de auth
   String _selectedRole = 'candidato';
 
@@ -502,8 +522,10 @@ class _SplashScreenState extends State<SplashScreen>
             flex: 4,
             child: Center(
               child: SingleChildScrollView(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 56, vertical: 48),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 56,
+                  vertical: 48,
+                ),
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 400),
                   child: Column(
@@ -526,309 +548,354 @@ class _SplashScreenState extends State<SplashScreen>
   // ── Logo + tagline ──
   Widget _buildLogo() {
     return AnimatedBuilder(
-                  animation: _logoController,
-                  builder: (context, child) {
-                    return Opacity(
-                      opacity: _logoOpacity.value,
-                      child: Transform.scale(
-                        scale: _logoScale.value,
-                        child: child,
-                      ),
-                    );
-                  },
-                  child: Column(
-                    children: [
-                      Container(
-                        width: 88,
-                        height: 88,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(24),
-                          boxShadow: [
-                            BoxShadow(
-                              color: NexTheme.brandAccent.withValues(alpha: 0.25),
-                              blurRadius: 30,
-                              offset: const Offset(0, 10),
-                            ),
-                          ],
-                        ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(24),
-                          child: Image.asset(
-                            'assets/branding/app_icon_1024.png',
-                            fit: BoxFit.cover,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      RichText(
-                        text: const TextSpan(
-                          children: [
-                            TextSpan(
-                              text: 'mploya',
-                              style: TextStyle(
-                                fontSize: 36,
-                                fontWeight: FontWeight.w900,
-                                color: Color(0xFF1C1C1E),
-                                letterSpacing: -0.5,
-                                fontFamily: '.SF Pro Display',
-                              ),
-                            ),
-                            TextSpan(
-                              text: '.ai',
-                              style: TextStyle(
-                                fontSize: 36,
-                                fontWeight: FontWeight.w900,
-                                color: NexTheme.brandAccent,
-                                letterSpacing: -0.5,
-                                fontFamily: '.SF Pro Display',
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      const Text(
-                        'Mutea el papel. Dale Play a tu carrera.',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w500,
-                          color: Color(0xFF8E8E93),
-                          fontFamily: '.SF Pro Text',
-                          decoration: TextDecoration.none,
-                          letterSpacing: -0.3,
-                        ),
-                      ),
-                    ],
+      animation: _logoController,
+      builder: (context, child) {
+        return Opacity(
+          opacity: _logoOpacity.value,
+          child: Transform.scale(scale: _logoScale.value, child: child),
+        );
+      },
+      child: Column(
+        children: [
+          Container(
+            width: 88,
+            height: 88,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: [
+                BoxShadow(
+                  color: NexTheme.brandAccent.withValues(alpha: 0.25),
+                  blurRadius: 30,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(24),
+              child: Image.asset(
+                'assets/branding/app_icon_1024.png',
+                fit: BoxFit.cover,
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
+          RichText(
+            text: const TextSpan(
+              children: [
+                TextSpan(
+                  text: 'mploya',
+                  style: TextStyle(
+                    fontSize: 36,
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFF1C1C1E),
+                    letterSpacing: -0.5,
+                    fontFamily: '.SF Pro Display',
                   ),
-                );
+                ),
+                TextSpan(
+                  text: '.ai',
+                  style: TextStyle(
+                    fontSize: 36,
+                    fontWeight: FontWeight.w900,
+                    color: NexTheme.brandAccent,
+                    letterSpacing: -0.5,
+                    fontFamily: '.SF Pro Display',
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+          const Text(
+            'Mutea el papel. Dale Play a tu carrera.',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w500,
+              color: Color(0xFF8E8E93),
+              fontFamily: '.SF Pro Text',
+              decoration: TextDecoration.none,
+              letterSpacing: -0.3,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   // ── Acciones de acceso (roles + login social) ──
   Widget _buildAuthActions(BuildContext context) {
     return SlideTransition(
-                  position: _contentSlide,
-                  child: FadeTransition(
-                    opacity: _contentOpacity,
-                    child: Column(
+      position: _contentSlide,
+      child: FadeTransition(
+        opacity: _contentOpacity,
+        child: Column(
+          children: [
+            // ── Tipo de cuenta ──
+            const Text(
+              '¿Cómo querés usar Mploya?',
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF3A3A3C),
+                decoration: TextDecoration.none,
+                fontFamily: '.SF Pro Text',
+              ),
+            ),
+            const SizedBox(height: 14),
+
+            // Candidato — principal
+            _SignInButton(
+              label: 'Soy Candidato',
+              icon: CupertinoIcons.person_fill,
+              backgroundColor: const Color(0xFF1C1C1E),
+              textColor: Colors.white,
+              onTap: () => _startAsRole('candidato'),
+            ),
+            const SizedBox(height: 10),
+
+            // Candidato Confidencial
+            _SignInButton(
+              label: 'Candidato Confidencial',
+              icon: CupertinoIcons.eye_slash_fill,
+              backgroundColor: Colors.white,
+              textColor: const Color(0xFF3A3A3C),
+              borderColor: const Color(0xFFD1D1D6),
+              onTap: () => _startAsRole('confidencial'),
+            ),
+            const SizedBox(height: 10),
+
+            // Empresa
+            _SignInButton(
+              label: 'Soy Empresa',
+              icon: CupertinoIcons.building_2_fill,
+              backgroundColor: Colors.white,
+              textColor: const Color(0xFF3A3A3C),
+              borderColor: const Color(0xFFD1D1D6),
+              onTap: () => _startAsRole('empresa'),
+            ),
+            const SizedBox(height: 10),
+
+            // Headhunter — recluta y ve candidatos Y empresas
+            _SignInButton(
+              label: 'Soy Headhunter',
+              icon: CupertinoIcons.person_2_square_stack_fill,
+              backgroundColor: Colors.white,
+              textColor: const Color(0xFF3A3A3C),
+              borderColor: const Color(0xFFD1D1D6),
+              onTap: () => _startAsRole('headhunter'),
+            ),
+
+            // ── Separador ──
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Container(
+                      height: 0.5,
+                      color: const Color(0xFFD1D1D6),
+                    ),
+                  ),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 12),
+                    child: Text(
+                      'o entrá con',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFF8E8E93),
+                        decoration: TextDecoration.none,
+                        fontFamily: '.SF Pro Text',
+                        fontWeight: FontWeight.w400,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: Container(
+                      height: 0.5,
+                      color: const Color(0xFFD1D1D6),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // ── Métodos de login ──
+            Row(
+              children: [
+                // Email
+                Expanded(
+                  child: CupertinoButton(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(14),
+                    onPressed: _showEmailAuth,
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        // ── Tipo de cuenta ──
-                        const Text(
-                          '¿Cómo querés usar Mploya?',
+                        Icon(
+                          CupertinoIcons.mail_solid,
+                          size: 18,
+                          color: Color(0xFF3A3A3C),
+                        ),
+                        SizedBox(width: 6),
+                        Text(
+                          'Email',
                           style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
                             color: Color(0xFF3A3A3C),
-                            decoration: TextDecoration.none,
-                            fontFamily: '.SF Pro Text',
+                            fontWeight: FontWeight.w600,
                           ),
-                        ),
-                        const SizedBox(height: 14),
-
-                        // Candidato — principal
-                        _SignInButton(
-                          label: 'Soy Candidato',
-                          icon: CupertinoIcons.person_fill,
-                          backgroundColor: const Color(0xFF1C1C1E),
-                          textColor: Colors.white,
-                          onTap: () => _startAsRole('candidato'),
-                        ),
-                        const SizedBox(height: 10),
-
-                        // Candidato Confidencial
-                        _SignInButton(
-                          label: 'Candidato Confidencial',
-                          icon: CupertinoIcons.eye_slash_fill,
-                          backgroundColor: Colors.white,
-                          textColor: const Color(0xFF3A3A3C),
-                          borderColor: const Color(0xFFD1D1D6),
-                          onTap: () => _startAsRole('confidencial'),
-                        ),
-                        const SizedBox(height: 10),
-
-                        // Empresa
-                        _SignInButton(
-                          label: 'Soy Empresa',
-                          icon: CupertinoIcons.building_2_fill,
-                          backgroundColor: Colors.white,
-                          textColor: const Color(0xFF3A3A3C),
-                          borderColor: const Color(0xFFD1D1D6),
-                          onTap: () => _startAsRole('empresa'),
-                        ),
-                        const SizedBox(height: 10),
-
-                        // Headhunter — recluta y ve candidatos Y empresas
-                        _SignInButton(
-                          label: 'Soy Headhunter',
-                          icon: CupertinoIcons.person_2_square_stack_fill,
-                          backgroundColor: Colors.white,
-                          textColor: const Color(0xFF3A3A3C),
-                          borderColor: const Color(0xFFD1D1D6),
-                          onTap: () => _startAsRole('headhunter'),
-                        ),
-
-                        // ── Separador ──
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          child: Row(
-                            children: [
-                              Expanded(child: Container(height: 0.5, color: const Color(0xFFD1D1D6))),
-                              const Padding(
-                                padding: EdgeInsets.symmetric(horizontal: 12),
-                                child: Text(
-                                  'o entrá con',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: Color(0xFF8E8E93),
-                                    decoration: TextDecoration.none,
-                                    fontFamily: '.SF Pro Text',
-                                    fontWeight: FontWeight.w400,
-                                  ),
-                                ),
-                              ),
-                              Expanded(child: Container(height: 0.5, color: const Color(0xFFD1D1D6))),
-                            ],
-                          ),
-                        ),
-
-                        // ── Métodos de login ──
-                        Row(
-                          children: [
-                            // Email
-                            Expanded(
-                              child: CupertinoButton(
-                                padding: const EdgeInsets.symmetric(vertical: 12),
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(14),
-                                onPressed: _showEmailAuth,
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(CupertinoIcons.mail_solid, size: 18, color: const Color(0xFF3A3A3C)),
-                                    const SizedBox(width: 6),
-                                    const Text('Email', style: TextStyle(fontSize: 14, color: Color(0xFF3A3A3C), fontWeight: FontWeight.w600)),
-                                  ],
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            // Google
-                            Expanded(
-                              child: CupertinoButton(
-                                padding: const EdgeInsets.symmetric(vertical: 12),
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(14),
-                                onPressed: () async {
-                                  final prefs = await SharedPreferences.getInstance();
-                                  await prefs.setString('pending_oauth_account_type', _selectedRole);
-                                  try {
-                                    final error = await AuthService.instance.signInWithGoogle();
-                                    if (!context.mounted) return;
-                                    if (error != null) _showEmailAuth();
-                                  } catch (_) {
-                                    if (context.mounted) _showEmailAuth();
-                                  }
-                                },
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(CupertinoIcons.globe, size: 18, color: const Color(0xFF3A3A3C)),
-                                    const SizedBox(width: 6),
-                                    const Text('Google', style: TextStyle(fontSize: 14, color: Color(0xFF3A3A3C), fontWeight: FontWeight.w600)),
-                                  ],
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            // Apple
-                            Expanded(
-                              child: CupertinoButton(
-                                padding: const EdgeInsets.symmetric(vertical: 12),
-                                color: const Color(0xFF1C1C1E),
-                                borderRadius: BorderRadius.circular(14),
-                                onPressed: () async {
-                                  try {
-                                    final error = await AuthService.instance.signInWithApple();
-                                    if (!context.mounted) return;
-                                    if (error != null) _showEmailAuth();
-                                  } catch (_) {
-                                    if (context.mounted) _showEmailAuth();
-                                  }
-                                },
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(CupertinoIcons.device_phone_portrait, size: 18, color: Colors.white),
-                                    const SizedBox(width: 6),
-                                    const Text('Apple', style: TextStyle(fontSize: 14, color: Colors.white, fontWeight: FontWeight.w600)),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-
-                        const SizedBox(height: 16),
-                        Wrap(
-                          alignment: WrapAlignment.center,
-                          children: [
-                            const Text(
-                              'Al continuar, aceptas los ',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Color(0xFFC7C7CC),
-                                height: 1.4,
-                                decoration: TextDecoration.none,
-                                fontFamily: '.SF Pro Text',
-                                fontWeight: FontWeight.w400,
-                              ),
-                            ),
-                            GestureDetector(
-                              onTap: () => _launchUrl(_termsUrl),
-                              child: const Text(
-                                'Términos de Uso',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: NexTheme.brandAccent,
-                                  height: 1.4,
-                                  decoration: TextDecoration.underline,
-                                  decorationColor: NexTheme.brandAccent,
-                                  fontFamily: '.SF Pro Text',
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ),
-                            const Text(
-                              ' y ',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Color(0xFFC7C7CC),
-                                height: 1.4,
-                                decoration: TextDecoration.none,
-                                fontFamily: '.SF Pro Text',
-                                fontWeight: FontWeight.w400,
-                              ),
-                            ),
-                            GestureDetector(
-                              onTap: () => _launchUrl(_privacyUrl),
-                              child: const Text(
-                                'Política de Privacidad',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: NexTheme.brandAccent,
-                                  height: 1.4,
-                                  decoration: TextDecoration.underline,
-                                  decorationColor: NexTheme.brandAccent,
-                                  fontFamily: '.SF Pro Text',
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ),
-                          ],
                         ),
                       ],
                     ),
                   ),
-                );
+                ),
+                const SizedBox(width: 10),
+                // Google
+                Expanded(
+                  child: CupertinoButton(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(14),
+                    onPressed: () async {
+                      final prefs = await SharedPreferences.getInstance();
+                      await prefs.setString(
+                        'pending_oauth_account_type',
+                        _selectedRole,
+                      );
+                      try {
+                        final error = await AuthService.instance
+                            .signInWithGoogle();
+                        if (!context.mounted) return;
+                        if (error != null) _showEmailAuth();
+                      } catch (_) {
+                        if (context.mounted) _showEmailAuth();
+                      }
+                    },
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          CupertinoIcons.globe,
+                          size: 18,
+                          color: Color(0xFF3A3A3C),
+                        ),
+                        SizedBox(width: 6),
+                        Text(
+                          'Google',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Color(0xFF3A3A3C),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                // Apple
+                Expanded(
+                  child: CupertinoButton(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    color: const Color(0xFF1C1C1E),
+                    borderRadius: BorderRadius.circular(14),
+                    onPressed: () async {
+                      try {
+                        final error = await AuthService.instance
+                            .signInWithApple();
+                        if (!context.mounted) return;
+                        if (error != null) _showEmailAuth();
+                      } catch (_) {
+                        if (context.mounted) _showEmailAuth();
+                      }
+                    },
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          CupertinoIcons.device_phone_portrait,
+                          size: 18,
+                          color: Colors.white,
+                        ),
+                        SizedBox(width: 6),
+                        Text(
+                          'Apple',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 16),
+            Wrap(
+              alignment: WrapAlignment.center,
+              children: [
+                const Text(
+                  'Al continuar, aceptas los ',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFFC7C7CC),
+                    height: 1.4,
+                    decoration: TextDecoration.none,
+                    fontFamily: '.SF Pro Text',
+                    fontWeight: FontWeight.w400,
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () => _launchUrl(_termsUrl),
+                  child: const Text(
+                    'Términos de Uso',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: NexTheme.brandAccent,
+                      height: 1.4,
+                      decoration: TextDecoration.underline,
+                      decorationColor: NexTheme.brandAccent,
+                      fontFamily: '.SF Pro Text',
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+                const Text(
+                  ' y ',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFFC7C7CC),
+                    height: 1.4,
+                    decoration: TextDecoration.none,
+                    fontFamily: '.SF Pro Text',
+                    fontWeight: FontWeight.w400,
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () => _launchUrl(_privacyUrl),
+                  child: const Text(
+                    'Política de Privacidad',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: NexTheme.brandAccent,
+                      height: 1.4,
+                      decoration: TextDecoration.underline,
+                      decorationColor: NexTheme.brandAccent,
+                      fontFamily: '.SF Pro Text',
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -880,7 +947,10 @@ class _WebBrandStat extends StatelessWidget {
 class _AuthBottomSheet extends StatefulWidget {
   final VoidCallback onAuthSuccess;
   final String accountType;
-  const _AuthBottomSheet({required this.onAuthSuccess, this.accountType = 'candidato'});
+  const _AuthBottomSheet({
+    required this.onAuthSuccess,
+    this.accountType = 'candidato',
+  });
 
   @override
   State<_AuthBottomSheet> createState() => _AuthBottomSheetState();
@@ -890,7 +960,7 @@ class _AuthBottomSheetState extends State<_AuthBottomSheet> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
-  
+
   bool _loading = false;
   bool _obscurePassword = true;
   bool _obscureConfirm = true;
@@ -950,10 +1020,23 @@ class _AuthBottomSheetState extends State<_AuthBottomSheet> {
       if (error == null) {
         final uid = Supabase.instance.client.auth.currentUser?.id;
         if (uid != null) {
-          await Supabase.instance.client.from('users').upsert({
-            'id': uid,
-            'account_type': widget.accountType,
-          }, onConflict: 'id');
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('mploya_account_type', widget.accountType);
+          final updated = await Supabase.instance.client
+              .from('users')
+              .update({'account_type': widget.accountType})
+              .eq('id', uid)
+              .select('id')
+              .maybeSingle();
+          if (updated == null) {
+            await Supabase.instance.client.from('users').insert({
+              'id': uid,
+              'account_type': widget.accountType,
+              'name': email.split('@').first,
+              'email': email,
+              'onboarding_step': 0,
+            });
+          }
         }
       }
     }
@@ -1004,7 +1087,9 @@ class _AuthBottomSheetState extends State<_AuthBottomSheet> {
     if (!mounted) return;
     Navigator.of(context, rootNavigator: true).push(
       CupertinoPageRoute(
-        builder: (_) => ForgotPasswordScreen(prefilledEmail: email.isNotEmpty ? email : null),
+        builder: (_) => ForgotPasswordScreen(
+          prefilledEmail: email.isNotEmpty ? email : null,
+        ),
       ),
     );
   }
@@ -1048,16 +1133,22 @@ class _AuthBottomSheetState extends State<_AuthBottomSheet> {
                   child: CupertinoSlidingSegmentedControl<int>(
                     groupValue: _tabIndex,
                     children: const {
-                      0: Padding(padding: EdgeInsets.symmetric(horizontal: 20), child: Text('Iniciar Sesión')),
-                      1: Padding(padding: EdgeInsets.symmetric(horizontal: 20), child: Text('Crear Cuenta')),
+                      0: Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 20),
+                        child: Text('Iniciar Sesión'),
+                      ),
+                      1: Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 20),
+                        child: Text('Crear Cuenta'),
+                      ),
                     },
                     onValueChanged: (val) {
                       if (val != null) {
                         setState(() {
-                        _tabIndex = val;
-                        // Opcional: reset fields al cambiar de tab
-                        _confirmPasswordController.clear();
-                      });
+                          _tabIndex = val;
+                          // Opcional: reset fields al cambiar de tab
+                          _confirmPasswordController.clear();
+                        });
                       }
                     },
                   ),
@@ -1071,9 +1162,18 @@ class _AuthBottomSheetState extends State<_AuthBottomSheet> {
                   autocorrect: false,
                   placeholder: 'tu@email.com',
                   autofocus: true,
-                  style: const TextStyle(color: MployaTheme.lightText, fontSize: 17),
-                  placeholderStyle: const TextStyle(color: MployaTheme.lightTertiary, fontSize: 17),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  style: const TextStyle(
+                    color: MployaTheme.lightText,
+                    fontSize: 17,
+                  ),
+                  placeholderStyle: const TextStyle(
+                    color: MployaTheme.lightTertiary,
+                    fontSize: 17,
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 14,
+                  ),
                   decoration: BoxDecoration(
                     color: MployaTheme.lightBg,
                     borderRadius: BorderRadius.circular(14),
@@ -1088,9 +1188,18 @@ class _AuthBottomSheetState extends State<_AuthBottomSheet> {
                   controller: _passwordController,
                   obscureText: _obscurePassword,
                   placeholder: 'Contraseña',
-                  style: const TextStyle(color: MployaTheme.lightText, fontSize: 17),
-                  placeholderStyle: const TextStyle(color: MployaTheme.lightTertiary, fontSize: 17),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  style: const TextStyle(
+                    color: MployaTheme.lightText,
+                    fontSize: 17,
+                  ),
+                  placeholderStyle: const TextStyle(
+                    color: MployaTheme.lightTertiary,
+                    fontSize: 17,
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 14,
+                  ),
                   decoration: BoxDecoration(
                     color: MployaTheme.lightBg,
                     borderRadius: BorderRadius.circular(14),
@@ -1099,16 +1208,19 @@ class _AuthBottomSheetState extends State<_AuthBottomSheet> {
                   suffix: CupertinoButton(
                     padding: const EdgeInsets.only(right: 16),
                     minimumSize: const Size(0, 0),
-                    onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                    onPressed: () =>
+                        setState(() => _obscurePassword = !_obscurePassword),
                     child: Icon(
-                      _obscurePassword ? CupertinoIcons.eye : CupertinoIcons.eye_slash,
+                      _obscurePassword
+                          ? CupertinoIcons.eye
+                          : CupertinoIcons.eye_slash,
                       color: MployaTheme.lightTertiary,
                       size: 20,
                     ),
                   ),
                   onSubmitted: (_) => _submitAuth(),
                 ),
-                
+
                 // ── Campo Confirmar Contraseña (solo si tabIndex == 1) ──
                 if (_tabIndex == 1) ...[
                   const SizedBox(height: 12),
@@ -1116,9 +1228,18 @@ class _AuthBottomSheetState extends State<_AuthBottomSheet> {
                     controller: _confirmPasswordController,
                     obscureText: _obscureConfirm,
                     placeholder: 'Confirmar Contraseña',
-                    style: const TextStyle(color: MployaTheme.lightText, fontSize: 17),
-                    placeholderStyle: const TextStyle(color: MployaTheme.lightTertiary, fontSize: 17),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    style: const TextStyle(
+                      color: MployaTheme.lightText,
+                      fontSize: 17,
+                    ),
+                    placeholderStyle: const TextStyle(
+                      color: MployaTheme.lightTertiary,
+                      fontSize: 17,
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 14,
+                    ),
                     decoration: BoxDecoration(
                       color: MployaTheme.lightBg,
                       borderRadius: BorderRadius.circular(14),
@@ -1127,9 +1248,12 @@ class _AuthBottomSheetState extends State<_AuthBottomSheet> {
                     suffix: CupertinoButton(
                       padding: const EdgeInsets.only(right: 16),
                       minimumSize: const Size(0, 0),
-                      onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
+                      onPressed: () =>
+                          setState(() => _obscureConfirm = !_obscureConfirm),
                       child: Icon(
-                        _obscureConfirm ? CupertinoIcons.eye : CupertinoIcons.eye_slash,
+                        _obscureConfirm
+                            ? CupertinoIcons.eye
+                            : CupertinoIcons.eye_slash,
                         color: MployaTheme.lightTertiary,
                         size: 20,
                       ),
@@ -1168,13 +1292,16 @@ class _AuthBottomSheetState extends State<_AuthBottomSheet> {
                       color: _loading
                           ? MployaTheme.brandAccent.withValues(alpha: 0.5)
                           : MployaTheme.brandAccent,
-                      borderRadius:
-                          BorderRadius.circular(MployaTheme.radiusPill),
+                      borderRadius: BorderRadius.circular(
+                        MployaTheme.radiusPill,
+                      ),
                       boxShadow: _loading
                           ? null
                           : [
                               BoxShadow(
-                                color: MployaTheme.brandAccent.withValues(alpha: 0.35),
+                                color: MployaTheme.brandAccent.withValues(
+                                  alpha: 0.35,
+                                ),
                                 blurRadius: 16,
                                 offset: const Offset(0, 4),
                               ),
@@ -1186,7 +1313,9 @@ class _AuthBottomSheetState extends State<_AuthBottomSheet> {
                               color: Colors.white,
                             )
                           : Text(
-                              _tabIndex == 0 ? 'Iniciar Sesión  →' : 'Crear Cuenta  →',
+                              _tabIndex == 0
+                                  ? 'Iniciar Sesión  →'
+                                  : 'Crear Cuenta  →',
                               style: const TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w700,
@@ -1238,11 +1367,10 @@ class _AuthBottomSheetState extends State<_AuthBottomSheet> {
                     height: 50,
                     decoration: BoxDecoration(
                       color: MployaTheme.lightBg,
-                      borderRadius:
-                          BorderRadius.circular(MployaTheme.radiusPill),
-                      border: Border.all(
-                        color: MployaTheme.lightDivider,
+                      borderRadius: BorderRadius.circular(
+                        MployaTheme.radiusPill,
                       ),
+                      border: Border.all(color: MployaTheme.lightDivider),
                     ),
                     child: const Row(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -1276,8 +1404,9 @@ class _AuthBottomSheetState extends State<_AuthBottomSheet> {
                     height: 50,
                     decoration: BoxDecoration(
                       color: Colors.black,
-                      borderRadius:
-                          BorderRadius.circular(MployaTheme.radiusPill),
+                      borderRadius: BorderRadius.circular(
+                        MployaTheme.radiusPill,
+                      ),
                     ),
                     child: const Row(
                       mainAxisAlignment: MainAxisAlignment.center,

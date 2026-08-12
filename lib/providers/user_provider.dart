@@ -5,8 +5,12 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/models.dart';
 
 /// Provider que expone la sesión activa de Supabase en tiempo real.
-final authSessionProvider = StreamProvider<Session?>((ref) {
-  return Supabase.instance.client.auth.onAuthStateChange.map((data) => data.session);
+final authSessionProvider = StreamProvider<Session?>((ref) async* {
+  final auth = Supabase.instance.client.auth;
+  yield auth.currentSession;
+  await for (final data in auth.onAuthStateChange) {
+    yield data.session;
+  }
 });
 
 /// Provider que vigila la tabla 'users' para obtener los datos del perfil local
@@ -40,14 +44,17 @@ final currentUserProvider = StreamProvider<NexUser?>((ref) {
 /// Provider para forzar un refresh manual del perfil del usuario actual.
 /// Útil cuando Realtime no está habilitado y necesitamos refrescar tras editar perfil.
 final manualUserRefreshProvider = FutureProvider<NexUser?>((ref) async {
-  final session = ref.watch(authSessionProvider).value;
+  final session =
+      ref.watch(authSessionProvider).value ??
+      Supabase.instance.client.auth.currentSession;
   if (session == null) return null;
   try {
     final row = await Supabase.instance.client
         .from('users')
         .select(kUserColumns)
         .eq('id', session.user.id)
-        .maybeSingle();
+        .maybeSingle()
+        .timeout(const Duration(seconds: 8));
     if (row == null) return null;
     return NexUser.fromJson(row);
   } catch (e) {

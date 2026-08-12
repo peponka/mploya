@@ -1,27 +1,24 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
-// Material widgets (SliverAppBar, Colors, Icons) have no Cupertino equivalent
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'dart:async';
-import '../theme/app_theme.dart';
-import 'onboarding_tour_screen.dart';
-import '../services/storage_service.dart';
-import '../services/auth_service.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../services/auth_service.dart';
+import '../services/storage_service.dart';
 import 'camera_screen.dart';
-// Grabador web (getUserMedia + MediaRecorder). En móvil usa el stub.
 import 'micro_pitch_web_stub.dart'
     if (dart.library.html) 'micro_pitch_web_recorder.dart';
+import 'onboarding_tour_screen.dart';
+import 'talent_onboarding_complete_screen.dart';
 
 class OnboardingPitchScreen extends StatefulWidget {
   final bool isCompany;
 
-  const OnboardingPitchScreen({
-    super.key,
-    required this.isCompany,
-  });
+  const OnboardingPitchScreen({super.key, required this.isCompany});
 
   @override
   State<OnboardingPitchScreen> createState() => _OnboardingPitchScreenState();
@@ -35,9 +32,8 @@ class _OnboardingPitchScreenState extends State<OnboardingPitchScreen> {
 
   void _finishAndEnterMploya() async {
     _timer?.cancel();
-    
+
     if (widget.isCompany) {
-      // Auto-creamos la vacante silenciosamente
       final user = Supabase.instance.client.auth.currentUser;
       if (user != null) {
         try {
@@ -48,23 +44,31 @@ class _OnboardingPitchScreenState extends State<OnboardingPitchScreen> {
               .maybeSingle();
 
           if (userData != null) {
-            final title = userData['headline']?.toString().isEmpty ?? true ? 'Nueva Vacante' : userData['headline'];
-            final companyName = userData['company'] ?? userData['name'] ?? 'Empresa Confidencial';
+            final title = userData['headline']?.toString().isEmpty ?? true
+                ? 'Nueva Vacante'
+                : userData['headline'];
+            final companyName =
+                userData['company'] ??
+                userData['name'] ??
+                'Empresa Confidencial';
 
             await Supabase.instance.client.from('jobs').insert({
               'company_id': user.id,
               'company_name': companyName,
               'title': title,
-              'description': userData['about'] ?? 'Oferta publicada desde onboarding.',
+              'description':
+                  userData['about'] ?? 'Oferta publicada desde onboarding.',
               'location': userData['location'] ?? 'Remoto',
               'modality': 'remote',
               'seniority': 'mid',
               'salary_range': 'A convenir',
             });
-            debugPrint('✅ Vacante auto-creada en onboarding (direct insert sin tags).');
+            debugPrint(
+              'Vacante auto-creada en onboarding (direct insert sin tags).',
+            );
           }
         } catch (e) {
-          debugPrint('❌ Error auto-creando vacante directa: $e');
+          debugPrint('Error auto-creando vacante directa: $e');
           if (mounted) {
             await showCupertinoDialog(
               context: context,
@@ -75,7 +79,7 @@ class _OnboardingPitchScreenState extends State<OnboardingPitchScreen> {
                   CupertinoDialogAction(
                     child: const Text('Entendido'),
                     onPressed: () => Navigator.pop(ctx),
-                  )
+                  ),
                 ],
               ),
             );
@@ -83,36 +87,43 @@ class _OnboardingPitchScreenState extends State<OnboardingPitchScreen> {
         }
       }
 
-      if (mounted) {
-        Navigator.of(context, rootNavigator: true).pushReplacement(
-          PageRouteBuilder(
-            pageBuilder: (context, animation, secondaryAnimation) => OnboardingTourScreen(accountType: widget.isCompany ? 'empresa' : 'candidato'),
-            transitionsBuilder: (context, animation, secondaryAnimation, child) {
-              return FadeTransition(opacity: animation, child: child);
-            },
-            transitionDuration: const Duration(milliseconds: 600),
-          ),
-        );
-      }
-    } else {
+      if (!mounted) return;
+
       Navigator.of(context, rootNavigator: true).pushReplacement(
         PageRouteBuilder(
-          pageBuilder: (context, animation, secondaryAnimation) => OnboardingTourScreen(accountType: widget.isCompany ? 'empresa' : 'candidato'),
+          pageBuilder: (context, animation, secondaryAnimation) =>
+              OnboardingTourScreen(accountType: 'empresa'),
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
             return FadeTransition(opacity: animation, child: child);
           },
           transitionDuration: const Duration(milliseconds: 600),
         ),
       );
+      return;
     }
+
+    if (!mounted) return;
+
+    Navigator.of(context, rootNavigator: true).pushReplacement(
+      PageRouteBuilder(
+        pageBuilder: (context, animation, secondaryAnimation) =>
+            const TalentOnboardingCompleteScreen(),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          return FadeTransition(opacity: animation, child: child);
+        },
+        transitionDuration: const Duration(milliseconds: 600),
+      ),
+    );
   }
 
   void _showPitchSuccessDialog() {
     showCupertinoDialog(
       context: context,
       builder: (ctx) => CupertinoAlertDialog(
-        title: const Text('¡Pitch Excelente! 🎉'),
-        content: const Text('Ya queremos que la red te escuche. ¿Listo para entrar a Mploya?'),
+        title: const Text('Pitch excelente'),
+        content: const Text(
+          'Tu pitch ya quedo listo. Ahora te mostramos el cierre de onboarding antes de entrar a Mploya.',
+        ),
         actions: [
           CupertinoDialogAction(
             isDestructiveAction: true,
@@ -128,7 +139,7 @@ class _OnboardingPitchScreenState extends State<OnboardingPitchScreen> {
               Navigator.pop(ctx);
               _finishAndEnterMploya();
             },
-            child: const Text('¡Entrar a Mploya!'),
+            child: const Text('Continuar'),
           ),
         ],
       ),
@@ -177,15 +188,12 @@ class _OnboardingPitchScreenState extends State<OnboardingPitchScreen> {
     );
   }
 
-  /// Sube el video a Supabase y guarda la URL en el perfil.
-  /// Solo muestra el diálogo de éxito si todo va bien.
   Future<void> _handleVideoReady(XFile file) async {
     final user = Supabase.instance.client.auth.currentUser;
 
     setState(() => _isUploading = true);
 
     try {
-      // ── 1. Subir al bucket "videos" ──
       final videoUrl = await StorageService.instance.uploadPitchVideo(
         user?.id ?? 'anonymous',
         file,
@@ -196,21 +204,23 @@ class _OnboardingPitchScreenState extends State<OnboardingPitchScreen> {
       if (videoUrl == null) {
         setState(() => _isUploading = false);
         _showErrorDialog(
-          StorageService.instance.lastError ?? 'Error desconocido al subir el video.',
+          StorageService.instance.lastError ??
+              'Error desconocido al subir el video.',
           onRetry: () => _handleVideoReady(file),
         );
         return;
       }
 
-      // ── 2. Guardar URL en public.users (solo si hay sesión activa) ──
       if (user != null) {
-        final profileError = await AuthService.instance.updatePitchUrl(user.id, videoUrl);
+        final profileError = await AuthService.instance.updatePitchUrl(
+          user.id,
+          videoUrl,
+        );
         if (!mounted) return;
         if (profileError != null) {
-          // No bloqueamos el flujo — el video ya subió. Solo avisamos.
           setState(() => _isUploading = false);
           _showErrorDialog(
-            'El video se subió, pero no se pudo guardar en tu perfil: $profileError',
+            'El video se subio, pero no se pudo guardar en tu perfil: $profileError',
             onRetry: () async {
               setState(() => _isUploading = true);
               await AuthService.instance.updatePitchUrl(user.id, videoUrl);
@@ -235,12 +245,7 @@ class _OnboardingPitchScreenState extends State<OnboardingPitchScreen> {
     }
   }
 
-
   Future<void> _toggleRecording() async {
-    // ── Web: grabar con la webcam (getUserMedia + MediaRecorder) ──
-    // El plugin `camera` no soporta startVideoRecording en web, así que
-    // usamos el grabador nativo del browser y reutilizamos el mismo flujo
-    // de subida que la opción "Subir MP4".
     if (kIsWeb) {
       final file = await WebRecorderHelper.recordVideo(context);
       if (!mounted) return;
@@ -250,10 +255,9 @@ class _OnboardingPitchScreenState extends State<OnboardingPitchScreen> {
       return;
     }
 
-    // ── Móvil: CameraScreen con preview real (devuelve true si subió) ──
-    final result = await Navigator.of(context).push<bool>(
-      CupertinoPageRoute(builder: (_) => const CameraScreen()),
-    );
+    final result = await Navigator.of(
+      context,
+    ).push<bool>(CupertinoPageRoute(builder: (_) => const CameraScreen()));
 
     if (!mounted) return;
 
@@ -263,12 +267,11 @@ class _OnboardingPitchScreenState extends State<OnboardingPitchScreen> {
   }
 
   Future<void> _pickFromGallery() async {
-    // Mostramos opciones: Cámara o Galería
     showCupertinoModalPopup(
       context: context,
       builder: (BuildContext context) => CupertinoActionSheet(
-        title: const Text('Añadir Video Pitch'),
-        message: const Text('¿De dónde quieres obtener el video?'),
+        title: const Text('Anadir Video Pitch'),
+        message: const Text('De donde quieres obtener el video?'),
         actions: <CupertinoActionSheetAction>[
           CupertinoActionSheetAction(
             isDefaultAction: true,
@@ -278,15 +281,20 @@ class _OnboardingPitchScreenState extends State<OnboardingPitchScreen> {
               final micStatus = await Permission.microphone.request();
               if (camStatus.isGranted && micStatus.isGranted) {
                 final picker = ImagePicker();
-                final file = await picker.pickVideo(source: ImageSource.camera, maxDuration: const Duration(seconds: 60));
+                final file = await picker.pickVideo(
+                  source: ImageSource.camera,
+                  maxDuration: const Duration(seconds: 60),
+                );
                 if (file != null && mounted) {
                   await _handleVideoReady(file);
                 }
               } else {
-                _showValidationAlert('Se requieren permisos de cámara y micrófono.');
+                _showValidationAlert(
+                  'Se requieren permisos de camara y microfono.',
+                );
               }
             },
-            child: const Text('Grabar con la Cámara'),
+            child: const Text('Grabar con la Camara'),
           ),
           CupertinoActionSheetAction(
             onPressed: () async {
@@ -297,7 +305,7 @@ class _OnboardingPitchScreenState extends State<OnboardingPitchScreen> {
                 await _handleVideoReady(file);
               }
             },
-            child: const Text('Subir desde Galería'),
+            child: const Text('Subir desde Galeria'),
           ),
         ],
         cancelButton: CupertinoActionSheetAction(
@@ -326,209 +334,542 @@ class _OnboardingPitchScreenState extends State<OnboardingPitchScreen> {
   @override
   Widget build(BuildContext context) {
     return CupertinoPageScaffold(
-      backgroundColor: Colors.black,
-      child: Stack(
-        children: [
-          // ── Fondo de Cámara Simulada ──
-          Positioned.fill(
-            child: Container(
-              color: const Color(0xFF151515),
+      backgroundColor: const Color(0xFFF8F5FF),
+      child: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 760),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
               child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(CupertinoIcons.video_camera, size: 80, color: Colors.white.withValues(alpha: 0.1)),
-                ],
-              ),
-            ),
-          ),
-
-          // ── Capa de Texto Amable y Guía ──
-          if (!_isRecording && !_isUploading)
-            Positioned(
-              top: 100,
-              left: 24,
-              right: 24,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    '¡Hola! 👋\nQueremos escucharte.',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 28,
-                      fontWeight: FontWeight.w800,
-                      height: 1.2,
-                      letterSpacing: -0.5,
+                  Row(
+                    children: [
+                      CupertinoButton(
+                        padding: EdgeInsets.zero,
+                        minimumSize: const Size(44, 44),
+                        onPressed: _isUploading
+                            ? null
+                            : () => Navigator.of(context).maybePop(),
+                        child: Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: const Color(0xFFE3DAFF)),
+                          ),
+                          child: const Icon(
+                            CupertinoIcons.chevron_back,
+                            color: Color(0xFF15163D),
+                          ),
+                        ),
+                      ),
+                      const Spacer(),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFF5B3DF5), Color(0xFF7E66FF)],
+                          ),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: const Text(
+                          'Asistente A4',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      const Spacer(),
+                      CupertinoButton(
+                        padding: EdgeInsets.zero,
+                        minimumSize: const Size(44, 44),
+                        onPressed: _isUploading
+                            ? null
+                            : () => Navigator.of(context).maybePop(),
+                        child: Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: const Color(0xFFE3DAFF)),
+                          ),
+                          child: const Icon(
+                            CupertinoIcons.xmark,
+                            color: Color(0xFF15163D),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 22),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Video de presentacion',
+                            style: TextStyle(
+                              color: Color(0xFF15163D),
+                              fontSize: 38,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: -1.2,
+                              height: 1.05,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            widget.isCompany
+                                ? 'Mostra en un minuto que hace especial a tu empresa y a quien estas buscando.'
+                                : 'Mostra en un minuto tu energia, tu foco y el tipo de oportunidad que estas buscando.',
+                            style: const TextStyle(
+                              color: Color(0xFF69708F),
+                              fontSize: 16,
+                              height: 1.5,
+                            ),
+                          ),
+                          const SizedBox(height: 22),
+                          const _PitchProgressRow(),
+                          const SizedBox(height: 22),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(22),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(28),
+                              border: Border.all(
+                                color: const Color(0xFFE3DAFF),
+                              ),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Row(
+                                  children: [
+                                    Icon(
+                                      CupertinoIcons.lightbulb_fill,
+                                      color: Color(0xFF5B3DF5),
+                                    ),
+                                    SizedBox(width: 10),
+                                    Text(
+                                      'Guia rapida',
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w700,
+                                        color: Color(0xFF15163D),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 16),
+                                _GuideBullet(
+                                  text: widget.isCompany
+                                      ? 'Conta que ofrece tu empresa y el tipo de talento que queres sumar.'
+                                      : 'Conta que sabes hacer y donde generas mas valor.',
+                                ),
+                                const SizedBox(height: 10),
+                                _GuideBullet(
+                                  text: widget.isCompany
+                                      ? 'Habla con claridad, buena luz y una propuesta concreta.'
+                                      : 'Menciona el tipo de rol, industria o modalidad que estas buscando.',
+                                ),
+                                const SizedBox(height: 10),
+                                const _GuideBullet(
+                                  text:
+                                      'El video pitch es obligatorio para activar la experiencia completa en Mploya.',
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(20),
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                colors: [Color(0xFF201642), Color(0xFF3B2F6A)],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                              borderRadius: BorderRadius.circular(30),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(
+                                    0xFF5B3DF5,
+                                  ).withValues(alpha: 0.18),
+                                  blurRadius: 24,
+                                  offset: const Offset(0, 12),
+                                ),
+                              ],
+                            ),
+                            child: Column(
+                              children: [
+                                Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 8,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white.withValues(
+                                          alpha: 0.14,
+                                        ),
+                                        borderRadius: BorderRadius.circular(
+                                          999,
+                                        ),
+                                      ),
+                                      child: Text(
+                                        _isUploading
+                                            ? 'Subiendo...'
+                                            : _isRecording
+                                            ? _formatTime(_seconds)
+                                            : 'Max 60 segundos',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ),
+                                    const Spacer(),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 10,
+                                        vertical: 6,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white.withValues(
+                                          alpha: 0.10,
+                                        ),
+                                        borderRadius: BorderRadius.circular(
+                                          999,
+                                        ),
+                                      ),
+                                      child: Text(
+                                        kIsWeb
+                                            ? 'Web recorder'
+                                            : 'Camara nativa',
+                                        style: TextStyle(
+                                          color: Colors.white.withValues(
+                                            alpha: 0.82,
+                                          ),
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 22),
+                                AspectRatio(
+                                  aspectRatio: 16 / 9,
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(24),
+                                      color: Colors.white.withValues(
+                                        alpha: 0.06,
+                                      ),
+                                      border: Border.all(
+                                        color: Colors.white.withValues(
+                                          alpha: 0.10,
+                                        ),
+                                      ),
+                                    ),
+                                    child: Stack(
+                                      alignment: Alignment.center,
+                                      children: [
+                                        Positioned.fill(
+                                          child: DecoratedBox(
+                                            decoration: BoxDecoration(
+                                              borderRadius:
+                                                  BorderRadius.circular(24),
+                                              gradient: LinearGradient(
+                                                colors: [
+                                                  Colors.white.withValues(
+                                                    alpha: 0.04,
+                                                  ),
+                                                  Colors.white.withValues(
+                                                    alpha: 0.01,
+                                                  ),
+                                                ],
+                                                begin: Alignment.topLeft,
+                                                end: Alignment.bottomRight,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                        Column(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          children: [
+                                            Container(
+                                              width: 94,
+                                              height: 94,
+                                              decoration: BoxDecoration(
+                                                shape: BoxShape.circle,
+                                                color: Colors.white.withValues(
+                                                  alpha: 0.10,
+                                                ),
+                                                border: Border.all(
+                                                  color: Colors.white,
+                                                  width: 3,
+                                                ),
+                                              ),
+                                              child: Center(
+                                                child: Container(
+                                                  width: _isRecording ? 38 : 74,
+                                                  height: _isRecording
+                                                      ? 38
+                                                      : 74,
+                                                  decoration: BoxDecoration(
+                                                    color: const Color(
+                                                      0xFFFF5A5F,
+                                                    ),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          _isRecording
+                                                              ? 10
+                                                              : 40,
+                                                        ),
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(height: 18),
+                                            Text(
+                                              _isUploading
+                                                  ? 'Estamos subiendo tu video pitch'
+                                                  : kIsWeb
+                                                  ? 'Graba desde la webcam o sube un video existente'
+                                                  : 'Graba ahora o usa un video desde tu galeria',
+                                              textAlign: TextAlign.center,
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 18,
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 8),
+                                            Text(
+                                              widget.isCompany
+                                                  ? 'Queremos entender tu cultura, tu propuesta y el perfil que necesitas.'
+                                                  : 'Queremos verte como te presentarias ante una empresa real.',
+                                              textAlign: TextAlign.center,
+                                              style: TextStyle(
+                                                color: Colors.white.withValues(
+                                                  alpha: 0.74,
+                                                ),
+                                                fontSize: 14,
+                                                height: 1.4,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(22),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(28),
+                              border: Border.all(
+                                color: const Color(0xFFE3DAFF),
+                              ),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Row(
+                                  children: [
+                                    Icon(
+                                      CupertinoIcons.sparkles,
+                                      color: Color(0xFF5B3DF5),
+                                    ),
+                                    SizedBox(width: 10),
+                                    Text(
+                                      'Idea sugerida por IA',
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w700,
+                                        color: Color(0xFF15163D),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 14),
+                                Text(
+                                  widget.isCompany
+                                      ? '"Somos una empresa en crecimiento que valora accion, claridad y ganas de construir. Hoy buscamos sumar a alguien que pueda generar impacto desde el primer mes."'
+                                      : '"Soy una persona proactiva, con foco en resultados y ganas de crecer en un entorno donde pueda aportar criterio, ejecucion y buena energia."',
+                                  style: const TextStyle(
+                                    color: Color(0xFF4A5073),
+                                    fontSize: 15,
+                                    height: 1.55,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                   const SizedBox(height: 16),
-                  Text(
-                    widget.isCompany
-                        ? 'En Mploya, los currículums de papel no existen. Las empresas y los candidatos se conectan a través de Videos. \n\nGraba tu primer Pitch contando:\n1. Qué ofreces como empresa.\n2. A quién estás buscando.'
-                        : 'En Mploya, los currículums de papel no existen. Las empresas quieren ver tu energía real. \n\nGraba tu primer Pitch contando:\n1. Qué sabes hacer (lo que ofreces).\n2. El tipo de empleo que buscas.',
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.85),
-                      fontSize: 16,
-                      fontWeight: FontWeight.w400,
-                      height: 1.5,
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
-                    ),
-                    child: const Row(
-                      children: [
-                        Icon(CupertinoIcons.info_circle_fill, color: MployaTheme.brandAccent, size: 20),
-                        SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            'Es obligatorio tener un Video-Pitch para poder ver los perfiles de los demás.',
-                            style: TextStyle(color: Colors.white, fontSize: 13, height: 1.4),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                ],
-              ),
-            ),
-
-          // ── Controles Inferiores (ocultos durante la subida) ──
-          if (!_isUploading)
-            Align(
-              alignment: Alignment.bottomCenter,
-              child: Container(
-                height: 160,
-                padding: const EdgeInsets.symmetric(horizontal: 40),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [Colors.black.withValues(alpha: 0.0), Colors.black.withValues(alpha: 0.8)],
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                  ),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    AnimatedOpacity(
-                      opacity: _isRecording ? 0.0 : 1.0,
-                      duration: const Duration(milliseconds: 200),
-                      child: GestureDetector(
-                        onTap: _pickFromGallery,
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(CupertinoIcons.folder_fill, color: Colors.white.withValues(alpha: 0.8), size: 30),
-                            const SizedBox(height: 6),
-                            Text('Subir MP4', style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 11)),
-                          ],
-                        ),
-                      ),
-                    ),
-
-                    // Botón central: Grabar (móvil) o Subir (web)
-                    GestureDetector(
-                      onTap: _toggleRecording,
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 300),
-                        width: 84,
-                        height: 84,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: _isRecording ? MployaTheme.danger.withValues(alpha: 0.4) : Colors.white,
-                            width: _isRecording ? 6 : 4,
-                          ),
-                        ),
-                        child: Center(
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 300),
-                            width: _isRecording ? 36 : 68,
-                            height: _isRecording ? 36 : 68,
+                  Row(
+                    children: [
+                      Expanded(
+                        child: CupertinoButton(
+                          padding: EdgeInsets.zero,
+                          onPressed: _isUploading
+                              ? null
+                              : () => Navigator.of(context).maybePop(),
+                          child: Container(
+                            height: 60,
                             decoration: BoxDecoration(
-                              color: MployaTheme.danger,
-                              borderRadius: BorderRadius.circular(_isRecording ? 8 : 40),
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: const Color(0xFFE3DAFF),
+                              ),
+                            ),
+                            alignment: Alignment.center,
+                            child: const Text(
+                              'Atras',
+                              style: TextStyle(
+                                color: Color(0xFF5B3DF5),
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                              ),
                             ),
                           ),
                         ),
                       ),
-                    ),
-
-                    // Botón Video Test ELIMINADO — solo se graba video real.
-                    const SizedBox(width: 48), // placeholder para mantener el layout centrado
-                  ],
-                ),
-              ),
-            ),
-
-          // ── Timer / Badge durante la grabación ──
-          if (_isRecording && !_isUploading)
-            Positioned(
-              top: 60,
-              left: 0,
-              right: 0,
-              child: Center(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: MployaTheme.danger.withValues(alpha: 0.9),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    _formatTime(_seconds),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 16,
-                      fontFeatures: [FontFeature.tabularFigures()],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-
-          // ── Overlay de Carga ──
-          if (_isUploading)
-            Positioned.fill(
-              child: Container(
-                color: Colors.black.withValues(alpha: 0.75),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const CupertinoActivityIndicator(
-                      radius: 18,
-                      color: MployaTheme.brandAccent,
-                    ),
-                    const SizedBox(height: 20),
-                    const Text(
-                      'Subiendo tu Pitch...',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: -0.3,
+                      const SizedBox(width: 14),
+                      Expanded(
+                        flex: 2,
+                        child: CupertinoButton(
+                          padding: EdgeInsets.zero,
+                          onPressed: _isUploading
+                              ? null
+                              : (kIsWeb ? _toggleRecording : _pickFromGallery),
+                          child: Container(
+                            height: 60,
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                colors: [Color(0xFF5B3DF5), Color(0xFF7E66FF)],
+                              ),
+                              borderRadius: BorderRadius.circular(20),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(
+                                    0xFF5B3DF5,
+                                  ).withValues(alpha: 0.25),
+                                  blurRadius: 24,
+                                  offset: const Offset(0, 12),
+                                ),
+                              ],
+                            ),
+                            alignment: Alignment.center,
+                            child: _isUploading
+                                ? const CupertinoActivityIndicator(
+                                    color: Colors.white,
+                                  )
+                                : Text(
+                                    kIsWeb ? 'Grabar ahora' : 'Subir ahora',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                          ),
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Esto puede tardar unos segundos.',
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.6),
-                        fontSize: 14,
-                      ),
-                    ),
-                  ],
-                ),
+                    ],
+                  ),
+                ],
               ),
             ),
-        ],
+          ),
+        ),
       ),
+    );
+  }
+}
+
+class _PitchProgressRow extends StatelessWidget {
+  const _PitchProgressRow();
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: List.generate(4, (index) {
+        return Expanded(
+          child: Container(
+            margin: EdgeInsets.only(right: index == 3 ? 0 : 8),
+            height: 8,
+            decoration: BoxDecoration(
+              color: const Color(0xFF5B3DF5),
+              borderRadius: BorderRadius.circular(999),
+            ),
+          ),
+        );
+      }),
+    );
+  }
+}
+
+class _GuideBullet extends StatelessWidget {
+  final String text;
+
+  const _GuideBullet({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 22,
+          height: 22,
+          margin: const EdgeInsets.only(top: 1),
+          decoration: const BoxDecoration(
+            color: Color(0xFFF2EEFF),
+            shape: BoxShape.circle,
+          ),
+          child: const Icon(
+            CupertinoIcons.check_mark,
+            size: 14,
+            color: Color(0xFF5B3DF5),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            text,
+            style: const TextStyle(
+              color: Color(0xFF4A5073),
+              fontSize: 14,
+              height: 1.45,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

@@ -1,4 +1,12 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import {
+  esParteDeLaEntrevista,
+  jwtDeRequest,
+} from '../_shared/autorizacion.ts';
+import {
+  esTranscripcionReal,
+  transcribirRespuesta,
+} from '../_shared/transcribe.ts';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // generate-interview-report — Lee las preguntas + respuestas transcriptas de una
@@ -8,6 +16,24 @@ import { createClient } from 'npm:@supabase/supabase-js@2';
 //
 // Body: { interview_id }
 // Usa el secret GEMINI_API_KEY. Modelo gemini-2.5-flash.
+//
+// ── RED DE SEGURIDAD DE TRANSCRIPCIÓN (12/8/2026) ───────────────────────────
+//
+// Antes, el cliente guardaba el texto fijo "[Respuesta grabada en video]" en
+// `interview_answers.transcript`, y esta función lo tomaba como si fuera la
+// respuesta del candidato. Resultado: informes con score y competencias
+// generados sobre una frase de relleno repetida, presentados a la empresa como
+// una evaluación real.
+//
+// Ahora, ANTES de evaluar:
+//   1. se revisa cada respuesta;
+//   2. las que no tengan transcripción REAL se intentan transcribir acá mismo
+//      (por si el disparo del cliente se perdió);
+//   3. se vuelve a verificar;
+//   4. si queda alguna sin transcripción real, se ABORTA con un motivo claro.
+//
+// No se genera informe parcial. No se rellena con "(sin respuesta)". Un informe
+// que no puede leer lo que dijo el candidato no debe existir.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const corsHeaders = {
@@ -34,6 +60,27 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     );
 
+    // ── AUTORIZACIÓN ─────────────────────────────────────────────────────────
+    //
+    // Esta función corre con service_role, o sea que SALTEA RLS: sin este
+    // chequeo, cualquiera con un interview_id recibía en la respuesta el informe
+    // completo de un candidato ajeno, lo escribía en interview_reports, marcaba
+    // la entrevista como completed y —desde que existe la red de
+    // transcripción— hacía que mandáramos sus VIDEOS a Gemini.
+    //
+    // Va ANTES de leer nada de la entrevista.
+    const permiso = await esParteDeLaEntrevista(
+      supabase,
+      jwtDeRequest(req),
+      interview_id,
+    );
+    if (!permiso.ok) {
+      return new Response(JSON.stringify({ error: permiso.error }), {
+        status: permiso.status ?? 403,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     // Entrevista + vacante
     const { data: interview, error: iErr } = await supabase
       .from('interviews')
@@ -56,23 +103,8 @@ Deno.serve(async (req) => {
       .eq('interview_id', interview_id)
       .order('ord', { ascending: true });
 
-    const { data: answers } = await supabase
-      .from('interview_answers')
-      .select('question_id, transcript')
-      .eq('interview_id', interview_id);
-
-    const answerByQ = new Map<string, string>();
-    for (const a of answers ?? []) {
-      answerByQ.set(a.question_id as string, (a.transcript as string) ?? '');
-    }
-
-    const qaText = (questions ?? [])
-      .map((q, i) =>
-        `${i + 1}. [${q.category ?? '-'}] P: ${q.text}\n   R: ${answerByQ.get(q.id as string) || '(sin respuesta)'}`)
-      .join('\n');
-
-    if (!qaText.trim()) {
-      return new Response(JSON.stringify({ error: 'La entrevista no tiene preguntas/respuestas' }), {
+    if (!questions || questions.length === 0) {
+      return new Response(JSON.stringify({ error: 'La entrevista no tiene preguntas' }), {
         status: 400, headers: corsHeaders,
       });
     }
@@ -83,6 +115,65 @@ Deno.serve(async (req) => {
         status: 500, headers: corsHeaders,
       });
     }
+
+    const leerRespuestas = async () => {
+      const { data } = await supabase
+        .from('interview_answers')
+        .select('question_id, transcript, created_at')
+        .eq('interview_id', interview_id)
+        .order('created_at', { ascending: true });
+
+      // Si el candidato reintentó una pregunta hay más de una fila: vale la
+      // última, que es la que también usa la transcripción.
+      const porPregunta = new Map<string, string>();
+      for (const a of data ?? []) {
+        porPregunta.set(a.question_id as string, (a.transcript as string) ?? '');
+      }
+      return porPregunta;
+    };
+
+    let respuestas = await leerRespuestas();
+
+    // ── Recuperar lo que falte ───────────────────────────────────────────────
+    //
+    // Se reutiliza todo lo ya transcripto: sólo se procesan los videos de las
+    // respuestas cuyo texto no pasa `esTranscripcionReal` (NULL, vacío, el
+    // placeholder viejo o una marca tipo "[inaudible]"). Si el cliente ya las
+    // transcribió al subirlas, este bloque no gasta un solo token.
+    const faltantes = questions
+      .map((q) => q.id as string)
+      .filter((id) => !esTranscripcionReal(respuestas.get(id)));
+
+    const sinRespuesta: string[] = [];
+    for (const questionId of faltantes) {
+      const r = await transcribirRespuesta(
+        supabase, geminiKey, interview_id, questionId,
+      );
+      if (!r.ok) sinRespuesta.push(`${questionId}: ${r.error}`);
+    }
+
+    if (faltantes.length > 0) respuestas = await leerRespuestas();
+
+    // ── Verificación final: o están todas, o no hay informe ──────────────────
+    const irrecuperables = questions
+      .map((q) => q.id as string)
+      .filter((id) => !esTranscripcionReal(respuestas.get(id)));
+
+    if (irrecuperables.length > 0) {
+      return new Response(JSON.stringify({
+        error: 'transcripciones_faltantes',
+        detalle:
+          `${irrecuperables.length} de ${questions.length} respuestas no tienen ` +
+          `transcripción real. No se genera el informe: evaluarlas sería ` +
+          `inventar una evaluación.`,
+        motivos: sinRespuesta,
+      }), { status: 422, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+    const qaText = questions
+      .map((q, i) =>
+        `${i + 1}. [${q.category ?? '-'}] P: ${q.text}\n   R: ${respuestas.get(q.id as string)}`)
+      .join('\n');
 
     const prompt =
       `Sos un especialista de RRHH. Evaluá esta entrevista para el puesto ` +

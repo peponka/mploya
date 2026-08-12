@@ -22,7 +22,12 @@ class StoryRow extends StatefulWidget {
   final bool isDarkOverlay;
   final String currentAccountType;
 
-  const StoryRow({super.key, required this.users, this.isDarkOverlay = false, this.currentAccountType = 'candidato'});
+  const StoryRow({
+    super.key,
+    required this.users,
+    this.isDarkOverlay = false,
+    this.currentAccountType = 'candidato',
+  });
 
   @override
   State<StoryRow> createState() => _StoryRowState();
@@ -74,8 +79,12 @@ class _StoryRowState extends State<StoryRow> {
           }).toList();
 
           // Priorizar los que tienen story activa
-          final withStory = crossFiltered.where((u) => activeIds.contains(u.id)).toList();
-          final withoutStory = crossFiltered.where((u) => !activeIds.contains(u.id)).toList();
+          final withStory = crossFiltered
+              .where((u) => activeIds.contains(u.id))
+              .toList();
+          final withoutStory = crossFiltered
+              .where((u) => !activeIds.contains(u.id))
+              .toList();
 
           // Si hay stories activas, solo mostrar esos. Si no, mostrar cross-filtered como fallback
           if (withStory.isNotEmpty) {
@@ -92,7 +101,10 @@ class _StoryRowState extends State<StoryRow> {
         setState(() {
           // Fallback: aplicar filtro cruzado básico
           final uid = Supabase.instance.client.auth.currentUser?.id;
-          _storyUsers = widget.users.where((u) => u.id != uid).take(15).toList();
+          _storyUsers = widget.users
+              .where((u) => u.id != uid)
+              .take(15)
+              .toList();
           _loaded = true;
         });
       }
@@ -104,14 +116,11 @@ class _StoryRowState extends State<StoryRow> {
     final displayUsers = _loaded ? _storyUsers : widget.users;
 
     return Container(
-      height: 68,
+      height: 108,
       color: Colors.transparent,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(
-          horizontal: 10,
-          vertical: 4,
-        ),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
         itemCount: displayUsers.length + 1,
         itemBuilder: (context, index) {
           if (index == 0) {
@@ -164,7 +173,12 @@ class _YourStoryState extends State<_YourStory> {
         setState(() {
           _avatarUrl = row['avatar_url']?.toString();
           _initials = name.isNotEmpty
-              ? name.split(' ').map((w) => w.isNotEmpty ? w[0] : '').take(2).join().toUpperCase()
+              ? name
+                    .split(' ')
+                    .map((w) => w.isNotEmpty ? w[0] : '')
+                    .take(2)
+                    .join()
+                    .toUpperCase()
               : 'ME';
         });
       }
@@ -189,7 +203,7 @@ class _YourStoryState extends State<_YourStory> {
         child: Column(
           children: [
             Container(
-              padding: const EdgeInsets.all(2.5),
+              padding: const EdgeInsets.all(3),
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: const LinearGradient(
@@ -208,18 +222,22 @@ class _YourStoryState extends State<_YourStory> {
               child: Container(
                 padding: const EdgeInsets.all(2),
                 decoration: BoxDecoration(
-                  color: widget.isDarkOverlay ? Colors.black : const Color(0xFFF9F9FA),
+                  color: widget.isDarkOverlay
+                      ? Colors.black
+                      : const Color(0xFFF9F9FA),
                   shape: BoxShape.circle,
                 ),
                 child: Stack(
                   clipBehavior: Clip.none,
                   children: [
                     Container(
-                      width: 34,
-                      height: 34,
+                      width: 58,
+                      height: 58,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: context.isDark ? const Color(0xFF3A3A3A) : const Color(0xFFEFEFEF),
+                        color: context.isDark
+                            ? const Color(0xFF3A3A3A)
+                            : const Color(0xFFEFEFEF),
                         image: (_avatarUrl != null && _avatarUrl!.isNotEmpty)
                             ? DecorationImage(
                                 image: CachedNetworkImageProvider(_avatarUrl!),
@@ -233,8 +251,8 @@ class _YourStoryState extends State<_YourStory> {
                                 _initials,
                                 style: TextStyle(
                                   color: context.textPrimary,
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w700,
                                 ),
                               ),
                             )
@@ -246,7 +264,9 @@ class _YourStoryState extends State<_YourStory> {
                       child: Container(
                         padding: const EdgeInsets.all(1.5),
                         decoration: BoxDecoration(
-                          color: widget.isDarkOverlay ? Colors.black : const Color(0xFFF9F9FA),
+                          color: widget.isDarkOverlay
+                              ? Colors.black
+                              : const Color(0xFFF9F9FA),
                           shape: BoxShape.circle,
                         ),
                         child: Container(
@@ -257,7 +277,7 @@ class _YourStoryState extends State<_YourStory> {
                           ),
                           child: const Icon(
                             CupertinoIcons.add,
-                            size: 12,
+                            size: 14,
                             color: Colors.white,
                           ),
                         ),
@@ -267,14 +287,18 @@ class _YourStoryState extends State<_YourStory> {
                 ),
               ),
             ),
-            const SizedBox(height: 3),
+            const SizedBox(height: 8),
             Text(
               'Tu Historia',
               style: TextStyle(
-                fontSize: 10,
-                color: widget.isDarkOverlay ? Colors.white : context.textSecondary,
-                fontWeight: FontWeight.w600,
-                shadows: widget.isDarkOverlay ? [const Shadow(color: Colors.black54, blurRadius: 4)] : null,
+                fontSize: 13,
+                color: widget.isDarkOverlay
+                    ? Colors.white
+                    : context.textSecondary,
+                fontWeight: FontWeight.w500,
+                shadows: widget.isDarkOverlay
+                    ? [const Shadow(color: Colors.black54, blurRadius: 4)]
+                    : null,
               ),
             ),
           ],
@@ -309,28 +333,28 @@ class _StoryItem extends StatelessWidget {
         children: [
           NexAvatar(
             user: user,
-            size: 34,
+            size: 58,
             showStoryRing: hasActiveStory,
             onTap: () {
               Navigator.of(context).push(
                 CupertinoPageRoute(
                   fullscreenDialog: true,
-                  builder: (_) => StoryViewerScreen(
-                    users: users,
-                    initialIndex: index,
-                  ),
+                  builder: (_) =>
+                      StoryViewerScreen(users: users, initialIndex: index),
                 ),
               );
             },
           ),
-          const SizedBox(height: 3),
+          const SizedBox(height: 8),
           Text(
             initial,
             style: TextStyle(
-              fontSize: 10,
+              fontSize: 13,
               fontWeight: FontWeight.w500,
               color: isDarkOverlay ? Colors.white70 : context.textSecondary,
-              shadows: isDarkOverlay ? [const Shadow(color: Colors.black54, blurRadius: 4)] : null,
+              shadows: isDarkOverlay
+                  ? [const Shadow(color: Colors.black54, blurRadius: 4)]
+                  : null,
             ),
           ),
         ],

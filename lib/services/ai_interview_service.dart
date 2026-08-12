@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -103,16 +105,41 @@ class AIInterviewService {
   }
 
   // ── Trigger Question Generation (Edge Function) ──
-  Future<bool> triggerQuestionGeneration(String interviewId) async {
+  ///
+  /// La Edge Function `generate-interview-questions` EXIGE `job_id`: sin él
+  /// responde 400 («job_id requerido») y no genera ni persiste nada. Durante un
+  /// tiempo se la invocó sólo con `interview_id`, así que ninguna entrevista
+  /// llegaba a tener preguntas y el circuito moría acá.
+  ///
+  /// Si el llamador ya conoce la vacante la pasa; si no, se resuelve leyendo la
+  /// propia entrevista antes de invocar.
+  Future<bool> triggerQuestionGeneration(
+    String interviewId, {
+    String? jobId,
+  }) async {
     if (interviewId.startsWith('demo-')) {
       return true;
     }
 
     try {
+      var vacanteId = jobId;
+      if (vacanteId == null || vacanteId.isEmpty) {
+        final fila = await _supabase
+            .from('interviews')
+            .select('job_id')
+            .eq('id', interviewId)
+            .maybeSingle();
+        vacanteId = fila?['job_id']?.toString();
+      }
+      if (vacanteId == null || vacanteId.isEmpty) {
+        debugPrint('⚠️ Sin job_id no se pueden generar preguntas: $interviewId');
+        return false;
+      }
+
       debugPrint('🧠 Generando preguntas de entrevista...');
       final response = await _supabase.functions.invoke(
         'generate-interview-questions',
-        body: {'interview_id': interviewId},
+        body: {'interview_id': interviewId, 'job_id': vacanteId},
       );
 
       if (response.status == 200) {
@@ -128,11 +155,20 @@ class AIInterviewService {
   }
 
   // ── Submit Answer ──
+  ///
+  /// Sube el video y registra la respuesta. La transcripción NO se escribe acá:
+  /// la hace la Edge Function `transcribe-interview-answer`, que oye el audio de
+  /// verdad.
+  ///
+  /// Hasta el 12/8/2026 esta función guardaba el texto fijo
+  /// "[Respuesta grabada en video]", y `generate-interview-report` evaluaba ESO
+  /// como si fuera la respuesta del candidato. Ahora la columna queda en NULL:
+  /// el estado "sin transcribir" tiene que ser detectable, y no hay parámetro
+  /// `transcript` para que nadie pueda volver a meter un placeholder.
   Future<bool> submitAnswer({
     required String interviewId,
     required String questionId,
     required XFile file,
-    String? transcript,
   }) async {
     if (interviewId.startsWith('demo-')) {
       return true;
@@ -152,19 +188,43 @@ class AIInterviewService {
         return false;
       }
 
-      // 2. Insertar respuesta en BD
+      // 2. Insertar respuesta en BD. `transcript` queda NULL a propósito.
       debugPrint('💾 Guardando registro de respuesta en BD...');
       await _supabase.from('interview_answers').insert({
         'interview_id': interviewId,
         'question_id': questionId,
         'video_url': videoUrl,
-        'transcript': transcript ?? '',
       });
+
+      // 3. Transcripción, SIN bloquear al candidato: mientras el modelo escucha
+      // el video, la persona ya está leyendo la pregunta siguiente. Si esta
+      // llamada se pierde, `generate-interview-report` la vuelve a intentar
+      // antes de evaluar, así que no hay un único punto de falla.
+      unawaited(_dispararTranscripcion(interviewId, questionId));
 
       return true;
     } catch (e) {
       debugPrint('Error submitting answer: $e');
       return false;
+    }
+  }
+
+  /// Pide la transcripción de una respuesta ya subida.
+  ///
+  /// Es best-effort por diseño: un fallo acá NO invalida la respuesta, que ya
+  /// está guardada con su video. Nunca escribe nada en la base — de eso se
+  /// encarga la Edge Function, que es la única que ve la GEMINI_API_KEY.
+  Future<void> _dispararTranscripcion(
+    String interviewId,
+    String questionId,
+  ) async {
+    try {
+      await _supabase.functions.invoke(
+        'transcribe-interview-answer',
+        body: {'interview_id': interviewId, 'question_id': questionId},
+      );
+    } catch (e) {
+      debugPrint('transcripción (se reintenta al generar el informe): $e');
     }
   }
 
@@ -276,8 +336,9 @@ class AIInterviewService {
       }).select().single();
       
       final interview = Interview.fromJson(row);
-      // Auto-disparar generación de preguntas iniciales
-      await triggerQuestionGeneration(interview.id);
+      // Auto-disparar generación de preguntas iniciales. El `job_id` va
+      // explícito: la Edge Function lo exige y acá ya lo tenemos.
+      await triggerQuestionGeneration(interview.id, jobId: interview.jobId);
       return interview;
     } catch (e) {
       debugPrint('Error creating interview: $e');

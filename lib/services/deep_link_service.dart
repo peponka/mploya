@@ -96,6 +96,10 @@ class DeepLinkService {
 
     // ── Solo procesar links de nuestro dominio ──
     final host = uri.host.toLowerCase();
+    if (host == '127.0.0.1' || host == 'localhost') {
+      debugPrint('ℹ️ Host local detectado: ${uri.host} — se ignora como deep link');
+      return false;
+    }
     if (host != 'mploya.ai' && host != 'www.mploya.ai') {
       debugPrint('⚠️ Dominio no reconocido: ${uri.host}');
       return false;

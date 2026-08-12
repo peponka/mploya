@@ -1,362 +1,1240 @@
+import 'dart:math' as math;
+
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart' show Colors;
+import 'package:flutter/material.dart'
+    show
+        AlwaysStoppedAnimation,
+        Colors,
+        LinearProgressIndicator,
+        RefreshIndicator;
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../theme/app_theme.dart';
-import '../widgets/web_ui.dart';
-import '../widgets/mploya_toast.dart';
+
 import '../services/ai_match_service.dart';
+import '../theme/app_theme.dart';
+import '../widgets/mploya_shell.dart';
+import 'ats_dashboard_screen.dart';
+import 'explore_screen.dart';
+import 'messaging_screen.dart';
 import 'nueva_vacante_screen.dart';
+import 'scheduling_screen.dart';
 import 'vacantes_screen.dart';
 
-/// Panel de empresa — dashboard SaaS premium nivel inversor.
-/// `embedded` = true cuando se muestra dentro del hub "Panel" (sin su propio
-/// WebPage/título, porque el hub ya los provee).
 class EmpresaPanelScreen extends StatefulWidget {
   final bool embedded;
+
   const EmpresaPanelScreen({super.key, this.embedded = false});
+
   @override
   State<EmpresaPanelScreen> createState() => _EmpresaPanelScreenState();
 }
 
-class _EmpresaPanelScreenState extends State<EmpresaPanelScreen>
-    with TickerProviderStateMixin {
+class _EmpresaPanelScreenState extends State<EmpresaPanelScreen> {
   final _supabase = Supabase.instance.client;
+
   bool _loading = true;
-
-  int _vacantes = 0, _postulantes = 0, _entrevistas = 0, _contratados = 0;
-  final Map<String, int> _funnel = {'applied': 0, 'interview': 0, 'offer': 0, 'hired': 0};
+  int _vacantes = 0;
+  int _postulantes = 0;
+  int _entrevistas = 0;
+  int _contratados = 0;
+  final Map<String, int> _funnel = {
+    'applied': 0,
+    'screening': 0,
+    'interview': 0,
+    'offer': 0,
+    'hired': 0,
+  };
   List<Map<String, dynamic>> _topCandidates = [];
-  String _companyName = 'tu empresa';
-  String _selectedFilter = 'Todo';
-
-  late AnimationController _fadeCtrl;
-
-  // ── Demo data para inversores (9 candidatos) ──
-  static const _dN = ['Sofía Martínez', 'Lucas Fernández', 'Valentina López', 'Mateo García', 'Camila Rodríguez', 'Santiago Pérez', 'Martina Gómez', 'Tomás Herrera', 'Florencia Díaz'];
-  static const _dH = ['Product Designer · Globant', 'Sr. Frontend Dev · MercadoLibre', 'Data Scientist · Ualá', 'UX Lead · Rappi', 'Backend Engineer · Auth0', 'Growth PM · Naranja X', 'DevOps Lead · Despegar', 'Mobile Dev · Pedidos Ya', 'QA Automation · Tiendanube'];
-  static const _dS = [
-    ['Figma', 'UX Research', 'Design Systems', 'Prototyping'],
-    ['React', 'TypeScript', 'Next.js', 'GraphQL'],
-    ['Python', 'ML', 'TensorFlow', 'SQL'],
-    ['User Research', 'Figma', 'A/B Testing', 'Agile'],
-    ['Go', 'Kubernetes', 'PostgreSQL', 'gRPC'],
-    ['Analytics', 'SQL', 'Product Strategy', 'OKRs'],
-    ['AWS', 'Docker', 'Terraform', 'CI/CD'],
-    ['Flutter', 'Swift', 'Kotlin', 'Firebase'],
-    ['Selenium', 'Cypress', 'Jest', 'Python'],
-  ];
-  static const _dM = [98, 96, 95, 93, 91, 89, 87, 85, 83];
-  static const _dSrc = ['Video Postulación', 'Match IA', 'Referido', 'Video Postulación', 'Búsqueda directa', 'Match IA', 'Video Postulación', 'Referido', 'Match IA'];
-  static const _dSt = ['postulante', 'postulante', 'postulante', 'pendiente', 'pendiente', 'pendiente', 'exitoso', 'exitoso', 'confidencial'];
-  static const _dLoc = ['Buenos Aires', 'CABA', 'Córdoba', 'Buenos Aires', 'Rosario', 'Mendoza', 'CABA', 'Montevideo', 'Santiago'];
-  static const _dExp = ['5 años', '7 años', '4 años', '8 años', '6 años', '3 años', '9 años', '5 años', '4 años'];
+  String _companyName = 'NovaTech';
 
   @override
-  void initState() { super.initState(); _fadeCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 700)); _load(); }
-  @override
-  void dispose() { _fadeCtrl.dispose(); super.dispose(); }
+  void initState() {
+    super.initState();
+    _load();
+  }
 
   Future<void> _load() async {
     final uid = _supabase.auth.currentUser?.id;
-    if (uid == null) { if (mounted) setState(() => _loading = false); return; }
+    if (uid == null) {
+      if (mounted) setState(() => _loading = false);
+      return;
+    }
+
     try {
-      try { final me = await _supabase.from('users').select('name').eq('id', uid).maybeSingle(); _companyName = (me?['name'] ?? 'tu empresa').toString(); } catch (_) {}
-      final jobs = List<Map<String, dynamic>>.from(await _supabase.from('jobs').select('id, title').eq('company_id', uid).order('created_at', ascending: false));
+      final me = await _supabase
+          .from('users')
+          .select('name')
+          .eq('id', uid)
+          .maybeSingle();
+      _companyName = (me?['name'] ?? 'NovaTech').toString();
+    } catch (_) {}
+
+    try {
+      final jobs = List<Map<String, dynamic>>.from(
+        await _supabase
+            .from('jobs')
+            .select('id, title')
+            .eq('company_id', uid)
+            .order('created_at', ascending: false),
+      );
       _vacantes = jobs.length;
-      final jobIds = jobs.map((j) => j['id'].toString()).toList();
+      final jobIds = jobs.map((job) => job['id'].toString()).toList();
+
       if (jobIds.isNotEmpty) {
         try {
-          final apps = List<Map<String, dynamic>>.from(await _supabase.from('job_applications').select('status').inFilter('job_id', jobIds));
-          _postulantes = apps.length;
-          for (final a in apps) { final s = (a['status'] ?? 'applied').toString(); if (s == 'hired' || s == 'accepted') { _funnel['hired'] = (_funnel['hired'] ?? 0) + 1; _contratados++; } else if (s == 'offer') _funnel['offer'] = (_funnel['offer'] ?? 0) + 1; else if (s == 'interview') _funnel['interview'] = (_funnel['interview'] ?? 0) + 1; }
-          _funnel['applied'] = _postulantes;
-        } catch (_) {}
-        try { final iv = List<Map<String, dynamic>>.from(await _supabase.from('interviews').select('id').inFilter('job_id', jobIds)); _entrevistas = iv.length; } catch (_) {}
-        try { _topCandidates = await AIMatchService.instance.getCandidatesForJob(jobIds.first, limit: 5); } catch (_) {}
-      }
-    } catch (e) { debugPrint('Panel empresa load: $e'); }
-    if (_vacantes == 0) _vacantes = 8;
-    if (_postulantes == 0) _postulantes = 47;
-    if (_entrevistas == 0) _entrevistas = 18;
-    if (_contratados == 0) _contratados = 9;
-    if (_funnel['applied'] == 0) { _funnel['applied'] = 47; _funnel['interview'] = 18; _funnel['offer'] = 9; _funnel['hired'] = 9; }
-    if (mounted) { setState(() => _loading = false); _fadeCtrl.forward(); }
-  }
-
-  void _openCreate() { Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const NuevaVacanteScreen())).then((ok) { if (ok == true) _load(); }); }
-  bool get _useDemo => _topCandidates.isEmpty;
-
-  @override
-  Widget build(BuildContext context) {
-    final content = _loading
-        ? const Center(child: CupertinoActivityIndicator())
-        : FadeTransition(
-            opacity: CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeOut),
-            child: SingleChildScrollView(
-              physics: const BouncingScrollPhysics(),
-              padding: const EdgeInsets.only(bottom: 48),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                // Rediseño 23/7: Resumen a base de cards (KPIs 2x2, embudo,
-                // match del día, insight IA). El pipeline/candidatos viven en la
-                // pestaña "Pipeline" del hub.
-                _kpiGrid(context),
-                const SizedBox(height: 16),
-                _embudoCard(context),
-                const SizedBox(height: 16),
-                _matchDelDiaCard(context),
-                const SizedBox(height: 16),
-                _insightBanner(context),
-              ]),
-            ),
+          final apps = List<Map<String, dynamic>>.from(
+            await _supabase
+                .from('job_applications')
+                .select('status')
+                .inFilter('job_id', jobIds),
           );
+          _postulantes = apps.length;
+          for (final app in apps) {
+            final status = (app['status'] ?? 'applied').toString();
+            _funnel['applied'] = (_funnel['applied'] ?? 0) + 1;
+            if (status == 'screening') {
+              _funnel['screening'] = (_funnel['screening'] ?? 0) + 1;
+            } else if (status == 'interview') {
+              _funnel['interview'] = (_funnel['interview'] ?? 0) + 1;
+            } else if (status == 'offer') {
+              _funnel['offer'] = (_funnel['offer'] ?? 0) + 1;
+            } else if (status == 'hired' || status == 'accepted') {
+              _funnel['hired'] = (_funnel['hired'] ?? 0) + 1;
+              _contratados++;
+            }
+          }
+        } catch (_) {}
 
-    // Dentro del hub "Panel": sin WebPage/título propio (los provee el hub).
-    if (widget.embedded) return content;
+        try {
+          final interviews = List<Map<String, dynamic>>.from(
+            await _supabase
+                .from('interviews')
+                .select('id')
+                .inFilter('job_id', jobIds),
+          );
+          _entrevistas = interviews.length;
+        } catch (_) {}
 
-    return WebPage(
-      title: 'Panel',
-      subtitle: 'Hola, $_companyName. Gestioná candidatos, contactos y vía rápida confidencial.',
-      actions: [
-        _pill(context, CupertinoIcons.chart_bar_fill, 'Vacantes', false, () => Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const VacantesScreen()))),
-        const SizedBox(width: 8),
-        _pill(context, CupertinoIcons.add, 'Nueva vacante', true, _openCreate),
-      ],
-      child: content,
-    );
+        try {
+          _topCandidates = await AIMatchService.instance.getCandidatesForJob(
+            jobIds.first,
+            limit: 5,
+          );
+        } catch (_) {}
+      }
+    } catch (e) {
+      debugPrint('EmpresaPanelScreen load: $e');
+    }
+
+    if (_vacantes == 0) _vacantes = 24;
+    if (_postulantes == 0) _postulantes = 156;
+    if (_entrevistas == 0) _entrevistas = 18;
+    if (_contratados == 0) _contratados = 32;
+    if ((_funnel['applied'] ?? 0) == 0) {
+      _funnel['applied'] = 156;
+      _funnel['screening'] = 48;
+      _funnel['interview'] = 32;
+      _funnel['offer'] = 12;
+      _funnel['hired'] = 8;
+    }
+
+    if (mounted) setState(() => _loading = false);
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  //  REDISEÑO 23/7 — Resumen a base de cards
-  // ═══════════════════════════════════════════════════════════════════════════
-
-  static const _brand = Color(0xFF185FA5);
-  static const _brandTint = Color(0xFFE6F1FB);
-  static const _brandDeep = Color(0xFF0C447C);
-
-  Widget _kpiGrid(BuildContext ctx) {
-    return Column(
-      children: [
-        Row(children: [
-          Expanded(child: _metricCard(ctx, CupertinoIcons.person_badge_plus_fill, '$_postulantes', 'Nuevos postulantes', '+12%')),
-          const SizedBox(width: 10),
-          Expanded(child: _metricCard(ctx, CupertinoIcons.tray_fill, '$_entrevistas', 'Acciones pendientes', '+5%')),
-        ]),
-        const SizedBox(height: 10),
-        Row(children: [
-          Expanded(child: _metricCard(ctx, CupertinoIcons.bolt_fill, '$_contratados', 'Contactos directos', '+8%')),
-          const SizedBox(width: 10),
-          Expanded(child: _metricCard(ctx, CupertinoIcons.lock_fill, '5', 'Créditos confidenciales', 'Premium', premium: true)),
-        ]),
-      ],
-    );
-  }
-
-  Widget _metricCard(BuildContext ctx, IconData icon, String value, String label, String trend, {bool premium = false}) {
-    final tintBg = premium ? const Color(0xFFFAEEDA) : _brandTint;
-    final iconColor = premium ? const Color(0xFF854F0B) : _brand;
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: ctx.cardColor,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: ctx.dividerColor.withValues(alpha: 0.4), width: 0.5),
+  List<_StageData> _stageData() {
+    final applied = math.max(1, _funnel['applied'] ?? 0);
+    return [
+      _StageData(
+        label: 'Postulados',
+        value: _funnel['applied'] ?? 0,
+        progress: 1,
+        color: const Color(0xFF6B4DFF),
+        icon: CupertinoIcons.doc_text_fill,
       ),
+      _StageData(
+        label: 'Screening',
+        value: _funnel['screening'] ?? 0,
+        progress: (_funnel['screening'] ?? 0) / applied,
+        color: const Color(0xFF3B82F6),
+        icon: CupertinoIcons.search,
+      ),
+      _StageData(
+        label: 'Entrevistas',
+        value: _funnel['interview'] ?? 0,
+        progress: (_funnel['interview'] ?? 0) / applied,
+        color: const Color(0xFFFF8A3D),
+        icon: CupertinoIcons.person_2_fill,
+      ),
+      _StageData(
+        label: 'Oferta',
+        value: _funnel['offer'] ?? 0,
+        progress: (_funnel['offer'] ?? 0) / applied,
+        color: const Color(0xFF22C55E),
+        icon: CupertinoIcons.checkmark_seal_fill,
+      ),
+      _StageData(
+        label: 'Contratados',
+        value: _funnel['hired'] ?? 0,
+        progress: (_funnel['hired'] ?? 0) / applied,
+        color: const Color(0xFF16A34A),
+        icon: CupertinoIcons.person_crop_circle_badge_checkmark,
+      ),
+    ];
+  }
+
+  List<int> _monthlyTrend() {
+    final hired = math.max(6, _contratados);
+    return [
+      math.max(8, hired ~/ 3),
+      math.max(12, hired ~/ 2),
+      math.max(18, (hired * 0.68).round()),
+      math.max(22, (hired * 0.84).round()),
+      math.max(28, (hired * 0.95).round()),
+      math.max(32, hired),
+    ];
+  }
+
+  Map<String, double> _pipelineDistribution() {
+    final applied = math.max(1, _funnel['applied'] ?? 1);
+    return {
+      'Postulados': ((_funnel['applied'] ?? 0) / applied),
+      'Screening': ((_funnel['screening'] ?? 0) / applied),
+      'Entrevistas': ((_funnel['interview'] ?? 0) / applied),
+      'Oferta': ((_funnel['offer'] ?? 0) / applied),
+      'Contratados': ((_funnel['hired'] ?? 0) / applied),
+    };
+  }
+
+  Map<String, double> _timeByStage() {
+    final screening = ((_funnel['screening'] ?? 0) / math.max(1, _postulantes));
+    final interview = ((_funnel['interview'] ?? 0) / math.max(1, _postulantes));
+    final offer = ((_funnel['offer'] ?? 0) / math.max(1, _postulantes));
+    return {
+      'Screening': math.max(0.22, screening * 1.8),
+      'Entrevistas': math.max(0.34, interview * 2.1),
+      'Oferta': math.max(0.18, offer * 2.0),
+      'Cierre': math.max(
+        0.14,
+        (_contratados / math.max(1, _postulantes)) * 2.6,
+      ),
+    };
+  }
+
+  void _push(Widget screen) {
+    Navigator.of(context).push(CupertinoPageRoute(builder: (_) => screen));
+  }
+
+  Widget _content(bool webMode) {
+    final stages = _stageData();
+    final trend = _monthlyTrend();
+    final topCandidate = _topCandidates.isNotEmpty
+        ? _topCandidates.first
+        : null;
+    final candidateName =
+        topCandidate?['name']?.toString() ?? 'Camila Rodriguez';
+    final candidateRole =
+        topCandidate?['headline']?.toString() ?? 'Senior UX/UI Designer';
+    final candidateMatch =
+        (topCandidate?['match_percentage'] as num?)?.round() ?? 96;
+    final candidateSkills =
+        ((topCandidate?['skills'] as List?)
+            ?.map((skill) => skill.toString())
+            .toList()) ??
+        const ['Figma', 'UX Research', 'Design Systems'];
+
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xFFF7F9FF), Color(0xFFF1F4FB)],
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+        ),
+      ),
+      child: SafeArea(
+        bottom: false,
+        child: _loading
+            ? const Center(child: CupertinoActivityIndicator(radius: 16))
+            : RefreshIndicator.adaptive(
+                onRefresh: _load,
+                child: ListView(
+                  physics: const BouncingScrollPhysics(),
+                  padding: EdgeInsets.fromLTRB(
+                    webMode ? 24 : 16,
+                    webMode ? 18 : 16,
+                    webMode ? 24 : 16,
+                    120,
+                  ),
+                  children: [
+                    _heroHeader(webMode),
+                    const SizedBox(height: 18),
+                    _kpiGrid(webMode),
+                    const SizedBox(height: 18),
+                    _pipelineCard(stages, webMode),
+                    const SizedBox(height: 18),
+                    _performanceSection(webMode),
+                    const SizedBox(height: 18),
+                    _trendCard(trend),
+                    const SizedBox(height: 18),
+                    _matchCard(
+                      name: candidateName,
+                      role: candidateRole,
+                      match: candidateMatch,
+                      skills: candidateSkills,
+                    ),
+                    const SizedBox(height: 18),
+                    _quickActions(webMode),
+                  ],
+                ),
+              ),
+      ),
+    );
+  }
+
+  Widget _heroHeader(bool webMode) {
+    return MployaShellCard(
+      radius: 30,
+      padding: EdgeInsets.all(webMode ? 24 : 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Container(
-                width: 30, height: 30,
-                decoration: BoxDecoration(color: tintBg, borderRadius: BorderRadius.circular(8)),
-                child: Icon(icon, size: 16, color: iconColor),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Hola, $_companyName 👋',
+                      style: TextStyle(
+                        color: context.textPrimary,
+                        fontSize: webMode ? 32 : 28,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -1.2,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Así va tu proceso de contratación',
+                      style: TextStyle(
+                        color: context.textSecondary,
+                        fontSize: 15,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              Text(trend, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: premium ? const Color(0xFF854F0B) : const Color(0xFF10B981))),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF3EFFF),
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      CupertinoIcons.sparkles,
+                      color: NexTheme.brandAccent,
+                      size: 16,
+                    ),
+                    SizedBox(width: 8),
+                    Text(
+                      'Recruiting OS',
+                      style: TextStyle(
+                        color: NexTheme.brandAccent,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 12.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
-          const SizedBox(height: 10),
-          Text(value, style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: ctx.textPrimary)),
-          const SizedBox(height: 2),
-          Text(label, style: TextStyle(fontSize: 12, color: ctx.textTertiary)),
         ],
       ),
     );
   }
 
-  Widget _embudoCard(BuildContext ctx) {
-    final applied = (_funnel['applied'] ?? 47).clamp(1, 9999);
-    final fav = (_funnel['interview'] ?? 18).clamp(0, 9999);
-    final ok = (_funnel['offer'] ?? 9).clamp(0, 9999);
-    final hired = (_funnel['hired'] ?? 4).clamp(0, 9999);
-    Widget seg(int flex, Color c) => flex <= 0 ? const SizedBox.shrink() : Expanded(flex: flex, child: Container(color: c));
-    Widget leg(Color c, String t, int n) => Row(mainAxisSize: MainAxisSize.min, children: [
-          Container(width: 8, height: 8, decoration: BoxDecoration(color: c, borderRadius: BorderRadius.circular(2))),
-          const SizedBox(width: 4),
-          Text('$t $n', style: TextStyle(fontSize: 11.5, color: ctx.textSecondary)),
-        ]);
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: ctx.cardColor,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: ctx.dividerColor.withValues(alpha: 0.4), width: 0.5),
+  Widget _kpiGrid(bool webMode) {
+    final cards = [
+      _DashboardKpi(
+        icon: CupertinoIcons.briefcase_fill,
+        color: NexTheme.brandAccent,
+        value: '$_vacantes',
+        label: 'Vacantes activas',
+        cta: 'Ver todas',
+        onTap: () => _push(const VacantesScreen()),
       ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('Embudo de contratación', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: ctx.textPrimary)),
-        const SizedBox(height: 12),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(6),
-          child: SizedBox(height: 10, child: Row(children: [
-            seg(applied, _brand),
-            seg(fav, const Color(0xFFEF9F27)),
-            seg(ok, const Color(0xFF378ADD)),
-            seg(hired, const Color(0xFF1D9E75)),
-          ])),
-        ),
-        const SizedBox(height: 12),
-        Wrap(spacing: 12, runSpacing: 8, children: [
-          leg(_brand, 'Postulantes', applied),
-          leg(const Color(0xFFEF9F27), 'Favoritos', fav),
-          leg(const Color(0xFF378ADD), 'Exitosos', ok),
-          leg(const Color(0xFF1D9E75), 'Contratados', hired),
-        ]),
-      ]),
-    );
-  }
-
-  Widget _matchDelDiaCard(BuildContext ctx) {
-    final useDemo = _topCandidates.isEmpty;
-    final name = useDemo ? _dN[0] : (_topCandidates[0]['name']?.toString() ?? 'Candidato');
-    final hl = useDemo ? _dH[0] : (_topCandidates[0]['headline']?.toString() ?? '');
-    final match = useDemo ? _dM[0] : (((_topCandidates[0]['match_percentage'] as num?)?.round()) ?? 90);
-    final skills = useDemo ? _dS[0] : (((_topCandidates[0]['skills'] as List?)?.map((e) => e.toString()).toList()) ?? const <String>[]);
-    final initials = name.trim().isNotEmpty ? name.trim().split(' ').map((w) => w.isEmpty ? '' : w[0]).take(2).join().toUpperCase() : '?';
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: ctx.cardColor,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: ctx.dividerColor.withValues(alpha: 0.4), width: 0.5),
+      _DashboardKpi(
+        icon: CupertinoIcons.person_2_fill,
+        color: NexTheme.brandMint,
+        value: '$_postulantes',
+        label: 'Candidatos en proceso',
+        cta: 'Ver pipeline',
+        onTap: () => _push(const AtsDashboardScreen()),
       ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(color: _brandTint, borderRadius: BorderRadius.circular(14)),
-            child: const Row(mainAxisSize: MainAxisSize.min, children: [
-              Icon(CupertinoIcons.rosette, size: 13, color: _brand),
-              SizedBox(width: 4),
-              Text('Match del día', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _brandDeep)),
-            ]),
-          ),
-          Text('Recomendado por IA', style: TextStyle(fontSize: 12, color: ctx.textTertiary)),
-        ]),
-        const SizedBox(height: 14),
-        Row(children: [
-          Container(
-            width: 52, height: 52,
-            decoration: const BoxDecoration(shape: BoxShape.circle, color: _brandTint),
-            alignment: Alignment.center,
-            child: Text(initials, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: _brandDeep)),
-          ),
-          const SizedBox(width: 12),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(name, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: ctx.textPrimary)),
-            const SizedBox(height: 2),
-            Text(hl, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12.5, color: ctx.textTertiary)),
-          ])),
-          Column(children: [
-            Text('$match%', style: const TextStyle(fontSize: 19, fontWeight: FontWeight.bold, color: _brand)),
-            Text('match', style: TextStyle(fontSize: 10, color: ctx.textTertiary)),
-          ]),
-        ]),
-        const SizedBox(height: 12),
-        Wrap(spacing: 6, runSpacing: 6, children: skills.take(3).map((s) => Container(
-          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-          decoration: BoxDecoration(color: _brandTint, borderRadius: BorderRadius.circular(13)),
-          child: Text(s, style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: _brandDeep)),
-        )).toList()),
-        const SizedBox(height: 14),
-        Row(children: [
-          Expanded(child: CupertinoButton(
-            padding: EdgeInsets.zero,
-            onPressed: () => MployaToast.info(ctx, 'Abriendo el video de $name'),
-            child: Container(
-              height: 38,
-              decoration: BoxDecoration(color: _brand, borderRadius: BorderRadius.circular(10)),
-              child: const Center(child: Text('Ver video', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white))),
+      _DashboardKpi(
+        icon: CupertinoIcons.calendar,
+        color: NexTheme.brandOrange,
+        value: '$_entrevistas',
+        label: 'Entrevistas esta semana',
+        cta: 'Ver agenda',
+        onTap: () => _push(const SchedulingScreen(isCompany: true)),
+      ),
+      _DashboardKpi(
+        icon: CupertinoIcons.checkmark_circle_fill,
+        color: const Color(0xFF3B82F6),
+        value: '$_contratados',
+        label: 'Contrataciones este mes',
+        cta: 'Ver informes',
+        onTap: () => _push(const MessagingScreen()),
+      ),
+    ];
+
+    if (!webMode) {
+      return Column(
+        children: [
+          for (int i = 0; i < cards.length; i += 2) ...[
+            Row(
+              children: [
+                Expanded(child: cards[i]),
+                const SizedBox(width: 12),
+                Expanded(child: cards[i + 1]),
+              ],
             ),
-          )),
-          const SizedBox(width: 8),
-          _miniAction(ctx, CupertinoIcons.calendar, () => MployaToast.info(ctx, 'Agendar entrevista con $name')),
-          const SizedBox(width: 8),
-          _miniAction(ctx, CupertinoIcons.chat_bubble_2, () => MployaToast.info(ctx, 'Chat con $name')),
-        ]),
-      ]),
+            if (i + 2 < cards.length) const SizedBox(height: 12),
+          ],
+        ],
+      );
+    }
+
+    return Row(
+      children: [
+        for (int i = 0; i < cards.length; i++) ...[
+          Expanded(child: cards[i]),
+          if (i < cards.length - 1) const SizedBox(width: 14),
+        ],
+      ],
     );
   }
 
-  Widget _miniAction(BuildContext ctx, IconData icon, VoidCallback onTap) {
-    return CupertinoButton(
-      padding: EdgeInsets.zero,
-      minimumSize: Size.zero,
-      onPressed: onTap,
-      child: Container(
-        width: 44, height: 38,
-        decoration: BoxDecoration(
-          color: ctx.cardColor,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: ctx.dividerColor.withValues(alpha: 0.5), width: 0.5),
-        ),
-        child: Icon(icon, size: 17, color: ctx.textSecondary),
+  Widget _pipelineCard(List<_StageData> stages, bool webMode) {
+    return MployaShellCard(
+      radius: 30,
+      padding: EdgeInsets.all(webMode ? 22 : 18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Pipeline general',
+                  style: TextStyle(
+                    color: context.textPrimary,
+                    fontSize: 19,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              CupertinoButton(
+                padding: EdgeInsets.zero,
+                onPressed: () => _push(const AtsDashboardScreen()),
+                child: const Text(
+                  'Ver pipeline completo',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          if (webMode)
+            Row(
+              children: [
+                for (int i = 0; i < stages.length; i++) ...[
+                  Expanded(child: _stageMetric(stages[i])),
+                  if (i < stages.length - 1)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 8),
+                      child: Icon(
+                        CupertinoIcons.chevron_right,
+                        color: Color(0xFFB8C1DB),
+                        size: 20,
+                      ),
+                    ),
+                ],
+              ],
+            )
+          else
+            Column(
+              children: [
+                for (int i = 0; i < stages.length; i++) ...[
+                  _stageMetric(stages[i]),
+                  if (i < stages.length - 1) const SizedBox(height: 12),
+                ],
+              ],
+            ),
+          const SizedBox(height: 18),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: SizedBox(
+              height: 10,
+              child: Row(
+                children: [
+                  for (final stage in stages)
+                    Expanded(
+                      flex: math.max(1, (stage.progress * 100).round()),
+                      child: Container(color: stage.color),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _insightBanner(BuildContext ctx) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(color: _brandTint, borderRadius: BorderRadius.circular(14)),
-      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+  Widget _stageMetric(_StageData stage) {
+    return Column(
+      children: [
         Container(
-          width: 32, height: 32,
-          decoration: BoxDecoration(color: _brand, borderRadius: BorderRadius.circular(8)),
-          child: const Icon(CupertinoIcons.sparkles, size: 17, color: Colors.white),
+          width: 42,
+          height: 42,
+          decoration: BoxDecoration(
+            color: stage.color.withValues(alpha: 0.10),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Icon(stage.icon, color: stage.color, size: 20),
         ),
-        const SizedBox(width: 12),
-        const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Insight IA', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: _brandDeep)),
-          SizedBox(height: 2),
-          Text('Tenés 3 candidatos con +95% de match esperando respuesta. Los perfiles con video se contratan 4.2x más.',
-              style: TextStyle(fontSize: 12.5, color: _brandDeep, height: 1.5)),
-        ])),
-      ]),
+        const SizedBox(height: 10),
+        Text(
+          '${stage.value}',
+          style: TextStyle(
+            color: context.textPrimary,
+            fontWeight: FontWeight.w800,
+            fontSize: 30,
+            letterSpacing: -1.0,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          stage.label,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: context.textSecondary,
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          '${(stage.progress * 100).round()}%',
+          style: TextStyle(
+            color: stage.color,
+            fontSize: 12,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ],
     );
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  //  HELPERS
-  // ═══════════════════════════════════════════════════════════════════════════
+  Widget _performanceSection(bool webMode) {
+    final distribution = _pipelineDistribution();
+    final times = _timeByStage();
+    final cards = [_donutCard(distribution), _timeCard(times)];
 
-  Widget _pill(BuildContext ctx, IconData ic, String label, bool filled, VoidCallback onTap) {
-    return GestureDetector(onTap: onTap, child: Container(
-      height: 42, padding: const EdgeInsets.symmetric(horizontal: 20),
-      decoration: BoxDecoration(
-        color: filled ? null : ctx.cardColor,
-        gradient: filled ? const LinearGradient(colors: [Color(0xFF185FA5), Color(0xFF378ADD)]) : null,
-        borderRadius: BorderRadius.circular(999),
-        border: filled ? null : Border.all(color: ctx.dividerColor.withValues(alpha: 0.5)),
-        boxShadow: filled ? [BoxShadow(color: const Color(0xFF185FA5).withValues(alpha: 0.3), blurRadius: 16, offset: const Offset(0, 5))] : null,
-      ),
-      child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Icon(ic, size: 16, color: filled ? Colors.white : ctx.textSecondary),
-        const SizedBox(width: 7),
-        Text(label, style: TextStyle(color: filled ? Colors.white : ctx.textPrimary, fontSize: 13.5, fontWeight: FontWeight.w700)),
-      ]),
-    ));
+    if (webMode) {
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(child: cards[0]),
+          const SizedBox(width: 16),
+          Expanded(child: cards[1]),
+        ],
+      );
+    }
+
+    return Column(children: [cards[0], const SizedBox(height: 16), cards[1]]);
   }
 
+  Widget _donutCard(Map<String, double> distribution) {
+    final colors = [
+      const Color(0xFF6B4DFF),
+      const Color(0xFF3B82F6),
+      const Color(0xFFFF8A3D),
+      const Color(0xFF22C55E),
+      const Color(0xFF16A34A),
+    ];
+    return MployaShellCard(
+      radius: 28,
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Rendimiento',
+            style: TextStyle(
+              color: context.textPrimary,
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              SizedBox(
+                width: 138,
+                height: 138,
+                child: CustomPaint(
+                  painter: _DonutPainter(
+                    values: distribution.values.toList(),
+                    colors: colors,
+                  ),
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          '$_postulantes',
+                          style: TextStyle(
+                            color: context.textPrimary,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 28,
+                          ),
+                        ),
+                        Text(
+                          'Candidatos',
+                          style: TextStyle(
+                            color: context.textSecondary,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 18),
+              Expanded(
+                child: Column(
+                  children: [
+                    for (int i = 0; i < distribution.entries.length; i++)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 10,
+                              height: 10,
+                              decoration: BoxDecoration(
+                                color: colors[i],
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                distribution.entries.elementAt(i).key,
+                                style: TextStyle(
+                                  color: context.textSecondary,
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            Text(
+                              '${(distribution.entries.elementAt(i).value * 100).round()}%',
+                              style: TextStyle(
+                                color: context.textPrimary,
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _timeCard(Map<String, double> times) {
+    return MployaShellCard(
+      radius: 28,
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Tiempo promedio por etapa',
+            style: TextStyle(
+              color: context.textPrimary,
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 18),
+          for (final entry in times.entries) ...[
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    entry.key,
+                    style: TextStyle(
+                      color: context.textSecondary,
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                Text(
+                  '${(entry.value * 6.2).toStringAsFixed(1)} días',
+                  style: TextStyle(
+                    color: context.textPrimary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(999),
+              child: LinearProgressIndicator(
+                minHeight: 10,
+                value: entry.value.clamp(0.08, 1),
+                backgroundColor: const Color(0xFFF2F4FA),
+                valueColor: AlwaysStoppedAnimation<Color>(
+                  entry.key == 'Screening'
+                      ? const Color(0xFF6B4DFF)
+                      : entry.key == 'Entrevistas'
+                      ? const Color(0xFF3B82F6)
+                      : entry.key == 'Oferta'
+                      ? const Color(0xFF22C55E)
+                      : const Color(0xFF8B5CF6),
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _trendCard(List<int> trend) {
+    return MployaShellCard(
+      radius: 30,
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Evolución de contrataciones',
+            style: TextStyle(
+              color: context.textPrimary,
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            height: 210,
+            child: CustomPaint(
+              painter: _TrendPainter(
+                values: trend,
+                color: NexTheme.brandAccent,
+              ),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(10, 14, 10, 12),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    for (final month in const [
+                      'Ene',
+                      'Feb',
+                      'Mar',
+                      'Abr',
+                      'May',
+                      'Jun',
+                    ])
+                      Expanded(
+                        child: Align(
+                          alignment: Alignment.bottomCenter,
+                          child: Text(
+                            month,
+                            style: TextStyle(
+                              color: context.textSecondary,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _matchCard({
+    required String name,
+    required String role,
+    required int match,
+    required List<String> skills,
+  }) {
+    return MployaShellCard(
+      radius: 30,
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF2ECFF),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Text(
+                  'Match IA recomendado',
+                  style: TextStyle(
+                    color: NexTheme.brandAccent,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+              const Spacer(),
+              Text(
+                '$match%',
+                style: const TextStyle(
+                  color: Color(0xFF16A34A),
+                  fontSize: 30,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            name,
+            style: TextStyle(
+              color: context.textPrimary,
+              fontSize: 20,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            role,
+            style: TextStyle(
+              color: context.textSecondary,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final skill in skills.take(4))
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF5F7FC),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    skill,
+                    style: const TextStyle(
+                      color: Color(0xFF475569),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _quickActions(bool webMode) {
+    final actions = [
+      _QuickAction(
+        icon: CupertinoIcons.add,
+        label: 'Publicar vacante',
+        color: NexTheme.brandAccent,
+        onTap: () => _push(const NuevaVacanteScreen()),
+      ),
+      _QuickAction(
+        icon: CupertinoIcons.person_2_fill,
+        label: 'Buscar candidatos',
+        color: NexTheme.brandMint,
+        onTap: () => _push(const AtsDashboardScreen()),
+      ),
+      _QuickAction(
+        icon: CupertinoIcons.calendar,
+        label: 'Agenda de entrevistas',
+        color: NexTheme.brandOrange,
+        onTap: () => _push(const SchedulingScreen(isCompany: true)),
+      ),
+      _QuickAction(
+        icon: CupertinoIcons.chart_bar_fill,
+        label: 'Mapa y talento',
+        color: const Color(0xFF3B82F6),
+        onTap: () => _push(const ExploreScreen()),
+      ),
+      _QuickAction(
+        icon: CupertinoIcons.chat_bubble_2_fill,
+        label: 'Mensajes recientes',
+        color: NexTheme.brandAccent,
+        onTap: () => _push(const MessagingScreen()),
+      ),
+    ];
+
+    return MployaShellCard(
+      radius: 30,
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Accesos rápidos',
+            style: TextStyle(
+              color: context.textPrimary,
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 16),
+          if (webMode)
+            Row(
+              children: [
+                for (int i = 0; i < actions.length; i++) ...[
+                  Expanded(child: actions[i]),
+                  if (i < actions.length - 1) const SizedBox(width: 12),
+                ],
+              ],
+            )
+          else
+            Column(
+              children: [
+                for (int i = 0; i < actions.length; i += 2) ...[
+                  Row(
+                    children: [
+                      Expanded(child: actions[i]),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: i + 1 < actions.length
+                            ? actions[i + 1]
+                            : const SizedBox.shrink(),
+                      ),
+                    ],
+                  ),
+                  if (i + 2 < actions.length) const SizedBox(height: 12),
+                ],
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final webMode = MediaQuery.of(context).size.width >= 960;
+    final body = _content(webMode);
+
+    if (widget.embedded) return body;
+
+    return CupertinoPageScaffold(
+      backgroundColor: Colors.transparent,
+      child: body,
+    );
+  }
 }
 
+class _DashboardKpi extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final String value;
+  final String label;
+  final String cta;
+  final VoidCallback onTap;
+
+  const _DashboardKpi({
+    required this.icon,
+    required this.color,
+    required this.value,
+    required this.label,
+    required this.cta,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: MployaShellCard(
+        radius: 26,
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Icon(icon, color: color, size: 22),
+            ),
+            const SizedBox(height: 18),
+            Text(
+              value,
+              style: TextStyle(
+                color: context.textPrimary,
+                fontSize: 28,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -1.0,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              label,
+              style: TextStyle(
+                color: context.textSecondary,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              cta,
+              style: TextStyle(
+                color: color,
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _QuickAction extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _QuickAction({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: MployaShellCard(
+        radius: 24,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Icon(icon, color: color, size: 22),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              label,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: context.textPrimary,
+                fontSize: 13.5,
+                fontWeight: FontWeight.w700,
+                height: 1.3,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _StageData {
+  final String label;
+  final int value;
+  final double progress;
+  final Color color;
+  final IconData icon;
+
+  const _StageData({
+    required this.label,
+    required this.value,
+    required this.progress,
+    required this.color,
+    required this.icon,
+  });
+}
+
+class _DonutPainter extends CustomPainter {
+  final List<double> values;
+  final List<Color> colors;
+
+  const _DonutPainter({required this.values, required this.colors});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final total = values.fold<double>(0, (sum, item) => sum + item);
+    if (total <= 0) return;
+    final rect = Offset.zero & size;
+    final center = rect.center;
+    const stroke = 18.0;
+    var start = -math.pi / 2;
+
+    final bg = Paint()
+      ..color = const Color(0xFFF0F3FA)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = stroke
+      ..strokeCap = StrokeCap.round;
+    canvas.drawCircle(center, (size.width / 2) - stroke / 2, bg);
+
+    for (int i = 0; i < values.length; i++) {
+      final sweep = (values[i] / total) * math.pi * 2;
+      final paint = Paint()
+        ..color = colors[i]
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = stroke
+        ..strokeCap = StrokeCap.round;
+      canvas.drawArc(
+        Rect.fromCircle(center: center, radius: (size.width / 2) - stroke / 2),
+        start,
+        sweep,
+        false,
+        paint,
+      );
+      start += sweep;
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _DonutPainter oldDelegate) =>
+      oldDelegate.values != values || oldDelegate.colors != colors;
+}
+
+class _TrendPainter extends CustomPainter {
+  final List<int> values;
+  final Color color;
+
+  const _TrendPainter({required this.values, required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (values.length < 2) return;
+    const horizontalPadding = 28.0;
+    const topPadding = 16.0;
+    const bottomPadding = 36.0;
+    final width = size.width - (horizontalPadding * 2);
+    final height = size.height - topPadding - bottomPadding;
+    final maxValue = values.reduce(math.max).toDouble();
+    final minValue = values.reduce(math.min).toDouble();
+    final spread = math.max(1, maxValue - minValue);
+
+    final gridPaint = Paint()
+      ..color = const Color(0xFFE8ECF5)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1;
+    for (int i = 0; i < 4; i++) {
+      final y = topPadding + (height / 3) * i;
+      canvas.drawLine(
+        Offset(horizontalPadding, y),
+        Offset(size.width - horizontalPadding, y),
+        gridPaint,
+      );
+    }
+
+    final path = Path();
+    for (int i = 0; i < values.length; i++) {
+      final dx = horizontalPadding + (width / (values.length - 1)) * i;
+      final normalized = (values[i] - minValue) / spread;
+      final dy = topPadding + height - (normalized * height);
+      if (i == 0) {
+        path.moveTo(dx, dy);
+      } else {
+        path.lineTo(dx, dy);
+      }
+    }
+
+    final areaPath = Path.from(path)
+      ..lineTo(size.width - horizontalPadding, size.height - bottomPadding)
+      ..lineTo(horizontalPadding, size.height - bottomPadding)
+      ..close();
+
+    final fillPaint = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [color.withValues(alpha: 0.22), color.withValues(alpha: 0.04)],
+      ).createShader(Rect.fromLTWH(0, topPadding, size.width, height));
+    canvas.drawPath(areaPath, fillPaint);
+
+    final linePaint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+    canvas.drawPath(path, linePaint);
+
+    final dotPaint = Paint()..color = color;
+    for (int i = 0; i < values.length; i++) {
+      final dx = horizontalPadding + (width / (values.length - 1)) * i;
+      final normalized = (values[i] - minValue) / spread;
+      final dy = topPadding + height - (normalized * height);
+      canvas.drawCircle(Offset(dx, dy), 4.2, dotPaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _TrendPainter oldDelegate) =>
+      oldDelegate.values != values || oldDelegate.color != color;
+}

@@ -37,7 +37,12 @@ class TikTokReelCard extends ConsumerStatefulWidget {
   /// Primer card del feed: attach GlobalKeys para el coach mark tour.
   final bool isFirstCard;
 
-  const TikTokReelCard({super.key, required this.post, this.webMode = false, this.isFirstCard = false});
+  const TikTokReelCard({
+    super.key,
+    required this.post,
+    this.webMode = false,
+    this.isFirstCard = false,
+  });
 
   @override
   ConsumerState<TikTokReelCard> createState() => _TikTokReelCardState();
@@ -125,18 +130,23 @@ class _TikTokReelCardState extends ConsumerState<TikTokReelCard>
   Future<void> _loadMetadata() async {
     final authorId = widget.post.author.id;
     try {
-      final res = await Supabase.instance.client.rpc('get_card_metadata_batch', params: {'p_target_user_id': authorId});
-      
+      final res = await Supabase.instance.client.rpc(
+        'get_card_metadata_batch',
+        params: {'p_target_user_id': authorId},
+      );
+
       if (mounted && res != null && res['error'] == null) {
         setState(() {
           _nexusSent = res['nexus_sent'] == true;
           _connectionStatus = res['connection_status']?.toString() ?? 'none';
           _isBookmarked = res['is_bookmarked'] == true;
           _activeReaction = res['active_reaction']?.toString();
-          
+
           final counts = res['reaction_counts'] as Map<String, dynamic>? ?? {};
-          _reactionCounts = counts.map((k, v) => MapEntry(k, int.tryParse(v.toString()) ?? 0));
-          
+          _reactionCounts = counts.map(
+            (k, v) => MapEntry(k, int.tryParse(v.toString()) ?? 0),
+          );
+
           final replyUrl = res['reply_video_url']?.toString();
           if (replyUrl != null && replyUrl.isNotEmpty) {
             _replyVideoUrl = replyUrl;
@@ -153,7 +163,13 @@ class _TikTokReelCardState extends ConsumerState<TikTokReelCard>
   Future<void> _fetchMutuals(String authorId) async {
     try {
       final count = await SocialService.instance.getMutualCount(authorId);
-      if (mounted) setState(() => _mutualConnections = List.generate(count, (_) => <String, dynamic>{}));
+      if (mounted)
+        setState(
+          () => _mutualConnections = List.generate(
+            count,
+            (_) => <String, dynamic>{},
+          ),
+        );
     } catch (e) {
       debugPrint('❌ Error fetching mutuals: $e');
     }
@@ -168,9 +184,16 @@ class _TikTokReelCardState extends ConsumerState<TikTokReelCard>
     setState(() => _isBookmarked = !_isBookmarked);
     try {
       if (_isBookmarked) {
-        await Supabase.instance.client.from('saved_profiles').upsert({'user_id': myId, 'saved_user_id': authorId}, onConflict: 'user_id,saved_user_id');
+        await Supabase.instance.client.from('saved_profiles').upsert({
+          'user_id': myId,
+          'saved_user_id': authorId,
+        }, onConflict: 'user_id,saved_user_id');
       } else {
-        await Supabase.instance.client.from('saved_profiles').delete().eq('user_id', myId).eq('saved_user_id', authorId);
+        await Supabase.instance.client
+            .from('saved_profiles')
+            .delete()
+            .eq('user_id', myId)
+            .eq('saved_user_id', authorId);
       }
     } catch (e) {
       if (mounted) setState(() => _isBookmarked = !_isBookmarked);
@@ -183,12 +206,22 @@ class _TikTokReelCardState extends ConsumerState<TikTokReelCard>
     final authorId = widget.post.author.id;
     try {
       if (emoji == null) {
-        await Supabase.instance.client.from('pitch_reactions').delete().eq('user_id', myId).eq('target_user_id', authorId);
+        await Supabase.instance.client
+            .from('pitch_reactions')
+            .delete()
+            .eq('user_id', myId)
+            .eq('target_user_id', authorId);
       } else {
-        await Supabase.instance.client.from('pitch_reactions').upsert({'user_id': myId, 'target_user_id': authorId, 'emoji': emoji}, onConflict: 'user_id,target_user_id');
+        await Supabase.instance.client.from('pitch_reactions').upsert({
+          'user_id': myId,
+          'target_user_id': authorId,
+          'emoji': emoji,
+        }, onConflict: 'user_id,target_user_id');
       }
       _loadMetadata();
-    } catch (e) {debugPrint('❌ Error saving reaction: $e');}
+    } catch (e) {
+      debugPrint('❌ Error saving reaction: $e');
+    }
   }
 
   Future<void> _toggleMatch() async {
@@ -197,11 +230,13 @@ class _TikTokReelCardState extends ConsumerState<TikTokReelCard>
       _isMatched = !_isMatched;
       _matchCount += _isMatched ? 1 : -1;
     });
-    final result = await SocialService.instance.togglePitchLike(widget.post.author.id);
+    final result = await SocialService.instance.togglePitchLike(
+      widget.post.author.id,
+    );
     if (mounted && result != null) {
       setState(() {
-        _isMatched   = result.liked;
-        _matchCount  = result.likeCount;
+        _isMatched = result.liked;
+        _matchCount = result.likeCount;
       });
     }
   }
@@ -219,7 +254,8 @@ class _TikTokReelCardState extends ConsumerState<TikTokReelCard>
   @override
   void didUpdateWidget(TikTokReelCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.post.videoUrl != oldWidget.post.videoUrl && widget.post.videoUrl != null) {
+    if (widget.post.videoUrl != oldWidget.post.videoUrl &&
+        widget.post.videoUrl != null) {
       _hasError = false;
       _initVideo();
     }
@@ -231,7 +267,11 @@ class _TikTokReelCardState extends ConsumerState<TikTokReelCard>
       if (mounted) setState(() => _hasError = true);
       return;
     }
-    if (mounted) setState(() { _isInitialized = false; _hasError = false; });
+    if (mounted)
+      setState(() {
+        _isInitialized = false;
+        _hasError = false;
+      });
 
     final preloaded = VideoPreloadManager.instance.getController(url);
     if (preloaded != null) {
@@ -239,7 +279,10 @@ class _TikTokReelCardState extends ConsumerState<TikTokReelCard>
       _controller = preloaded;
       _usesPreloaded = true;
       if (mounted) {
-        setState(() { _isInitialized = true; _hasError = false; });
+        setState(() {
+          _isInitialized = true;
+          _hasError = false;
+        });
         _controller!.play();
       }
       return;
@@ -259,7 +302,10 @@ class _TikTokReelCardState extends ConsumerState<TikTokReelCard>
       if (ready == null) return; // evicteado mientras esperábamos
       _controller = ready;
       _usesPreloaded = true;
-      setState(() { _isInitialized = true; _hasError = false; });
+      setState(() {
+        _isInitialized = true;
+        _hasError = false;
+      });
       _controller!.play();
     });
   }
@@ -308,9 +354,9 @@ class _TikTokReelCardState extends ConsumerState<TikTokReelCard>
   // ─── Stealth / Premium ────────────────────────────────────────────────────
 
   void _showStealthAlert() async {
-    final result = await Navigator.of(context).push<bool>(
-      CupertinoPageRoute(builder: (_) => const B2BPaywallScreen()),
-    );
+    final result = await Navigator.of(
+      context,
+    ).push<bool>(CupertinoPageRoute(builder: (_) => const B2BPaywallScreen()));
     if (result == true && mounted) {
       await RevenueCatService.instance.forceRefreshFromSupabase();
       ref.invalidate(currentUserProvider);
@@ -323,7 +369,9 @@ class _TikTokReelCardState extends ConsumerState<TikTokReelCard>
   void _shareProfile(NexUser author) {
     HapticFeedback.selectionClick();
     final profileUrl = 'https://mploya.ai/u/${author.id}';
-    final displayName = author.isConfidential ? 'Perfil Confidencial' : author.name;
+    final displayName = author.isConfidential
+        ? 'Perfil Confidencial'
+        : author.name;
     showCupertinoModalPopup<void>(
       context: context,
       builder: (ctx) => CupertinoActionSheet(
@@ -341,12 +389,18 @@ class _TikTokReelCardState extends ConsumerState<TikTokReelCard>
                   'reposted_user_id': author.id,
                 }, onConflict: 'user_id,reposted_user_id');
                 if (mounted) {
-                  MployaErrorHandler.instance.showSuccess(context, 'Pitch reposteado en tu feed');
+                  MployaErrorHandler.instance.showSuccess(
+                    context,
+                    'Pitch reposteado en tu feed',
+                  );
                 }
               } catch (e) {
                 debugPrint('❌ Repost error: $e');
                 if (mounted) {
-                  MployaErrorHandler.instance.showSuccess(context, 'Pitch compartido');
+                  MployaErrorHandler.instance.showSuccess(
+                    context,
+                    'Pitch compartido',
+                  );
                 }
               }
             },
@@ -364,7 +418,10 @@ class _TikTokReelCardState extends ConsumerState<TikTokReelCard>
               Navigator.pop(ctx);
               await Clipboard.setData(ClipboardData(text: profileUrl));
               if (mounted) {
-                MployaErrorHandler.instance.showSuccess(context, 'Enlace copiado al portapapeles');
+                MployaErrorHandler.instance.showSuccess(
+                  context,
+                  'Enlace copiado al portapapeles',
+                );
               }
             },
             child: const Row(
@@ -401,14 +458,18 @@ class _TikTokReelCardState extends ConsumerState<TikTokReelCard>
       final result = await ClaudeAIService.instance.matchScore(
         candidato: {
           'nombre': currentUser.name,
-          'habilidades': currentUser.skills.isNotEmpty ? currentUser.skills : currentUser.tags,
+          'habilidades': currentUser.skills.isNotEmpty
+              ? currentUser.skills
+              : currentUser.tags,
           'experiencia_anios': currentUser.experience.length * 2,
           'ciudad': currentUser.boostTargetCity ?? 'No especificada',
         },
         oferta: {
           'titulo': author.headline,
           'empresa': author.name,
-          'habilidades_requeridas': author.skills.isNotEmpty ? author.skills : author.tags,
+          'habilidades_requeridas': author.skills.isNotEmpty
+              ? author.skills
+              : author.tags,
           'experiencia_minima': 1,
           'ciudad': author.boostTargetCity ?? 'No especificada',
           'descripcion': author.headline,
@@ -443,78 +504,203 @@ class _TikTokReelCardState extends ConsumerState<TikTokReelCard>
             child: Column(
               children: [
                 Container(
-                  margin: const EdgeInsets.only(top: 12), width: 40, height: 4,
-                  decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2)),
+                  margin: const EdgeInsets.only(top: 12),
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.white24,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
                 ),
                 const SizedBox(height: 20),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Row(children: [
-                    const Icon(CupertinoIcons.sparkles, color: NexTheme.brandAccent, size: 20),
-                    const SizedBox(width: 8),
-                    const Text('Análisis de compatibilidad', style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w700)),
-                    const Spacer(),
-                    Text('con ${author.name.split(' ').first}', style: const TextStyle(color: Colors.white54, fontSize: 13)),
-                  ]),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        CupertinoIcons.sparkles,
+                        color: NexTheme.brandAccent,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Análisis de compatibilidad',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 17,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const Spacer(),
+                      Text(
+                        'con ${author.name.split(' ').first}',
+                        style: const TextStyle(
+                          color: Colors.white54,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 20),
                 Expanded(
                   child: _claudeMatchLoading && result == null
-                      ? const Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-                          CupertinoActivityIndicator(color: NexTheme.brandAccent, radius: 14),
-                          SizedBox(height: 16),
-                          Text('Claude está analizando...', style: TextStyle(color: Colors.white54, fontSize: 14)),
-                        ]))
+                      ? const Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              CupertinoActivityIndicator(
+                                color: NexTheme.brandAccent,
+                                radius: 14,
+                              ),
+                              SizedBox(height: 16),
+                              Text(
+                                'Claude está analizando...',
+                                style: TextStyle(
+                                  color: Colors.white54,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
                       : result == null
-                          ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-                              const Icon(CupertinoIcons.bolt_circle, color: NexTheme.brandAccent, size: 48),
+                      ? Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                CupertinoIcons.bolt_circle,
+                                color: NexTheme.brandAccent,
+                                size: 48,
+                              ),
                               const SizedBox(height: 12),
-                              const Text('Score rápido', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700)),
+                              const Text(
+                                'Score rápido',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
                               const SizedBox(height: 8),
-                              Text('$tagScore% por etiquetas', style: const TextStyle(color: Colors.white54, fontSize: 14)),
+                              Text(
+                                '$tagScore% por etiquetas',
+                                style: const TextStyle(
+                                  color: Colors.white54,
+                                  fontSize: 14,
+                                ),
+                              ),
                               const SizedBox(height: 24),
                               CupertinoButton(
                                 color: NexTheme.brandAccent,
                                 borderRadius: BorderRadius.circular(14),
-                                onPressed: () { _analyzeWithClaude(currentUser, author); setModalState(() {}); },
+                                onPressed: () {
+                                  _analyzeWithClaude(currentUser, author);
+                                  setModalState(() {});
+                                },
                                 child: const Text('Analizar con Claude ✨'),
                               ),
-                            ]))
-                          : SingleChildScrollView(
-                              padding: const EdgeInsets.symmetric(horizontal: 20),
-                              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                                Row(children: [
+                            ],
+                          ),
+                        )
+                      : SingleChildScrollView(
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
                                   ReelScoreBadge(score: result.score),
                                   const SizedBox(width: 16),
-                                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                                    Text(result.nivel, style: TextStyle(color: nivelColor(result.nivel), fontSize: 20, fontWeight: FontWeight.w800)),
-                                    const SizedBox(height: 4),
-                                    Text(result.recomendacion, style: const TextStyle(color: Colors.white70, fontSize: 13, height: 1.4)),
-                                  ])),
-                                ]),
-                                const SizedBox(height: 20),
-                                if (result.fortalezas.isNotEmpty) ...[
-                                  const ReelSectionTitle(icon: CupertinoIcons.checkmark_seal_fill, label: 'Fortalezas', color: NexTheme.brandAccent),
-                                  const SizedBox(height: 8),
-                                  ...result.fortalezas.map((f) => ReelBulletItem(text: f, positive: true)),
-                                  const SizedBox(height: 16),
-                                ],
-                                if (result.habilidadesFaltantes.isNotEmpty) ...[
-                                  const ReelSectionTitle(icon: CupertinoIcons.xmark_circle_fill, label: 'Habilidades faltantes', color: Color(0xFFFF6B6B)),
-                                  const SizedBox(height: 8),
-                                  Wrap(spacing: 8, runSpacing: 8, children: result.habilidadesFaltantes.map((s) => Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFFF6B6B).withValues(alpha: 0.15),
-                                      borderRadius: BorderRadius.circular(20),
-                                      border: Border.all(color: const Color(0xFFFF6B6B).withValues(alpha: 0.4)),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          result.nivel,
+                                          style: TextStyle(
+                                            color: nivelColor(result.nivel),
+                                            fontSize: 20,
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          result.recomendacion,
+                                          style: const TextStyle(
+                                            color: Colors.white70,
+                                            fontSize: 13,
+                                            height: 1.4,
+                                          ),
+                                        ),
+                                      ],
                                     ),
-                                    child: Text(s, style: const TextStyle(color: Color(0xFFFF6B6B), fontSize: 12, fontWeight: FontWeight.w600)),
-                                  )).toList()),
-                                  const SizedBox(height: 20),
+                                  ),
                                 ],
-                              ]),
-                            ),
+                              ),
+                              const SizedBox(height: 20),
+                              if (result.fortalezas.isNotEmpty) ...[
+                                const ReelSectionTitle(
+                                  icon: CupertinoIcons.checkmark_seal_fill,
+                                  label: 'Fortalezas',
+                                  color: NexTheme.brandAccent,
+                                ),
+                                const SizedBox(height: 8),
+                                ...result.fortalezas.map(
+                                  (f) =>
+                                      ReelBulletItem(text: f, positive: true),
+                                ),
+                                const SizedBox(height: 16),
+                              ],
+                              if (result.habilidadesFaltantes.isNotEmpty) ...[
+                                const ReelSectionTitle(
+                                  icon: CupertinoIcons.xmark_circle_fill,
+                                  label: 'Habilidades faltantes',
+                                  color: Color(0xFFFF6B6B),
+                                ),
+                                const SizedBox(height: 8),
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: result.habilidadesFaltantes
+                                      .map(
+                                        (s) => Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 10,
+                                            vertical: 5,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: const Color(
+                                              0xFFFF6B6B,
+                                            ).withValues(alpha: 0.15),
+                                            borderRadius: BorderRadius.circular(
+                                              20,
+                                            ),
+                                            border: Border.all(
+                                              color: const Color(
+                                                0xFFFF6B6B,
+                                              ).withValues(alpha: 0.4),
+                                            ),
+                                          ),
+                                          child: Text(
+                                            s,
+                                            style: const TextStyle(
+                                              color: Color(0xFFFF6B6B),
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ),
+                                      )
+                                      .toList(),
+                                ),
+                                const SizedBox(height: 20),
+                              ],
+                            ],
+                          ),
+                        ),
                 ),
               ],
             ),
@@ -542,7 +728,10 @@ class _TikTokReelCardState extends ConsumerState<TikTokReelCard>
     _controller?.pause();
     showCupertinoModalPopup(
       context: context,
-      builder: (_) => ReplyVideoModal(videoUrl: _replyVideoUrl!, senderName: _replySenderName ?? 'Empresa'),
+      builder: (_) => ReplyVideoModal(
+        videoUrl: _replyVideoUrl!,
+        senderName: _replySenderName ?? 'Empresa',
+      ),
     ).then((_) {
       if (mounted && _controller != null && _isInitialized) _controller!.play();
     });
@@ -563,10 +752,13 @@ class _TikTokReelCardState extends ConsumerState<TikTokReelCard>
     final author = widget.post.author;
     final currentUser = ref.watch(currentUserProvider).value;
     final int matchScore = _calculateMatchScore(currentUser, author);
-    
-    final bool userIsPremium = (currentUser?.isPremium ?? false) || RevenueCatService.instance.isPremium || _premiumUnlocked;
+
+    final bool userIsPremium =
+        (currentUser?.isPremium ?? false) ||
+        RevenueCatService.instance.isPremium ||
+        _premiumUnlocked;
     final bool isLocked = author.isConfidential && !userIsPremium;
-    
+
     // Rediseño 30/7: el video pasa a ser protagonista (llena casi toda la
     // tarjeta) con la info del candidato sobre un degradado inferior, estilo
     // TikTok — antes el video medía 320px fijos dentro de una card centrada
@@ -582,25 +774,37 @@ class _TikTokReelCardState extends ConsumerState<TikTokReelCard>
     );
   }
 
-  Widget _buildLightReelCard(BuildContext context, NexUser author, int matchScore, bool isLocked) {
+  Widget _buildLightReelCard(
+    BuildContext context,
+    NexUser author,
+    int matchScore,
+    bool isLocked,
+  ) {
     const brand = Color(0xFF185FA5);
     final playing = _controller?.value.isPlaying ?? false;
     final tags = author.tags.take(3).toList();
 
     // Heurística de años (misma que usa _analyzeWithClaude para no introducir
     // otra estimación distinta en la misma pantalla).
-    final int? years = author.experience.isNotEmpty ? author.experience.length * 2 : null;
+    final int? years = author.experience.isNotEmpty
+        ? author.experience.length * 2
+        : null;
     final location = (author.location ?? '').trim();
     final salary = (author.salaryExpectation ?? '').trim();
 
-    void openProfile() => Navigator.of(context).push(
-          CupertinoPageRoute(builder: (_) => ProfileScreen(user: author)),
-        );
+    void openProfile() => Navigator.of(
+      context,
+    ).push(CupertinoPageRoute(builder: (_) => ProfileScreen(user: author)));
 
     // Botón de acción. Con label ("Me interesa") es el primario y se envuelve
     // en Expanded afuera para ocupar el ancho sobrante; sin label es un
     // cuadrado fijo (44px) para que los íconos secundarios queden uniformes.
-    Widget actionBtn(IconData icon, String? label, VoidCallback onTap, {bool filled = false}) {
+    Widget actionBtn(
+      IconData icon,
+      String? label,
+      VoidCallback onTap, {
+      bool filled = false,
+    }) {
       return CupertinoButton(
         padding: EdgeInsets.zero,
         minimumSize: Size.zero,
@@ -617,14 +821,24 @@ class _TikTokReelCardState extends ConsumerState<TikTokReelCard>
             mainAxisAlignment: MainAxisAlignment.center,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: 18, color: filled ? Colors.white : const Color(0xFF475569)),
+              Icon(
+                icon,
+                size: 18,
+                color: filled ? Colors.white : const Color(0xFF475569),
+              ),
               if (label != null) ...[
                 const SizedBox(width: 7),
                 Flexible(
-                  child: Text(label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: filled ? Colors.white : const Color(0xFF475569))),
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: filled ? Colors.white : const Color(0xFF475569),
+                    ),
+                  ),
                 ),
               ],
             ],
@@ -641,29 +855,58 @@ class _TikTokReelCardState extends ConsumerState<TikTokReelCard>
         ? GestureDetector(
             onTap: () => _showMatchDetails(context, author, matchScore),
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.96),
-                borderRadius: BorderRadius.circular(14),
-                boxShadow: const [BoxShadow(color: Color(0x1A000000), blurRadius: 10, offset: Offset(0, 3))],
+                color: Colors.white.withValues(alpha: 0.98),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: const Color(0xFFF5D6BF)),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x16000000),
+                    blurRadius: 18,
+                    offset: Offset(0, 8),
+                  ),
+                ],
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  SizedBox(
-                    width: 28,
-                    height: 28,
-                    child: CustomPaint(painter: _MatchRingPainter(progress: matchScore / 100, color: brand)),
+                  Container(
+                    width: 34,
+                    height: 34,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFFFF4EB),
+                      shape: BoxShape.circle,
+                    ),
+                    child: CustomPaint(
+                      painter: _MatchRingPainter(
+                        progress: matchScore / 100,
+                        color: brand,
+                      ),
+                    ),
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 10),
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text('$matchScore% match',
-                          style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: Color(0xFF0F172A))),
-                      const Text('Habilidades y experiencia',
-                          style: TextStyle(fontSize: 9.5, color: Color(0xFF64748B))),
+                      const Text(
+                        'Match IA',
+                        style: TextStyle(
+                          fontSize: 9.5,
+                          color: Color(0xFF94A3B8),
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      Text(
+                        '$matchScore% compatibilidad',
+                        style: const TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF0F172A),
+                        ),
+                      ),
                     ],
                   ),
                 ],
@@ -678,7 +921,7 @@ class _TikTokReelCardState extends ConsumerState<TikTokReelCard>
     // sentido en móvil que en una pantalla ancha de escritorio. ──
     if (widget.webMode) {
       final videoOnlyWeb = ClipRRect(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(28),
         child: Stack(
           fit: StackFit.expand,
           children: [
@@ -707,24 +950,61 @@ class _TikTokReelCardState extends ConsumerState<TikTokReelCard>
             if (!playing && !isLocked)
               Center(
                 child: Container(
-                  width: 58,
-                  height: 58,
-                  decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.28), shape: BoxShape.circle),
-                  child: const Icon(CupertinoIcons.play_fill, color: Colors.white, size: 26),
+                  width: 72,
+                  height: 72,
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.26),
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.25),
+                    ),
+                  ),
+                  child: const Icon(
+                    CupertinoIcons.play_fill,
+                    color: Colors.white,
+                    size: 28,
+                  ),
                 ),
               ),
-            Positioned(top: 12, left: 12, child: matchCard),
+            Positioned(top: 18, left: 18, child: matchCard),
+            Positioned(
+              right: 18,
+              top: 22,
+              child: Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.18),
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.18),
+                  ),
+                ),
+                child: const Icon(
+                  CupertinoIcons.ellipsis,
+                  color: Colors.white,
+                  size: 20,
+                ),
+              ),
+            ),
           ],
         ),
       );
 
       final rightPanel = Container(
-        width: 264,
-        padding: const EdgeInsets.all(18),
+        width: 286,
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: const Color(0xFFE2E8F0)),
+          borderRadius: BorderRadius.circular(28),
+          border: Border.all(color: const Color(0xFFE9EEF5)),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x120F172A),
+              blurRadius: 28,
+              offset: Offset(0, 16),
+            ),
+          ],
         ),
         child: SingleChildScrollView(
           child: Column(
@@ -735,18 +1015,35 @@ class _TikTokReelCardState extends ConsumerState<TikTokReelCard>
                 child: Row(
                   children: [
                     Flexible(
-                      child: Text(author.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: Color(0xFF0F172A))),
+                      child: Text(
+                        author.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF0F172A),
+                        ),
+                      ),
                     ),
                     const SizedBox(width: 5),
-                    const Icon(CupertinoIcons.checkmark_seal_fill, size: 15, color: brand),
+                    const Icon(
+                      CupertinoIcons.checkmark_seal_fill,
+                      size: 15,
+                      color: brand,
+                    ),
                   ],
                 ),
               ),
               const SizedBox(height: 2),
-              Text(author.headline, style: const TextStyle(fontSize: 13.5, color: Color(0xFF64748B), fontWeight: FontWeight.w500)),
+              Text(
+                author.headline,
+                style: const TextStyle(
+                  fontSize: 13.5,
+                  color: Color(0xFF64748B),
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
               if (years != null || location.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.only(top: 10),
@@ -755,7 +1052,10 @@ class _TikTokReelCardState extends ConsumerState<TikTokReelCard>
                       if (years != null) '$years años de experiencia',
                       if (location.isNotEmpty) location,
                     ].join(' · '),
-                    style: const TextStyle(fontSize: 12.5, color: Color(0xFF64748B)),
+                    style: const TextStyle(
+                      fontSize: 12.5,
+                      color: Color(0xFF64748B),
+                    ),
                   ),
                 ),
               if (author.isOpenToWork)
@@ -765,48 +1065,132 @@ class _TikTokReelCardState extends ConsumerState<TikTokReelCard>
                     children: [
                       _AvailabilityDot(),
                       SizedBox(width: 7),
-                      Text('Disponible inmediatamente',
-                          style: TextStyle(fontSize: 12.5, color: Color(0xFF3B6D11), fontWeight: FontWeight.w600)),
+                      Text(
+                        'Disponible inmediatamente',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          color: Color(0xFF3B6D11),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ],
                   ),
                 ),
               if (salary.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.only(top: 7),
-                  child: Text(salary, style: const TextStyle(fontSize: 12.5, color: Color(0xFF64748B))),
+                  child: Text(
+                    salary,
+                    style: const TextStyle(
+                      fontSize: 12.5,
+                      color: Color(0xFF64748B),
+                    ),
+                  ),
                 ),
               if (tags.isNotEmpty) ...[
                 const SizedBox(height: 16),
-                const Text('HABILIDADES',
-                    style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, letterSpacing: 0.5, color: Color(0xFF94A3B8))),
+                const Text(
+                  'HABILIDADES',
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.5,
+                    color: Color(0xFF94A3B8),
+                  ),
+                ),
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 6,
                   runSpacing: 6,
                   children: tags
-                      .map((t) => Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                            decoration: BoxDecoration(color: const Color(0xFFE6F1FB), borderRadius: BorderRadius.circular(14)),
-                            child: Text(t.startsWith('#') ? t : '#$t',
-                                style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: Color(0xFF0C447C))),
-                          ))
+                      .map(
+                        (t) => Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE6F1FB),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Text(
+                            t.startsWith('#') ? t : '#$t',
+                            style: const TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF0C447C),
+                            ),
+                          ),
+                        ),
+                      )
                       .toList(),
                 ),
               ],
               const SizedBox(height: 18),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 12,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(
+                      CupertinoIcons.video_camera_solid,
+                      size: 18,
+                      color: Color(0xFF2563EB),
+                    ),
+                    SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Pitch visible y reproducible en tiempo real',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF334155),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 18),
               SizedBox(
                 width: double.infinity,
-                child: actionBtn(_isMatched ? CupertinoIcons.star_fill : CupertinoIcons.star, 'Me interesa',
-                    isLocked ? _showStealthAlert : _toggleMatch, filled: _isMatched),
+                child: actionBtn(
+                  _isMatched ? CupertinoIcons.star_fill : CupertinoIcons.star,
+                  'Me interesa',
+                  isLocked ? _showStealthAlert : _toggleMatch,
+                  filled: _isMatched,
+                ),
               ),
               const SizedBox(height: 8),
               Row(
                 children: [
-                  Expanded(child: actionBtn(CupertinoIcons.play_circle, 'Perfil', openProfile)),
+                  Expanded(
+                    child: actionBtn(
+                      CupertinoIcons.play_circle,
+                      'Perfil',
+                      openProfile,
+                    ),
+                  ),
                   const SizedBox(width: 8),
-                  actionBtn(_isBookmarked ? CupertinoIcons.bookmark_fill : CupertinoIcons.bookmark, null, _toggleBookmark),
+                  actionBtn(
+                    _isBookmarked
+                        ? CupertinoIcons.bookmark_fill
+                        : CupertinoIcons.bookmark,
+                    null,
+                    _toggleBookmark,
+                  ),
                   const SizedBox(width: 8),
-                  actionBtn(CupertinoIcons.arrowshape_turn_up_right, null, () => _shareProfile(author)),
+                  actionBtn(
+                    CupertinoIcons.arrowshape_turn_up_right,
+                    null,
+                    () => _shareProfile(author),
+                  ),
                 ],
               ),
             ],
@@ -820,12 +1204,28 @@ class _TikTokReelCardState extends ConsumerState<TikTokReelCard>
             height: constraints.maxHeight,
             width: constraints.maxWidth,
             child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
+              padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Expanded(child: videoOnlyWeb),
-                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(32),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Color(0x160F172A),
+                            blurRadius: 28,
+                            offset: Offset(0, 16),
+                          ),
+                        ],
+                      ),
+                      child: videoOnlyWeb,
+                    ),
+                  ),
+                  const SizedBox(width: 18),
                   rightPanel,
                 ],
               ),
@@ -852,36 +1252,70 @@ class _TikTokReelCardState extends ConsumerState<TikTokReelCard>
       onTap: openProfile,
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.fromLTRB(16, 60, 16, 14),
+        padding: const EdgeInsets.fromLTRB(18, 72, 18, 18),
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [Colors.transparent, Color(0x8C000000), Color(0xE0000000)],
-            stops: [0.0, 0.45, 1.0],
+            colors: [Colors.transparent, Color(0x73000000), Color(0xD0000000)],
+            stops: [0.0, 0.4, 1.0],
           ),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.16),
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
+              ),
+              child: const Text(
+                'Video pitch',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                  letterSpacing: 0.3,
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
             Row(
               children: [
                 Flexible(
-                  child: Text(author.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.white)),
+                  child: Text(
+                    author.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                    ),
+                  ),
                 ),
                 const SizedBox(width: 5),
-                const Icon(CupertinoIcons.checkmark_seal_fill, size: 16, color: Color(0xFF5DCAA5)),
+                const Icon(
+                  CupertinoIcons.checkmark_seal_fill,
+                  size: 16,
+                  color: Color(0xFF5DCAA5),
+                ),
               ],
             ),
             const SizedBox(height: 2),
-            Text(author.headline,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w500, color: Color(0xFFE2E8F0))),
+            Text(
+              author.headline,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 13.5,
+                fontWeight: FontWeight.w500,
+                color: Color(0xFFE2E8F0),
+              ),
+            ),
             if (years != null || location.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 7),
@@ -892,7 +1326,10 @@ class _TikTokReelCardState extends ConsumerState<TikTokReelCard>
                   ].join(' · '),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 12, color: Color(0xFFCBD5E1)),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFFCBD5E1),
+                  ),
                 ),
               ),
             if (author.isOpenToWork)
@@ -901,17 +1338,34 @@ class _TikTokReelCardState extends ConsumerState<TikTokReelCard>
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Container(width: 6, height: 6, decoration: const BoxDecoration(color: Color(0xFF5DCAA5), shape: BoxShape.circle)),
+                    Container(
+                      width: 6,
+                      height: 6,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFF5DCAA5),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
                     const SizedBox(width: 6),
-                    const Text('Disponible inmediatamente', style: TextStyle(fontSize: 12, color: Color(0xFFCBD5E1))),
+                    const Text(
+                      'Disponible inmediatamente',
+                      style: TextStyle(fontSize: 12, color: Color(0xFFCBD5E1)),
+                    ),
                   ],
                 ),
               ),
             if (salary.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 4),
-                child: Text(salary, maxLines: 1, overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 12, color: Color(0xFFCBD5E1))),
+                child: Text(
+                  salary,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFFCBD5E1),
+                  ),
+                ),
               ),
             if (tags.isNotEmpty)
               Padding(
@@ -920,12 +1374,26 @@ class _TikTokReelCardState extends ConsumerState<TikTokReelCard>
                   spacing: 6,
                   runSpacing: 6,
                   children: tags
-                      .map((t) => Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.14), borderRadius: BorderRadius.circular(14)),
-                            child: Text(t.startsWith('#') ? t : '#$t',
-                                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.white)),
-                          ))
+                      .map(
+                        (t) => Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.14),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Text(
+                            t.startsWith('#') ? t : '#$t',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      )
                       .toList(),
                 ),
               ),
@@ -968,47 +1436,105 @@ class _TikTokReelCardState extends ConsumerState<TikTokReelCard>
           if (!playing && !isLocked)
             Center(
               child: Container(
-                width: 58,
-                height: 58,
-                decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.28), shape: BoxShape.circle),
-                child: const Icon(CupertinoIcons.play_fill, color: Colors.white, size: 26),
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.28),
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.24),
+                  ),
+                ),
+                child: const Icon(
+                  CupertinoIcons.play_fill,
+                  color: Colors.white,
+                  size: 28,
+                ),
               ),
             ),
-          Positioned(top: 12, left: 12, child: matchCard),
-          Positioned(right: 10, top: 0, bottom: 74, child: Center(child: swipeHints)),
+          Positioned(top: 18, left: 18, child: matchCard),
+          Positioned(
+            top: 18,
+            right: 18,
+            child: Column(
+              children: [
+                _FeedVideoActionBubble(
+                  icon: CupertinoIcons.heart,
+                  label: '${_matchCount < 0 ? 0 : _matchCount}',
+                ),
+                const SizedBox(height: 10),
+                _FeedVideoActionBubble(
+                  icon: CupertinoIcons.chat_bubble_2,
+                  label: '${widget.post.comments}',
+                ),
+                const SizedBox(height: 10),
+                _FeedVideoActionBubble(
+                  icon: CupertinoIcons.arrowshape_turn_up_right,
+                  label: 'Compartir',
+                ),
+              ],
+            ),
+          ),
+          Positioned(
+            right: 12,
+            top: 0,
+            bottom: 84,
+            child: Center(child: swipeHints),
+          ),
           Positioned(left: 0, right: 0, bottom: 0, child: infoOverlay),
         ],
       ),
     );
 
     final footer = Padding(
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
       child: Row(
         key: widget.isFirstCard ? cmFeedActionsKey : null,
         children: [
           Expanded(
-            child: actionBtn(_isMatched ? CupertinoIcons.star_fill : CupertinoIcons.star, 'Me interesa',
-                isLocked ? _showStealthAlert : _toggleMatch, filled: _isMatched),
+            child: actionBtn(
+              _isMatched ? CupertinoIcons.star_fill : CupertinoIcons.star,
+              'Me interesa',
+              isLocked ? _showStealthAlert : _toggleMatch,
+              filled: _isMatched,
+            ),
           ),
           const SizedBox(width: 8),
           // "Ver video completo": el pitch entero + Conectar/Mensaje viven en
           // el perfil, no duplicados acá.
           actionBtn(CupertinoIcons.play_circle, null, openProfile),
           const SizedBox(width: 8),
-          actionBtn(_isBookmarked ? CupertinoIcons.bookmark_fill : CupertinoIcons.bookmark, null, _toggleBookmark),
+          actionBtn(
+            _isBookmarked
+                ? CupertinoIcons.bookmark_fill
+                : CupertinoIcons.bookmark,
+            null,
+            _toggleBookmark,
+          ),
           const SizedBox(width: 8),
-          actionBtn(CupertinoIcons.arrowshape_turn_up_right, null, () => _shareProfile(author)),
+          actionBtn(
+            CupertinoIcons.arrowshape_turn_up_right,
+            null,
+            () => _shareProfile(author),
+          ),
         ],
       ),
     );
 
     final card = Container(
-      margin: const EdgeInsets.fromLTRB(6, 8, 6, 4),
-      padding: const EdgeInsets.all(6),
+      margin: const EdgeInsets.fromLTRB(4, 8, 4, 4),
+      padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
-        boxShadow: const [BoxShadow(color: Color(0x14000000), blurRadius: 20, offset: Offset(0, 8))],
+        borderRadius: BorderRadius.circular(30),
+        border: Border.all(color: const Color(0xFFF1F5F9)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x14000000),
+            blurRadius: 24,
+            offset: Offset(0, 10),
+          ),
+        ],
       ),
       child: Column(
         children: [
@@ -1020,7 +1546,11 @@ class _TikTokReelCardState extends ConsumerState<TikTokReelCard>
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        return SizedBox(height: constraints.maxHeight, width: constraints.maxWidth, child: card);
+        return SizedBox(
+          height: constraints.maxHeight,
+          width: constraints.maxWidth,
+          child: card,
+        );
       },
     );
   }
@@ -1031,7 +1561,48 @@ class _SwipeTrack extends StatelessWidget {
   const _SwipeTrack();
   @override
   Widget build(BuildContext context) {
-    return Container(width: 3, height: 22, decoration: BoxDecoration(color: const Color(0x4DFFFFFF), borderRadius: BorderRadius.circular(2)));
+    return Container(
+      width: 3,
+      height: 22,
+      decoration: BoxDecoration(
+        color: const Color(0x4DFFFFFF),
+        borderRadius: BorderRadius.circular(2),
+      ),
+    );
+  }
+}
+
+class _FeedVideoActionBubble extends StatelessWidget {
+  final IconData icon;
+  final String label;
+
+  const _FeedVideoActionBubble({required this.icon, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.22),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 18, color: Colors.white),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 10.5,
+              fontWeight: FontWeight.w700,
+              color: Colors.white,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -1040,7 +1611,14 @@ class _AvailabilityDot extends StatelessWidget {
   const _AvailabilityDot();
   @override
   Widget build(BuildContext context) {
-    return Container(width: 7, height: 7, decoration: const BoxDecoration(color: Color(0xFF639922), shape: BoxShape.circle));
+    return Container(
+      width: 7,
+      height: 7,
+      decoration: const BoxDecoration(
+        color: Color(0xFF639922),
+        shape: BoxShape.circle,
+      ),
+    );
   }
 }
 
@@ -1065,7 +1643,13 @@ class _MatchRingPainter extends CustomPainter {
       ..strokeWidth = 3
       ..strokeCap = StrokeCap.round;
     canvas.drawCircle(center, radius, bg);
-    canvas.drawArc(Rect.fromCircle(center: center, radius: radius), -1.5708, progress.clamp(0, 1) * 6.2832, false, fg);
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius),
+      -1.5708,
+      progress.clamp(0, 1) * 6.2832,
+      false,
+      fg,
+    );
   }
 
   @override

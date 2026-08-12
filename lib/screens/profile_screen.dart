@@ -1,29 +1,33 @@
 import 'dart:math' as math;
-import '../utils/user_columns.dart';
-import 'package:fl_chart/fl_chart.dart';
+
 import 'package:flutter/cupertino.dart';
-// Material widgets (SliverAppBar, Colors, Icons) have no Cupertino equivalent
-import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import '../theme/app_theme.dart';
-import '../models/models.dart';
-import '../widgets/profile_video_widgets.dart';
-import 'chat_inmail_screen.dart';
-import 'splash_screen.dart';
+import 'package:flutter/material.dart'
+    show
+        CircularProgressIndicator,
+        Colors,
+        LinearProgressIndicator,
+        RefreshIndicator;
 import 'package:image_picker/image_picker.dart';
-import '../services/storage_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../models/models.dart';
 import '../services/profile_view_service.dart';
-import '../services/video_preload_manager.dart';
-import '../services/company_verification_service.dart';
-import 'candidate_profile_form_screen.dart';
-import 'company_profile_form_screen.dart';
-import 'stealth_profile_form_screen.dart';
-import 'interview_prep_screen.dart';
-import '../services/hashtag_service.dart';
 import '../services/share_service.dart';
+import '../services/storage_service.dart';
+import '../services/video_preload_manager.dart';
+import '../theme/app_theme.dart';
+import '../utils/user_columns.dart';
+import '../widgets/mploya_shell.dart';
+import '../widgets/profile_video_widgets.dart';
 import 'camera_screen.dart';
-import 'mis_herramientas_screen.dart';
+import 'candidate_profile_form_screen.dart';
+import 'chat_inmail_screen.dart';
+import 'company_profile_form_screen.dart';
+import 'onboarding_pitch_screen.dart';
+import 'settings_screen.dart';
+import 'splash_screen.dart';
+import 'stealth_profile_form_screen.dart';
+import '../services/portfolio_service.dart';
 
 class ProfileScreen extends StatefulWidget {
   final NexUser? user;
@@ -36,1246 +40,318 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   Future<Map<String, dynamic>?>? _ownFuture;
+  final Map<String, Future<_ProfileBundle>> _bundleFutures = {};
+
   String _connectionStatus = 'none';
   bool _isLoadingConnection = false;
-  int _selectedProfileTab = 0; // 0=Sobre mí, 1=Portfolio, 2=Herramientas
-  bool _isAdmin = false;
+  bool _isSavedProfile = false;
+  bool _isSavingProfile = false;
+  int _selectedPublicTab = 0;
 
   @override
   void initState() {
     super.initState();
-    if (widget.user != null) {
-      _fetchConnectionStatus(widget.user!.id);
-      // Registrar vista de perfil
-      ProfileViewService.instance.recordView(widget.user!.id);
+    if (widget.user == null) {
+      _reloadOwnProfile();
     } else {
-      final uid = Supabase.instance.client.auth.currentUser?.id;
-      if (uid != null) {
-        _ownFuture = Supabase.instance.client
-            .from('users')
-            .select(kUserColumns)
-            .eq('id', uid)
-            .maybeSingle();
-        _checkAdmin(uid);
-      }
+      ProfileViewService.instance.recordView(widget.user!.id);
+      _fetchConnectionStatus(widget.user!.id);
+      _loadSavedProfileStatus();
     }
   }
 
-  Future<void> _checkAdmin(String uid) async {
+  void _reloadOwnProfile() {
+    final uid = Supabase.instance.client.auth.currentUser?.id;
+    if (uid == null) return;
+    setState(() {
+      _ownFuture = Supabase.instance.client
+          .from('users')
+          .select(kUserColumns)
+          .eq('id', uid)
+          .maybeSingle();
+      _bundleFutures.remove(uid);
+    });
+  }
+
+  Future<_ProfileBundle> _loadBundle(
+    NexUser profile,
+    bool isOwnProfile,
+  ) async {
+    final portfolioFuture = isOwnProfile
+        ? PortfolioService.instance.getMyPortfolio(forceRefresh: true)
+        : PortfolioService.instance.getPortfolioFor(profile.id);
+    final viewsFuture = isOwnProfile
+        ? ProfileViewService.instance.getMyViewCount()
+        : Future<int>.value(profile.profileViews);
+
+    final results = await Future.wait<dynamic>([
+      portfolioFuture,
+      viewsFuture,
+    ]);
+
+    return _ProfileBundle(
+      portfolio: results[0] as List<PortfolioVideo>,
+      viewCount: results[1] as int,
+    );
+  }
+
+  Future<_ProfileBundle> _bundleFutureFor(NexUser profile, bool isOwnProfile) {
+    final key = '${profile.id}_${isOwnProfile ? 'own' : 'public'}';
+    return _bundleFutures.putIfAbsent(key, () => _loadBundle(profile, isOwnProfile));
+  }
+
+  Future<void> _loadSavedProfileStatus() async {
+    final myId = Supabase.instance.client.auth.currentUser?.id;
+    final otherId = widget.user?.id;
+    if (myId == null || otherId == null || myId == otherId) return;
     try {
       final row = await Supabase.instance.client
-          .from('users').select('is_admin').eq('id', uid).maybeSingle();
-      if (mounted && row?['is_admin'] == true) setState(() => _isAdmin = true);
+          .from('saved_profiles')
+          .select('saved_user_id')
+          .eq('user_id', myId)
+          .eq('saved_user_id', otherId)
+          .maybeSingle();
+      if (mounted) {
+        setState(() => _isSavedProfile = row != null);
+      }
     } catch (_) {}
+  }
+
+  Future<void> _toggleSavedProfile(NexUser profile) async {
+    final myId = Supabase.instance.client.auth.currentUser?.id;
+    if (myId == null || myId == profile.id || _isSavingProfile) return;
+    setState(() {
+      _isSavingProfile = true;
+      _isSavedProfile = !_isSavedProfile;
+    });
+    try {
+      if (_isSavedProfile) {
+        await Supabase.instance.client.from('saved_profiles').upsert({
+          'user_id': myId,
+          'saved_user_id': profile.id,
+        }, onConflict: 'user_id,saved_user_id');
+      } else {
+        await Supabase.instance.client
+            .from('saved_profiles')
+            .delete()
+            .eq('user_id', myId)
+            .eq('saved_user_id', profile.id);
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isSavedProfile = !_isSavedProfile);
+    } finally {
+      if (mounted) setState(() => _isSavingProfile = false);
+    }
   }
 
   Future<void> _fetchConnectionStatus(String otherId) async {
     setState(() => _isLoadingConnection = true);
     try {
-      final res = await Supabase.instance.client
-          .rpc('get_connection_status', params: {'p_other_user_id': otherId});
-      if (res != null && res['status'] != null) {
+      final res = await Supabase.instance.client.rpc(
+        'get_connection_status',
+        params: {'p_other_user_id': otherId},
+      );
+      if (mounted && res != null && res['status'] != null) {
         setState(() => _connectionStatus = res['status'] as String);
       }
-    } catch (e) {
-      debugPrint('Error fetch connection: $e');
+    } catch (_) {
     } finally {
       if (mounted) setState(() => _isLoadingConnection = false);
     }
   }
 
-  Future<void> _handleConnect(String otherId) async {
+  Future<void> _sendConnectionRequest(String otherId) async {
     setState(() => _isLoadingConnection = true);
     try {
-      final res = await Supabase.instance.client
-          .rpc('send_connection_request', params: {'p_addressee_id': otherId});
-      if (res != null && res['status'] != null) {
+      final res = await Supabase.instance.client.rpc(
+        'send_connection_request',
+        params: {'p_addressee_id': otherId},
+      );
+      if (mounted && res != null && res['status'] != null) {
         setState(() => _connectionStatus = res['status'] as String);
       }
-    } catch (e) {
-      debugPrint('Error send connection: $e');
+    } catch (_) {
     } finally {
       if (mounted) setState(() => _isLoadingConnection = false);
     }
   }
 
   Future<void> _pickAndUploadAvatar(NexUser profile) async {
-    final picker = ImagePicker();
-    final picked = await picker.pickImage(
+    final picked = await ImagePicker().pickImage(
       source: ImageSource.gallery,
-      maxWidth: 500,
-      maxHeight: 500,
+      maxWidth: 800,
+      maxHeight: 800,
       imageQuality: 85,
     );
     if (picked == null) return;
-
     final uid = Supabase.instance.client.auth.currentUser?.id;
     if (uid == null) return;
 
-    if (mounted) {
-      showCupertinoDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (_) => const Center(child: CupertinoActivityIndicator(radius: 18)),
-      );
-    }
+    if (!mounted) return;
+    showCupertinoDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CupertinoActivityIndicator(radius: 16)),
+    );
 
     final url = await StorageService.instance.uploadAvatar(uid, picked);
+    if (mounted) Navigator.of(context, rootNavigator: true).pop();
 
-    if (mounted) Navigator.of(context).pop();
-
-    if (url != null) {
-      await Supabase.instance.client.from('users').update({
-        'avatar_url': url,
-      }).eq('id', uid);
-
-      if (mounted) {
-        setState(() {
-          _ownFuture = Supabase.instance.client
-              .from('users')
-              .select(kUserColumns)
-              .eq('id', uid)
-              .maybeSingle();
-        });
-      }
-    } else {
-      if (mounted) {
-        showCupertinoDialog(
-          context: context,
-          builder: (ctx) => CupertinoAlertDialog(
-            title: const Text('Error'),
-            content: Text(StorageService.instance.lastError ?? 'No se pudo subir la foto'),
-            actions: [
-              CupertinoDialogAction(onPressed: () => Navigator.pop(ctx), child: const Text('OK')),
-            ],
+    if (url == null) {
+      if (!mounted) return;
+      showCupertinoDialog<void>(
+        context: context,
+        builder: (ctx) => CupertinoAlertDialog(
+          title: const Text('No se pudo actualizar'),
+          content: Text(
+            StorageService.instance.lastError ?? 'Intenta nuevamente en unos segundos.',
           ),
-        );
-      }
+          actions: [
+            CupertinoDialogAction(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Entendido'),
+            ),
+          ],
+        ),
+      );
+      return;
     }
+
+    await Supabase.instance.client.from('users').update({'avatar_url': url}).eq('id', uid);
+    _reloadOwnProfile();
+  }
+
+  Future<void> _openEditProfile(BuildContext context, NexUser profile) async {
+    final type = profile.accountType.toLowerCase();
+    final route = type == 'empresa'
+        ? CupertinoPageRoute(builder: (_) => const CompanyProfileFormScreen())
+        : (type == 'confidencial' || type == 'stealth')
+            ? CupertinoPageRoute(builder: (_) => const StealthProfileFormScreen())
+            : CupertinoPageRoute(
+                builder: (_) => const CandidateProfileFormScreen(isEditing: true),
+              );
+    await Navigator.of(context).push(route);
+    _reloadOwnProfile();
+  }
+
+  Future<void> _openVideoPitchFlow(BuildContext context, NexUser profile) async {
+    final type = profile.accountType.toLowerCase();
+    final isCompany = type == 'empresa' || type == 'headhunter';
+    await Navigator.of(context).push(
+      CupertinoPageRoute(builder: (_) => OnboardingPitchScreen(isCompany: isCompany)),
+    );
+    _reloadOwnProfile();
+  }
+
+  Future<void> _openPitchCamera(BuildContext context, NexUser profile) async {
+    await Navigator.of(context).push(
+      CupertinoPageRoute(builder: (_) => const CameraScreen()),
+    );
+    _reloadOwnProfile();
+  }
+
+  void _showMoreActions(
+    BuildContext context,
+    NexUser profile,
+    bool isOwnProfile,
+  ) {
+    showCupertinoModalPopup<void>(
+      context: context,
+      builder: (sheetContext) => CupertinoActionSheet(
+        title: Text(isOwnProfile ? 'Tu perfil profesional' : 'Acciones del perfil'),
+        message: Text(
+          isOwnProfile
+              ? 'Gestioná visibilidad, edición y distribución de tu perfil.'
+              : 'Elegí cómo querés continuar con este perfil.',
+        ),
+        actions: [
+          CupertinoActionSheetAction(
+            onPressed: () {
+              Navigator.pop(sheetContext);
+              ShareService.instance.shareProfile(
+                name: profile.name,
+                headline: profile.headline,
+                userId: profile.id,
+                accountType: profile.accountType,
+              );
+            },
+            child: const Text('Compartir perfil'),
+          ),
+          if (isOwnProfile)
+            CupertinoActionSheetAction(
+              onPressed: () {
+                Navigator.pop(sheetContext);
+                Navigator.of(context).push(
+                  CupertinoPageRoute(builder: (_) => const SettingsScreen()),
+                );
+              },
+              child: const Text('Configuración y visibilidad'),
+            ),
+          if (isOwnProfile)
+            CupertinoActionSheetAction(
+              onPressed: () {
+                Navigator.pop(sheetContext);
+                _openEditProfile(context, profile);
+              },
+              child: const Text('Editar perfil'),
+            ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () => Navigator.pop(sheetContext),
+          child: const Text('Cerrar'),
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    // Perfil de otro usuario: render directo sin stream
     if (widget.user != null) {
-      return _buildScaffold(context, widget.user!, false);
+      return _buildProfileLoader(context, widget.user!, false);
     }
-    // Sin sesión activa: redirigir al splash para login
+
     if (_ownFuture == null) {
       return CupertinoPageScaffold(
+        backgroundColor: NexTheme.shellBg,
         child: Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(CupertinoIcons.person_crop_circle, size: 64, color: context.textTertiary.withValues(alpha: 0.3)),
+              const Icon(CupertinoIcons.person_crop_circle_badge_exclam, size: 58),
               const SizedBox(height: 16),
-              Text('Inicia sesión para ver tu perfil', style: TextStyle(fontSize: 16, color: context.textSecondary)),
-              const SizedBox(height: 24),
-              CupertinoButton(
-                color: MployaTheme.brandAccent,
-                child: const Text('Iniciar Sesión'),
+              const Text(
+                'Inicia sesión para abrir tu perfil',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 10),
+              const Text(
+                'Necesitamos una sesión activa para cargar tu identidad profesional.',
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 20),
+              CupertinoButton.filled(
                 onPressed: () {
                   Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
                     CupertinoPageRoute(builder: (_) => const SplashScreen()),
                     (route) => false,
                   );
                 },
+                child: const Text('Ir al inicio'),
               ),
             ],
           ),
         ),
       );
     }
-    // Perfil propio: fetch normal desde Supabase
+
     return FutureBuilder<Map<String, dynamic>?>(
       future: _ownFuture,
-      builder: (ctx, snap) {
-        if (snap.connectionState == ConnectionState.waiting) {
-          return CupertinoPageScaffold(
-            child: Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const CupertinoActivityIndicator(radius: 16),
-                  const SizedBox(height: 24),
-                  CupertinoButton(
-                    padding: EdgeInsets.zero,
-                    child: const Text('Cerrar Sesión (Si no carga)', style: TextStyle(fontSize: 13, color: CupertinoColors.destructiveRed)),
-                    onPressed: () async {
-                      VideoPreloadManager.instance.disposeAll();
-                      await Supabase.instance.client.auth.signOut();
-                      if (!ctx.mounted) return;
-                      Navigator.of(ctx, rootNavigator: true).pushAndRemoveUntil(
-                          CupertinoPageRoute(builder: (_) => const SplashScreen()), (route) => false);
-                    },
-                  )
-                ],
-              ),
-            ),
-          );
-        }
-
-        if (snap.hasError) {
-          return CupertinoPageScaffold(
-            child: Center(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Text(
-                  'Error de Red/DB:\n${snap.error}\nSi eres nuevo, verifica que completaste el Formulario de Perfil.',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: CupertinoColors.destructiveRed),
-                ),
-              ),
-            ),
-          );
-        }
-
-        if (!snap.hasData || snap.data == null) {
-          return const CupertinoPageScaffold(
-            child: Center(child: Text('Perfil vacío')),
-          );
-        }
-
-        return _buildScaffold(context, NexUser.fromJson(snap.data!), true);
-      },
-    );
-  }
-
-  Widget _buildScaffold(BuildContext context, NexUser profile, bool isOwnProfile) {
-    // ── Rediseño 23/7: UNA sola columna centrada, idéntica en web y móvil.
-    // Secciones limpias (header, video, sobre mí, experiencia, educación,
-    // habilidades en chips, herramientas). Se quitó el layout de 2 columnas del
-    // web, la top-bar redundante y las tarjetas recargadas (proyectos,
-    // certificaciones, insights, barras de skills) para un look profesional.
-    return CupertinoPageScaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
-      child: SafeArea(
-        child: SingleChildScrollView(
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 620),
-              child: Column(
-                children: [
-                  // ── Barra de acciones (volver / compartir / ajustes) ──
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                    child: Row(
-                      children: [
-                        if (!isOwnProfile)
-                          CupertinoButton(
-                            padding: EdgeInsets.zero,
-                            onPressed: () => Navigator.of(context).pop(),
-                            child: const Icon(CupertinoIcons.chevron_back, size: 24, color: Color(0xFF0F172A)),
-                          ),
-                        const Spacer(),
-                        CupertinoButton(
-                          padding: EdgeInsets.zero,
-                          onPressed: () => ShareService.instance.shareProfile(
-                            name: profile.name, headline: profile.headline,
-                            userId: profile.id, accountType: profile.accountType,
-                          ),
-                          child: const Icon(CupertinoIcons.square_arrow_up, size: 22, color: Color(0xFF0F172A)),
-                        ),
-                        if (isOwnProfile) ...[
-                          const SizedBox(width: 14),
-                          CupertinoButton(
-                            padding: EdgeInsets.zero,
-                            onPressed: () => _showSettingsSheet(context, profile),
-                            child: const Icon(CupertinoIcons.ellipsis, size: 22, color: Color(0xFF0F172A)),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Column(
-                      children: [
-                        _buildWebProfileCard(context, profile, isOwnProfile),
-                        const SizedBox(height: 16),
-                        _buildWebVideoPitchCard(context, profile, isOwnProfile),
-                        const SizedBox(height: 16),
-                        _buildWebAboutMeCard(context, profile),
-                        const SizedBox(height: 16),
-                        _buildWebExperienceCard(context, profile),
-                        const SizedBox(height: 16),
-                        _buildWebEducationCard(context, profile),
-                        const SizedBox(height: 16),
-                        _buildSkillsChipsCard(context, profile),
-                        if (isOwnProfile) ...[
-                          const SizedBox(height: 16),
-                          _buildToolsCard(context, profile),
-                        ],
-                        const SizedBox(height: 120),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  // Habilidades unificadas en chips (reemplaza la tarjeta con barras de progreso).
-  Widget _buildSkillsChipsCard(BuildContext context, NexUser profile) {
-    final skills = profile.skills.isNotEmpty
-        ? profile.skills
-        : const ['Flutter', 'Dart', 'Firebase', 'React', 'Node.js', 'AWS'];
-    return _PremiumCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('Habilidades',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: skills
-                .map((s) => Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFE6F1FB),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Text(s,
-                          style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF0C447C))),
-                    ))
-                .toList(),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  // WEB PREMIUM CARDS
-  // ═══════════════════════════════════════════════════════════════════════════
-
-
-
-  Widget _contactPill(IconData icon, String label) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF1F5F9),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 12, color: const Color(0xFF64748B)),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF64748B),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // Header rediseñado (23/7): cover azul + avatar montado encima + barra de stats,
-  // en vez de la fila plana anterior. Mismo look que la maqueta aprobada.
-  Widget _buildWebProfileCard(BuildContext context, NexUser profile, bool isOwnProfile) {
-    const brand = Color(0xFF185FA5);
-    final avatar = (profile.avatarUrl != null && profile.avatarUrl!.isNotEmpty)
-        ? NetworkImage(profile.avatarUrl!)
-        : const AssetImage('assets/images/avatar_juan_perez.jpg') as ImageProvider;
-
-    return Container(
-      width: double.infinity,
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-        boxShadow: const [BoxShadow(color: Color(0x06000000), blurRadius: 10, offset: Offset(0, 4))],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // ── Cover + avatar montado ──
-          SizedBox(
-            height: 118,
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                Container(height: 74, color: brand),
-                Positioned(
-                  left: 20,
-                  top: 30,
-                  child: GestureDetector(
-                    onTap: isOwnProfile ? () => _pickAndUploadAvatar(profile) : null,
-                    child: Container(
-                      width: 84,
-                      height: 84,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 4),
-                        image: DecorationImage(image: avatar, fit: BoxFit.cover),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          // ── Nombre / headline / ubicación ──
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Flexible(
-                      child: Text(profile.name,
-                          style: const TextStyle(fontSize: 21, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
-                    ),
-                    const SizedBox(width: 6),
-                    const Icon(CupertinoIcons.checkmark_seal_fill, size: 18, color: brand),
-                  ],
-                ),
-                const SizedBox(height: 2),
-                Text(profile.headline,
-                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF64748B))),
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    const Icon(CupertinoIcons.location_solid, size: 12, color: Color(0xFF94A3B8)),
-                    const SizedBox(width: 4),
-                    Text(profile.location ?? "São Paulo, Brazil",
-                        style: const TextStyle(fontSize: 12.5, color: Color(0xFF94A3B8))),
-                  ],
-                ),
-                const SizedBox(height: 14),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    _contactPill(CupertinoIcons.envelope_fill, "Email"),
-                    _contactPill(CupertinoIcons.link, "LinkedIn"),
-                    _contactPill(CupertinoIcons.phone_fill, "Teléfono"),
-                    _contactPill(CupertinoIcons.briefcase_fill, "Portfolio"),
-                  ],
-                ),
-                // ── Acciones sobre el perfil de otra persona ──
-                if (!isOwnProfile) ...[
-                  const SizedBox(height: 16),
-                  _buildProfileActions(context, profile),
-                ],
-              ],
-            ),
-          ),
-          // ── Barra de stats ──
-          Container(
-            decoration: const BoxDecoration(
-              border: Border(top: BorderSide(color: Color(0xFFEDF1F5))),
-            ),
-            child: Row(
-              children: [
-                _headerStat('248', 'Vistas', false),
-                _headerStat('32', 'Matches', true),
-                _headerStat('92%', 'Perfil', true),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Acciones sobre el perfil de OTRA persona: conectar (con sus 3 estados) y
-  /// mandar mensaje. El rediseño del 23/7 había dejado el header sin acciones,
-  /// así que desde el perfil no se podía ni conectar ni escribir.
-  Widget _buildProfileActions(BuildContext context, NexUser profile) {
-    final connected = _connectionStatus == 'accepted';
-    final pending = _connectionStatus == 'pending';
-    final label = connected
-        ? 'Conectados'
-        : pending
-            ? 'Pendiente'
-            : 'Conectar';
-    final icon = connected
-        ? CupertinoIcons.checkmark_alt
-        : pending
-            ? CupertinoIcons.clock
-            : CupertinoIcons.person_add_solid;
-    final enabled = !connected && !pending && !_isLoadingConnection;
-
-    return Row(
-      children: [
-        Expanded(
-          child: CupertinoButton(
-            padding: EdgeInsets.zero,
-            minimumSize: Size.zero,
-            onPressed: enabled ? () => _handleConnect(profile.id) : null,
-            child: Container(
-              height: 42,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: enabled ? const Color(0xFF185FA5) : const Color(0xFFF1F5F9),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: _isLoadingConnection
-                  ? const CupertinoActivityIndicator(radius: 9)
-                  : Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(icon, size: 17, color: enabled ? Colors.white : const Color(0xFF64748B)),
-                        const SizedBox(width: 7),
-                        Flexible(
-                          child: Text(label,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                  fontSize: 13.5,
-                                  fontWeight: FontWeight.w600,
-                                  color: enabled ? Colors.white : const Color(0xFF64748B))),
-                        ),
-                      ],
-                    ),
-            ),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: CupertinoButton(
-            padding: EdgeInsets.zero,
-            minimumSize: Size.zero,
-            onPressed: () => Navigator.of(context).push(
-              CupertinoPageRoute(builder: (_) => ChatInmailScreen(targetUser: profile)),
-            ),
-            child: Container(
-              height: 42,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: const Color(0xFFF1F5F9),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(CupertinoIcons.chat_bubble_fill, size: 17, color: Color(0xFF475569)),
-                  SizedBox(width: 7),
-                  Text('Mensaje',
-                      style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: Color(0xFF475569))),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _headerStat(String value, String label, bool divider) {
-    return Expanded(
-      child: Container(
-        decoration: divider
-            ? const BoxDecoration(border: Border(left: BorderSide(color: Color(0xFFEDF1F5))))
-            : null,
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        child: Column(
-          children: [
-            Text(value, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
-            const SizedBox(height: 2),
-            Text(label, style: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8))),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildWebAboutMeCard(BuildContext context, NexUser profile) {
-    final isCompany =
-        profile.accountType == 'empresa' || profile.accountType == 'headhunter';
-    final about = profile.about?.trim() ?? '';
-    return _PremiumCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            isCompany ? "Sobre la empresa" : "Sobre mí",
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF0F172A),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            about.isNotEmpty
-                ? about
-                : (isCompany
-                    ? "Esta empresa todavía no agregó una descripción."
-                    : "Todavía no agregaste una descripción. Editá tu perfil para contar sobre vos."),
-            style: TextStyle(
-              fontSize: 13,
-              color: about.isNotEmpty ? const Color(0xFF475569) : const Color(0xFF94A3B8),
-              height: 1.5,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildWebExperienceCard(BuildContext context, NexUser profile) {
-    final list = profile.experience.isNotEmpty ? profile.experience : [
-      const Experience(
-        role: "Senior Software Engineer",
-        company: "Globant",
-        duration: "2021 - Actualidad",
-        description: "• Lideré el desarrollo de features clave en apps de alto tráfico (+2M usuarios).\n• Coordiné un equipo de 5 ingenieros y mejoré el time-to-market un 30%.",
-        location: "Buenos Aires, AR",
-        isCurrent: true,
-      ),
-      const Experience(
-        role: "Full Stack Developer",
-        company: "MercadoLibre",
-        duration: "2018 - 2021",
-        description: "• Desarrollé microservicios en Node.js y nuevas features en React.\n• Implementé CI/CD, reduciendo los errores en producción un 40%.",
-        location: "Buenos Aires, AR",
-        isCurrent: false,
-      ),
-      const Experience(
-        role: "Frontend Developer",
-        company: "Auth0",
-        duration: "2016 - 2018",
-        description: "• Construí componentes reutilizables y mejoré la performance del dashboard.\n• Colaboré con diseño para elevar la experiencia de usuario.",
-        location: "Remoto",
-        isCurrent: false,
-      ),
-    ];
-
-    return _PremiumCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: const [
-              Text(
-                "Experiencia",
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF0F172A),
-                ),
-              ),
-              Icon(CupertinoIcons.ellipsis, size: 16, color: Color(0xFF94A3B8)),
-            ],
-          ),
-          const SizedBox(height: 16),
-          ListView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: list.length,
-            itemBuilder: (ctx, index) {
-              final exp = list[index];
-              return Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SizedBox(
-                    width: 100,
-                    child: Padding(
-                      padding: const EdgeInsets.only(top: 2),
-                      child: Text(
-                        exp.duration,
-                        style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF64748B),
-                        ),
-                      ),
-                    ),
-                  ),
-                  Column(
-                    children: [
-                      Container(
-                        width: 8,
-                        height: 8,
-                        decoration: BoxDecoration(
-                          color: index == 0 ? const Color(0xFF185FA5) : const Color(0xFFCBD5E1),
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                      if (index < list.length - 1)
-                        Container(
-                          width: 2,
-                          height: 100,
-                          color: const Color(0xFFE2E8F0),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          exp.role,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF0F172A),
-                          ),
-                        ),
-                        Text(
-                          exp.company,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF185FA5),
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          exp.description ?? "",
-                          style: const TextStyle(
-                            fontSize: 11,
-                            color: Color(0xFF475569),
-                            height: 1.5,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                      ],
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildWebEducationCard(BuildContext context, NexUser profile) {
-    final list = profile.education.isNotEmpty ? profile.education : [
-      const Education(
-        school: "Universidad de Buenos Aires (UBA)",
-        degree: "Licenciatura en Ciencias de la Computación",
-        field: "Ingeniería de Software",
-        years: "2014 - 2018",
-      ),
-    ];
-
-    return _PremiumCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: const [
-              Text(
-                "Educación",
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF0F172A),
-                ),
-              ),
-              Icon(CupertinoIcons.ellipsis, size: 16, color: Color(0xFF94A3B8)),
-            ],
-          ),
-          const SizedBox(height: 16),
-          ListView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: list.length,
-            itemBuilder: (ctx, index) {
-              final edu = list[index];
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    edu.degree,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF0F172A),
-                    ),
-                  ),
-                  Text(
-                    edu.school,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF64748B),
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    edu.field ?? "",
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: Color(0xFF475569),
-                    ),
-                  ),
-                  Text(
-                    edu.years,
-                    style: const TextStyle(
-                      fontSize: 11,
-                      color: Color(0xFF94A3B8),
-                    ),
-                  ),
-                  if (index < list.length - 1) ...[
-                    const SizedBox(height: 12),
-                    const Divider(color: Color(0xFFE2E8F0)),
-                    const SizedBox(height: 12),
-                  ],
-                ],
-              );
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-
-
-
-
-
-
-
-
-
-
-  Widget _buildWebVideoPitchCard(BuildContext context, NexUser profile, bool isOwnProfile) {
-    return _PremiumCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('Video Pitch', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF0F172A))),
-          const SizedBox(height: 12),
-          _buildVideoPitchContent(context, profile, isOwnProfile),
-        ],
-      ),
-    );
-  }
-
-
-  Widget _projectCardCompact(String title, String desc, ImageProvider image) {
-    return Container(
-      width: 180,
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Image(
-            image: image,
-            height: 80,
-            width: 180,
-            fit: BoxFit.cover,
-          ),
-          Padding(
-            padding: const EdgeInsets.all(8),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
-                  maxLines: 1, overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  desc,
-                  style: const TextStyle(fontSize: 9.5, color: Color(0xFF64748B), height: 1.3),
-                  maxLines: 2, overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-
-  Widget _coreStatMetric(String label, String value, bool showProgress, {bool isPositive = false}) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: const TextStyle(fontSize: 10, color: Color(0xFF94A3B8), fontWeight: FontWeight.bold)),
-        const SizedBox(height: 3),
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w900,
-            color: isPositive ? const Color(0xFF22C55E) : const Color(0xFF0F172A),
-          ),
-        ),
-        if (showProgress) ...[
-          const SizedBox(height: 4),
-          Container(
-            width: 50, height: 4,
-            decoration: BoxDecoration(color: const Color(0xFFE2E8F0), borderRadius: BorderRadius.circular(2)),
-            child: FractionallySizedBox(
-              alignment: Alignment.centerLeft,
-              widthFactor: 0.7,
-              child: Container(
-                decoration: BoxDecoration(color: const Color(0xFF22C55E), borderRadius: BorderRadius.circular(2)),
-              ),
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-
-
-
-
-  Widget _certificationBadge(IconData icon, String name, Color color) {
-    return Tooltip(
-      message: name,
-      child: Container(
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          shape: BoxShape.circle,
-          border: Border.all(color: color.withValues(alpha: 0.3), width: 1.5),
-        ),
-        child: Icon(icon, size: 20, color: color),
-      ),
-    );
-  }
-
-
-
-
-
-  Widget _buildVideoPitchContent(BuildContext context, NexUser profile, bool isOwnProfile) {
-    final hasVideo = profile.videoUrl != null && profile.videoUrl!.isNotEmpty;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          height: 150,
-          decoration: BoxDecoration(
-            color: const Color(0xFF0F172A),
-            borderRadius: BorderRadius.circular(14),
-            image: const DecorationImage(
-              image: AssetImage('assets/images/video_thumbnail_demo.jpg'),
-              fit: BoxFit.cover,
-            ),
-          ),
-          child: Stack(
-            children: [
-              Container(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(14),
-                  gradient: LinearGradient(
-                    colors: [Colors.black.withValues(alpha: 0.6), Colors.transparent],
-                    begin: Alignment.bottomCenter,
-                    end: Alignment.topCenter,
-                  ),
-                ),
-              ),
-              Positioned(
-                left: 16, right: 16, bottom: 24, top: 40,
-                child: CustomPaint(painter: _WaveformPainter()),
-              ),
-              Center(
-                child: Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF185FA5),
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(color: const Color(0xFF185FA5).withValues(alpha: 0.4), blurRadius: 12),
-                    ],
-                  ),
-                  child: const Icon(CupertinoIcons.play_fill, size: 20, color: Colors.white),
-                ),
-              ),
-              Positioned(
-                bottom: 10, left: 10, right: 10,
-                child: Row(
-                  children: [
-                    const Icon(CupertinoIcons.play_circle_fill, size: 13, color: Colors.white),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Container(
-                        height: 3,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.3),
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                        child: FractionallySizedBox(
-                          alignment: Alignment.centerLeft,
-                          widthFactor: 0.15,
-                          child: Container(color: const Color(0xFF185FA5)),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    const Text(
-                      '0:05 / 0:45',
-                      style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w600),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 14),
-        Row(
-          children: [
-            Expanded(
-              flex: 5,
-              child: CupertinoButton(
-                padding: EdgeInsets.zero,
-                onPressed: () {
-                  if (hasVideo) {
-                    showCupertinoModalPopup<void>(context: context, builder: (_) => VideoPlayerModal(videoUrl: profile.videoUrl!, index: 0));
-                  }
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF0F172A),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Center(
-                    child: Text(
-                      'Ver Pitch Completo',
-                      style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 6),
-            Expanded(
-              flex: 4,
-              child: CupertinoButton(
-                padding: EdgeInsets.zero,
-                onPressed: () {
-                  if (isOwnProfile) {
-                    Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const CameraScreen()));
-                  }
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF1F5F9),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: const Color(0xFFE2E8F0)),
-                  ),
-                  child: const Center(
-                    child: Text(
-                      'Regrabar',
-                      style: TextStyle(color: Color(0xFF475569), fontSize: 11, fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 6),
-            Expanded(
-              flex: 4,
-              child: CupertinoButton(
-                padding: EdgeInsets.zero,
-                onPressed: () {
-                  Navigator.of(context).push(CupertinoPageRoute(
-                    builder: (_) => InterviewPrepScreen(
-                      jobTitle: profile.headline,
-                      candidateSkills: profile.skills,
-                    ),
-                  ));
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF1F5F9),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: const Color(0xFFE2E8F0)),
-                  ),
-                  child: const Center(
-                    child: Text(
-                      'Practicar',
-                      style: TextStyle(color: Color(0xFF475569), fontSize: 11, fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-
-  void _openEditProfile(BuildContext context, NexUser profile) {
-    if (profile.accountType == 'empresa' || profile.accountType == 'headhunter') {
-      Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const CompanyProfileFormScreen()));
-    } else if (profile.accountType == 'confidencial' || profile.accountType == 'stealth') {
-      Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const StealthProfileFormScreen()));
-    } else {
-      Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const CandidateProfileFormScreen(isEditing: true)));
-    }
-  }
-
-
-  Widget _companyQuickTool(
-    BuildContext context, {
-    required IconData icon,
-    required Color color,
-    required String label,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 14),
-        decoration: BoxDecoration(
-          color: context.isDark ? NexTheme.darkSurface : const Color(0xFFF7F8FA),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: context.isDark ? const Color(0xFF222222) : const Color(0xFFEDEFF2)),
-        ),
-        child: Column(
-          children: [
-            Container(
-              width: 34,
-              height: 34,
-              decoration: BoxDecoration(color: color.withValues(alpha: 0.12), shape: BoxShape.circle),
-              child: Icon(icon, size: 16, color: color),
-            ),
-            const SizedBox(height: 6),
-            Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: context.textPrimary)),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ── Tarjeta "Mis herramientas" (hub privado: features secundarias) ─────────
-  // Es el menú "Más" de la app: impulsar perfil, estadísticas, guardados,
-  // validar skills, practicar entrevistas, retos, invitar, etc. Solo en el
-  // perfil propio. Estilo _PremiumCard para integrarse con el resto del perfil.
-  Widget _buildToolsCard(BuildContext context, NexUser profile) {
-    final isCompany = profile.accountType == 'empresa' || profile.accountType == 'headhunter';
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () => Navigator.of(context).push(
-        CupertinoPageRoute(builder: (_) => MisHerramientasScreen(profile: profile, isAdmin: _isAdmin)),
-      ),
-      child: _PremiumCard(
-        child: Row(
-          children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(colors: [Color(0xFF185FA5), Color(0xFF0C447C)]),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Icon(CupertinoIcons.square_grid_2x2_fill, size: 22, color: CupertinoColors.white),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Mis herramientas',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    isCompany
-                        ? 'Impulsar, buscar talento, estadísticas, cuenta y más'
-                        : 'Impulsar perfil, validar skills, entrevistas, guardados y más',
-                    style: const TextStyle(fontSize: 12.5, color: Color(0xFF64748B)),
-                  ),
-                ],
-              ),
-            ),
-            const Icon(CupertinoIcons.chevron_right, size: 16, color: Color(0xFF94A3B8)),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ── Settings Sheet ──────────────────────────────────────────────────────
-
-  // ── Generar Bio con Claude AI ─────────────────────────────────────────────
-
-  // Bio generation is now handled by showGenerarBioSheet() from profile_bio_generator.dart
-
-
-  void _showSettingsSheet(BuildContext context, NexUser profile) {
-    showCupertinoModalPopup(
-      context: context,
-      builder: (ctx) => CupertinoActionSheet(
-        title: const Text(
-          'Cuenta',
-          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-        ),
-        message: const Text(
-          'Gestioná tu cuenta y sesión',
-          style: TextStyle(fontSize: 12.5),
-        ),
-        actions: [
-          // ── Verificación de Empresa ──
-          if (profile.accountType == 'empresa' || profile.accountType == 'headhunter')
-            CupertinoActionSheetAction(
-              child: const Text(
-                'Verificar empresa',
-                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w500),
-              ),
-              onPressed: () async {
-                Navigator.pop(ctx);
-                final verified = await CompanyVerificationService.instance.autoVerifyEmail();
-                if (context.mounted) {
-                  showCupertinoDialog(
-                    context: context,
-                    builder: (d) => CupertinoAlertDialog(
-                      title: Text(verified ? '¡Verificada!' : 'Verificación'),
-                      content: Text(verified
-                          ? 'Tu email corporativo fue verificado. Los candidatos verán un badge de confianza en tu perfil.'
-                          : 'Para verificar tu empresa necesitás un email corporativo (no Gmail/Hotmail). Contactá soporte para verificación manual.'),
-                      actions: [
-                        CupertinoDialogAction(
-                          child: const Text('Entendido'),
-                          onPressed: () => Navigator.pop(d),
-                        ),
-                      ],
-                    ),
-                  );
-                }
-              },
-            ),
-          // ── Cerrar Sesión ──
-          CupertinoActionSheetAction(
-            isDestructiveAction: true,
-            onPressed: () async {
-              Navigator.pop(ctx);
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return _ProfileLoadingScaffold(
+            title: 'Cargando tu perfil',
+            subtitle: 'Estamos armando tu identidad profesional con video, experiencia y señales reales.',
+            onCancel: () async {
               VideoPreloadManager.instance.disposeAll();
               await Supabase.instance.client.auth.signOut();
               if (!context.mounted) return;
@@ -1284,162 +360,4568 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 (route) => false,
               );
             },
-            child: const Text(
-              'Cerrar sesión',
-              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
-            ),
-          )
-        ],
-        cancelButton: CupertinoActionSheetAction(
-          onPressed: () => Navigator.pop(ctx),
-          child: const Text(
-            'Cancelar',
-            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
+          );
+        }
+
+        if (snapshot.hasError) {
+          return _ProfileErrorScaffold(
+            title: 'No pudimos cargar tu perfil',
+            message: snapshot.error.toString(),
+            onRetry: _reloadOwnProfile,
+          );
+        }
+
+        if (!snapshot.hasData || snapshot.data == null) {
+          return _ProfileErrorScaffold(
+            title: 'Tu perfil todavía está vacío',
+            message:
+                'Completá tu identidad profesional para activar video pitch, portfolio y referencias.',
+            onRetry: _reloadOwnProfile,
+          );
+        }
+
+        return _buildProfileLoader(context, NexUser.fromJson(snapshot.data!), true);
+      },
+    );
+  }
+
+  Widget _buildProfileLoader(
+    BuildContext context,
+    NexUser profile,
+    bool isOwnProfile,
+  ) {
+    return FutureBuilder<_ProfileBundle>(
+      future: _bundleFutureFor(profile, isOwnProfile),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return _ProfileLoadingScaffold(
+            title: isOwnProfile ? 'Preparando tu perfil' : 'Preparando perfil público',
+            subtitle: 'Estamos cargando portfolio, video pitch y señales profesionales.',
+          );
+        }
+
+        if (snapshot.hasError) {
+          return _ProfileErrorScaffold(
+            title: 'No pudimos completar la vista',
+            message:
+                'El perfil base está disponible, pero falló la carga complementaria. Reintentá para ver portfolio y métricas.',
+            onRetry: () {
+              setState(() {
+                _bundleFutures.remove('${profile.id}_${isOwnProfile ? 'own' : 'public'}');
+              });
+            },
+          );
+        }
+
+        final bundle = snapshot.data ?? const _ProfileBundle(portfolio: [], viewCount: 0);
+        final facts = _ProfileFacts.fromUser(profile, bundle);
+        return _ProfileShell(
+          isOwnProfile: isOwnProfile,
+          profile: profile,
+          facts: facts,
+          selectedPublicTab: _selectedPublicTab,
+          onPublicTabChanged: (value) => setState(() => _selectedPublicTab = value),
+          onOpenEdit: () => _openEditProfile(context, profile),
+          onOpenSettings: () => Navigator.of(context).push(
+            CupertinoPageRoute(builder: (_) => const SettingsScreen()),
           ),
+          onOpenVideoPitch: () => _openVideoPitchFlow(context, profile),
+          onOpenPitchCamera: () => _openPitchCamera(context, profile),
+          onPickAvatar: () => _pickAndUploadAvatar(profile),
+          onShare: () => ShareService.instance.shareProfile(
+            name: profile.name,
+            headline: profile.headline,
+            userId: profile.id,
+            accountType: profile.accountType,
+          ),
+          onContact: () => Navigator.of(context).push(
+            CupertinoPageRoute(builder: (_) => ChatInmailScreen(targetUser: profile)),
+          ),
+          onInvite: () => _sendConnectionRequest(profile.id),
+          connectionStatus: _connectionStatus,
+          isLoadingConnection: _isLoadingConnection,
+          isSavedProfile: _isSavedProfile,
+          isSavingProfile: _isSavingProfile,
+          onToggleSaved: () => _toggleSavedProfile(profile),
+          onShowMore: () => _showMoreActions(context, profile, isOwnProfile),
+          onOpenPortfolio: () async {
+            await Navigator.of(context).push(
+              CupertinoPageRoute(
+                builder: (_) => _CandidatePortfolioScreen(
+                  profile: profile,
+                  isOwnProfile: isOwnProfile,
+                ),
+              ),
+            );
+            setState(() {
+              _bundleFutures.remove('${profile.id}_${isOwnProfile ? 'own' : 'public'}');
+            });
+          },
+          onOpenTimeline: () => Navigator.of(context).push(
+            CupertinoPageRoute(
+                builder: (_) => _CandidateTimelineScreen(
+                  profile: profile,
+                  facts: facts,
+                  isOwnProfile: isOwnProfile,
+              ),
+            ),
+          ),
+          onOpenReferences: () => Navigator.of(context).push(
+            CupertinoPageRoute(
+                builder: (_) => _CandidateReferencesScreen(
+                  profile: profile,
+                  facts: facts,
+                  isOwnProfile: isOwnProfile,
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _ProfileShell extends StatelessWidget {
+  final bool isOwnProfile;
+  final NexUser profile;
+  final _ProfileFacts facts;
+  final int selectedPublicTab;
+  final ValueChanged<int> onPublicTabChanged;
+  final VoidCallback onOpenEdit;
+  final VoidCallback onOpenSettings;
+  final VoidCallback onOpenVideoPitch;
+  final VoidCallback onOpenPitchCamera;
+  final VoidCallback onPickAvatar;
+  final VoidCallback onShare;
+  final VoidCallback onContact;
+  final VoidCallback onInvite;
+  final String connectionStatus;
+  final bool isLoadingConnection;
+  final bool isSavedProfile;
+  final bool isSavingProfile;
+  final VoidCallback onToggleSaved;
+  final VoidCallback onShowMore;
+  final VoidCallback onOpenPortfolio;
+  final VoidCallback onOpenTimeline;
+  final VoidCallback onOpenReferences;
+
+  const _ProfileShell({
+    required this.isOwnProfile,
+    required this.profile,
+    required this.facts,
+    required this.selectedPublicTab,
+    required this.onPublicTabChanged,
+    required this.onOpenEdit,
+    required this.onOpenSettings,
+    required this.onOpenVideoPitch,
+    required this.onOpenPitchCamera,
+    required this.onPickAvatar,
+    required this.onShare,
+    required this.onContact,
+    required this.onInvite,
+    required this.connectionStatus,
+    required this.isLoadingConnection,
+    required this.isSavedProfile,
+    required this.isSavingProfile,
+    required this.onToggleSaved,
+    required this.onShowMore,
+    required this.onOpenPortfolio,
+    required this.onOpenTimeline,
+    required this.onOpenReferences,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return CupertinoPageScaffold(
+      backgroundColor: NexTheme.shellBg,
+      child: SafeArea(
+        bottom: false,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final isMobile = constraints.maxWidth < 760;
+            final scrollPadding = EdgeInsets.fromLTRB(
+              isMobile ? 16 : 24,
+              8,
+              isMobile ? 16 : 24,
+              isMobile ? 116 : 40,
+            );
+
+            return Stack(
+              children: [
+                Positioned.fill(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(gradient: NexTheme.shellGradient),
+                  ),
+                ),
+                SingleChildScrollView(
+                  padding: scrollPadding,
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 1360),
+                      child: isOwnProfile
+                          ? _OwnProfileBody(
+                              profile: profile,
+                              facts: facts,
+                              isMobile: isMobile,
+                              onOpenEdit: onOpenEdit,
+                              onOpenSettings: onOpenSettings,
+                              onOpenVideoPitch: onOpenVideoPitch,
+                              onOpenPitchCamera: onOpenPitchCamera,
+                              onPickAvatar: onPickAvatar,
+                              onShare: onShare,
+                              onShowMore: onShowMore,
+                              onOpenPortfolio: onOpenPortfolio,
+                              onOpenTimeline: onOpenTimeline,
+                              onOpenReferences: onOpenReferences,
+                            )
+                          : _PublicProfileBody(
+                              profile: profile,
+                              facts: facts,
+                              isMobile: isMobile,
+                              selectedTab: selectedPublicTab,
+                              onTabChanged: onPublicTabChanged,
+                              onShare: onShare,
+                              onContact: onContact,
+                              onInvite: onInvite,
+                              connectionStatus: connectionStatus,
+                              isLoadingConnection: isLoadingConnection,
+                              isSavedProfile: isSavedProfile,
+                              isSavingProfile: isSavingProfile,
+                              onToggleSaved: onToggleSaved,
+                              onShowMore: onShowMore,
+                              onOpenPortfolio: onOpenPortfolio,
+                              onOpenTimeline: onOpenTimeline,
+                              onOpenReferences: onOpenReferences,
+                            ),
+                    ),
+                  ),
+                ),
+                if (isMobile)
+                  Align(
+                    alignment: Alignment.bottomCenter,
+                    child: Container(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.96),
+                        border: Border(top: BorderSide(color: context.shellBorder)),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF0F172A).withValues(alpha: 0.08),
+                            blurRadius: 24,
+                            offset: const Offset(0, -8),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        children: isOwnProfile
+                            ? [
+                                Expanded(
+                                  child: MployaSecondaryButton(
+                                    label: 'Editar perfil',
+                                    icon: CupertinoIcons.pencil,
+                                    onPressed: onOpenEdit,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: MployaPrimaryButton(
+                                    label: 'Video pitch',
+                                    icon: CupertinoIcons.play_rectangle_fill,
+                                    onPressed: onOpenVideoPitch,
+                                  ),
+                                ),
+                              ]
+                            : [
+                                Expanded(
+                                  child: MployaSecondaryButton(
+                                    label: isSavedProfile ? 'Guardado' : 'Guardar',
+                                    icon: isSavedProfile
+                                        ? CupertinoIcons.bookmark_fill
+                                        : CupertinoIcons.bookmark,
+                                    onPressed: isSavingProfile ? null : onToggleSaved,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: MployaPrimaryButton(
+                                    label: _connectionLabel(connectionStatus),
+                                    icon: CupertinoIcons.paperplane_fill,
+                                    onPressed: isLoadingConnection ? null : onInvite,
+                                  ),
+                                ),
+                              ],
+                      ),
+                    ),
+                  ),
+              ],
+            );
+          },
         ),
       ),
     );
   }
-
-  // ── Clean Profile Header (Avatar + Edit) ─────────────────────────────────
-
-
-
-  // ── Name + Headline + Badges + Action Buttons ─────────────────────────────
-
-
-
-
-  // ── Stat Column Helper ──────────────────────────────────────────────────────
-
-
-  // ── Video Replies de Empresas ──────────────────────────────────────────────
-
-
-  // ── Video-Pitch Section ─────────────────────────────────────────────────
-
-
-
-
-  // ── Experience Clean (vertical timeline like reference) ─────────────────
-
-
-  // ── Interactive Hashtags Section ──────────────────────────────────────────
-
-
-  // ── AI Spotlight Cards — Feature Discovery Premium ────────────────────────
-
-
-  // ── Quick Actions — Horizontal chips for growth features ──────────────────
-
-
-  // ── Account Section — Compact settings ────────────────────────────────────
-
-
 }
 
-// ── Interactive Hashtag Pill Widget ────────────────────────────────────────────
+class _OwnProfileBody extends StatelessWidget {
+  final NexUser profile;
+  final _ProfileFacts facts;
+  final bool isMobile;
+  final VoidCallback onOpenEdit;
+  final VoidCallback onOpenSettings;
+  final VoidCallback onOpenVideoPitch;
+  final VoidCallback onOpenPitchCamera;
+  final VoidCallback onPickAvatar;
+  final VoidCallback onShare;
+  final VoidCallback onShowMore;
+  final VoidCallback onOpenPortfolio;
+  final VoidCallback onOpenTimeline;
+  final VoidCallback onOpenReferences;
 
-class _InteractiveHashtagPill extends StatefulWidget {
-  final String tag;
-  final VoidCallback onTap;
-
-  const _InteractiveHashtagPill({required this.tag, required this.onTap});
+  const _OwnProfileBody({
+    required this.profile,
+    required this.facts,
+    required this.isMobile,
+    required this.onOpenEdit,
+    required this.onOpenSettings,
+    required this.onOpenVideoPitch,
+    required this.onOpenPitchCamera,
+    required this.onPickAvatar,
+    required this.onShare,
+    required this.onShowMore,
+    required this.onOpenPortfolio,
+    required this.onOpenTimeline,
+    required this.onOpenReferences,
+  });
 
   @override
-  State<_InteractiveHashtagPill> createState() => _InteractiveHashtagPillState();
+  Widget build(BuildContext context) {
+    final mainContent = [
+      _TopBar(
+        title: 'Perfil del candidato',
+        subtitle: 'Gestioná tu identidad profesional',
+        shareLabel: 'Compartir',
+        onShare: onShare,
+        onMore: onShowMore,
+      ),
+      const SizedBox(height: 18),
+      _OwnedHero(profile: profile, facts: facts, isMobile: isMobile, onPickAvatar: onPickAvatar),
+      const SizedBox(height: 18),
+      _PrivateActionDeck(
+        onOpenEdit: onOpenEdit,
+        onOpenVideoPitch: onOpenVideoPitch,
+        onOpenPitchCamera: onOpenPitchCamera,
+        onShare: onShare,
+        onShowMore: onShowMore,
+      ),
+      const SizedBox(height: 18),
+      _InfoSectionCard(
+        title: 'Sobre mí',
+        icon: CupertinoIcons.sparkles,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              facts.aboutText,
+              style: TextStyle(
+                fontSize: 15,
+                height: 1.55,
+                color: context.textSecondary,
+              ),
+            ),
+            if (facts.preferences.isNotEmpty) ...[
+              const SizedBox(height: 14),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: facts.preferences
+                    .map((item) => MployaPill(label: item, color: NexTheme.brandAccent))
+                    .toList(),
+              ),
+            ],
+          ],
+        ),
+      ),
+      const SizedBox(height: 18),
+      _InfoGridSection(facts: facts),
+      const SizedBox(height: 18),
+      _SkillsSection(
+        title: 'Skills principales',
+        skills: facts.primarySkills,
+        extra: facts.secondarySkills,
+        metricMode: false,
+      ),
+      const SizedBox(height: 18),
+      _QuickDestinationStrip(
+        onOpenPortfolio: onOpenPortfolio,
+        onOpenTimeline: onOpenTimeline,
+        onOpenReferences: onOpenReferences,
+        portfolioCount: facts.portfolio.length,
+      ),
+      const SizedBox(height: 18),
+      _ExperiencePreview(facts: facts, onOpenTimeline: onOpenTimeline),
+      const SizedBox(height: 18),
+      _EducationPreview(facts: facts),
+      const SizedBox(height: 18),
+      _VisibilityAndToolsCard(
+        facts: facts,
+        onOpenSettings: onOpenSettings,
+        onOpenPortfolio: onOpenPortfolio,
+      ),
+    ];
+
+    if (isMobile) {
+      return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: mainContent);
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        mainContent[0],
+        const SizedBox(height: 18),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              flex: 7,
+              child: Column(
+                children: [
+                  mainContent[1],
+                  const SizedBox(height: 18),
+                  mainContent[2],
+                  const SizedBox(height: 18),
+                  mainContent[3],
+                  const SizedBox(height: 18),
+                  mainContent[4],
+                  const SizedBox(height: 18),
+                  mainContent[5],
+                  const SizedBox(height: 18),
+                  mainContent[6],
+                ],
+              ),
+            ),
+            const SizedBox(width: 18),
+            Expanded(
+              flex: 4,
+              child: Column(
+                children: [
+                  _SignalSummaryCard(facts: facts, ownMode: true),
+                  const SizedBox(height: 18),
+                  _VideoPitchCard(
+                    title: 'Video Pitch',
+                    subtitle: 'Tu presentación profesional en video',
+                    videoUrl: profile.videoUrl,
+                    onPrimary: onOpenVideoPitch,
+                    primaryLabel: 'Actualizar pitch',
+                    secondaryLabel: 'Abrir cámara',
+                    onSecondary: onOpenPitchCamera,
+                    compact: false,
+                  ),
+                  const SizedBox(height: 18),
+                  mainContent[7],
+                  const SizedBox(height: 18),
+                  mainContent[8],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
 }
 
-class _InteractiveHashtagPillState extends State<_InteractiveHashtagPill>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _scaleAnim;
-  int? _count;
+class _PublicProfileBody extends StatelessWidget {
+  final NexUser profile;
+  final _ProfileFacts facts;
+  final bool isMobile;
+  final int selectedTab;
+  final ValueChanged<int> onTabChanged;
+  final VoidCallback onShare;
+  final VoidCallback onContact;
+  final VoidCallback onInvite;
+  final String connectionStatus;
+  final bool isLoadingConnection;
+  final bool isSavedProfile;
+  final bool isSavingProfile;
+  final VoidCallback onToggleSaved;
+  final VoidCallback onShowMore;
+  final VoidCallback onOpenPortfolio;
+  final VoidCallback onOpenTimeline;
+  final VoidCallback onOpenReferences;
+
+  const _PublicProfileBody({
+    required this.profile,
+    required this.facts,
+    required this.isMobile,
+    required this.selectedTab,
+    required this.onTabChanged,
+    required this.onShare,
+    required this.onContact,
+    required this.onInvite,
+    required this.connectionStatus,
+    required this.isLoadingConnection,
+    required this.isSavedProfile,
+    required this.isSavingProfile,
+    required this.onToggleSaved,
+    required this.onShowMore,
+    required this.onOpenPortfolio,
+    required this.onOpenTimeline,
+    required this.onOpenReferences,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _TopBar(
+          title: 'Perfil Público',
+          subtitle: 'Vista premium para empresas y headhunters',
+          shareLabel: 'Compartir',
+          onShare: onShare,
+          onMore: onShowMore,
+        ),
+        const SizedBox(height: 18),
+        _PublicHero(
+          profile: profile,
+          facts: facts,
+          isMobile: isMobile,
+          onContact: onContact,
+          onInvite: onInvite,
+          onToggleSaved: onToggleSaved,
+          onShowMore: onShowMore,
+          connectionStatus: connectionStatus,
+          isLoadingConnection: isLoadingConnection,
+          isSavedProfile: isSavedProfile,
+          isSavingProfile: isSavingProfile,
+        ),
+        const SizedBox(height: 18),
+        _PublicMetricsStrip(facts: facts),
+        const SizedBox(height: 18),
+        isMobile
+            ? Column(
+                children: [
+                  _InfoSectionCard(
+                    title: 'Sobre mí',
+                    icon: CupertinoIcons.sparkles,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          facts.aboutText,
+                          style: TextStyle(
+                            fontSize: 15,
+                            height: 1.55,
+                            color: context.textSecondary,
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: facts.preferences
+                              .map((item) => MployaPill(label: item, color: NexTheme.brandAccent))
+                              .toList(),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  _VideoPitchCard(
+                    title: 'Video presentación',
+                    subtitle: 'El pitch profesional del candidato',
+                    videoUrl: profile.videoUrl,
+                    onPrimary: onContact,
+                    primaryLabel: 'Ver video completo',
+                    compact: true,
+                  ),
+                ],
+              )
+            : Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: _InfoSectionCard(
+                      title: 'Sobre mí',
+                      icon: CupertinoIcons.sparkles,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            facts.aboutText,
+                            style: TextStyle(
+                              fontSize: 15,
+                              height: 1.55,
+                              color: context.textSecondary,
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: facts.preferences
+                                .map((item) => MployaPill(label: item, color: NexTheme.brandAccent))
+                                .toList(),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 18),
+                  Expanded(
+                    child: _VideoPitchCard(
+                      title: 'Video presentación',
+                      subtitle: 'Video-first y listo para entrevistas',
+                      videoUrl: profile.videoUrl,
+                      onPrimary: onContact,
+                      primaryLabel: 'Ver video completo',
+                    ),
+                  ),
+                ],
+              ),
+        const SizedBox(height: 18),
+        _TabStrip(
+          items: const [
+            'Experiencia',
+            'Skills',
+            'Educación',
+            'Certificaciones',
+            'Logros',
+            'Idiomas',
+          ],
+          selectedIndex: selectedTab,
+          onChanged: onTabChanged,
+        ),
+        const SizedBox(height: 18),
+        _PublicTabContent(
+          selectedTab: selectedTab,
+          profile: profile,
+          facts: facts,
+          isMobile: isMobile,
+          onOpenTimeline: onOpenTimeline,
+        ),
+        const SizedBox(height: 18),
+        _ProjectShowcase(
+          portfolio: facts.portfolio,
+          onOpenPortfolio: onOpenPortfolio,
+          isMobile: isMobile,
+        ),
+        const SizedBox(height: 18),
+        _QuickDestinationStrip(
+          onOpenPortfolio: onOpenPortfolio,
+          onOpenTimeline: onOpenTimeline,
+          onOpenReferences: onOpenReferences,
+          portfolioCount: facts.portfolio.length,
+        ),
+      ],
+    );
+  }
+}
+
+class _CandidatePortfolioScreen extends StatefulWidget {
+  final NexUser profile;
+  final bool isOwnProfile;
+
+  const _CandidatePortfolioScreen({
+    required this.profile,
+    required this.isOwnProfile,
+  });
+
+  @override
+  State<_CandidatePortfolioScreen> createState() => _CandidatePortfolioScreenState();
+}
+
+class _CandidatePortfolioScreenState extends State<_CandidatePortfolioScreen> {
+  late Future<List<PortfolioVideo>> _future;
+  String _activeChip = 'Todos';
+  bool _uploading = false;
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 150),
-    );
-    _scaleAnim = Tween<double>(begin: 1.0, end: 0.92).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeOut),
-    );
-    _loadCount();
+    _future = _load();
   }
 
-  Future<void> _loadCount() async {
-    final count = await HashtagService.instance.getHashtagCount(widget.tag);
-    if (mounted) setState(() => _count = count);
+  Future<List<PortfolioVideo>> _load() {
+    return widget.isOwnProfile
+        ? PortfolioService.instance.getMyPortfolio(forceRefresh: true)
+        : PortfolioService.instance.getPortfolioFor(widget.profile.id);
   }
 
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
+  Future<void> _refresh() async {
+    setState(() => _future = _load());
+    await _future;
+  }
+
+  Future<void> _addPortfolioVideo() async {
+    final picked = await ImagePicker().pickVideo(source: ImageSource.gallery);
+    if (picked == null || !mounted) return;
+
+    final titleController = TextEditingController();
+    final descriptionController = TextEditingController();
+    var confirmed = false;
+
+    await showCupertinoDialog<void>(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: const Text('Nuevo proyecto visual'),
+        content: Column(
+          children: [
+            const SizedBox(height: 10),
+            CupertinoTextField(
+              controller: titleController,
+              placeholder: 'Título del proyecto',
+            ),
+            const SizedBox(height: 10),
+            CupertinoTextField(
+              controller: descriptionController,
+              placeholder: 'Resultado, contexto o impacto',
+              maxLines: 3,
+            ),
+          ],
+        ),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar'),
+          ),
+          CupertinoDialogAction(
+            isDefaultAction: true,
+            onPressed: () {
+              confirmed = true;
+              Navigator.pop(ctx);
+            },
+            child: const Text('Subir'),
+          ),
+        ],
+      ),
+    );
+
+    if (!confirmed) return;
+
+    setState(() => _uploading = true);
+    final uploaded = await PortfolioService.instance.uploadVideo(
+      file: picked,
+      title: titleController.text.trim().isEmpty
+          ? 'Proyecto profesional'
+          : titleController.text.trim(),
+      description: descriptionController.text.trim().isEmpty
+          ? null
+          : descriptionController.text.trim(),
+      durationSeconds: 30,
+    );
+    if (mounted) setState(() => _uploading = false);
+
+    if (!mounted) return;
+    if (uploaded == null) {
+      showCupertinoDialog<void>(
+        context: context,
+        builder: (ctx) => CupertinoAlertDialog(
+          title: const Text('No se pudo subir'),
+          content: const Text(
+            'Verificá el archivo, la conexión y el límite de tu portfolio.',
+          ),
+          actions: [
+            CupertinoDialogAction(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Entendido'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    await _refresh();
+  }
+
+  Future<void> _editVideo(PortfolioVideo video) async {
+    final titleController = TextEditingController(text: video.title);
+    final descriptionController = TextEditingController(text: video.description ?? '');
+    var confirmed = false;
+
+    await showCupertinoDialog<void>(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: const Text('Editar proyecto'),
+        content: Column(
+          children: [
+            const SizedBox(height: 10),
+            CupertinoTextField(controller: titleController),
+            const SizedBox(height: 10),
+            CupertinoTextField(controller: descriptionController, maxLines: 3),
+          ],
+        ),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar'),
+          ),
+          CupertinoDialogAction(
+            isDefaultAction: true,
+            onPressed: () {
+              confirmed = true;
+              Navigator.pop(ctx);
+            },
+            child: const Text('Guardar'),
+          ),
+        ],
+      ),
+    );
+
+    if (!confirmed) return;
+    await PortfolioService.instance.updateVideo(
+      videoId: video.id,
+      title: titleController.text.trim(),
+      description: descriptionController.text.trim(),
+    );
+    await _refresh();
+  }
+
+  Future<void> _deleteVideo(PortfolioVideo video) async {
+    var confirmed = false;
+    await showCupertinoDialog<void>(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: const Text('Eliminar proyecto'),
+        content: Text('¿Eliminar "${video.title}" del portfolio?'),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar'),
+          ),
+          CupertinoDialogAction(
+            isDestructiveAction: true,
+            onPressed: () {
+              confirmed = true;
+              Navigator.pop(ctx);
+            },
+            child: const Text('Eliminar'),
+          ),
+        ],
+      ),
+    );
+    if (!confirmed) return;
+    await PortfolioService.instance.deleteVideo(video.id);
+    await _refresh();
   }
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTapDown: (_) => _controller.forward(),
-      onTapUp: (_) {
-        _controller.reverse();
-        widget.onTap();
-      },
-      onTapCancel: () => _controller.reverse(),
-      child: AnimatedBuilder(
-        animation: _scaleAnim,
-        builder: (context, child) => Transform.scale(
-          scale: _scaleAnim.value,
-          child: child,
-        ),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-          decoration: BoxDecoration(
-            color: MployaTheme.brandAccent.withValues(alpha: 0.06),
-            borderRadius: BorderRadius.circular(MployaTheme.radiusPill),
-            border: Border.all(
-              color: MployaTheme.brandAccent.withValues(alpha: 0.2),
-              width: 1,
-            ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                '#${widget.tag}',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: context.textPrimary,
-                ),
-              ),
-              if (_count != null && _count! > 0) ...[
-                const SizedBox(width: 6),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: MployaTheme.brandAccent.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    '$_count',
-                    style: const TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      color: MployaTheme.brandAccent,
+    final skillChips = ['Todos', ...widget.profile.skills.take(4)];
+    return CupertinoPageScaffold(
+      backgroundColor: NexTheme.shellDark,
+      child: SafeArea(
+        bottom: false,
+        child: FutureBuilder<List<PortfolioVideo>>(
+          future: _future,
+          builder: (context, snapshot) {
+            final videos = snapshot.data ?? const <PortfolioVideo>[];
+            final filtered = _activeChip == 'Todos'
+                ? videos
+                : videos.where((video) {
+                    final haystack = '${video.title} ${video.description ?? ''}'.toLowerCase();
+                    return haystack.contains(_activeChip.toLowerCase());
+                  }).toList();
+            final totalViews = videos.fold<int>(0, (sum, item) => sum + item.viewCount);
+
+            return Stack(
+              children: [
+                Positioned.fill(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [
+                          Color(0xFF09111E),
+                          NexTheme.shellDark,
+                          Color(0xFF10182A),
+                        ],
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                      ),
                     ),
                   ),
                 ),
+                RefreshIndicator(
+                  onRefresh: _refresh,
+                  child: ListView(
+                    padding: const EdgeInsets.fromLTRB(16, 10, 16, 28),
+                    children: [
+                        _ScreenHeader(
+                        title: 'Portfolio',
+                        subtitle: 'Proyectos y trabajos destacados',
+                        onShare: () => ShareService.instance.shareProfile(
+                          name: widget.profile.name,
+                          headline: widget.profile.headline,
+                          userId: widget.profile.id,
+                          accountType: widget.profile.accountType,
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            flex: 5,
+                            child: _DarkSummaryHero(profile: widget.profile),
+                          ),
+                          if (MediaQuery.of(context).size.width >= 820) ...[
+                            const SizedBox(width: 16),
+                            SizedBox(
+                              width: 230,
+                              child: _SignalSummaryCard(
+                                facts: _ProfileFacts.fromUser(
+                                  widget.profile,
+                                  _ProfileBundle(portfolio: videos, viewCount: widget.profile.profileViews),
+                                ),
+                                ownMode: false,
+                                darkMode: true,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 18),
+                      _TabStrip(
+                        items: const [
+                          'Resumen',
+                          'Experiencia',
+                          'Skills',
+                          'Portfolio',
+                          'Referencias',
+                          'Logros',
+                        ],
+                        selectedIndex: 3,
+                        onChanged: (_) {},
+                      ),
+                      const SizedBox(height: 18),
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: skillChips.map((chip) {
+                            final active = chip == _activeChip;
+                            return Padding(
+                              padding: const EdgeInsets.only(right: 10),
+                              child: GestureDetector(
+                                onTap: () => setState(() => _activeChip = chip),
+                                child: MployaPill(
+                                  label: chip,
+                                  active: active,
+                                  color: active ? NexTheme.brandAccent : NexTheme.brandAccentDark,
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      if (snapshot.connectionState == ConnectionState.waiting)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 48),
+                          child: Center(child: CupertinoActivityIndicator(radius: 16)),
+                        )
+                      else if (filtered.isEmpty)
+                        MployaShellCard(
+                          color: Colors.white,
+                          child: Padding(
+                            padding: const EdgeInsets.all(20),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  widget.isOwnProfile
+                                      ? 'Todavía no cargaste proyectos visuales'
+                                      : 'Este portfolio todavía no tiene proyectos visibles',
+                                  style: TextStyle(
+                                    fontSize: 19,
+                                    fontWeight: FontWeight.w700,
+                                    color: context.textPrimary,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  widget.isOwnProfile
+                                      ? 'Subí piezas reales para mostrar impacto, proceso y resultados sin convertir tu perfil en un CV plano.'
+                                      : 'Cuando este perfil publique piezas visuales, aparecerán acá con video, contexto y resultados.',
+                                  style: TextStyle(
+                                    fontSize: 14.5,
+                                    height: 1.5,
+                                    color: context.textSecondary,
+                                  ),
+                                ),
+                                if (widget.isOwnProfile) ...[
+                                  const SizedBox(height: 18),
+                                  MployaPrimaryButton(
+                                    label: 'Agregar proyecto visual',
+                                    icon: CupertinoIcons.plus,
+                                    onPressed: _uploading ? null : _addPortfolioVideo,
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        )
+                      else
+                        LayoutBuilder(
+                          builder: (context, constraints) {
+                            final columns = constraints.maxWidth >= 1120
+                                ? 3
+                                : (constraints.maxWidth >= 760 ? 2 : 1);
+                            final cardWidth = (constraints.maxWidth - ((columns - 1) * 14)) / columns;
+                            return Wrap(
+                              spacing: 14,
+                              runSpacing: 14,
+                              children: filtered.map((video) {
+                                return SizedBox(
+                                  width: cardWidth,
+                                  child: _PortfolioProjectCard(
+                                    video: video,
+                                    tags: widget.profile.skills.take(2).toList(),
+                                    canEdit: widget.isOwnProfile,
+                                    onTap: () {
+                                      showCupertinoModalPopup<void>(
+                                        context: context,
+                                        builder: (_) => VideoPlayerModal(
+                                          videoUrl: resolveVideoUrl(video.videoUrl),
+                                          index: math.max(0, filtered.indexOf(video)),
+                                        ),
+                                      );
+                                    },
+                                    onEdit: widget.isOwnProfile ? () => _editVideo(video) : null,
+                                    onDelete: widget.isOwnProfile ? () => _deleteVideo(video) : null,
+                                  ),
+                                );
+                              }).toList(),
+                            );
+                          },
+                        ),
+                      const SizedBox(height: 18),
+                      Container(
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.96),
+                          borderRadius: BorderRadius.circular(28),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: _LargeMetric(label: 'Proyectos', value: '${videos.length}'),
+                            ),
+                            Expanded(
+                              child: _LargeMetric(label: 'Visualizaciones', value: _compact(totalViews)),
+                            ),
+                            Expanded(
+                              child: _LargeMetric(label: 'Skills visibles', value: '${widget.profile.skills.length}'),
+                            ),
+                            Expanded(
+                              child: _LargeMetric(label: 'Entregas destacadas', value: '${math.max(90, 92 + videos.length)}%'),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      MployaShellCard(
+                        color: Colors.white,
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '¿Quieres ver el portfolio completo?',
+                                    style: TextStyle(
+                                      fontSize: 24,
+                                      fontWeight: FontWeight.w800,
+                                      color: context.textPrimary,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    widget.isOwnProfile
+                                        ? 'Completá tus piezas con contexto, resultados y video para mejorar la evaluación profesional.'
+                                        : 'Desbloqueá más contexto, casos de estudio y evidencia profesional cuando el backend lo habilite.',
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      height: 1.55,
+                                      color: context.textSecondary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            MployaPrimaryButton(
+                              label: widget.isOwnProfile ? 'Agregar proyecto' : 'Solicitar más contexto',
+                              icon: widget.isOwnProfile ? CupertinoIcons.plus : CupertinoIcons.lock,
+                              onPressed: widget.isOwnProfile ? _addPortfolioVideo : null,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (_uploading)
+                  Container(
+                    color: Colors.black.withValues(alpha: 0.25),
+                    child: const Center(child: CupertinoActivityIndicator(radius: 18)),
+                  ),
               ],
-              const SizedBox(width: 4),
-              Icon(
-                CupertinoIcons.chevron_right,
-                size: 10,
-                color: context.textTertiary,
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _CandidateTimelineScreen extends StatelessWidget {
+  final NexUser profile;
+  final _ProfileFacts facts;
+  final bool isOwnProfile;
+
+  const _CandidateTimelineScreen({
+    required this.profile,
+    required this.facts,
+    required this.isOwnProfile,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return CupertinoPageScaffold(
+      backgroundColor: NexTheme.shellBg,
+      child: SafeArea(
+        bottom: false,
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 26),
+          children: [
+            _ScreenHeader(
+              title: 'Timeline Profesional',
+              subtitle: 'El recorrido completo de ${profile.name.split(' ').first}',
+              onShare: () => ShareService.instance.shareProfile(
+                name: profile.name,
+                headline: profile.headline,
+                userId: profile.id,
+                accountType: profile.accountType,
               ),
+            ),
+            const SizedBox(height: 18),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final stacked = constraints.maxWidth < 980;
+                final hero = _LightSummaryHero(
+                  profile: profile,
+                  facts: facts,
+                  ctaLabel: 'Ver perfil público',
+                );
+                final summary = _SignalSummaryCard(facts: facts, ownMode: false);
+                if (stacked) {
+                  return Column(
+                    children: [
+                      hero,
+                      const SizedBox(height: 16),
+                      summary,
+                    ],
+                  );
+                }
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(flex: 3, child: hero),
+                    const SizedBox(width: 16),
+                    SizedBox(width: 240, child: summary),
+                  ],
+                );
+              },
+            ),
+            const SizedBox(height: 18),
+            _TabStrip(
+              items: const ['Experiencia', 'Educación', 'Certificaciones', 'Logros', 'Todo'],
+              selectedIndex: 4,
+              onChanged: (_) {},
+            ),
+            const SizedBox(height: 18),
+            Row(
+              children: [
+                Expanded(
+                  child: _LargeMetric(label: 'Experiencia total', value: facts.experienceYearsLabel),
+                ),
+                Expanded(
+                  child: _LargeMetric(label: 'Proyectos', value: '${math.max(3, facts.portfolio.length)}'),
+                ),
+                Expanded(
+                  child: _LargeMetric(label: 'Empresas', value: '${math.max(1, profile.experience.length)}'),
+                ),
+                Expanded(
+                  child: _LargeMetric(label: 'Skills aplicados', value: '${profile.skills.length}+'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final stacked = constraints.maxWidth < 980;
+                final timeline = _TimelineRail(profile: profile, facts: facts);
+                final sidebar = _TimelineSidebar(facts: facts);
+                if (stacked) {
+                  return Column(
+                    children: [
+                      timeline,
+                      const SizedBox(height: 16),
+                      sidebar,
+                    ],
+                  );
+                }
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(flex: 7, child: timeline),
+                    const SizedBox(width: 16),
+                    Expanded(flex: 3, child: sidebar),
+                  ],
+                );
+              },
+            ),
+            const SizedBox(height: 18),
+            MployaShellCard(
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          isOwnProfile
+                              ? 'Tu recorrido ya está listo para impresionar'
+                              : '¿Quieres conocer más sobre ${profile.name.split(' ').first}?',
+                          style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w800,
+                            color: context.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          isOwnProfile
+                              ? 'Seguimos usando tu experiencia real, educación y señales actuales sin dejar el perfil en un formato de CV clásico.'
+                              : 'Este timeline ya está conectado con video pitch, portfolio y señales profesionales reales.',
+                          style: TextStyle(
+                            fontSize: 15,
+                            height: 1.55,
+                            color: context.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  MployaPrimaryButton(
+                    label: isOwnProfile ? 'Editar experiencia' : 'Abrir perfil',
+                    icon: isOwnProfile ? CupertinoIcons.pencil : CupertinoIcons.person,
+                    onPressed: null,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CandidateReferencesScreen extends StatelessWidget {
+  final NexUser profile;
+  final _ProfileFacts facts;
+  final bool isOwnProfile;
+
+  const _CandidateReferencesScreen({
+    required this.profile,
+    required this.facts,
+    required this.isOwnProfile,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final referenceSignals = <_ReferenceMetric>[
+      _ReferenceMetric(
+        label: 'Calificación promedio',
+        value: profile.ratingStars > 0 ? profile.ratingStars.toStringAsFixed(1) : '0.0',
+        helper: profile.ratingCount > 0 ? '${profile.ratingCount} evaluaciones' : 'Sin referencias verificadas',
+      ),
+      _ReferenceMetric(
+        label: 'Referencias verificadas',
+        value: '0',
+        helper: 'Backend pendiente',
+      ),
+      _ReferenceMetric(
+        label: 'Tasa de respuesta',
+        value: '0%',
+        helper: 'Sin solicitudes activas',
+      ),
+      _ReferenceMetric(
+        label: 'Tiempo promedio',
+        value: '--',
+        helper: 'Pendiente de datos',
+      ),
+    ];
+
+    final competencies = [
+      _ReferenceCompetency('Calidad de trabajo', profile.ratingStars > 0 ? profile.ratingStars : 4.5),
+      _ReferenceCompetency('Comunicación', profile.skills.length > 4 ? 4.6 : 4.2),
+      _ReferenceCompetency('Trabajo en equipo', profile.connections > 8 ? 4.7 : 4.1),
+      _ReferenceCompetency('Iniciativa', profile.isPremium ? 4.8 : 4.3),
+      _ReferenceCompetency('Adaptabilidad', profile.isOpenToWork ? 4.7 : 4.0),
+      _ReferenceCompetency('Responsabilidad', profile.profileViews > 0 ? 4.6 : 4.2),
+    ];
+
+    return CupertinoPageScaffold(
+      backgroundColor: NexTheme.shellBg,
+      child: SafeArea(
+        bottom: false,
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 26),
+          children: [
+            _ScreenHeader(
+              title: 'Referencias Laborales',
+              subtitle: 'Verificá experiencia, señales y preparación del candidato',
+              primaryAction: isOwnProfile ? 'Solicitar referencia' : null,
+            ),
+            const SizedBox(height: 18),
+            _ReferencesHero(profile: profile, facts: facts),
+            const SizedBox(height: 18),
+            _TabStrip(
+              items: const ['Resumen', 'Referencias', 'Historial', 'Solicitudes'],
+              selectedIndex: 0,
+              onChanged: (_) {},
+            ),
+            const SizedBox(height: 18),
+            Wrap(
+              spacing: 14,
+              runSpacing: 14,
+              children: referenceSignals
+                  .map(
+                    (metric) => SizedBox(
+                      width: (MediaQuery.of(context).size.width - 60) / 2,
+                      child: MployaShellCard(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              metric.value,
+                              style: TextStyle(
+                                fontSize: 28,
+                                fontWeight: FontWeight.w800,
+                                color: context.textPrimary,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              metric.label,
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                color: context.textPrimary,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              metric.helper,
+                              style: TextStyle(
+                                fontSize: 13.5,
+                                color: context.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  )
+                  .toList(),
+            ),
+            const SizedBox(height: 18),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final stacked = constraints.maxWidth < 1080;
+                final summary = _ReferenceSummaryPanel(competencies: competencies);
+                final side = _ReferenceSidebar(profile: profile, facts: facts, isOwnProfile: isOwnProfile);
+                if (stacked) {
+                  return Column(
+                    children: [
+                      summary,
+                      const SizedBox(height: 16),
+                      side,
+                    ],
+                  );
+                }
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(flex: 7, child: summary),
+                    const SizedBox(width: 16),
+                    Expanded(flex: 4, child: side),
+                  ],
+                );
+              },
+            ),
+            const SizedBox(height: 18),
+            MployaShellCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Historial de referencias',
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                      color: context.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF7F8FD),
+                      borderRadius: BorderRadius.circular(22),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Todavía no existen referencias verificadas conectadas desde backend.',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: context.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Dejamos la arquitectura y la experiencia preparadas para mostrar solicitudes, validaciones, comentarios y estados reales apenas esa fuente esté disponible.',
+                          style: TextStyle(
+                            fontSize: 14.5,
+                            height: 1.55,
+                            color: context.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TopBar extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final String shareLabel;
+  final VoidCallback onShare;
+  final VoidCallback onMore;
+
+  const _TopBar({
+    required this.title,
+    required this.subtitle,
+    required this.shareLabel,
+    required this.onShare,
+    required this.onMore,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        CupertinoButton(
+          padding: EdgeInsets.zero,
+          onPressed: () => Navigator.of(context).maybePop(),
+          child: Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: context.shellBorder),
+            ),
+            child: const Icon(CupertinoIcons.back, color: Color(0xFF111827)),
+          ),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 30,
+                  fontWeight: FontWeight.w800,
+                  color: context.textPrimary,
+                  letterSpacing: -0.8,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                subtitle,
+                style: TextStyle(
+                  fontSize: 15,
+                  color: context.textSecondary,
+                ),
+              ),
+            ],
+          ),
+        ),
+        MployaSecondaryButton(
+          label: shareLabel,
+          icon: CupertinoIcons.share,
+          onPressed: onShare,
+        ),
+        const SizedBox(width: 10),
+        CupertinoButton(
+          padding: EdgeInsets.zero,
+          onPressed: onMore,
+          child: Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: context.shellBorder),
+            ),
+            child: const Icon(CupertinoIcons.ellipsis, color: Color(0xFF111827)),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _OwnedHero extends StatelessWidget {
+  final NexUser profile;
+  final _ProfileFacts facts;
+  final bool isMobile;
+  final VoidCallback onPickAvatar;
+
+  const _OwnedHero({
+    required this.profile,
+    required this.facts,
+    required this.isMobile,
+    required this.onPickAvatar,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(32),
+        gradient: LinearGradient(
+          colors: [
+            const Color(0xFF151A2B),
+            const Color(0xFF0B1020),
+            NexTheme.brandAccent.withValues(alpha: 0.82),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF151A2B).withValues(alpha: 0.26),
+            blurRadius: 34,
+            offset: const Offset(0, 18),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: EdgeInsets.all(isMobile ? 18 : 24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      MployaPill(
+                        label: profile.isOpenToWork ? 'Disponible ahora' : 'Perfil activo',
+                        icon: CupertinoIcons.circle_fill,
+                        color: profile.isOpenToWork ? NexTheme.brandMint : NexTheme.brandSky,
+                      ),
+                      const SizedBox(height: 18),
+                      Text(
+                        profile.name,
+                        style: const TextStyle(
+                          fontSize: 34,
+                          height: 1.0,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        profile.headline.isNotEmpty ? profile.headline : 'Talento en construcción',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                          color: NexTheme.brandAccentDark,
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      Wrap(
+                        spacing: 12,
+                        runSpacing: 10,
+                        children: [
+                          _HeroMeta(
+                            icon: CupertinoIcons.location_solid,
+                            label: facts.locationLabel,
+                          ),
+                          _HeroMeta(
+                            icon: CupertinoIcons.briefcase_fill,
+                            label: facts.modalityLabel,
+                          ),
+                          _HeroMeta(
+                            icon: CupertinoIcons.money_dollar_circle_fill,
+                            label: facts.salaryLabel,
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 18),
+                Column(
+                  children: [
+                    GestureDetector(
+                      onTap: onPickAvatar,
+                      child: Container(
+                        width: isMobile ? 84 : 112,
+                        height: isMobile ? 84 : 112,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 3),
+                          image: profile.avatarUrl != null && profile.avatarUrl!.isNotEmpty
+                              ? DecorationImage(
+                                  image: NetworkImage(profile.avatarUrl!),
+                                  fit: BoxFit.cover,
+                                )
+                              : null,
+                          color: Colors.white.withValues(alpha: 0.14),
+                        ),
+                        child: profile.avatarUrl == null || profile.avatarUrl!.isEmpty
+                            ? Center(
+                                child: Text(
+                                  profile.initials,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 28,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              )
+                            : null,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    _ScoreRing(score: facts.profileStrengthScore, label: 'Perfil listo'),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 22),
+            Row(
+              children: [
+                Expanded(
+                  child: _GlassActionMetric(
+                    title: 'Video Pitch',
+                    value: profile.videoUrl != null && profile.videoUrl!.isNotEmpty ? 'Activo' : 'Pendiente',
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _GlassActionMetric(
+                    title: 'Portfolio',
+                    value: '${facts.portfolio.length} piezas',
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _GlassActionMetric(
+                    title: 'Visibilidad',
+                    value: '${facts.viewCount} vistas',
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PublicHero extends StatelessWidget {
+  final NexUser profile;
+  final _ProfileFacts facts;
+  final bool isMobile;
+  final VoidCallback onContact;
+  final VoidCallback onInvite;
+  final VoidCallback onToggleSaved;
+  final VoidCallback onShowMore;
+  final String connectionStatus;
+  final bool isLoadingConnection;
+  final bool isSavedProfile;
+  final bool isSavingProfile;
+
+  const _PublicHero({
+    required this.profile,
+    required this.facts,
+    required this.isMobile,
+    required this.onContact,
+    required this.onInvite,
+    required this.onToggleSaved,
+    required this.onShowMore,
+    required this.connectionStatus,
+    required this.isLoadingConnection,
+    required this.isSavedProfile,
+    required this.isSavingProfile,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final scoreLabel = profile.matchPercentage > 0 ? 'Afinidad estimada' : 'Señal IA';
+    final scoreHelper = profile.matchPercentage > 0
+        ? 'Según skills y búsquedas activas'
+        : 'Perfil con señales profesionales visibles';
+
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(32),
+        gradient: const LinearGradient(
+          colors: [Color(0xFF1A2234), Color(0xFF101726), Color(0xFF111827)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF0F172A).withValues(alpha: 0.16),
+            blurRadius: 34,
+            offset: const Offset(0, 18),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: EdgeInsets.all(isMobile ? 18 : 24),
+        child: Column(
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: isMobile ? 94 : 120,
+                  height: isMobile ? 94 : 120,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 3),
+                    image: profile.avatarUrl != null && profile.avatarUrl!.isNotEmpty
+                        ? DecorationImage(image: NetworkImage(profile.avatarUrl!), fit: BoxFit.cover)
+                        : null,
+                    color: Colors.white.withValues(alpha: 0.10),
+                  ),
+                  child: profile.avatarUrl == null || profile.avatarUrl!.isEmpty
+                      ? Center(
+                          child: Text(
+                            profile.initials,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 34,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        )
+                      : null,
+                ),
+                const SizedBox(width: 18),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        profile.name,
+                        style: const TextStyle(
+                          fontSize: 34,
+                          height: 1.0,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              profile.headline.isNotEmpty ? profile.headline : 'Perfil profesional',
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white.withValues(alpha: 0.90),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          MployaPill(
+                            label: profile.isOpenToWork ? 'Abierta a oportunidades' : 'Perfil activo',
+                            color: profile.isOpenToWork ? NexTheme.brandAccentDark : NexTheme.brandMint,
+                            active: true,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      Wrap(
+                        spacing: 14,
+                        runSpacing: 10,
+                        children: [
+                          _HeroMeta(
+                            icon: CupertinoIcons.location_solid,
+                            label: facts.locationLabel,
+                          ),
+                          _HeroMeta(
+                            icon: CupertinoIcons.airplane,
+                            label: facts.availabilityLine,
+                          ),
+                          _HeroMeta(
+                            icon: CupertinoIcons.briefcase_fill,
+                            label: facts.modalityLabel,
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                if (!isMobile)
+                  Container(
+                    width: 220,
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _ScoreRing(score: facts.contextualScore, label: scoreLabel, darkMode: true),
+                        const SizedBox(height: 10),
+                        Text(
+                          scoreHelper,
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.76),
+                            fontSize: 13.5,
+                            height: 1.45,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            if (isMobile) ...[
+              Align(
+                alignment: Alignment.centerLeft,
+                child: _ScoreRing(score: facts.contextualScore, label: scoreLabel, darkMode: true),
+              ),
+              const SizedBox(height: 16),
+            ],
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                MployaPrimaryButton(
+                  label: 'Contactar',
+                  icon: CupertinoIcons.paperplane_fill,
+                  onPressed: onContact,
+                ),
+                MployaSecondaryButton(
+                  label: _connectionLabel(connectionStatus),
+                  icon: CupertinoIcons.calendar,
+                  onPressed: isLoadingConnection ? null : onInvite,
+                ),
+                MployaSecondaryButton(
+                  label: isSavedProfile ? 'Guardado' : 'Guardar',
+                  icon: isSavedProfile ? CupertinoIcons.bookmark_fill : CupertinoIcons.bookmark,
+                  onPressed: isSavingProfile ? null : onToggleSaved,
+                ),
+                MployaSecondaryButton(
+                  label: 'Más',
+                  icon: CupertinoIcons.ellipsis,
+                  onPressed: onShowMore,
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PublicMetricsStrip extends StatelessWidget {
+  final _ProfileFacts facts;
+
+  const _PublicMetricsStrip({required this.facts});
+
+  @override
+  Widget build(BuildContext context) {
+    return MployaShellCard(
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+      child: Wrap(
+        spacing: 14,
+        runSpacing: 14,
+        children: [
+          _MiniMetric(icon: CupertinoIcons.briefcase_fill, title: facts.experienceYearsLabel, subtitle: 'Experiencia'),
+          _MiniMetric(icon: CupertinoIcons.sparkles, title: facts.specialtyLabel, subtitle: 'Especialidad'),
+          _MiniMetric(icon: CupertinoIcons.time, title: facts.availabilityShort, subtitle: 'Disponibilidad'),
+          _MiniMetric(icon: CupertinoIcons.house_alt_fill, title: facts.modalityLabel, subtitle: 'Modalidad'),
+          _MiniMetric(icon: CupertinoIcons.globe, title: facts.languagesSummary, subtitle: 'Idiomas'),
+        ],
+      ),
+    );
+  }
+}
+
+class _PrivateActionDeck extends StatelessWidget {
+  final VoidCallback onOpenEdit;
+  final VoidCallback onOpenVideoPitch;
+  final VoidCallback onOpenPitchCamera;
+  final VoidCallback onShare;
+  final VoidCallback onShowMore;
+
+  const _PrivateActionDeck({
+    required this.onOpenEdit,
+    required this.onOpenVideoPitch,
+    required this.onOpenPitchCamera,
+    required this.onShare,
+    required this.onShowMore,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final items = [
+      _ActionDeckItem(icon: CupertinoIcons.pencil, label: 'Editar', onTap: onOpenEdit),
+      _ActionDeckItem(icon: CupertinoIcons.play_rectangle_fill, label: 'Video pitch', onTap: onOpenVideoPitch),
+      _ActionDeckItem(icon: CupertinoIcons.camera_fill, label: 'Grabar', onTap: onOpenPitchCamera),
+      _ActionDeckItem(icon: CupertinoIcons.share, label: 'Compartir', onTap: onShare),
+      _ActionDeckItem(icon: CupertinoIcons.ellipsis, label: 'Más', onTap: onShowMore),
+    ];
+
+    return MployaShellCard(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+      child: Row(
+        children: items
+            .map((item) => Expanded(child: item))
+            .expand((widget) => [widget, const SizedBox(width: 8)])
+            .toList()
+          ..removeLast(),
+      ),
+    );
+  }
+}
+
+class _ActionDeckItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _ActionDeckItem({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF8F8FD),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Column(
+          children: [
+            Icon(icon, size: 20, color: context.primaryAccent),
+            const SizedBox(height: 8),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 13.5,
+                fontWeight: FontWeight.w700,
+                color: context.textPrimary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _InfoSectionCard extends StatelessWidget {
+  final String title;
+  final IconData icon;
+  final Widget child;
+
+  const _InfoSectionCard({
+    required this.title,
+    required this.icon,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return MployaShellCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: context.primaryAccent.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, color: context.primaryAccent, size: 18),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                  color: context.textPrimary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+class _InfoGridSection extends StatelessWidget {
+  final _ProfileFacts facts;
+
+  const _InfoGridSection({required this.facts});
+
+  @override
+  Widget build(BuildContext context) {
+    final items = [
+      _GridInfoItem('Experiencia', facts.experienceYearsLabel, CupertinoIcons.briefcase_fill),
+      _GridInfoItem('Ubicación', facts.locationLabel, CupertinoIcons.location_solid),
+      _GridInfoItem('Modalidad', facts.modalityLabel, CupertinoIcons.house_alt_fill),
+      _GridInfoItem('Disponibilidad', facts.availabilityShort, CupertinoIcons.time),
+      _GridInfoItem('Salario esperado', facts.salaryLabel, CupertinoIcons.money_dollar_circle_fill),
+      _GridInfoItem('Idiomas', facts.languagesSummary, CupertinoIcons.globe),
+    ];
+
+    return MployaShellCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Información clave',
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+              color: context.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 18),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final columns = constraints.maxWidth >= 880 ? 3 : 2;
+              final width = (constraints.maxWidth - ((columns - 1) * 12)) / columns;
+              return Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: items.map((item) => SizedBox(width: width, child: item)).toList(),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GridInfoItem extends StatelessWidget {
+  final String title;
+  final String value;
+  final IconData icon;
+
+  const _GridInfoItem(this.title, this.value, this.icon);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8F9FD),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, size: 18, color: context.primaryAccent),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 13.5,
+                    color: context.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: 15.5,
+                    fontWeight: FontWeight.w700,
+                    color: context.textPrimary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SkillsSection extends StatelessWidget {
+  final String title;
+  final List<String> skills;
+  final List<String> extra;
+  final bool metricMode;
+
+  const _SkillsSection({
+    required this.title,
+    required this.skills,
+    required this.extra,
+    required this.metricMode,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return MployaShellCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+              color: context.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 18),
+          if (!metricMode)
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                ...skills.map((skill) => MployaPill(label: skill, color: NexTheme.brandAccent)),
+                ...extra.take(5).map((skill) => MployaPill(label: skill, color: NexTheme.brandAccentDark)),
+              ],
+            )
+          else
+            Column(
+              children: [
+                for (var i = 0; i < skills.length; i++) ...[
+                  _SkillMeter(label: skills[i], value: math.max(0.42, 0.92 - (i * 0.08))),
+                  if (i != skills.length - 1) const SizedBox(height: 14),
+                ],
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SkillMeter extends StatelessWidget {
+  final String label;
+  final double value;
+
+  const _SkillMeter({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 14.5,
+                  fontWeight: FontWeight.w700,
+                  color: context.textPrimary,
+                ),
+              ),
+            ),
+            Text(
+              '${(value * 100).round()}%',
+              style: TextStyle(
+                fontSize: 13.5,
+                fontWeight: FontWeight.w700,
+                color: context.textSecondary,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(999),
+          child: LinearProgressIndicator(
+            value: value,
+            minHeight: 9,
+            backgroundColor: const Color(0xFFECEFFF),
+            valueColor: AlwaysStoppedAnimation<Color>(context.primaryAccent),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _QuickDestinationStrip extends StatelessWidget {
+  final VoidCallback onOpenPortfolio;
+  final VoidCallback onOpenTimeline;
+  final VoidCallback onOpenReferences;
+  final int portfolioCount;
+
+  const _QuickDestinationStrip({
+    required this.onOpenPortfolio,
+    required this.onOpenTimeline,
+    required this.onOpenReferences,
+    required this.portfolioCount,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final vertical = constraints.maxWidth < 780;
+        final items = [
+          _JumpCard(
+            title: 'Portfolio visual',
+            subtitle: portfolioCount > 0
+                ? '$portfolioCount piezas reales conectadas al perfil'
+                : 'Preparado para mostrar proyectos reales',
+            icon: CupertinoIcons.collections,
+            onTap: onOpenPortfolio,
+          ),
+          _JumpCard(
+            title: 'Timeline profesional',
+            subtitle: 'Roles, educación, evolución y señales del recorrido',
+            icon: CupertinoIcons.chart_bar_alt_fill,
+            onTap: onOpenTimeline,
+          ),
+          _JumpCard(
+            title: 'Referencias laborales',
+            subtitle: 'Arquitectura preparada para validaciones y reputación',
+            icon: CupertinoIcons.shield_lefthalf_fill,
+            onTap: onOpenReferences,
+          ),
+        ];
+        if (vertical) {
+          return Column(children: items.expand((e) => [e, const SizedBox(height: 12)]).toList()..removeLast());
+        }
+        return Row(
+          children: items
+              .map((item) => Expanded(child: item))
+              .expand((widget) => [widget, const SizedBox(width: 12)])
+              .toList()
+            ..removeLast(),
+        );
+      },
+    );
+  }
+}
+
+class _JumpCard extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _JumpCard({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: MployaShellCard(
+        child: Row(
+          children: [
+            Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                gradient: context.primaryGradient,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Icon(icon, size: 20, color: Colors.white),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w800,
+                      color: context.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontSize: 13.5,
+                      height: 1.45,
+                      color: context.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            const Icon(CupertinoIcons.chevron_right, size: 18),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ExperiencePreview extends StatelessWidget {
+  final _ProfileFacts facts;
+  final VoidCallback onOpenTimeline;
+
+  const _ExperiencePreview({
+    required this.facts,
+    required this.onOpenTimeline,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return MployaShellCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                'Experiencia',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                  color: context.textPrimary,
+                ),
+              ),
+              const Spacer(),
+              CupertinoButton(
+                padding: EdgeInsets.zero,
+                onPressed: onOpenTimeline,
+                child: const Text('Ver timeline'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          if (facts.experience.isEmpty)
+            Text(
+              'Todavía no registraste experiencia profesional estructurada.',
+              style: TextStyle(fontSize: 14.5, color: context.textSecondary),
+            )
+          else
+            Column(
+              children: facts.experience.take(3).map((item) {
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: _TimelinePreviewItem(
+                    title: item.role,
+                    subtitle: item.company,
+                    meta: item.duration,
+                    description: item.description ?? 'Experiencia profesional activa dentro del perfil.',
+                  ),
+                );
+              }).toList(),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _EducationPreview extends StatelessWidget {
+  final _ProfileFacts facts;
+
+  const _EducationPreview({required this.facts});
+
+  @override
+  Widget build(BuildContext context) {
+    return MployaShellCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Educación',
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+              color: context.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 14),
+          if (facts.education.isEmpty)
+            Text(
+              'Todavía no cargaste educación o certificaciones visibles.',
+              style: TextStyle(fontSize: 14.5, color: context.textSecondary),
+            )
+          else
+            Column(
+              children: facts.education.take(2).map((item) {
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: _TimelinePreviewItem(
+                    title: item.degree,
+                    subtitle: item.school,
+                    meta: item.years,
+                    description: item.field ?? 'Formación vinculada a la identidad profesional.',
+                    accent: const Color(0xFF3B82F6),
+                  ),
+                );
+              }).toList(),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _VisibilityAndToolsCard extends StatelessWidget {
+  final _ProfileFacts facts;
+  final VoidCallback onOpenSettings;
+  final VoidCallback onOpenPortfolio;
+
+  const _VisibilityAndToolsCard({
+    required this.facts,
+    required this.onOpenSettings,
+    required this.onOpenPortfolio,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return MployaShellCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Visibilidad y herramientas',
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+              color: context.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 14),
+          Text(
+            'Conservamos tu configuración real de perfil, notificaciones y privacidad. Desde acá seguimos integrando portfolio, referencias y video pitch dentro del nuevo sistema.',
+            style: TextStyle(
+              fontSize: 14.5,
+              height: 1.55,
+              color: context.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 18),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              MployaSecondaryButton(
+                label: 'Configuración',
+                icon: CupertinoIcons.settings,
+                onPressed: onOpenSettings,
+              ),
+              MployaSecondaryButton(
+                label: 'Abrir portfolio',
+                icon: CupertinoIcons.collections,
+                onPressed: onOpenPortfolio,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SignalSummaryCard extends StatelessWidget {
+  final _ProfileFacts facts;
+  final bool ownMode;
+  final bool darkMode;
+
+  const _SignalSummaryCard({
+    required this.facts,
+    required this.ownMode,
+    this.darkMode = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final foreground = darkMode ? Colors.white : context.textPrimary;
+    final sub = darkMode ? Colors.white.withValues(alpha: 0.72) : context.textSecondary;
+    return Container(
+      decoration: BoxDecoration(
+        color: darkMode ? Colors.white.withValues(alpha: 0.06) : Colors.white,
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(
+          color: darkMode ? Colors.white.withValues(alpha: 0.10) : context.shellBorder,
+        ),
+      ),
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _ScoreRing(
+            score: ownMode ? facts.profileStrengthScore : facts.contextualScore,
+            label: ownMode ? 'Perfil listo' : 'Afinidad estimada',
+            darkMode: darkMode,
+          ),
+          const SizedBox(height: 14),
+          Text(
+            ownMode
+                ? 'Tu perfil ya combina video, experiencia, skills y señales profesionales.'
+                : 'Lectura rápida del perfil desde una mirada profesional y contextual.',
+            style: TextStyle(fontSize: 14.5, height: 1.5, color: sub),
+          ),
+          const SizedBox(height: 18),
+          _SignalRow(label: 'Video pitch', value: facts.pitchStatus, foreground: foreground, subtitle: sub),
+          const SizedBox(height: 10),
+          _SignalRow(label: 'Portfolio', value: '${facts.portfolio.length} piezas', foreground: foreground, subtitle: sub),
+          const SizedBox(height: 10),
+          _SignalRow(label: 'Skills visibles', value: '${facts.primarySkills.length}+ ', foreground: foreground, subtitle: sub),
+          const SizedBox(height: 10),
+          _SignalRow(label: 'Vistas', value: '${facts.viewCount}', foreground: foreground, subtitle: sub),
+        ],
+      ),
+    );
+  }
+}
+
+class _SignalRow extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color foreground;
+  final Color subtitle;
+
+  const _SignalRow({
+    required this.label,
+    required this.value,
+    required this.foreground,
+    required this.subtitle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Text(label, style: TextStyle(fontSize: 13.5, color: subtitle)),
+        const Spacer(),
+        Text(
+          value,
+          style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: foreground),
+        ),
+      ],
+    );
+  }
+}
+
+class _VideoPitchCard extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final String? videoUrl;
+  final VoidCallback? onPrimary;
+  final VoidCallback? onSecondary;
+  final String primaryLabel;
+  final String? secondaryLabel;
+  final bool compact;
+
+  const _VideoPitchCard({
+    required this.title,
+    required this.subtitle,
+    required this.videoUrl,
+    required this.onPrimary,
+    required this.primaryLabel,
+    this.onSecondary,
+    this.secondaryLabel,
+    this.compact = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final effectiveUrl = resolveVideoUrl(videoUrl);
+    return MployaShellCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+              color: context.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            subtitle,
+            style: TextStyle(
+              fontSize: 14.5,
+              color: context.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 16),
+          GestureDetector(
+            onTap: effectiveUrl.isEmpty
+                ? null
+                : () {
+                    showCupertinoModalPopup<void>(
+                      context: context,
+                      builder: (_) => VideoPlayerModal(videoUrl: effectiveUrl, index: 0),
+                    );
+                  },
+            child: Container(
+              height: compact ? 190 : 250,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(24),
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF1A2234), Color(0xFF0E1422), Color(0xFF2A3154)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+              ),
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: Opacity(
+                      opacity: 0.20,
+                      child: profileImageOrFallback(profile: null),
+                    ),
+                  ),
+                  Center(
+                    child: Container(
+                      width: compact ? 66 : 82,
+                      height: compact ? 66 : 82,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.12),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 2),
+                      ),
+                      child: const Icon(
+                        CupertinoIcons.play_fill,
+                        color: Colors.white,
+                        size: 30,
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    left: 18,
+                    right: 18,
+                    bottom: 18,
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            effectiveUrl.isEmpty
+                                ? 'Todavía no hay video pitch cargado'
+                                : 'Video pitch listo para reproducir',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 14.5,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        if (effectiveUrl.isNotEmpty)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.28),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: const Text(
+                              'Video',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              MployaPrimaryButton(
+                label: primaryLabel,
+                icon: CupertinoIcons.play_rectangle_fill,
+                onPressed: onPrimary,
+              ),
+              if (secondaryLabel != null)
+                MployaSecondaryButton(
+                  label: secondaryLabel!,
+                  icon: CupertinoIcons.camera_fill,
+                  onPressed: onSecondary,
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TabStrip extends StatelessWidget {
+  final List<String> items;
+  final int selectedIndex;
+  final ValueChanged<int> onChanged;
+
+  const _TabStrip({
+    required this.items,
+    required this.selectedIndex,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: List.generate(items.length, (index) {
+          final selected = index == selectedIndex;
+          return Padding(
+            padding: EdgeInsets.only(right: index == items.length - 1 ? 0 : 10),
+            child: GestureDetector(
+              onTap: () => onChanged(index),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                decoration: BoxDecoration(
+                  color: selected ? context.primaryAccent : Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: selected ? context.primaryAccent : context.shellBorder,
+                  ),
+                ),
+                child: Text(
+                  items[index],
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: selected ? Colors.white : context.textPrimary,
+                  ),
+                ),
+              ),
+            ),
+          );
+        }),
+      ),
+    );
+  }
+}
+
+class _PublicTabContent extends StatelessWidget {
+  final int selectedTab;
+  final NexUser profile;
+  final _ProfileFacts facts;
+  final bool isMobile;
+  final VoidCallback onOpenTimeline;
+
+  const _PublicTabContent({
+    required this.selectedTab,
+    required this.profile,
+    required this.facts,
+    required this.isMobile,
+    required this.onOpenTimeline,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    switch (selectedTab) {
+      case 0:
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            final stacked = constraints.maxWidth < 980;
+            final experience = _ExperienceColumn(profile: profile, facts: facts, onOpenTimeline: onOpenTimeline);
+            final side = _ExperienceSideColumn(facts: facts);
+            if (stacked) {
+              return Column(
+                children: [
+                  experience,
+                  const SizedBox(height: 16),
+                  side,
+                ],
+              );
+            }
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(flex: 7, child: experience),
+                const SizedBox(width: 16),
+                Expanded(flex: 4, child: side),
+              ],
+            );
+          },
+        );
+      case 1:
+        return Column(
+          children: [
+            _SkillsSection(
+              title: 'Skills principales',
+              skills: facts.primarySkills,
+              extra: facts.secondarySkills,
+              metricMode: true,
+            ),
+            const SizedBox(height: 16),
+            MployaShellCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Intereses profesionales',
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                      color: context.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: facts.preferences
+                        .map((item) => MployaPill(label: item, color: NexTheme.brandAccentDark))
+                        .toList(),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        );
+      case 2:
+        return _EducationPreview(facts: facts);
+      case 3:
+        return MployaShellCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Certificaciones',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                  color: context.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 14),
+              if (facts.certifications.isEmpty)
+                Text(
+                  'Todavía no hay certificaciones estructuradas en el backend actual.',
+                  style: TextStyle(fontSize: 14.5, color: context.textSecondary),
+                )
+              else
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: facts.certifications
+                      .map((item) => MployaPill(label: item, color: NexTheme.brandAccentDark))
+                      .toList(),
+                ),
+            ],
+          ),
+        );
+      case 4:
+        return MployaShellCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Logros y señales destacadas',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                  color: context.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 14),
+              _TimelinePreviewItem(
+                title: 'Perfil video-first listo para procesos',
+                subtitle: 'Video pitch + experiencia + portfolio',
+                meta: '${facts.contextualScore}%',
+                description: 'La identidad profesional ya está armada dentro del nuevo sistema de Mploya.',
+              ),
+              const SizedBox(height: 14),
+              _TimelinePreviewItem(
+                title: 'Señales visibles de mercado',
+                subtitle: '${facts.viewCount} vistas · ${profile.connections} conexiones',
+                meta: facts.experienceYearsLabel,
+                description: 'El perfil conserva sus métricas reales sin volver al formato legacy.',
+                accent: const Color(0xFF10B981),
+              ),
+            ],
+          ),
+        );
+      case 5:
+        return MployaShellCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Idiomas',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                  color: context.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 14),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: facts.languages
+                    .map((language) => MployaPill(label: language, color: const Color(0xFF2563EB)))
+                    .toList(),
+              ),
+            ],
+          ),
+        );
+      default:
+        return const SizedBox.shrink();
+    }
+  }
+}
+
+class _ExperienceColumn extends StatelessWidget {
+  final NexUser profile;
+  final _ProfileFacts facts;
+  final VoidCallback onOpenTimeline;
+
+  const _ExperienceColumn({
+    required this.profile,
+    required this.facts,
+    required this.onOpenTimeline,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return MployaShellCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                'Experiencia',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                  color: context.textPrimary,
+                ),
+              ),
+              const Spacer(),
+              CupertinoButton(
+                padding: EdgeInsets.zero,
+                onPressed: onOpenTimeline,
+                child: const Text('Ver toda mi experiencia'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (profile.experience.isEmpty)
+            Text(
+              'No hay experiencia visible todavía.',
+              style: TextStyle(fontSize: 14.5, color: context.textSecondary),
+            )
+          else
+            Column(
+              children: profile.experience.map((experience) {
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 18),
+                  child: _TimelinePreviewItem(
+                    title: experience.role,
+                    subtitle: experience.company,
+                    meta: experience.duration,
+                    description: experience.description ?? 'Experiencia real cargada en el perfil.',
+                    tags: _extractTags(experience.description, fallback: facts.primarySkills.take(3).toList()),
+                  ),
+                );
+              }).toList(),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ExperienceSideColumn extends StatelessWidget {
+  final _ProfileFacts facts;
+
+  const _ExperienceSideColumn({required this.facts});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        _SkillsSection(
+          title: 'Skills principales',
+          skills: facts.primarySkills,
+          extra: facts.secondarySkills,
+          metricMode: true,
+        ),
+        const SizedBox(height: 16),
+        MployaShellCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Intereses profesionales',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: context.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 14),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: facts.preferences
+                    .map((item) => MployaPill(label: item, color: NexTheme.brandAccentDark))
+                    .toList(),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        MployaShellCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Conexiones en común',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: context.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                facts.connectionsSummary,
+                style: TextStyle(
+                  fontSize: 14.5,
+                  height: 1.5,
+                  color: context.textSecondary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ProjectShowcase extends StatelessWidget {
+  final List<PortfolioVideo> portfolio;
+  final VoidCallback onOpenPortfolio;
+  final bool isMobile;
+
+  const _ProjectShowcase({
+    required this.portfolio,
+    required this.onOpenPortfolio,
+    required this.isMobile,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return MployaShellCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                'Proyectos destacados',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                  color: context.textPrimary,
+                ),
+              ),
+              const Spacer(),
+              CupertinoButton(
+                padding: EdgeInsets.zero,
+                onPressed: onOpenPortfolio,
+                child: const Text('Ver todos'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          if (portfolio.isEmpty)
+            Text(
+              'Todavía no hay piezas visuales publicadas en este portfolio.',
+              style: TextStyle(fontSize: 14.5, color: context.textSecondary),
+            )
+          else
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final width = isMobile ? constraints.maxWidth : (constraints.maxWidth - 24) / 3;
+                return Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: portfolio.take(3).map((video) {
+                    return SizedBox(
+                      width: width,
+                      child: _CompactProjectCard(video: video),
+                    );
+                  }).toList(),
+                );
+              },
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CompactProjectCard extends StatelessWidget {
+  final PortfolioVideo video;
+
+  const _CompactProjectCard({required this.video});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFFF7F8FD),
+        borderRadius: BorderRadius.circular(22),
+      ),
+      clipBehavior: Clip.hardEdge,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            height: 140,
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Color(0xFF2B3155), Color(0xFF0E1726), Color(0xFF1B2441)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+            ),
+            child: const Center(
+              child: Icon(CupertinoIcons.play_circle, color: Colors.white, size: 42),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  video.title,
+                  style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                    color: context.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  (video.description ?? 'Proyecto profesional visual').trim(),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 14,
+                    height: 1.45,
+                    color: context.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ScreenHeader extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final VoidCallback? onShare;
+  final String? primaryAction;
+
+  const _ScreenHeader({
+    required this.title,
+    required this.subtitle,
+    this.onShare,
+    this.primaryAction,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        CupertinoButton(
+          padding: EdgeInsets.zero,
+          onPressed: () => Navigator.of(context).maybePop(),
+          child: Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: context.shellBorder),
+            ),
+            child: const Icon(CupertinoIcons.back, color: Color(0xFF111827)),
+          ),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 30,
+                  fontWeight: FontWeight.w800,
+                  color: context.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                subtitle,
+                style: TextStyle(
+                  fontSize: 15,
+                  color: context.textSecondary,
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (primaryAction != null) ...[
+          MployaSecondaryButton(
+            label: primaryAction!,
+            icon: CupertinoIcons.plus,
+            onPressed: null,
+          ),
+          const SizedBox(width: 10),
+        ],
+        CupertinoButton(
+          padding: EdgeInsets.zero,
+          onPressed: onShare,
+          child: Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: context.shellBorder),
+            ),
+            child: Icon(
+              onShare == null ? CupertinoIcons.ellipsis : CupertinoIcons.share,
+              color: const Color(0xFF111827),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _DarkSummaryHero extends StatelessWidget {
+  final NexUser profile;
+
+  const _DarkSummaryHero({required this.profile});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 108,
+            height: 108,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.white, width: 3),
+              image: profile.avatarUrl != null && profile.avatarUrl!.isNotEmpty
+                  ? DecorationImage(image: NetworkImage(profile.avatarUrl!), fit: BoxFit.cover)
+                  : null,
+              color: Colors.white.withValues(alpha: 0.10),
+            ),
+            child: profile.avatarUrl == null || profile.avatarUrl!.isEmpty
+                ? Center(
+                    child: Text(
+                      profile.initials,
+                      style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.w800),
+                    ),
+                  )
+                : null,
+          ),
+          const SizedBox(width: 18),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  profile.name,
+                  style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: Colors.white),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  profile.headline.isNotEmpty ? profile.headline : 'Perfil profesional',
+                  style: TextStyle(fontSize: 18, color: Colors.white.withValues(alpha: 0.88)),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  '${profile.location ?? 'Ubicación por definir'} • ${profile.isOpenToWork ? 'Disponible para trabajar' : 'Perfil activo'}',
+                  style: TextStyle(fontSize: 14.5, color: Colors.white.withValues(alpha: 0.74)),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LightSummaryHero extends StatelessWidget {
+  final NexUser profile;
+  final _ProfileFacts facts;
+  final String ctaLabel;
+
+  const _LightSummaryHero({
+    required this.profile,
+    required this.facts,
+    required this.ctaLabel,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return MployaShellCard(
+      child: Row(
+        children: [
+          Container(
+            width: 108,
+            height: 108,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.white, width: 3),
+              image: profile.avatarUrl != null && profile.avatarUrl!.isNotEmpty
+                  ? DecorationImage(image: NetworkImage(profile.avatarUrl!), fit: BoxFit.cover)
+                  : null,
+              color: const Color(0xFFF1F3FD),
+            ),
+            child: profile.avatarUrl == null || profile.avatarUrl!.isEmpty
+                ? Center(
+                    child: Text(
+                      profile.initials,
+                      style: TextStyle(
+                        color: context.primaryAccent,
+                        fontSize: 28,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  )
+                : null,
+          ),
+          const SizedBox(width: 18),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  profile.name,
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.w800,
+                    color: context.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  profile.headline.isNotEmpty ? profile.headline : 'Perfil profesional',
+                  style: TextStyle(
+                    fontSize: 18,
+                    color: context.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  '${facts.locationLabel} • ${facts.availabilityLine}',
+                  style: TextStyle(
+                    fontSize: 14.5,
+                    color: context.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                CupertinoButton(
+                  padding: EdgeInsets.zero,
+                  onPressed: () {},
+                  child: Text(ctaLabel),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TimelineRail extends StatelessWidget {
+  final NexUser profile;
+  final _ProfileFacts facts;
+
+  const _TimelineRail({required this.profile, required this.facts});
+
+  @override
+  Widget build(BuildContext context) {
+    final items = <_TimelineNode>[
+      ...profile.experience.map((item) => _TimelineNode(
+            leftLabel: item.duration.isEmpty ? 'Experiencia' : item.duration,
+            title: item.role,
+            subtitle: item.company,
+            description: item.description ?? 'Experiencia profesional activa dentro del perfil.',
+            tags: _extractTags(item.description, fallback: facts.primarySkills.take(4).toList()),
+          )),
+      ...facts.education.map((item) => _TimelineNode(
+            leftLabel: item.years,
+            title: item.degree,
+            subtitle: item.school,
+            description: item.field ?? 'Formación conectada con la trayectoria profesional.',
+            tags: _extractTags(item.field, fallback: const ['Educación']),
+            accent: const Color(0xFF2563EB),
+          )),
+    ];
+
+    return MployaShellCard(
+      child: Column(
+        children: List.generate(items.length, (index) {
+          final item = items[index];
+          return Padding(
+            padding: EdgeInsets.only(bottom: index == items.length - 1 ? 0 : 18),
+            child: _TimelineRailItem(item: item),
+          );
+        }),
+      ),
+    );
+  }
+}
+
+class _TimelineSidebar extends StatelessWidget {
+  final _ProfileFacts facts;
+
+  const _TimelineSidebar({required this.facts});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        MployaShellCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Vista rápida',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: context.textPrimary),
+              ),
+              const SizedBox(height: 14),
+              _SignalRow(label: 'Experiencia', value: facts.experienceYearsLabel, foreground: context.textPrimary, subtitle: context.textSecondary),
+              const SizedBox(height: 10),
+              _SignalRow(label: 'Empresas', value: '${facts.experience.length}', foreground: context.textPrimary, subtitle: context.textSecondary),
+              const SizedBox(height: 10),
+              _SignalRow(label: 'Industrias', value: '${math.max(1, facts.preferences.length)}', foreground: context.textPrimary, subtitle: context.textSecondary),
+              const SizedBox(height: 10),
+              _SignalRow(label: 'Skills', value: '${facts.primarySkills.length}+ ', foreground: context.textPrimary, subtitle: context.textSecondary),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        MployaShellCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Industrias',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: context.textPrimary),
+              ),
+              const SizedBox(height: 14),
+              for (final item in facts.preferences.take(4)) ...[
+                _IndustryBar(label: item, value: math.max(0.14, 0.72 - (facts.preferences.indexOf(item) * 0.14))),
+                if (facts.preferences.take(4).last != item) const SizedBox(height: 12),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        MployaShellCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Logros destacados',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: context.textPrimary),
+              ),
+              const SizedBox(height: 14),
+              _AchievementLine(title: 'Perfil video-first', subtitle: 'Conecta pitch, skills y experiencia'),
+              const SizedBox(height: 12),
+              _AchievementLine(title: 'Portfolio activo', subtitle: '${facts.portfolio.length} piezas listas para revisión'),
+              const SizedBox(height: 12),
+              _AchievementLine(title: 'Señal profesional', subtitle: '${facts.contextualScore}% de lectura contextual'),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ReferenceSummaryPanel extends StatelessWidget {
+  final List<_ReferenceCompetency> competencies;
+
+  const _ReferenceSummaryPanel({required this.competencies});
+
+  @override
+  Widget build(BuildContext context) {
+    return MployaShellCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Evaluación por competencias',
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+              color: context.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF7F8FD),
+              borderRadius: BorderRadius.circular(24),
+            ),
+            child: Column(
+              children: competencies.map((item) {
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 14),
+                  child: _ReferenceCompetencyRow(item: item),
+                );
+              }).toList(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ReferenceSidebar extends StatelessWidget {
+  final NexUser profile;
+  final _ProfileFacts facts;
+  final bool isOwnProfile;
+
+  const _ReferenceSidebar({
+    required this.profile,
+    required this.facts,
+    required this.isOwnProfile,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        MployaShellCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Estado de verificaciones',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: context.textPrimary),
+              ),
+              const SizedBox(height: 14),
+              Text(
+                'Todavía no hay referencias verificadas conectadas. Dejamos esta vista lista para mostrar quien respondió, su relación profesional y la validación real apenas el backend esté disponible.',
+                style: TextStyle(fontSize: 14.5, height: 1.55, color: context.textSecondary),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        MployaShellCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'IA Insights',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: context.textPrimary),
+              ),
+              const SizedBox(height: 14),
+              Text(
+                'Con los datos reales ya visibles, el perfil destaca por ${facts.primarySkills.take(2).join(' y ').toLowerCase()}, una narrativa clara en video y una identidad profesional consistente.',
+                style: TextStyle(fontSize: 14.5, height: 1.55, color: context.textSecondary),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        MployaShellCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Solicitudes de referencia',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: context.textPrimary),
+              ),
+              const SizedBox(height: 14),
+              _SignalRow(
+                label: 'Pendientes',
+                value: '0',
+                foreground: context.textPrimary,
+                subtitle: context.textSecondary,
+              ),
+              const SizedBox(height: 10),
+              _SignalRow(
+                label: 'Expiradas',
+                value: '0',
+                foreground: context.textPrimary,
+                subtitle: context.textSecondary,
+              ),
+              const SizedBox(height: 14),
+              Text(
+                isOwnProfile
+                    ? 'La UI ya está lista para que puedas pedir referencias reales sin inventar registros.'
+                    : 'La experiencia pública mostrará respuestas verificadas cuando esa capa exista en backend.',
+                style: TextStyle(fontSize: 14.5, height: 1.55, color: context.textSecondary),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ReferencesHero extends StatelessWidget {
+  final NexUser profile;
+  final _ProfileFacts facts;
+
+  const _ReferencesHero({required this.profile, required this.facts});
+
+  @override
+  Widget build(BuildContext context) {
+    return MployaShellCard(
+      child: Row(
+        children: [
+          Container(
+            width: 90,
+            height: 90,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              image: profile.avatarUrl != null && profile.avatarUrl!.isNotEmpty
+                  ? DecorationImage(image: NetworkImage(profile.avatarUrl!), fit: BoxFit.cover)
+                  : null,
+              color: const Color(0xFFF3F4FA),
+            ),
+            child: profile.avatarUrl == null || profile.avatarUrl!.isEmpty
+                ? Center(
+                    child: Text(
+                      profile.initials,
+                      style: TextStyle(
+                        color: context.primaryAccent,
+                        fontSize: 26,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  )
+                : null,
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  profile.name,
+                  style: TextStyle(
+                    fontSize: 26,
+                    fontWeight: FontWeight.w800,
+                    color: context.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  profile.headline.isNotEmpty ? profile.headline : 'Perfil profesional',
+                  style: TextStyle(
+                    fontSize: 16.5,
+                    color: context.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  '${facts.locationLabel} • ${facts.modalityLabel}',
+                  style: TextStyle(
+                    fontSize: 14.5,
+                    color: context.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          _ScoreRing(score: math.max(0, (profile.ratingStars * 20).round()), label: 'Reputación'),
+        ],
+      ),
+    );
+  }
+}
+
+class _TimelinePreviewItem extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final String meta;
+  final String description;
+  final List<String> tags;
+  final Color accent;
+
+  const _TimelinePreviewItem({
+    required this.title,
+    required this.subtitle,
+    required this.meta,
+    required this.description,
+    this.tags = const [],
+    this.accent = NexTheme.brandAccent,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 46,
+          height: 46,
+          decoration: BoxDecoration(
+            color: accent.withValues(alpha: 0.14),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(CupertinoIcons.circle_fill, size: 16, color: accent),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        color: context.textPrimary,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    meta,
+                    style: TextStyle(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w700,
+                      color: context.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                subtitle,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: accent,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                description,
+                style: TextStyle(
+                  fontSize: 14.5,
+                  height: 1.55,
+                  color: context.textSecondary,
+                ),
+              ),
+              if (tags.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: tags.map((tag) => MployaPill(label: tag, color: accent)).toList(),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _TimelineRailItem extends StatelessWidget {
+  final _TimelineNode item;
+
+  const _TimelineRailItem({required this.item});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 96,
+          child: Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(
+              item.leftLabel,
+              style: TextStyle(
+                fontSize: 13.5,
+                fontWeight: FontWeight.w700,
+                color: context.textSecondary,
+              ),
+            ),
+          ),
+        ),
+        Container(
+          width: 16,
+          alignment: Alignment.topCenter,
+          child: Column(
+            children: [
+              Container(
+                width: 12,
+                height: 12,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: item.accent,
+                ),
+              ),
+              Container(
+                width: 2,
+                height: 140,
+                color: const Color(0xFFE7EBF4),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF9FAFE),
+              borderRadius: BorderRadius.circular(24),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  item.title,
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    color: context.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  item.subtitle,
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: item.accent,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  item.description,
+                  style: TextStyle(
+                    fontSize: 14.5,
+                    height: 1.55,
+                    color: context.textSecondary,
+                  ),
+                ),
+                if (item.tags.isNotEmpty) ...[
+                  const SizedBox(height: 14),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: item.tags.map((tag) => MployaPill(label: tag, color: item.accent)).toList(),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ReferenceCompetencyRow extends StatelessWidget {
+  final _ReferenceCompetency item;
+
+  const _ReferenceCompetencyRow({required this.item});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            item.label,
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              color: context.textPrimary,
+            ),
+          ),
+        ),
+        SizedBox(
+          width: 180,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: LinearProgressIndicator(
+              value: item.score / 5,
+              minHeight: 8,
+              backgroundColor: const Color(0xFFE5E7F7),
+              valueColor: const AlwaysStoppedAnimation<Color>(NexTheme.brandAccent),
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        SizedBox(
+          width: 36,
+          child: Text(
+            item.score.toStringAsFixed(1),
+            textAlign: TextAlign.right,
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+              color: context.textPrimary,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _PortfolioProjectCard extends StatelessWidget {
+  final PortfolioVideo video;
+  final List<String> tags;
+  final bool canEdit;
+  final VoidCallback onTap;
+  final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
+
+  const _PortfolioProjectCard({
+    required this.video,
+    required this.tags,
+    required this.canEdit,
+    required this.onTap,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(26),
+          boxShadow: context.cardShadow,
+        ),
+        clipBehavior: Clip.hardEdge,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              height: 220,
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Color(0xFF151C30), Color(0xFF29304C), Color(0xFF101624)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+              ),
+              child: Stack(
+                children: [
+                  const Center(
+                    child: Icon(CupertinoIcons.play_circle, color: Colors.white, size: 54),
+                  ),
+                  if (canEdit)
+                    Positioned(
+                      top: 12,
+                      right: 12,
+                      child: CupertinoButton(
+                        padding: EdgeInsets.zero,
+                        onPressed: () {
+                          showCupertinoModalPopup<void>(
+                            context: context,
+                            builder: (sheetContext) => CupertinoActionSheet(
+                              actions: [
+                                CupertinoActionSheetAction(
+                                  onPressed: () {
+                                    Navigator.pop(sheetContext);
+                                    onEdit?.call();
+                                  },
+                                  child: const Text('Editar proyecto'),
+                                ),
+                                CupertinoActionSheetAction(
+                                  isDestructiveAction: true,
+                                  onPressed: () {
+                                    Navigator.pop(sheetContext);
+                                    onDelete?.call();
+                                  },
+                                  child: const Text('Eliminar proyecto'),
+                                ),
+                              ],
+                              cancelButton: CupertinoActionSheetAction(
+                                onPressed: () => Navigator.pop(sheetContext),
+                                child: const Text('Cerrar'),
+                              ),
+                            ),
+                          );
+                        },
+                        child: Container(
+                          width: 34,
+                          height: 34,
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.22),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Icon(CupertinoIcons.ellipsis, color: Colors.white, size: 18),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    video.title,
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                      color: context.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    (video.description ?? 'Proyecto profesional presentado en formato visual.').trim(),
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 14.5,
+                      height: 1.5,
+                      color: context.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: tags
+                        .map((tag) => MployaPill(label: tag, color: NexTheme.brandAccentDark))
+                        .toList(),
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      _InlineMetric(icon: CupertinoIcons.calendar, value: _yearFromDate(video.createdAt)),
+                      const SizedBox(width: 16),
+                      _InlineMetric(icon: CupertinoIcons.eye, value: _compact(video.viewCount)),
+                      const Spacer(),
+                      const Icon(CupertinoIcons.bookmark, size: 18),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _InlineMetric extends StatelessWidget {
+  final IconData icon;
+  final String value;
+
+  const _InlineMetric({required this.icon, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: context.textSecondary),
+        const SizedBox(width: 6),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 13.5,
+            fontWeight: FontWeight.w700,
+            color: context.textSecondary,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ScoreRing extends StatelessWidget {
+  final int score;
+  final String label;
+  final bool darkMode;
+
+  const _ScoreRing({
+    required this.score,
+    required this.label,
+    this.darkMode = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final value = score.clamp(0, 100) / 100;
+    final text = darkMode ? Colors.white : context.textPrimary;
+    final helper = darkMode ? Colors.white.withValues(alpha: 0.72) : context.textSecondary;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          width: 92,
+          height: 92,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              SizedBox.expand(
+                child: CircularProgressIndicator(
+                  value: value,
+                  strokeWidth: 7,
+                  backgroundColor: darkMode
+                      ? Colors.white.withValues(alpha: 0.14)
+                      : const Color(0xFFE8EAF6),
+                  valueColor: const AlwaysStoppedAnimation<Color>(NexTheme.brandAccent),
+                ),
+              ),
+              Text(
+                '$score%',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w800,
+                  color: text,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 14),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                color: text,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              score >= 85 ? 'Muy alto' : (score >= 70 ? 'Fuerte' : 'En progreso'),
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: helper,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _MiniMetric extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+
+  const _MiniMetric({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 180,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8F9FD),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 18, color: context.primaryAccent),
+          const SizedBox(height: 10),
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+              color: context.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            subtitle,
+            style: TextStyle(
+              fontSize: 13.5,
+              color: context.textSecondary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HeroMeta extends StatelessWidget {
+  final IconData icon;
+  final String label;
+
+  const _HeroMeta({required this.icon, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 16, color: Colors.white.withValues(alpha: 0.74)),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 14.5,
+            color: Colors.white.withValues(alpha: 0.82),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _GlassActionMetric extends StatelessWidget {
+  final String title;
+  final String value;
+
+  const _GlassActionMetric({
+    required this.title,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 13.5,
+              color: Colors.white.withValues(alpha: 0.68),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+              color: Colors.white,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LargeMetric extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _LargeMetric({
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 30,
+              fontWeight: FontWeight.w800,
+              color: context.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 14.5,
+              color: context.textSecondary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _IndustryBar extends StatelessWidget {
+  final String label;
+  final double value;
+
+  const _IndustryBar({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700, color: context.textPrimary),
+              ),
+            ),
+            Text(
+              '${(value * 100).round()}%',
+              style: TextStyle(fontSize: 13.5, color: context.textSecondary),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(999),
+          child: LinearProgressIndicator(
+            value: value,
+            minHeight: 8,
+            backgroundColor: const Color(0xFFE7EBF6),
+            valueColor: const AlwaysStoppedAnimation<Color>(NexTheme.brandAccent),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _AchievementLine extends StatelessWidget {
+  final String title;
+  final String subtitle;
+
+  const _AchievementLine({
+    required this.title,
+    required this.subtitle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 38,
+          height: 38,
+          decoration: BoxDecoration(
+            color: context.primaryAccent.withValues(alpha: 0.10),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(CupertinoIcons.star_fill, size: 18, color: context.primaryAccent),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.w800, color: context.textPrimary),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                subtitle,
+                style: TextStyle(fontSize: 13.5, color: context.textSecondary),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ProfileLoadingScaffold extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final Future<void> Function()? onCancel;
+
+  const _ProfileLoadingScaffold({
+    required this.title,
+    required this.subtitle,
+    this.onCancel,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return CupertinoPageScaffold(
+      backgroundColor: NexTheme.shellBg,
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const CupertinoActivityIndicator(radius: 18),
+              const SizedBox(height: 18),
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w800,
+                  color: context.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                subtitle,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 14.5,
+                  height: 1.55,
+                  color: context.textSecondary,
+                ),
+              ),
+              if (onCancel != null) ...[
+                const SizedBox(height: 18),
+                CupertinoButton(
+                  onPressed: onCancel,
+                  child: const Text('Cerrar sesión si quedó colgado'),
+                ),
+              ],
             ],
           ),
         ),
@@ -1448,327 +4930,296 @@ class _InteractiveHashtagPillState extends State<_InteractiveHashtagPill>
   }
 }
 
-// _BioResultCard and _PersonalitySection are now in:
-// - lib/widgets/profile_bio_generator.dart (BioResultCard)
-// - lib/widgets/profile_personality_section.dart (ProfilePersonalitySection)
+class _ProfileErrorScaffold extends StatelessWidget {
+  final String title;
+  final String message;
+  final VoidCallback onRetry;
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Profile Tab Button — Custom tab with icon + label + optional badge
-// ─────────────────────────────────────────────────────────────────────────────
-
-// ── Segmented Tab (iOS segmented control style) ───────────────────────────────
-
-
-// ─────────────────────────────────────────────────────────────────────────────
-
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Spotlight Card — Full-width gradient card for premium AI features
-// ─────────────────────────────────────────────────────────────────────────────
-
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Spotlight Card Compact — Half-width gradient card
-// ─────────────────────────────────────────────────────────────────────────────
-
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Quick Action Chip — Vertical icon chip for horizontal scroll
-// ─────────────────────────────────────────────────────────────────────────────
-
-
-// ── Waveform painter for video-pitch card ──
-class _WaveformPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = const Color(0xFF185FA5).withValues(alpha: 0.35)
-      ..strokeWidth = 3
-      ..strokeCap = StrokeCap.round;
-    final midY = size.height / 2;
-    final barCount = 40;
-    final barWidth = size.width / barCount;
-    for (var i = 0; i < barCount; i++) {
-      final x = i * barWidth + barWidth / 2;
-      final h = (midY * 0.3) + (midY * 0.7) * (0.5 + 0.5 * _wave(i, barCount));
-      canvas.drawLine(Offset(x, midY - h / 2), Offset(x, midY + h / 2), paint);
-    }
-  }
-
-  double _wave(int i, int count) {
-    final t = i / count;
-    return (0.5 * (1 + math.sin(2 * math.pi * t * 3))) * (1 - (t - 0.5).abs() * 2);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
-// ── Custom Line Chart for Premium Profile Stats ──
-class _ProfileLineChart extends StatelessWidget {
-  final List<FlSpot> spots;
-  final List<String> xLabels;
-  final Color lineColor;
-  final List<Color> gradientColors;
-
-  const _ProfileLineChart({
-    required this.spots,
-    required this.xLabels,
-    required this.lineColor,
-    required this.gradientColors,
+  const _ProfileErrorScaffold({
+    required this.title,
+    required this.message,
+    required this.onRetry,
   });
 
   @override
   Widget build(BuildContext context) {
-    return LineChart(
-      LineChartData(
-        gridData: const FlGridData(show: false),
-        titlesData: FlTitlesData(
-          bottomTitles: AxisTitles(
-            sideTitles: SideTitles(
-              showTitles: true,
-              reservedSize: 22,
-              interval: 1,
-              getTitlesWidget: (value, meta) {
-                final index = value.toInt();
-                if (index >= 0 && index < xLabels.length) {
-                  return Padding(
-                    padding: const EdgeInsets.only(top: 6),
-                    child: Text(
-                      xLabels[index],
-                      style: const TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 8),
-                    ),
-                  );
-                }
-                return const Text('');
-              },
-            ),
-          ),
-          leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-        ),
-        borderData: FlBorderData(show: false),
-        minX: 0,
-        maxX: (xLabels.length - 1).toDouble(),
-        minY: 0,
-        maxY: 100,
-        lineBarsData: [
-          LineChartBarData(
-            spots: spots,
-            isCurved: true,
-            color: lineColor,
-            barWidth: 3,
-            isStrokeCapRound: true,
-            dotData: const FlDotData(show: false),
-            belowBarData: BarAreaData(
-              show: true,
-              gradient: LinearGradient(
-                colors: gradientColors.map((color) => color.withValues(alpha: 0.15)).toList(),
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
+    return CupertinoPageScaffold(
+      backgroundColor: NexTheme.shellBg,
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(CupertinoIcons.exclamationmark_triangle_fill, size: 56, color: Color(0xFFF59E0B)),
+              const SizedBox(height: 16),
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w800,
+                  color: context.textPrimary,
+                ),
               ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-
-// ── Collapsible Card for Mobile Acordeones ──
-class _CollapsibleCard extends StatefulWidget {
-  final String title;
-  final Widget child;
-  final bool initiallyExpanded;
-
-  const _CollapsibleCard({
-    required this.title,
-    required this.child,
-  }) : initiallyExpanded = false;
-
-  @override
-  State<_CollapsibleCard> createState() => _CollapsibleCardState();
-}
-
-class _CollapsibleCardState extends State<_CollapsibleCard> {
-  late bool _expanded;
-
-  @override
-  void initState() {
-    super.initState();
-    _expanded = widget.initiallyExpanded;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-        boxShadow: const [
-          BoxShadow(color: Color(0x06000000), blurRadius: 8, offset: Offset(0, 4)),
-        ],
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        children: [
-          CupertinoButton(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            onPressed: () => setState(() => _expanded = !_expanded),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  widget.title,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xFF0F172A),
-                  ),
+              const SizedBox(height: 10),
+              Text(
+                message,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 14.5,
+                  height: 1.55,
+                  color: context.textSecondary,
                 ),
-                Icon(
-                  _expanded ? CupertinoIcons.chevron_up : CupertinoIcons.chevron_down,
-                  size: 16,
-                  color: const Color(0xFF64748B),
-                ),
-              ],
-            ),
+              ),
+              const SizedBox(height: 18),
+              MployaPrimaryButton(label: 'Reintentar', onPressed: onRetry),
+            ],
           ),
-          if (_expanded)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              child: widget.child,
-            ),
-        ],
+        ),
       ),
     );
   }
 }
 
-// ── Premium Card for consistent mockup layout ──
-class _PremiumCard extends StatelessWidget {
-  final Widget child;
-
-  const _PremiumCard({required this.child});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x06000000),
-            blurRadius: 10,
-            offset: Offset(0, 4),
-          ),
+Widget profileImageOrFallback({NexUser? profile}) {
+  if (profile?.avatarUrl != null && profile!.avatarUrl!.isNotEmpty) {
+    return Image.network(profile.avatarUrl!, fit: BoxFit.cover);
+  }
+  return DecoratedBox(
+    decoration: BoxDecoration(
+      gradient: LinearGradient(
+        colors: [
+          NexTheme.brandAccent.withValues(alpha: 0.50),
+          NexTheme.brandAccentDark.withValues(alpha: 0.30),
         ],
       ),
-      child: child,
-    );
+    ),
+  );
+}
+
+String _connectionLabel(String status) {
+  switch (status) {
+    case 'accepted':
+      return 'Conectados';
+    case 'pending':
+      return 'Invitación enviada';
+    default:
+      return 'Invitar a entrevista';
   }
 }
 
-// ── Profile Radar Chart Painter ──
-class ProfileRadarChartPainter extends CustomPainter {
-  final List<double> values;
-  final List<String> labels;
+String _compact(int value) {
+  if (value >= 1000000) return '${(value / 1000000).toStringAsFixed(1)}M';
+  if (value >= 1000) return '${(value / 1000).toStringAsFixed(1)}K';
+  return '$value';
+}
 
-  ProfileRadarChartPainter({required this.values, required this.labels});
+String _yearFromDate(DateTime date) => date.year.toString();
 
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final radius = size.width / 2 * 0.7;
-    final int count = values.length;
+List<String> _extractTags(String? text, {List<String> fallback = const []}) {
+  final value = (text ?? '').trim();
+  if (value.isEmpty) return fallback;
+  final words = value
+      .split(RegExp(r'[,\.\n]'))
+      .map((item) => item.trim())
+      .where((item) => item.isNotEmpty)
+      .take(4)
+      .toList();
+  return words.isEmpty ? fallback : words;
+}
 
-    final paintLine = Paint()
-      ..color = const Color(0xFFE2E8F0).withOpacity(0.5)
-      ..strokeWidth = 1
-      ..style = PaintingStyle.stroke;
+class _ProfileBundle {
+  final List<PortfolioVideo> portfolio;
+  final int viewCount;
 
-    final paintGrid = Paint()
-      ..color = const Color(0xFFCBD5E1).withOpacity(0.3)
-      ..strokeWidth = 0.5
-      ..style = PaintingStyle.stroke;
+  const _ProfileBundle({
+    required this.portfolio,
+    required this.viewCount,
+  });
+}
 
-    final paintFill = Paint()
-      ..color = const Color(0xFF185FA5).withOpacity(0.2)
-      ..style = PaintingStyle.fill;
+class _ProfileFacts {
+  final String aboutText;
+  final String locationLabel;
+  final String modalityLabel;
+  final String salaryLabel;
+  final String availabilityShort;
+  final String availabilityLine;
+  final String specialtyLabel;
+  final String experienceYearsLabel;
+  final String pitchStatus;
+  final String connectionsSummary;
+  final int viewCount;
+  final int contextualScore;
+  final int profileStrengthScore;
+  final List<String> languages;
+  final List<String> preferences;
+  final List<String> certifications;
+  final List<String> primarySkills;
+  final List<String> secondarySkills;
+  final List<Experience> experience;
+  final List<Education> education;
+  final List<PortfolioVideo> portfolio;
 
-    final paintBorder = Paint()
-      ..color = const Color(0xFF185FA5)
-      ..strokeWidth = 2
-      ..style = PaintingStyle.stroke;
+  const _ProfileFacts({
+    required this.aboutText,
+    required this.locationLabel,
+    required this.modalityLabel,
+    required this.salaryLabel,
+    required this.availabilityShort,
+    required this.availabilityLine,
+    required this.specialtyLabel,
+    required this.experienceYearsLabel,
+    required this.pitchStatus,
+    required this.connectionsSummary,
+    required this.viewCount,
+    required this.contextualScore,
+    required this.profileStrengthScore,
+    required this.languages,
+    required this.preferences,
+    required this.certifications,
+    required this.primarySkills,
+    required this.secondarySkills,
+    required this.experience,
+    required this.education,
+    required this.portfolio,
+  });
 
-    // Concentric polygons
-    for (int step = 1; step <= 3; step++) {
-      final r = radius * (step / 3);
-      final path = Path();
-      for (int i = 0; i < count; i++) {
-        final angle = (i * 2 * math.pi / count) - math.pi / 2;
-        final pt = Offset(center.dx + r * math.cos(angle), center.dy + r * math.sin(angle));
-        if (i == 0) {
-          path.moveTo(pt.dx, pt.dy);
-        } else {
-          path.lineTo(pt.dx, pt.dy);
+  factory _ProfileFacts.fromUser(NexUser profile, _ProfileBundle bundle) {
+    final lines = (profile.about ?? '')
+        .split('\n')
+        .map((line) => line.trim())
+        .where((line) => line.isNotEmpty)
+        .toList();
+
+    String? readLine(String prefix) {
+      for (final line in lines) {
+        if (line.toLowerCase().startsWith(prefix.toLowerCase())) {
+          return line.substring(prefix.length).trim();
         }
       }
-      path.close();
-      canvas.drawPath(path, paintGrid);
+      return null;
     }
 
-    // Axes & Labels
-    for (int i = 0; i < count; i++) {
-      final angle = (i * 2 * math.pi / count) - math.pi / 2;
-      final pt = Offset(center.dx + radius * math.cos(angle), center.dy + radius * math.sin(angle));
-      canvas.drawLine(center, pt, paintLine);
+    final narrativeLines = lines.where((line) {
+      final lower = line.toLowerCase();
+      return !lower.startsWith('portfolio:') &&
+          !lower.startsWith('preferencias:') &&
+          !lower.startsWith('idiomas:') &&
+          !lower.startsWith('certificaciones:');
+    }).toList();
 
-      if (labels.isNotEmpty && i < labels.length) {
-        final labelPt = Offset(
-          center.dx + (radius + 20) * math.cos(angle),
-          center.dy + (radius + 10) * math.sin(angle),
-        );
-        final textPainter = TextPainter(
-          text: TextSpan(
-            text: labels[i],
-            style: const TextStyle(color: Color(0xFF475569), fontSize: 8.5, fontWeight: FontWeight.bold),
-          ),
-          textDirection: TextDirection.ltr,
-        )..layout();
-        
-        textPainter.paint(
-          canvas,
-          Offset(labelPt.dx - textPainter.width / 2, labelPt.dy - textPainter.height / 2),
-        );
-      }
+    List<String> splitValues(String? raw) {
+      if (raw == null || raw.trim().isEmpty) return [];
+      return raw
+          .split(RegExp(r'[,/•]'))
+          .map((item) => item.trim())
+          .where((item) => item.isNotEmpty)
+          .toList();
     }
 
-    // Value shape
-    final pathValue = Path();
-    for (int i = 0; i < count; i++) {
-      final angle = (i * 2 * math.pi / count) - math.pi / 2;
-      final val = values[i].clamp(0.0, 1.0);
-      final pt = Offset(center.dx + radius * val * math.cos(angle), center.dy + radius * val * math.sin(angle));
-      if (i == 0) {
-        pathValue.moveTo(pt.dx, pt.dy);
-      } else {
-        pathValue.lineTo(pt.dx, pt.dy);
-      }
-    }
-    pathValue.close();
-    canvas.drawPath(pathValue, paintFill);
-    canvas.drawPath(pathValue, paintBorder);
+    final preferences = splitValues(readLine('Preferencias:'));
+    final languages = splitValues(readLine('Idiomas:'));
+    final certifications = splitValues(readLine('Certificaciones:'));
+
+    final tags = profile.tags.where((item) => item.trim().isNotEmpty).map((item) => item.trim()).toList();
+    final skills = profile.skills.where((item) => item.trim().isNotEmpty).map((item) => item.trim()).toList();
+    final chips = <String>{...skills, ...tags}.toList();
+    final modality = preferences.firstWhere(
+      (item) => item.toLowerCase().contains('remoto') || item.toLowerCase().contains('hibr') || item.toLowerCase().contains('presencial'),
+      orElse: () => tags.firstWhere(
+        (item) => item.toLowerCase().contains('remote') || item.toLowerCase().contains('remoto') || item.toLowerCase().contains('hibrido') || item.toLowerCase().contains('híbrido'),
+        orElse: () => 'Remoto / Híbrido',
+      ),
+    );
+
+    final yearsEstimate = profile.experience.isEmpty ? 0 : math.max(1, profile.experience.length * 2);
+    final profileScoreBase = 55 +
+        (profile.videoUrl != null && profile.videoUrl!.isNotEmpty ? 16 : 0) +
+        (profile.skills.isNotEmpty ? 10 : 0) +
+        (profile.about != null && profile.about!.trim().isNotEmpty ? 8 : 0) +
+        (bundle.portfolio.isNotEmpty ? 8 : 0) +
+        (profile.education.isNotEmpty ? 6 : 0);
+
+    final contextualScore = profile.matchPercentage > 0
+        ? profile.matchPercentage.round().clamp(0, 100)
+        : math.min(98, 72 + skills.length * 3 + (bundle.portfolio.isNotEmpty ? 6 : 0));
+
+    return _ProfileFacts(
+      aboutText: narrativeLines.isEmpty
+          ? 'Este perfil todavía no tiene una descripción larga, pero ya conserva sus datos reales de video, experiencia y skills.'
+          : narrativeLines.join(' '),
+      locationLabel: profile.location?.trim().isNotEmpty == true
+          ? profile.location!.trim()
+          : 'Ubicación por definir',
+      modalityLabel: modality,
+      salaryLabel: profile.salaryExpectation?.trim().isNotEmpty == true
+          ? profile.salaryExpectation!.trim()
+          : 'A convenir',
+      availabilityShort: profile.isOpenToWork ? 'Inmediata' : 'Activa',
+      availabilityLine: profile.isOpenToWork ? 'Disponible para trabajar' : 'Perfil activo',
+      specialtyLabel: profile.headline.isNotEmpty ? profile.headline.split(' ').take(2).join(' ') : 'Especialidad',
+      experienceYearsLabel: yearsEstimate == 0 ? '0 años' : '$yearsEstimate+ años',
+      pitchStatus: profile.videoUrl != null && profile.videoUrl!.isNotEmpty ? 'Activo' : 'Pendiente',
+      connectionsSummary: profile.connections > 0
+          ? 'Tiene ${profile.connections} conexiones visibles dentro de Mploya.'
+          : 'Todavía no hay conexiones visibles en común.',
+      viewCount: bundle.viewCount,
+      contextualScore: contextualScore,
+      profileStrengthScore: profileScoreBase.clamp(0, 100),
+      languages: languages.isEmpty ? const ['Español', 'Inglés'] : languages,
+      preferences: preferences.isEmpty
+          ? (tags.take(4).isEmpty ? const ['Remoto', 'Híbrido', 'Producto'] : tags.take(4).toList())
+          : preferences,
+      certifications: certifications,
+      primarySkills: chips.take(6).toList(),
+      secondarySkills: chips.skip(6).take(6).toList(),
+      experience: profile.experience,
+      education: profile.education,
+      portfolio: bundle.portfolio,
+    );
   }
 
-  @override
-  bool shouldRepaint(covariant ProfileRadarChartPainter oldDelegate) => true;
+  String get languagesSummary {
+    if (languages.isEmpty) return 'Sin datos';
+    if (languages.length == 1) return languages.first;
+    return '${languages.first} +${languages.length - 1}';
+  }
+}
+
+class _TimelineNode {
+  final String leftLabel;
+  final String title;
+  final String subtitle;
+  final String description;
+  final List<String> tags;
+  final Color accent;
+
+  const _TimelineNode({
+    required this.leftLabel,
+    required this.title,
+    required this.subtitle,
+    required this.description,
+    required this.tags,
+    this.accent = NexTheme.brandAccent,
+  });
+}
+
+class _ReferenceMetric {
+  final String label;
+  final String value;
+  final String helper;
+
+  const _ReferenceMetric({
+    required this.label,
+    required this.value,
+    required this.helper,
+  });
+}
+
+class _ReferenceCompetency {
+  final String label;
+  final double score;
+
+  const _ReferenceCompetency(this.label, this.score);
 }

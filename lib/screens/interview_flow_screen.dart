@@ -65,7 +65,12 @@ class _InterviewFlowScreenState extends State<InterviewFlowScreen> {
       var questions = await AIInterviewService.instance.fetchQuestions(widget.interviewId);
       if (questions.isEmpty) {
         // Generar preguntas si no existen
-        final generated = await AIInterviewService.instance.triggerQuestionGeneration(widget.interviewId);
+        // El `job_id` sale de la entrevista ya cargada: la Edge Function lo
+        // exige y sin él devuelve 400 sin generar nada.
+        final generated = await AIInterviewService.instance.triggerQuestionGeneration(
+          widget.interviewId,
+          jobId: interview.jobId,
+        );
         if (generated) {
           questions = await AIInterviewService.instance.fetchQuestions(widget.interviewId);
         } else {
@@ -142,11 +147,13 @@ class _InterviewFlowScreenState extends State<InterviewFlowScreen> {
     });
 
     final currentQuestion = _questions[_currentQuestionIndex];
+    // La transcripción la hace la Edge Function `transcribe-interview-answer`
+    // escuchando el audio real. Antes acá se mandaba un placeholder que después
+    // el informe de IA evaluaba como si fuera la respuesta del candidato.
     final success = await AIInterviewService.instance.submitAnswer(
       interviewId: widget.interviewId,
       questionId: currentQuestion.id,
       file: file,
-      transcript: '[Respuesta grabada en video]', // Placeholder para simular transcripción
     );
 
     if (!success) {
