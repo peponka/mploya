@@ -33,6 +33,10 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
   Map<String, int> _matchScores = {};
   final Set<String> _appliedJobIds = {};
 
+  /// Guard de doble envío de `_applyToJob`. No se lee en `build`, así que se
+  /// asigna sin `setState`: sirve para bloquear reentradas, no para pintar.
+  bool _isApplying = false;
+
   // ── Filtros avanzados (solo panel web) — aplicados en cliente sobre _jobs,
   // igual que _selectedFilter, sin pegarle de nuevo al backend. ──
   final Set<String> _skillsFilter = {};
@@ -254,29 +258,78 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
     return jobs;
   }
 
-  void _applyToJob(String jobId, String jobTitle) async {
-    final uid = _supabase.auth.currentUser?.id;
-    if (uid == null) return;
+  /// Aviso simple, con el mismo formato que los demás diálogos de la pantalla.
+  /// El llamador debe haber comprobado `mounted`.
+  void _aviso(String titulo, String mensaje) {
+    showCupertinoDialog(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: Text(titulo),
+        content: Text(mensaje),
+        actions: [
+          CupertinoDialogAction(
+            child: const Text('OK'),
+            onPressed: () => Navigator.pop(ctx),
+          ),
+        ],
+      ),
+    );
+  }
 
-    // Verificar si el usuario ya tiene un Video-Pitch usando la DB
-    final userData = await _supabase
-        .from('users')
-        .select('video_url')
-        .eq('id', uid)
-        .maybeSingle();
+  /// Guard de doble envío. El flujo real vive en `_applyToJobFlow` para no
+  /// tener que envolver todo su cuerpo en un try/finally.
+  void _applyToJob(String jobId, String jobTitle) async {
+    if (_isApplying) return;
+    _isApplying = true;
+    try {
+      await _applyToJobFlow(jobId, jobTitle);
+    } catch (e) {
+      debugPrint('jobs · postulación: $e');
+      if (mounted) {
+        _aviso(
+          'No pudimos continuar',
+          'Algo salió mal. Probá de nuevo en un momento.',
+        );
+      }
+    } finally {
+      _isApplying = false;
+    }
+  }
+
+  Future<void> _applyToJobFlow(String jobId, String jobTitle) async {
+    final uid = _supabase.auth.currentUser?.id;
+    if (uid == null) {
+      if (!mounted) return;
+      _aviso('Iniciá sesión',
+          'Necesitás iniciar sesión para postularte a esta vacante.');
+      return;
+    }
+
+    // Perfil del candidato: una sola consulta para el Video-Pitch y el tipo de
+    // cuenta. Antes eran dos viajes a `users` para leer una columna cada uno.
+    Map<String, dynamic>? userData;
+    try {
+      userData = await _supabase
+          .from('users')
+          .select('video_url, account_type')
+          .eq('id', uid)
+          .maybeSingle();
+    } catch (e) {
+      debugPrint('jobs · perfil del candidato: $e');
+      if (!mounted) return;
+      _aviso('No pudimos continuar',
+          'No pudimos leer tu perfil. Revisá tu conexión y probá de nuevo.');
+      return;
+    }
 
     final hasPitch = userData != null &&
         userData['video_url'] != null &&
         userData['video_url'].toString().isNotEmpty;
 
     // Check if the user is a confidential candidate → offer Ghost Apply
-    final accountType = await _supabase
-        .from('users')
-        .select('account_type')
-        .eq('id', uid)
-        .maybeSingle();
-    final isConfidential = accountType?['account_type'] == 'confidencial' ||
-        accountType?['account_type'] == 'stealth';
+    final accountType = userData?['account_type'];
+    final isConfidential =
+        accountType == 'confidencial' || accountType == 'stealth';
 
     bool forceCamera = false;
 
@@ -347,12 +400,21 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
 
       if (ghostChoice == null) return;
       if (ghostChoice == 'ghost') {
-        // Ghost Apply flow
-        setState(() => _appliedJobIds.add(jobId));
+        // Ghost Apply flow. Escribe en `ghost_applications`, NO en
+        // `job_applications`: insertar ahí expondría el candidate_id a la
+        // empresa y rompería el anonimato. Por lo mismo no puede apoyarse en
+        // `trg_notify_job_application` (ese aviso lleva el nombre del
+        // candidato) y conserva su llamada a `create_system_notification`,
+        // autorizada por la migración 028 vía la fila de ghost_applications
+        // que el servicio acaba de crear.
         final error = await GhostApplyService.instance.ghostApply(
           jobId: jobId,
           jobTitle: jobTitle,
         );
+        // Sólo se marca como aplicada si el servicio confirmó el envío.
+        if (mounted && error == null) {
+          setState(() => _appliedJobIds.add(jobId));
+        }
         if (mounted) {
           showCupertinoDialog(
             context: context,
@@ -385,27 +447,25 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
       if (result != true) return;
     }
 
-    setState(() => _appliedJobIds.add(jobId));
-
-    // Insertar notificación al dueño del job
+    // POSTULACIÓN NORMAL. Se insertan SÓLO estas dos columnas: la migración 029
+    // revoca el INSERT de tabla y otorga `INSERT (job_id, candidate_id)`, así
+    // que nombrar `status` —aunque sea con su propio default 'pending'— haría
+    // fallar la escritura con "permission denied for column". `status`, `id`,
+    // `created_at` e `is_favorite` los resuelve el default.
+    //
+    // Acá NO se notifica a la empresa: de eso se encarga el trigger
+    // `trg_notify_job_application` (AFTER INSERT sobre job_applications), que
+    // arma el aviso del lado del servidor. Antes esta pantalla llamaba a
+    // `create_system_notification` SIN insertar nada: la empresa recibía el
+    // aviso y la postulación no quedaba registrada en ningún lado.
     try {
-      final job = _jobs.firstWhere((j) => j['id'].toString() == jobId, orElse: () => {});
-      final companyId = job['company_id']?.toString();
-      if (companyId != null) {
-        final userData = await _supabase.from('users').select('name').eq('id', uid).maybeSingle();
-        final userName = userData?['name'] ?? 'Un candidato';
-        await _supabase.rpc('create_system_notification', params: {
-          'p_user_id': companyId,
-          'p_type': 'jobAlert',
-          'p_description': '📩 $userName aplicó a tu vacante "$jobTitle".',
-          'p_actor_id': uid,
-        });
-      }
-    } catch (e) {
-      debugPrint('Error notificando aplicación: $e');
-    }
+      await _supabase.from('job_applications').insert({
+        'job_id': jobId,
+        'candidate_id': uid,
+      });
 
-    if (mounted) {
+      if (!mounted) return;
+      setState(() => _appliedJobIds.add(jobId));
       showCupertinoDialog(
         context: context,
         builder: (ctx) => CupertinoAlertDialog(
@@ -419,6 +479,25 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
           ],
         ),
       );
+    } on PostgrestException catch (e) {
+      if (!mounted) return;
+      // 23505 = unique_violation contra `job_applications_uniq (job_id,
+      // candidate_id)`. No es un error: ya estaba postulado. `_appliedJobIds`
+      // es estado local y se vacía al reiniciar la app, así que este caso
+      // aparece de forma perfectamente normal al reintentar.
+      if (e.code == '23505') {
+        setState(() => _appliedJobIds.add(jobId));
+        _aviso('Ya te postulaste', 'Ya te postulaste a esta vacante.');
+      } else {
+        debugPrint('jobs · insert postulación: ${e.code} ${e.message}');
+        _aviso('No pudimos enviar tu postulación',
+            'Algo salió mal al enviarla. Probá de nuevo en un momento.');
+      }
+    } catch (e) {
+      debugPrint('jobs · insert postulación: $e');
+      if (!mounted) return;
+      _aviso('No pudimos enviar tu postulación',
+          'Algo salió mal al enviarla. Probá de nuevo en un momento.');
     }
   }
 
