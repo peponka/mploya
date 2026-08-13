@@ -6,7 +6,11 @@ class SavedJobsService {
   SavedJobsService._();
   static final instance = SavedJobsService._();
 
-  final _supabase = Supabase.instance.client;
+  // `late`: `Supabase.instance.client` LANZA si Supabase no está inicializado,
+  // y este es un singleton cuyo campo se evaluaba al crear la instancia. Con
+  // `late`, el cliente se resuelve en el primer uso real. En producción el
+  // comportamiento es idéntico.
+  late final _supabase = Supabase.instance.client;
   String? get _uid => _supabase.auth.currentUser?.id;
 
   Future<List<Map<String, dynamic>>> fetchSavedJobs() async {

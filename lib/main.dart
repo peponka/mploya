@@ -11,6 +11,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'l10n/app_localizations.dart';
 import 'theme/app_theme.dart';
+import 'preview/preview_flags.dart';
+import 'preview/preview_app.dart';
 import 'screens/empresa/empresa_sala_preview_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/splash_screen.dart';
@@ -82,6 +84,18 @@ void _handleFlutterError(FlutterErrorDetails details) {
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // ── MODO PREVIEW LOCAL ────────────────────────────────────────────────
+  // Corta ANTES de inicializar Supabase, Firebase, pinning, push, deep links
+  // y conectividad: el preview no debe tocar ningún servicio productivo.
+  //
+  // `kPreviewMode` es `kDebugMode && bool.fromEnvironment('MPLOYA_PREVIEW')`,
+  // las dos resueltas en compilación. En un build de release la constante es
+  // `false` y el tree shaking se lleva esta rama y todo `lib/preview/`.
+  if (kPreviewMode) {
+    runApp(const PreviewApp());
+    return;
+  }
 
   // Error handling — Fase 1: captura básica antes de Firebase
   FlutterError.onError = _handleFlutterError;

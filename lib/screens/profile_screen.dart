@@ -25,6 +25,8 @@ import 'chat_inmail_screen.dart';
 import 'company_profile_form_screen.dart';
 import 'onboarding_pitch_screen.dart';
 import 'settings_screen.dart';
+import 'tools_hub_entry_screen.dart';
+import 'saved_jobs_screen.dart';
 import 'splash_screen.dart';
 import 'stealth_profile_form_screen.dart';
 import '../services/portfolio_service.dart';
@@ -294,6 +296,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 _openEditProfile(context, profile);
               },
               child: const Text('Editar perfil'),
+            ),
+          // Mis Herramientas y Guardados no tenían NINGUNA entrada: el hub de
+          // herramientas vivía en una ranura del IndexedStack que la barra de
+          // candidato no publicaba, así que ni él ni las pantallas que cuelgan
+          // de él (CV, referidos, quién vio tu perfil, impulsar perfil) eran
+          // alcanzables. Se abren por `push`, no cambiando de pestaña.
+          if (isOwnProfile)
+            CupertinoActionSheetAction(
+              onPressed: () {
+                Navigator.pop(sheetContext);
+                Navigator.of(context).push(
+                  CupertinoPageRoute(builder: (_) => const ToolsHubEntryScreen()),
+                );
+              },
+              child: const Text('Mis Herramientas'),
+            ),
+          if (isOwnProfile)
+            CupertinoActionSheetAction(
+              onPressed: () {
+                Navigator.pop(sheetContext);
+                Navigator.of(context).push(
+                  CupertinoPageRoute(builder: (_) => const SavedJobsScreen()),
+                );
+              },
+              child: const Text('Guardados'),
             ),
         ],
         cancelButton: CupertinoActionSheetAction(

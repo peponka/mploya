@@ -25,8 +25,27 @@ import 'scheduling_screen.dart';
 // MessagingScreen — inbox & matches reales (Premium "No-Line" Theme)
 // ─────────────────────────────────────────────────────────────────────────────
 
+/// Datos ya resueltos para el modo preview local. Mismo patrón que
+/// `JobsPreviewData`: si llega, la pantalla NO consulta Supabase ni abre
+/// streams en tiempo real.
+@immutable
+class MessagingPreviewData {
+  const MessagingPreviewData({
+    this.conexiones = const [],
+    this.usuarios = const [],
+    this.mensajes = const [],
+  });
+
+  final List<Map<String, dynamic>> conexiones;
+  final List<Map<String, dynamic>> usuarios;
+  final List<Map<String, dynamic>> mensajes;
+}
+
 class MessagingScreen extends StatefulWidget {
-  const MessagingScreen({super.key});
+  /// Sólo lo usa `lib/preview/`. En producción es `null`.
+  final MessagingPreviewData? previewData;
+
+  const MessagingScreen({super.key, this.previewData});
 
   @override
   State<MessagingScreen> createState() => _MessagingScreenState();
@@ -40,50 +59,11 @@ class _MessagingScreenState extends State<MessagingScreen> {
   // ── Panel maestro-detalle web: conversación seleccionada ──
   NexUser? _selectedUser;
 
-  static const List<NexUser> _demoUsers = [
-    NexUser(
-      id: 'demo_elena',
-      name: 'Elena García',
-      avatarUrl: '👩‍🎨',
-      headline: 'Motion Designer',
-      location: 'Madrid, Spain',
-    ),
-    NexUser(
-      id: 'demo_alex',
-      name: 'Alex Rivera',
-      avatarUrl: '👨‍💻',
-      headline: 'Product Designer',
-      location: 'CDMX, Mexico',
-    ),
-    NexUser(
-      id: 'demo_martin',
-      name: 'Martín López',
-      avatarUrl: '👨‍💼',
-      headline: 'Brand Manager',
-      location: 'Buenos Aires, Argentina',
-    ),
-    NexUser(
-      id: 'demo_camila',
-      name: 'Camila Ruiz',
-      avatarUrl: '👩‍🔬',
-      headline: 'Research Lead',
-      location: 'Santiago, Chile',
-    ),
-    NexUser(
-      id: 'demo_lucas',
-      name: 'Lucas Herrera',
-      avatarUrl: '👨‍¼',
-      headline: 'UX Specialist',
-      location: 'Bogotá, Colombia',
-    ),
-    NexUser(
-      id: 'demo_valentina',
-      name: 'Valentina Torres',
-      avatarUrl: '👩‍🚀',
-      headline: 'Tech Recruiter',
-      location: 'São Paulo, Brazil',
-    ),
-  ];
+  // Los seis usuarios demo y el avatar de "nuevo match" se eliminaron: la
+  // bandeja vacia los mostraba como si fueran conversaciones reales.
+  // `_demoMessagesMap` queda como codigo inalcanzable -ningun usuario `demo_`
+  // se renderiza ni se puede seleccionar- y se retira aparte, para no tocar
+  // en el mismo pase el camino real del chat.
 
   static final Map<String, List<Map<String, dynamic>>> _demoMessagesMap = {
     'demo_elena': [
@@ -121,8 +101,11 @@ class _MessagingScreenState extends State<MessagingScreen> {
   // del cliente como segunda capa de seguridad. Si RLS falla por
   // misconfiguration, estos filtros limitan la superficie de exposición.
 
-  final String? _currentUserId =
-      Supabase.instance.client.auth.currentUser?.id;
+  // `late`: ver la nota de jobs_screen.dart. En preview no hay sesión ni
+  // Supabase inicializado, y este campo se evaluaba al construir el State.
+  late final String? _currentUserId = widget.previewData != null
+      ? '${'preview'}-cand-01'
+      : Supabase.instance.client.auth.currentUser?.id;
 
   List<Map<String, dynamic>>? _connectionsData;
   List<Map<String, dynamic>>? _usersData;
@@ -135,6 +118,15 @@ class _MessagingScreenState extends State<MessagingScreen> {
   @override
   void initState() {
     super.initState();
+    final preview = widget.previewData;
+    if (preview != null) {
+      // Preview local: datos resueltos y SIN suscribirse a streams en tiempo
+      // real, que abrirían websockets contra Supabase.
+      _connectionsData = preview.conexiones;
+      _usersData = preview.usuarios;
+      _messagesData = preview.mensajes;
+      return;
+    }
     _loadInitialData();
     _subscribeToStreams();
   }
@@ -224,6 +216,24 @@ class _MessagingScreenState extends State<MessagingScreen> {
     }
   }
 
+  // ── ÚNICOS PUNTOS DE BIFURCACIÓN preview / producción ───────────────────
+  // Los `late final` de abajo resuelven `Supabase.instance.client`, que LANZA
+  // si Supabase no está inicializado. En preview no se los toca: estos getters
+  // devuelven un stream de un solo valor, sin websocket ni suscripción.
+  // Con `previewData == null` el camino es el productivo de siempre.
+
+  Stream<List<Map<String, dynamic>>> get _conexionesStream {
+    final preview = widget.previewData;
+    if (preview != null) return Stream.value(preview.conexiones);
+    return _connectionsStream;
+  }
+
+  Stream<List<Map<String, dynamic>>> get _usuariosStream {
+    final preview = widget.previewData;
+    if (preview != null) return Stream.value(preview.usuarios);
+    return _usersStream;
+  }
+
   late final _usersStream = Supabase.instance.client
       .from('users')
       .stream(primaryKey: ['id'])
@@ -275,7 +285,7 @@ class _MessagingScreenState extends State<MessagingScreen> {
             const SizedBox(height: 16),
             Expanded(
               child: StreamBuilder<List<Map<String, dynamic>>>(
-                stream: _connectionsStream,
+                stream: _conexionesStream,
                 builder: (ctx, snap) {
                   if (!snap.hasData) return const Center(child: CupertinoActivityIndicator());
                   final accepted = snap.data!.where((c) =>
@@ -286,7 +296,7 @@ class _MessagingScreenState extends State<MessagingScreen> {
                     return Center(child: Text('No tenés conexiones aún', style: TextStyle(color: ctx.textSecondary)));
                   }
                   return StreamBuilder<List<Map<String, dynamic>>>(
-                    stream: _usersStream,
+                    stream: _usuariosStream,
                     builder: (ctx, usersSnap) {
                       if (!usersSnap.hasData) return const Center(child: CupertinoActivityIndicator());
                       final userMap = {for (var u in usersSnap.data!) u['id']?.toString() ?? '': u};
@@ -369,17 +379,6 @@ class _MessagingScreenState extends State<MessagingScreen> {
     }
 
     final loading = _connectionsData == null || _usersData == null;
-    List<NexUser> allUsers = [];
-    if (!loading) {
-      final validUserIds = _connectionsData!
-          .where((c) => c['status'] == 'accepted')
-          .map((c) => c['requester_id'] == _currentUserId ? c['addressee_id'] : c['requester_id'])
-          .toSet();
-      allUsers = _usersData!
-          .where((r) => validUserIds.contains(r['id']))
-          .map((r) => NexUser.fromJson(r))
-          .toList();
-    }
 
     if (loading) {
       return const CupertinoPageScaffold(
@@ -388,7 +387,9 @@ class _MessagingScreenState extends State<MessagingScreen> {
       );
     }
 
-    final selected = _selectedUser ?? (allUsers.isEmpty ? _demoUsers.first : null);
+    // Sin conversaciones no se preselecciona a nadie: antes caía en
+    // `_demoUsers.first` y el panel de la derecha abría un chat inventado.
+    final selected = _selectedUser;
 
     return CupertinoPageScaffold(
       backgroundColor: const Color(0xFFF1F1F4),
@@ -743,37 +744,6 @@ class _MessagingScreenState extends State<MessagingScreen> {
     );
   }
 
-  Widget _demoMatchAvatar(String name, String emoji, bool isNew) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 16),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(3),
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: isNew
-                  ? const LinearGradient(colors: [Color(0xFF185FA5), Color(0xFF0C447C)])
-                  : null,
-              border: isNew ? null : Border.all(color: context.dividerColor, width: 2),
-            ),
-            child: Container(
-              width: 48, height: 48,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: context.cardColor,
-              ),
-              child: Center(child: Text(emoji, style: const TextStyle(fontSize: 24))),
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(name, style: TextStyle(fontSize: 11, fontWeight: isNew ? FontWeight.w700 : FontWeight.w500, color: context.textSecondary)),
-        ],
-      ),
-    );
-  }
-
   Widget _quickActionsSidebar(BuildContext context, NexUser user) {
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(vertical: 8),
@@ -881,48 +851,45 @@ class _MessagingScreenState extends State<MessagingScreen> {
     );
   }
 
+  /// Bandeja sin conversaciones.
+  ///
+  /// Antes esto NO era un estado vacío: dibujaba seis "nuevos matches" y seis
+  /// conversaciones inventadas —con textos, horas y contadores de no leídos—
+  /// indistinguibles de las reales. Un candidato nuevo creía tener mensajes
+  /// esperándolo. Ahora dice la verdad: no hay conversaciones todavía.
   Widget _buildEmptyInbox(BuildContext context, {required void Function(NexUser) onTapUser, NexUser? selectedUser}) {
     return SliverToBoxAdapter(
-      child: Column(
-        children: [
-          // ── Nuevos Matches demo (horizontal scroll) ──
-          SizedBox(
-            height: 100,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
-              children: [
-                _demoMatchAvatar('Sofía', '👩‍💼', true),
-                _demoMatchAvatar('Carlos', '👨‍🔬', true),
-                _demoMatchAvatar('Ana', '👩‍⚕️', false),
-                _demoMatchAvatar('Diego', '👨‍🎓', true),
-                _demoMatchAvatar('Lucía', '👩‍🏫', false),
-                _demoMatchAvatar('Mateo', '👨‍🎤', true),
-              ],
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 72, horizontal: 40),
+        child: Column(
+          children: [
+            Icon(
+              CupertinoIcons.chat_bubble_2,
+              size: 52,
+              color: const Color(0xFFAEAEB2).withValues(alpha: 0.6),
             ),
-          ),
-          Divider(height: 1, color: context.dividerColor.withValues(alpha: 0.3)),
-          // ── Demo conversations using actual _ConversationTile ──
-          ...List.generate(_demoUsers.length, (i) {
-            final user = _demoUsers[i];
-            final msgs = _demoMessagesMap[user.id] ?? [];
-            final lastMsg = msgs.isNotEmpty ? msgs.last : null;
-            final previewText = lastMsg != null ? lastMsg['text']?.toString() ?? '' : user.headline;
-            final timeText = lastMsg != null ? lastMsg['time']?.toString() ?? '' : '';
-            final unreadCount = i == 0 ? 2 : (i == 2 ? 1 : (i == 5 ? 3 : 0));
-            final hasUnread = unreadCount > 0;
-
-            return _ConversationTile(
-              user: user,
-              isLast: i == _demoUsers.length - 1,
-              previewText: previewText,
-              timeText: timeText,
-              hasUnread: hasUnread,
-              isSelected: selectedUser?.id == user.id,
-              onTap: () => onTapUser(user),
-            );
-          }),
-        ],
+            const SizedBox(height: 18),
+            Text(
+              'Todavía no tenés mensajes',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.w700,
+                color: context.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Cuando conectes con alguien, la conversación aparece acá.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 14,
+                height: 1.4,
+                color: context.textTertiary,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

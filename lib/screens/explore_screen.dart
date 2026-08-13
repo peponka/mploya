@@ -12,7 +12,6 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import '../widgets/web_ui.dart';
 import '../models/models.dart';
-import '../screens/vacantes_screen.dart';
 import 'profile_screen.dart';
 import 'explore_demo_data.dart';
 // Mapa Leaflet: flutter_map no pinta los tiles ni en web (CanvasKit) ni en móvil
@@ -56,7 +55,12 @@ String _getItemPhoto(Map<String, dynamic> item) {
 }
 
 class ExploreScreen extends StatefulWidget {
-  const ExploreScreen({super.key});
+  /// Filtro con el que arranca la pantalla: `todos`, `empresa`, `candidato` o
+  /// `video`. Vacantes la abre con `empresa` ("Empresas cerca tuyo"): para un
+  /// candidato, ver a otros candidatos en el mapa no aporta nada.
+  final String filtroInicial;
+
+  const ExploreScreen({super.key, this.filtroInicial = 'todos'});
 
   @override
   State<ExploreScreen> createState() => _ExploreScreenState();
@@ -105,6 +109,7 @@ class _ExploreScreenState extends State<ExploreScreen> with TickerProviderStateM
   @override
   void initState() {
     super.initState();
+    _selectedTypeFilter = widget.filtroInicial;
     _mapController = MapController();
     _applyFilters();
     _loadRealPins();
@@ -143,12 +148,22 @@ class _ExploreScreenState extends State<ExploreScreen> with TickerProviderStateM
   // Hasta la auditoría del 29/7 esta pantalla no tocaba la base: todos los
   // pines salían de `simCandidates` (inventados), así que un candidato real
   // nunca aparecía. Ahora se consulta `get_explore_pins`, que ya existía en la
-  // BD sin que nadie la llamara. Si no hay usuarios reales en el radio se cae a
-  // los demo, para que el mapa no quede vacío mientras la base se puebla.
+  // BD sin que nadie la llamara.
+  //
+  // El fallback a los demo SE ELIMINÓ: cuando el radio no devolvía a nadie, el
+  // mapa se llenaba de personas que no existen y el usuario no tenía forma de
+  // distinguirlas de las reales. Si no hay pines, se dice que no hay pines.
   List<Map<String, dynamic>> _realItems = [];
-  bool _usandoDemo = true;
+  bool _cargandoPines = true;
+  bool _errorPines = false;
 
   Future<void> _loadRealPins() async {
+    if (mounted) {
+      setState(() {
+        _cargandoPines = true;
+        _errorPines = false;
+      });
+    }
     try {
       final res = await Supabase.instance.client.rpc('get_explore_pins', params: {
         'p_lat': _mapCenter.latitude,
@@ -174,19 +189,26 @@ class _ExploreScreenState extends State<ExploreScreen> with TickerProviderStateM
       if (!mounted) return;
       setState(() {
         _realItems = items;
-        _usandoDemo = items.isEmpty;
+        _cargandoPines = false;
       });
-      debugPrint('🗺️ ${items.length} pines reales (demo=$_usandoDemo)');
+      debugPrint('🗺️ ${items.length} pines reales');
       _applyFilters();
     } catch (e) {
       debugPrint('get_explore_pins: $e');
+      if (!mounted) return;
+      setState(() {
+        _cargandoPines = false;
+        _errorPines = true;
+        _realItems = [];
+        _filteredItems = [];
+      });
     }
   }
 
   void _applyFilters() {
     final normQuery = normalizeQuery(_searchQuery);
-    List<Map<String, dynamic>> results =
-        _realItems.isNotEmpty ? _realItems : simCandidates;
+    // Sin fallback: lo que hay es lo que devolvió la base.
+    List<Map<String, dynamic>> results = _realItems;
 
     // Text search (by name, headline or city name)
     if (normQuery.isNotEmpty) {
@@ -442,6 +464,90 @@ class _ExploreScreenState extends State<ExploreScreen> with TickerProviderStateM
     return hasVideo ? '#2563EB' : '#6D48E5';
   }
 
+  /// Aviso superpuesto al mapa cuando no hay nada real que mostrar.
+  ///
+  /// Antes esta situación se tapaba cayendo a `simCandidates`: el mapa se
+  /// llenaba de gente inventada y el usuario no podía distinguirla de la real.
+  /// Ahora el mapa queda como está y encima se dice qué pasó.
+  Widget? _avisoSinPines() {
+    if (_cargandoPines) return null;
+    if (_filteredItems.isNotEmpty) return null;
+
+    final titulo = _errorPines
+        ? 'No pudimos cargar el mapa'
+        : (_selectedTypeFilter == 'empresa'
+              ? 'No hay empresas cerca tuyo'
+              : 'No hay nadie por acá todavía');
+    final detalle = _errorPines
+        ? 'Revisá tu conexión y probá de nuevo.'
+        : 'Probá ampliar la zona o buscar otra ciudad.';
+
+    return Positioned(
+      left: 16,
+      right: 16,
+      bottom: 24,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+        decoration: BoxDecoration(
+          color: CupertinoColors.white,
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x1A000000),
+              blurRadius: 18,
+              offset: Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              _errorPines
+                  ? CupertinoIcons.wifi_slash
+                  : CupertinoIcons.map_pin_slash,
+              size: 26,
+              color: const Color(0xFF94A3B8),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              titulo,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF1C1C1E),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              detalle,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 13,
+                height: 1.35,
+                color: Color(0xFF64748B),
+              ),
+            ),
+            if (_errorPines) ...[
+              const SizedBox(height: 12),
+              CupertinoButton(
+                padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 8),
+                borderRadius: BorderRadius.circular(9),
+                color: const Color(0xFF185FA5),
+                onPressed: _loadRealPins,
+                child: const Text(
+                  'Reintentar',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildMap() {
     // flutter_map no pinta los tiles ni en web (CanvasKit) ni en Android
     // (Impeller/Skia): los descarga pero no los dibuja → mapa gris con pines.
@@ -469,7 +575,7 @@ class _ExploreScreenState extends State<ExploreScreen> with TickerProviderStateM
     }
 
     final builder = kIsWeb ? buildWebMap : buildMobileMap;
-    return builder(
+    final mapa = builder(
       centerLat: _mapCenter.latitude,
       centerLng: _mapCenter.longitude,
       zoom: _mapZoom,
@@ -477,6 +583,10 @@ class _ExploreScreenState extends State<ExploreScreen> with TickerProviderStateM
       selectedId: _selectedItem?['name'] as String?,
       onPinTap: handlePinTap,
     );
+
+    final aviso = _avisoSinPines();
+    if (aviso == null) return mapa;
+    return Stack(children: [Positioned.fill(child: mapa), aviso]);
   }
 
 
@@ -846,13 +956,18 @@ class _ExploreScreenState extends State<ExploreScreen> with TickerProviderStateM
         color: brand,
         borderRadius: BorderRadius.circular(10),
         onPressed: () {
-          if (isCompany) {
-            Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const VacantesScreen()));
-          } else {
-            Navigator.of(context).push(CupertinoPageRoute(builder: (_) => ProfileScreen(user: _userFromPin(item))));
-          }
+          // Antes, para una empresa, esto abría `VacantesScreen`: la pantalla
+          // de GESTIÓN de vacantes de la empresa (crea vacantes, cuenta
+          // postulantes). Un candidato aterrizaba en el panel de otra persona.
+          // Ahora los dos casos abren la ficha del pin, que es lo que el
+          // candidato quiere ver.
+          Navigator.of(context).push(
+            CupertinoPageRoute(
+              builder: (_) => ProfileScreen(user: _userFromPin(item)),
+            ),
+          );
         },
-        child: Text(isCompany ? 'Ver vacantes' : 'Ver perfil', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white)),
+        child: Text(isCompany ? 'Ver empresa' : 'Ver perfil', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white)),
       )),
     ]);
   }

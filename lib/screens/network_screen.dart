@@ -10,18 +10,46 @@ import '../services/social_service.dart';
 import '../services/error_handler.dart';
 import 'profile_screen.dart';
 import 'messaging_screen.dart';
-import '../navigation/main_navigation.dart';
+import 'explore_screen.dart';
+import 'jobs_screen.dart';
 import '../widgets/web_ui.dart';
 
+/// Datos ya resueltos para el modo preview local. Mismo patrón que
+/// `JobsPreviewData`: si llega, la pantalla NO consulta Supabase.
+@immutable
+class NetworkPreviewData {
+  const NetworkPreviewData({
+    this.conexiones = const [],
+    this.recomendados = const [],
+    this.solicitudes = const [],
+    this.personas = const [],
+  });
+
+  final List<NexUser> conexiones;
+  final List<Map<String, dynamic>> recomendados;
+
+  /// Filas de `connections` con `status = 'pending'`.
+  final List<Map<String, dynamic>> solicitudes;
+
+  /// Filas de `users` para resolver el autor de cada solicitud sin consultar.
+  final List<Map<String, dynamic>> personas;
+}
+
 class NetworkScreen extends StatefulWidget {
-  const NetworkScreen({super.key});
+  /// Sólo lo usa `lib/preview/`. En producción es `null` y el comportamiento
+  /// es exactamente el de antes.
+  final NetworkPreviewData? previewData;
+
+  const NetworkScreen({super.key, this.previewData});
 
   @override
   State<NetworkScreen> createState() => _NetworkScreenState();
 }
 
 class _NetworkScreenState extends State<NetworkScreen> {
-  final _supabase = Supabase.instance.client;
+  // `late`: ver la nota de jobs_screen.dart. El inicializador ansioso lanzaba
+  // al construir el State cuando Supabase no está inicializado (modo preview).
+  late final _supabase = Supabase.instance.client;
   String? get _uid => _supabase.auth.currentUser?.id;
 
   List<Map<String, dynamic>>? _recommended;
@@ -31,7 +59,45 @@ class _NetworkScreenState extends State<NetworkScreen> {
   @override
   void initState() {
     super.initState();
+    final preview = widget.previewData;
+    if (preview != null) {
+      // Preview local: datos ya resueltos, sin tocar la red.
+      _connections = preview.conexiones;
+      _recommended = preview.recomendados;
+      _loadingConnections = false;
+      return;
+    }
     _loadData();
+  }
+
+  // ── ÚNICOS PUNTOS DE BIFURCACIÓN preview / producción ───────────────────
+  // Todo acceso a datos de esta pantalla pasa por acá. Con `previewData == null`
+  // el camino es exactamente el productivo de antes.
+
+  /// Solicitudes pendientes. En producción es un stream en vivo; en preview,
+  /// un stream de un solo valor, sin websocket ni suscripción que cerrar.
+  Stream<List<Map<String, dynamic>>> get _solicitudesStream {
+    final preview = widget.previewData;
+    if (preview != null) return Stream.value(preview.solicitudes);
+    return SocialService.instance.pendingRequestsStream;
+  }
+
+  /// Ficha mínima de quien envió una solicitud.
+  Future<Map<String, dynamic>?> _perfilBreve(String userId) {
+    final preview = widget.previewData;
+    if (preview != null) {
+      return Future.value(
+        preview.personas.cast<Map<String, dynamic>?>().firstWhere(
+          (p) => p?['id'] == userId,
+          orElse: () => null,
+        ),
+      );
+    }
+    return _supabase
+        .from('users')
+        .select('name, avatar_url, headline')
+        .eq('id', userId)
+        .maybeSingle();
   }
 
   Future<void> _loadData() async {
@@ -85,7 +151,7 @@ class _NetworkScreenState extends State<NetworkScreen> {
     return CupertinoPageScaffold(
       backgroundColor: context.isDark ? NexTheme.darkBg : CupertinoColors.white,
       child: StreamBuilder<List<Map<String, dynamic>>>(
-        stream: SocialService.instance.pendingRequestsStream,
+        stream: _solicitudesStream,
         builder: (context, pendingSnap) {
           final pending = pendingSnap.data ?? [];
           if (isWebWide(context)) return _buildWeb(context, pending);
@@ -169,11 +235,7 @@ class _NetworkScreenState extends State<NetworkScreen> {
                     children: pending.take(2).map((req) {
                       final requesterId = req['requester_id']?.toString() ?? '';
                       return FutureBuilder<Map<String, dynamic>?>(
-                        future: _supabase
-                            .from('users')
-                            .select('name, avatar_url, headline')
-                            .eq('id', requesterId)
-                            .maybeSingle(),
+                        future: _perfilBreve(requesterId),
                         builder: (context, snap) {
                           final name = snap.data?['name']?.toString() ?? '...';
                           final headline = snap.data?['headline']?.toString() ?? '';
@@ -262,11 +324,7 @@ class _NetworkScreenState extends State<NetworkScreen> {
                 children: pending.map((req) {
                   final requesterId = req['requester_id']?.toString() ?? '';
                   return FutureBuilder<Map<String, dynamic>?>(
-                    future: _supabase
-                        .from('users')
-                        .select('name, avatar_url, headline')
-                        .eq('id', requesterId)
-                        .maybeSingle(),
+                    future: _perfilBreve(requesterId),
                     builder: (context, snap) {
                       final name = snap.data?['name']?.toString() ?? '...';
                       final headline = snap.data?['headline']?.toString() ?? '';
@@ -401,13 +459,21 @@ class _NetworkScreenState extends State<NetworkScreen> {
             onTap: () => Navigator.of(context).push(CupertinoPageRoute(builder: (_) => ProfileScreen(user: null))),
           ),
           const SizedBox(height: 8),
+          // Estos dos botones escribían `currentMainTabNotifier` creyendo que
+          // eso cambiaba de pestaña. NO lo hace: `MainNavigation` sólo ESCRIBE
+          // ese notifier —para que los reels sepan si están en el feed— y nunca
+          // lo escucha. Eran botones muertos. Además el índice 1, que uno de
+          // ellos usaba pensando en "Explorar", hoy es Vacantes.
+          // Ahora navegan de verdad, por `push`.
           _firstStepButton(
             context,
             icon: CupertinoIcons.compass_fill,
             backgroundColor: const Color(0xFFF1F5F9),
             textColor: const Color(0xFF475569),
-            label: 'Explora el feed',
-            onTap: () => currentMainTabNotifier.value = 0,
+            label: 'Descubrí gente cerca',
+            onTap: () => Navigator.of(context).push(
+              CupertinoPageRoute(builder: (_) => const ExploreScreen()),
+            ),
           ),
           const SizedBox(height: 8),
           _firstStepButton(
@@ -415,8 +481,10 @@ class _NetworkScreenState extends State<NetworkScreen> {
             icon: CupertinoIcons.paperplane_fill,
             backgroundColor: const Color(0xFFF1F5F9),
             textColor: const Color(0xFF475569),
-            label: 'Enviá solicitudes',
-            onTap: () => currentMainTabNotifier.value = 1, // → Explorar (descubrir gente)
+            label: 'Mirá vacantes',
+            onTap: () => Navigator.of(context).push(
+              CupertinoPageRoute(builder: (_) => const JobsScreen()),
+            ),
           ),
         ],
       ),
@@ -737,7 +805,7 @@ class _NetworkScreenState extends State<NetworkScreen> {
                     final req = pending[index];
                     final requesterId = req['requester_id']?.toString() ?? '';
                     return FutureBuilder<Map<String, dynamic>?>(
-                      future: _supabase.from('users').select('name, avatar_url, headline').eq('id', requesterId).maybeSingle(),
+                      future: _perfilBreve(requesterId),
                       builder: (context, snap) {
                         final name = snap.data?['name']?.toString() ?? 'Usuario';
                         final headline = snap.data?['headline']?.toString() ?? '';

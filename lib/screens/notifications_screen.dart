@@ -17,7 +17,6 @@ import 'profile_screen.dart';
 import 'ats_dashboard_screen.dart';
 import 'interview_flow_screen.dart';
 import 'scheduling_screen.dart';
-import '../navigation/main_navigation.dart';
 
 /// Id de la entrevista con IA a la que invita una notificación
 /// `interview_request`.
@@ -544,7 +543,15 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
           time: 'Hace 20 min',
           unread: true,
           actions: [
-            _miniBtn('Ver perfil', const Color(0xFF1C1C1E), Colors.white, () => currentMainTabNotifier.value = 2),
+            // Escribía `currentMainTabNotifier.value = 2` creyendo que abría
+            // Perfil. Nunca navegó —MainNavigation no escucha ese notifier— y
+            // además el índice 2 hoy es Red, no Perfil. Ahora abre el perfil
+            // propio por `push`.
+            _miniBtn('Ver perfil', const Color(0xFF1C1C1E), Colors.white, () {
+              Navigator.of(context).push(
+                CupertinoPageRoute(builder: (_) => const ProfileScreen()),
+              );
+            }),
             const SizedBox(width: 8),
             _miniBtn('Guardar', const Color(0xFFF1F5F9), const Color(0xFF64748B), () {}),
           ],

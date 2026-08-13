@@ -17,16 +17,36 @@ import '../widgets/mploya_toast.dart';
 import 'saved_jobs_screen.dart';
 import 'create_job_screen.dart';
 import 'job_detail_screen.dart';
+import 'explore_screen.dart';
+
+/// Datos ya resueltos para el modo preview local. Mismo patrón que usan las
+/// pantallas de Empresa: si llega, la pantalla NO consulta Supabase.
+@immutable
+class JobsPreviewData {
+  const JobsPreviewData({required this.vacantes, this.matchScores = const {}});
+
+  final List<Map<String, dynamic>> vacantes;
+  final Map<String, int> matchScores;
+}
 
 class JobsScreen extends ConsumerStatefulWidget {
-  const JobsScreen({super.key});
+  /// Sólo lo usa `lib/preview/` (kDebugMode + MPLOYA_PREVIEW). En producción es
+  /// `null` y el comportamiento es exactamente el de antes.
+  final JobsPreviewData? previewData;
+
+  const JobsScreen({super.key, this.previewData});
 
   @override
   ConsumerState<JobsScreen> createState() => _JobsScreenState();
 }
 
 class _JobsScreenState extends ConsumerState<JobsScreen> {
-  final _supabase = Supabase.instance.client;
+  // `late` a propósito: `Supabase.instance.client` LANZA si Supabase no está
+  // inicializado, y un inicializador de campo se evalúa al construir el State.
+  // El modo preview corre sin inicializar Supabase, así que el cliente debe
+  // resolverse recién en el primer uso —que en preview nunca ocurre—.
+  // En producción el comportamiento es idéntico.
+  late final _supabase = Supabase.instance.client;
   bool _isLoading = true;
   List<Map<String, dynamic>> _jobs = [];
   String _selectedFilter = 'Para Ti';
@@ -136,6 +156,14 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
   @override
   void initState() {
     super.initState();
+    final preview = widget.previewData;
+    if (preview != null) {
+      // Preview local: los datos ya vienen resueltos y no se toca la red.
+      _jobs = preview.vacantes;
+      _matchScores = preview.matchScores;
+      _isLoading = false;
+      return;
+    }
     _fetchJobs();
   }
 
@@ -510,6 +538,21 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
+            // "Empresas cerca tuyo". Explorar deja de ser pestaña principal y
+            // pasa a ser este acceso secundario, arrancando ya filtrado a
+            // empresas: para un candidato, ver a otros candidatos en el mapa
+            // no aporta nada.
+            CupertinoButton(
+              padding: EdgeInsets.zero,
+              minimumSize: Size.zero,
+              onPressed: () => Navigator.of(context).push(
+                CupertinoPageRoute(
+                  builder: (_) => const ExploreScreen(filtroInicial: 'empresa'),
+                ),
+              ),
+              child: Icon(CupertinoIcons.map_pin_ellipse, size: 21, color: context.brandAccent),
+            ),
+            const SizedBox(width: 12),
             CupertinoButton(
               padding: EdgeInsets.zero,
               minimumSize: Size.zero,
@@ -646,6 +689,7 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
                                     ),
                                   ),
                                   child: _JobListCard(
+                                    esPreview: widget.previewData != null,
                                     job: job,
                                     isApplied: _appliedJobIds.contains(jobId),
                                     matchScore: effectiveScore,
@@ -1017,11 +1061,17 @@ class _JobListCard extends StatefulWidget {
   final VoidCallback onApply;
   final int? matchScore;
 
+  /// En preview no hay sesión: la tarjeta no consulta su estado de guardado.
+  /// Se recibe por parámetro y no se deduce del id, para que esta pantalla
+  /// productiva no tenga que importar nada de `lib/preview/`.
+  final bool esPreview;
+
   const _JobListCard({
     required this.job,
     required this.isApplied,
     required this.onApply,
     this.matchScore,
+    this.esPreview = false,
   });
 
   @override
@@ -1040,6 +1090,9 @@ class _JobListCardState extends State<_JobListCard> {
   Future<void> _checkSaved() async {
     final id = widget.job['id']?.toString();
     if (id == null) return;
+    // En preview no hay sesión ni Supabase: la tarjeta se dibuja sin estado de
+    // guardado en vez de intentar una consulta que fallaría.
+    if (widget.esPreview) return;
     final s = await SavedJobsService.instance.isJobSaved(id);
     if (mounted) setState(() => _saved = s);
   }
