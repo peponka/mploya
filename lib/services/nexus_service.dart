@@ -139,7 +139,7 @@ class NexusService {
           final receiverName = receiverData?['name'] ?? 'Una empresa';
           await _client.rpc('create_system_notification', params: {
             'p_user_id': signal['sender_id'],
-            'p_type': 'connection',
+            'p_type': 'connection_accepted',
             'p_description': '🎉 ¡Match! $receiverName aceptó tu solicitud. Conectá ahora.',
             'p_actor_id': _uid,
           });
