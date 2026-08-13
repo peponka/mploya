@@ -23,6 +23,11 @@ import 'empresa_vacantes_data.dart';
 /// etapa" y "listo para entrevista": nada de eso existe en la base, así que no
 /// se dibuja. Un candidato sin score (se postuló pero no tiene embedding) se
 /// muestra SIN porcentaje, no con un número inventado.
+/// ╔═══════════════════════════════════════════════════════════════════════╗
+/// ║ CONGELADA el 12/8/2026 — diseño Y comportamiento aprobados.           ║
+/// ║ No modificar salvo bug funcional o responsive concreto y demostrable. ║
+/// ╚═══════════════════════════════════════════════════════════════════════╝
+///
 class EmpresaShortlistScreen extends StatefulWidget {
   final Vacante vacante;
 
