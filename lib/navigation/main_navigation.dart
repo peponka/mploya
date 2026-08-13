@@ -83,33 +83,62 @@ class _MainNavigationState extends State<MainNavigation> {
   Widget get _companyDashboard =>
       EmpresaDashboardScreen(unreadNotifications: _unreadNotifications);
 
+  /// Las ranuras son COMPARTIDAS por los tres roles y su numeración es un
+  /// contrato: Empresa usa 0-8 y Headhunter {0,1,2,3,5,6,7,8}. Por eso el array
+  /// no se reordena ni cambia de longitud — sólo cambia qué monta cada rol.
+  ///
+  /// Las ranuras que un rol no expone en su barra se neutralizan con
+  /// `SizedBox.shrink()`: el `IndexedStack` construye TODOS sus hijos, así que
+  /// dejar una pantalla real en una ranura inalcanzable la monta igual y
+  /// dispara sus consultas para nada.
   List<Widget> get _screens => [
+    // 0 · Inicio
     _accountType == 'empresa' ? _companyTalentFeed : _homeFeed,
+    // 1 · Empresa: Pipeline · Headhunter: ATS · Candidato: Vacantes
     _accountType == 'empresa'
         ? const EmpresaPipelineScreen()
-        : (_accountType == 'headhunter' ? _atsDashboard : _explore),
+        : (_accountType == 'headhunter' ? _atsDashboard : const JobsScreen()),
+    // 2 · Empresa: Mapa · Headhunter: Explorar · Candidato: Red
     _accountType == 'empresa'
         ? const EmpresaMapaScreen()
         : (_accountType == 'headhunter' ? _explore : _network),
+    // 3 · Actividad / Notificaciones. Candidato llega desde Inicio, no por barra.
     _accountType == 'empresa'
         ? const EmpresaActividadScreen()
         : _notifications,
     // FASE DE CIERRE DE LEGACY — la ranura 4 es "Perfil". Para Empresa abre su
     // ficha institucional; `ProfileScreen` es el perfil personal del rol
-    // candidato y no corresponde acá.
-    _accountType == 'empresa' ? const EmpresaPerfilScreen() : _profile,
+    // candidato y no corresponde acá. Para los demás roles queda vacía: el
+    // perfil personal vive en la ranura 9 y montarlo dos veces duplicaba
+    // consultas sin que se pudiera llegar a esta copia.
+    _accountType == 'empresa' ? const EmpresaPerfilScreen() : const SizedBox.shrink(),
+    // 5 · Mensajes
     _accountType == 'empresa'
         ? const EmpresaMensajesScreen()
         : _messages,
-    _accountType == 'empresa' ? _companyVacantes : const JobsScreen(),
+    // 6 · Empresa: Vacantes · Headhunter: Búsquedas · Candidato: vacía, porque
+    //     sus Vacantes pasaron a la ranura 1 y montar `JobsScreen` dos veces
+    //     dispararía dos veces la carga de vacantes.
+    _accountType == 'empresa'
+        ? _companyVacantes
+        : (_accountType == 'headhunter'
+              ? const JobsScreen()
+              : const SizedBox.shrink()),
+    // 7 · Empresa: Dashboard · Headhunter: hub · Candidato: vacía (era una
+    //     pantalla de Empresa en la ranura de un candidato).
     _accountType == 'empresa'
         ? _companyDashboard
-        : const EmpresaPanelHubScreen(),
+        : (_accountType == 'headhunter'
+              ? const EmpresaPanelHubScreen()
+              : const SizedBox.shrink()),
+    // 8 · Herramientas. Candidato: vacía por ahora; su acceso será un push desde
+    //     Perfil en el paso siguiente del bloque.
     _accountType == 'empresa'
         ? EmpresaHerramientasScreen(
             unreadNotifications: _unreadNotifications,
           )
-        : _tools,
+        : (_accountType == 'headhunter' ? _tools : const SizedBox.shrink()),
+    // 9 · Perfil personal
     _profile,
   ];
 
@@ -146,7 +175,10 @@ class _MainNavigationState extends State<MainNavigation> {
       case 'headhunter':
         return const {0, 1, 2, 3, 5, 6, 7, 8}.contains(index);
       default:
-        return const {0, 1, 2, 3, 5, 6, 8, 9}.contains(index);
+        // Candidato: exactamente los cinco destinos que publica su barra.
+        // Antes declaraba {0,1,2,3,5,6,8,9} —ocho— mientras la barra sólo
+        // mostraba cuatro, así que había ranuras "permitidas" inalcanzables.
+        return const {0, 1, 2, 5, 9}.contains(index);
     }
   }
 
@@ -258,6 +290,12 @@ class _MainNavigationState extends State<MainNavigation> {
   }
 
   void _onTabTap(int index) {
+    // BLINDAJE. Las ranuras que un rol no expone montan `SizedBox.shrink()`,
+    // así que aterrizar en una sería una pantalla en blanco sin forma de
+    // volver. Hoy todos los llamadores están gateados por rol, pero eso es una
+    // garantía del llamador, no de esta función: un acceso nuevo, un deep link
+    // o un estado restaurado alcanzarían para romperlo. La regla vive acá.
+    if (!_isIndexAllowedForAccount(_accountType, index)) return;
     if (index == _currentIndex) return;
     if (!kIsWeb) HapticFeedback.selectionClick();
     if (index != 0) {
@@ -662,20 +700,29 @@ List<_NavItemData> _navItemsForAccount(String accountType) {
     ];
   }
 
+  // CANDIDATO — navegación canónica de cinco destinos. Los índices son los del
+  // array `_screens` compartido y no deben renumerarse.
   return const [
     _NavItemData(
       index: 0,
-      label: 'Feed',
-      shortLabel: 'Feed',
-      icon: CupertinoIcons.play_rectangle_fill,
-      inactiveIcon: CupertinoIcons.play_rectangle,
+      label: 'Inicio',
+      shortLabel: 'Inicio',
+      icon: CupertinoIcons.house_fill,
+      inactiveIcon: CupertinoIcons.house,
     ),
     _NavItemData(
       index: 1,
-      label: 'Buscar',
-      shortLabel: 'Buscar',
-      icon: CupertinoIcons.search,
-      inactiveIcon: CupertinoIcons.search,
+      label: 'Vacantes',
+      shortLabel: 'Vacantes',
+      icon: CupertinoIcons.briefcase_fill,
+      inactiveIcon: CupertinoIcons.briefcase,
+    ),
+    _NavItemData(
+      index: 2,
+      label: 'Red',
+      shortLabel: 'Red',
+      icon: CupertinoIcons.person_2_fill,
+      inactiveIcon: CupertinoIcons.person_2,
     ),
     _NavItemData(
       index: 5,
