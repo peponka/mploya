@@ -166,6 +166,17 @@ void main() {
     }
   });
 
+  testWidgets('acciones rápidas: buscar candidatos y mensajes', (tester) async {
+    await _pump(tester, const Size(393, 852), _conDatos);
+    expect(find.text('Buscar candidatos'), findsOneWidget);
+    // "Mensajes" también es la etiqueta de la pestaña inferior en este host.
+    expect(find.text('Mensajes'), findsWidgets);
+    // No se ofrecen las acciones del mockup que necesitan elegir antes un
+    // candidato o una vacante (acá no hay ninguno seleccionado).
+    expect(find.text('Agregar candidato'), findsNothing);
+    expect(find.text('Crear shortlist'), findsNothing);
+  });
+
   testWidgets('no se muestra Match sin vacante', (tester) async {
     await _pump(tester, const Size(393, 852), _conDatos);
     expect(find.textContaining('Match'), findsNothing);

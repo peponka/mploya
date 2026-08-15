@@ -68,6 +68,12 @@ class InformeEntrevista {
   final String? candidatoAvatar;
   final String? vacante;
 
+  /// `account_type` empieza con "confidenc" o es "stealth": mismo criterio que
+  /// Pipeline, Shortlist, Mensajes, Match IA y el Perfil de Candidato.
+  /// `candidato`/`candidatoAvatar` guardan el dato REAL — el ocultamiento es
+  /// sólo de presentación.
+  final bool candidatoConfidencial;
+
   final List<CompetenciaEvaluada> competencias;
   final List<String> habilidades;
   final List<RespuestaEntrevista> respuestas;
@@ -78,11 +84,22 @@ class InformeEntrevista {
     required this.candidato,
     this.candidatoHeadline,
     this.candidatoAvatar,
+    this.candidatoConfidencial = false,
     this.vacante,
     this.competencias = const [],
     this.habilidades = const [],
     this.respuestas = const [],
   });
+
+  /// Nombre a mostrar: un candidato confidencial no expone su identidad acá
+  /// tampoco, aunque `candidato` guarde el nombre real.
+  String get candidatoVisible =>
+      candidatoConfidencial ? 'Candidato confidencial' : candidato;
+
+  /// Sin foto real para un candidato confidencial — mismo criterio que el
+  /// resto de Empresa.
+  String? get candidatoAvatarVisible =>
+      candidatoConfidencial ? null : candidatoAvatar;
 
   int? get puntaje => informe.score;
 
@@ -170,6 +187,7 @@ Future<InformeEntrevistaData> loadInformeEntrevista(String interviewId) async {
   String? headline;
   String? avatar;
   String? vacante;
+  var candidatoConfidencial = false;
 
   try {
     final fila = await client
@@ -183,6 +201,8 @@ Future<InformeEntrevistaData> loadInformeEntrevista(String interviewId) async {
       headline = h.isEmpty ? null : h;
       final a = fila['avatar_url']?.toString() ?? '';
       avatar = a.isEmpty ? null : a;
+      final tipo = fila['account_type']?.toString().toLowerCase() ?? '';
+      candidatoConfidencial = tipo.startsWith('confidenc') || tipo == 'stealth';
     }
   } catch (e) {
     debugPrint('informe entrevista · users: $e');
@@ -269,6 +289,7 @@ Future<InformeEntrevistaData> loadInformeEntrevista(String interviewId) async {
       candidato: candidato,
       candidatoHeadline: headline,
       candidatoAvatar: avatar,
+      candidatoConfidencial: candidatoConfidencial,
       vacante: vacante,
       competencias: competencias,
       habilidades: habilidades,

@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mploya/screens/empresa/empresa_ofertas_screen.dart';
 import 'package:mploya/screens/empresa/empresa_proceso_data.dart';
+import 'package:mploya/widgets/ds/mploya_ds.dart';
 
 import 'mp_golden_host.dart';
 
@@ -9,7 +10,12 @@ import 'mp_golden_host.dart';
 ///
 ///   flutter test test/empresa_ofertas_golden_test.dart --update-goldens
 
-PersonaEnProceso _p(String id, String nombre, String? vacante) {
+PersonaEnProceso _p(
+  String id,
+  String nombre,
+  String? vacante, {
+  bool confidencial = false,
+}) {
   return PersonaEnProceso(
     candidatoId: id,
     nombre: nombre,
@@ -17,7 +23,9 @@ PersonaEnProceso _p(String id, String nombre, String? vacante) {
     vacante: vacante,
     estado: 'accepted',
     origen: 'job_applications',
-    postuladoEl: DateTime(2026, 8, 1),
+    confidencial: confidencial,
+    // Mantiene estable el texto del golden (`Se postuló hace 10 días`).
+    postuladoEl: DateTime.now().subtract(const Duration(days: 10)),
   );
 }
 
@@ -79,6 +87,26 @@ void main() {
   testWidgets('la fecha se rotula como la de la postulación', (tester) async {
     await pumpMp(tester, const Size(393, 1800), _pantalla(_conDatos));
     expect(find.textContaining('Se postuló'), findsWidgets);
+  });
+
+  testWidgets('una oferta confidencial no expone nombre ni avatar',
+      (tester) async {
+    final data = ProcesoData(
+      personas: [
+        _p(
+          'confidencial',
+          'Nombre Real Oculto',
+          'Product Manager Senior',
+          confidencial: true,
+        ),
+      ],
+    );
+    await pumpMp(tester, const Size(393, 852), _pantalla(data));
+
+    expect(find.text('Candidato confidencial'), findsOneWidget);
+    expect(find.text('Nombre Real Oculto'), findsNothing);
+    final avatar = tester.widget<MpAvatar>(find.byType(MpAvatar));
+    expect(avatar.image, isNull);
   });
 
   testWidgets('se agrupa por vacante real', (tester) async {

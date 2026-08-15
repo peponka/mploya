@@ -1,6 +1,11 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+bool _esCuentaConfidencial(dynamic raw) {
+  final tipo = raw?.toString().toLowerCase() ?? '';
+  return tipo.startsWith('confidenc') || tipo == 'stealth';
+}
+
 /// Datos compartidos por Ofertas, Contrataciones y Rendimiento de vacantes.
 ///
 /// Las tres miran el MISMO proceso desde ángulos distintos, así que comparten
@@ -26,6 +31,7 @@ class PersonaEnProceso {
   final String? headline;
   final String? avatarUrl;
   final List<String> tags;
+  final bool confidencial;
 
   final String? vacanteId;
   final String? vacante;
@@ -48,10 +54,14 @@ class PersonaEnProceso {
     this.headline,
     this.avatarUrl,
     this.tags = const [],
+    this.confidencial = false,
     this.vacanteId,
     this.vacante,
     this.postuladoEl,
   });
+
+  String get nombreVisible =>
+      confidencial ? 'Candidato confidencial' : nombre;
 
   String? get antiguedad {
     final f = postuladoEl;
@@ -92,10 +102,8 @@ class ProcesoData {
 
 /// Estados de `job_applications` que representan una oferta hecha.
 ///
-/// Hoy la base sólo usa `accepted` (es lo que cuenta el Dashboard como
-/// "Oferta"). `offered` se acepta por si aparece más adelante: leerlo no
-/// inventa nada, y evita que la pantalla quede muda si el estado cambia.
-const _estadosOferta = {'accepted', 'offered'};
+/// Es el estado canónico que el Dashboard también rotula como "Oferta".
+const _estadosOferta = {'accepted'};
 
 /// Estados que representan una contratación.
 const _estadosContratado = {'hired', 'contratado'};
@@ -109,14 +117,40 @@ Future<ProcesoData> _loadPostulacionesPorEstado(Set<String> estados) async {
     final filas = await client.rpc('get_company_candidates') as List<dynamic>;
     final personas = <PersonaEnProceso>[];
 
+    // La RPC legacy no devuelve account_type. Se completa desde users para no
+    // exponer nombre/avatar de perfiles confidenciales; ante una falla se
+    // enmascara por defecto.
+    final ids = {
+      for (final raw in filas)
+        if ((raw as Map)['candidate_id'] != null)
+          raw['candidate_id'].toString(),
+    };
+    final confidencialPorId = <String, bool>{};
+    var privacidadDisponible = true;
+    try {
+      final perfiles = await client
+          .from('users')
+          .select('id, account_type')
+          .inFilter('id', ids.toList()) as List<dynamic>;
+      for (final raw in perfiles) {
+        final perfil = raw as Map;
+        confidencialPorId[perfil['id'].toString()] =
+            _esCuentaConfidencial(perfil['account_type']);
+      }
+    } catch (e) {
+      privacidadDisponible = false;
+      debugPrint('proceso · privacidad users: $e');
+    }
+
     for (final raw in filas) {
       final p = raw as Map;
       final estado = p['status']?.toString().toLowerCase() ?? '';
       if (!estados.contains(estado)) continue;
+      final candidatoId = p['candidate_id']?.toString() ?? '';
 
       personas.add(
         PersonaEnProceso(
-          candidatoId: p['candidate_id']?.toString() ?? '',
+          candidatoId: candidatoId,
           nombre: p['candidate_name']?.toString() ?? 'Candidato',
           headline: (p['candidate_headline']?.toString().isNotEmpty ?? false)
               ? p['candidate_headline'].toString()
@@ -128,6 +162,8 @@ Future<ProcesoData> _loadPostulacionesPorEstado(Set<String> estados) async {
             for (final t in (p['candidate_tags'] as List? ?? const []))
               t.toString().replaceAll('#', '').trim(),
           ]..removeWhere((t) => t.isEmpty),
+          confidencial: !privacidadDisponible ||
+              (confidencialPorId[candidatoId] ?? true),
           vacanteId: p['job_id']?.toString(),
           vacante: p['job_title']?.toString(),
           estado: p['status']?.toString() ?? '',
@@ -194,6 +230,8 @@ Future<ProcesoData> loadContrataciones() async {
         avatarUrl: (f['user_avatar_url']?.toString().isNotEmpty ?? false)
             ? f['user_avatar_url'].toString()
             : null,
+        confidencial: f['is_confidential'] == true ||
+            _esCuentaConfidencial(f['user_account_type']),
         estado: 'hired',
         // El pipeline no dice para qué vacante: no se infiere.
         origen: 'connections',

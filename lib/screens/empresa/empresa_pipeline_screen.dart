@@ -5,6 +5,8 @@ import '../../models/models.dart';
 import '../../widgets/ds/mploya_ds.dart';
 import '../chat_inmail_screen.dart';
 import 'empresa_candidato_perfil_screen.dart';
+import 'empresa_mensajes_screen.dart';
+import 'empresa_talent_feed_screen.dart';
 
 /// Etapas del pipeline de Empresa.
 ///
@@ -161,6 +163,14 @@ Future<PipelineData> loadEmpresaPipeline() async {
 /// `ats_status = pendiente`. La pantalla ya no afirma que hay un pipeline por
 /// etapas cuando no lo hay.
 ///
+/// POLISH VISUAL 2 (15/8/2026): se agregó "Acciones rápidas" (Buscar
+/// candidatos / Mensajes) entre las columnas y las métricas — el mockup tiene
+/// un bloque equivalente ("Agregar candidato / Enviar mensaje / Crear
+/// shortlist / Ver shortlist"), pero acá sólo se llevan las DOS acciones que
+/// no requieren elegir antes un candidato o una vacante (Shortlist pide una
+/// vacante; "enviar mensaje" desde acá no tiene destinatario). También llena
+/// el hueco visual que dejaba una columna de 316pt con 2-3 tarjetas cortas.
+///
 class EmpresaPipelineScreen extends StatefulWidget {
   final PipelineData? previewData;
 
@@ -216,6 +226,7 @@ class _EmpresaPipelineScreenState extends State<EmpresaPipelineScreen> {
                     )
                   else ...[
                     SliverToBoxAdapter(child: _columnas()),
+                    SliverToBoxAdapter(child: _accionesRapidas()),
                     SliverToBoxAdapter(child: _metricas()),
                     const SliverToBoxAdapter(
                       child: SizedBox(height: MpTokens.space32),
@@ -476,6 +487,50 @@ class _EmpresaPipelineScreenState extends State<EmpresaPipelineScreen> {
               CupertinoIcons.chat_bubble,
               size: 16,
               color: s.textTertiary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Acciones rápidas ──────────────────────────────────────────────────────
+
+  Widget _accionesRapidas() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        MpTokens.screenPadding,
+        MpTokens.space20,
+        MpTokens.screenPadding,
+        0,
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: MpButton(
+              label: 'Buscar candidatos',
+              icon: CupertinoIcons.search,
+              variant: MpButtonVariant.outline,
+              expand: true,
+              onPressed: () => Navigator.of(context).push(
+                CupertinoPageRoute(
+                  builder: (_) => const EmpresaTalentFeedScreen(),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: MpTokens.space8),
+          Expanded(
+            child: MpButton(
+              label: 'Mensajes',
+              icon: CupertinoIcons.chat_bubble_2,
+              variant: MpButtonVariant.outline,
+              expand: true,
+              onPressed: () => Navigator.of(context).push(
+                CupertinoPageRoute(
+                  builder: (_) => const EmpresaMensajesScreen(),
+                ),
+              ),
             ),
           ),
         ],

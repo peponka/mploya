@@ -35,6 +35,16 @@ import 'empresa_match_ia_data.dart';
 /// dejó de hacer. En su lugar se muestran los tres cruces que SÍ son
 /// verificables: skills, salario y distancia — y cada uno sólo si sus datos
 /// existen de verdad.
+///
+/// POLISH VISUAL 4 (15/8/2026) — BUG DE PRIVACIDAD CORREGIDO: el encabezado
+/// mostraba el nombre real, la foto real y la ciudad real del candidato sin
+/// ningún chequeo de confidencialidad, a diferencia de Pipeline, Shortlist,
+/// Mensajes y el Perfil de Candidato, que sí enmascaran. Ahora usa
+/// `candidatoVisible`/`candidatoAvatarVisible`/`candidatoCiudadVisible`, con
+/// el mismo criterio (`account_type` empieza con "confidenc"). El dato real
+/// sigue viajando en `MatchIaData` para no romper `_mensaje()`, que ya se
+/// comporta como el resto de Empresa al abrir el chat (deuda registrada, no
+/// se toca en esta tanda).
 class EmpresaMatchIaScreen extends StatefulWidget {
   final String jobId;
   final String candidatoId;
@@ -228,10 +238,10 @@ class _EmpresaMatchIaScreenState extends State<EmpresaMatchIaScreen> {
               _anillo(),
               Expanded(
                 child: _extremo(
-                  nombre: _data.candidato,
+                  nombre: _data.candidatoVisible,
                   detalle: _data.candidatoHeadline,
-                  ciudad: _data.candidatoCiudad,
-                  avatar: _data.candidatoAvatar,
+                  ciudad: _data.candidatoCiudadVisible,
+                  avatar: _data.candidatoAvatarVisible,
                 ),
               ),
             ],

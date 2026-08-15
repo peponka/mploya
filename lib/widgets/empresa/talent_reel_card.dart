@@ -62,6 +62,31 @@ class TalentReelCard extends StatefulWidget {
   State<TalentReelCard> createState() => _TalentReelCardState();
 }
 
+/// Ícono en placa translúcida para el fondo de respaldo sin video. Mismo
+/// lenguaje visual que `_CirculoPlayIdle` del feed de Candidato, sin el
+/// triángulo de play (acá no hay nada para reproducir).
+class _NoVideoBadge extends StatelessWidget {
+  const _NoVideoBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 64,
+      height: 64,
+      decoration: BoxDecoration(
+        color: const Color(0x24FFFFFF),
+        shape: BoxShape.circle,
+        border: Border.all(color: const Color(0x1FFFFFFF)),
+      ),
+      child: const Icon(
+        CupertinoIcons.videocam,
+        size: 28,
+        color: Color(0xCCFFFFFF),
+      ),
+    );
+  }
+}
+
 class _TalentReelCardState extends State<TalentReelCard> with RouteAware {
   VideoPlayerController? _controller;
   bool _isInitialized = false;
@@ -372,17 +397,40 @@ class _TalentReelCardState extends State<TalentReelCard> with RouteAware {
           children: [
             // Con video se usa el fondo compartido. Ante error se dibuja un
             // respaldo propio: el del widget compartido centra dos líneas de
-            // texto que quedaban PISANDO el nombre del candidato.
+            // texto que quedaban PISANDO el nombre del candidato. Fondo
+            // degradado (no negro plano) + ícono en placa + una sola línea,
+            // todo por encima de donde arranca el bloque de datos.
             if (_hasError)
-              const ColoredBox(
-                color: MpTokens.darkBg,
+              const DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Color(0xFF1B1436),
+                      Color(0xFF241A46),
+                      MpTokens.darkBg,
+                    ],
+                  ),
+                ),
                 child: Align(
                   // Arriba del bloque de datos, no detrás del nombre.
-                  alignment: Alignment(0, -0.35),
-                  child: Icon(
-                    CupertinoIcons.videocam,
-                    size: 46,
-                    color: Color(0x40FFFFFF),
+                  alignment: Alignment(0, -0.32),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _NoVideoBadge(),
+                      SizedBox(height: 12),
+                      Text(
+                        'Sin video pitch todavía',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.2,
+                          color: Color(0xBFFFFFFF),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               )

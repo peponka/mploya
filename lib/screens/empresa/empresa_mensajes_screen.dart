@@ -237,13 +237,22 @@ class _EmpresaMensajesScreenState extends State<EmpresaMensajesScreen> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          MpAvatar(
-            name: c.nombre,
-            size: 46,
-            image: (c.avatar?.isNotEmpty ?? false)
-                ? NetworkImage(c.avatar!)
-                : null,
-          ),
+          // Mismo criterio que Pipeline/Feed: un candidato confidencial no
+          // muestra su nombre ni su foto real en la lista, aunque el chat que
+          // se abre al tocar sigue usando el dato real (`_abrirChat`).
+          c.confidencial
+              ? const MpIconTile(
+                  icon: CupertinoIcons.lock_fill,
+                  color: MpTokens.catIndigo,
+                  size: 46,
+                )
+              : MpAvatar(
+                  name: c.nombre,
+                  size: 46,
+                  image: (c.avatar?.isNotEmpty ?? false)
+                      ? NetworkImage(c.avatar!)
+                      : null,
+                ),
           const SizedBox(width: MpTokens.space12),
           Expanded(
             child: Column(
@@ -254,7 +263,7 @@ class _EmpresaMensajesScreenState extends State<EmpresaMensajesScreen> {
                   children: [
                     Expanded(
                       child: Text(
-                        c.nombre,
+                        c.confidencial ? 'Candidato confidencial' : c.nombre,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: MpTokens.title.copyWith(
@@ -274,7 +283,7 @@ class _EmpresaMensajesScreenState extends State<EmpresaMensajesScreen> {
                     ),
                   ],
                 ),
-                if (c.headline.isNotEmpty) ...[
+                if (!c.confidencial && c.headline.isNotEmpty) ...[
                   const SizedBox(height: 1),
                   Text(
                     c.headline,

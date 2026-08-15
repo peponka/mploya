@@ -179,6 +179,21 @@ void main() {
     }
   });
 
+  testWidgets('el resumen final usa los mismos conteos reales que las píldoras',
+      (tester) async {
+    await _pump(tester, const Size(393, 1200), _conDatos);
+    expect(find.text('Resumen de tu actividad'), findsOneWidget);
+    // No es "Insights": sin flechas de variación ni vistas/tasa inventadas.
+    expect(find.textContaining('↑'), findsNothing);
+    expect(find.textContaining('Vistas de vacantes'), findsNothing);
+    expect(find.textContaining('Tasa de respuesta'), findsNothing);
+  });
+
+  testWidgets('sin actividad no se dibuja el resumen', (tester) async {
+    await _pump(tester, const Size(393, 900), ActividadData.empty);
+    expect(find.text('Resumen de tu actividad'), findsNothing);
+  });
+
   testWidgets('sin datos muestra estado vacío, no una lista falsa',
       (tester) async {
     await _pump(tester, const Size(393, 900), ActividadData.empty);

@@ -11,20 +11,19 @@ import 'mp_golden_host.dart';
 ///   flutter test test/empresa_creditos_golden_test.dart --update-goldens
 
 CreditosData _conDatos() {
-  final ahora = DateTime.now();
   return CreditosData(
     creditos: 12,
     plan: 'Pro Recruiter',
     desbloqueos: [
       DesbloqueoRealizado(
         candidatoId: 'c1',
-        cuando: ahora.subtract(const Duration(days: 2)),
+        cuando: DateTime(2026, 8, 9),
         nombre: 'Ana Suárez',
         headline: 'Senior Product Manager',
       ),
       DesbloqueoRealizado(
         candidatoId: 'c2',
-        cuando: ahora.subtract(const Duration(days: 40)),
+        cuando: DateTime(2026, 7, 2),
         nombre: 'Martín Gil',
         headline: 'Flutter Developer',
       ),
@@ -126,6 +125,27 @@ void main() {
     expect(
       find.text('Sin créditos: no vas a poder desbloquear perfiles.'),
       findsOneWidget,
+    );
+  });
+
+  testWidgets('sin billetera ofrece el bono real de bienvenida',
+      (tester) async {
+    await pumpMp(
+      tester,
+      const Size(393, 852),
+      _pantalla(
+        const CreditosData(puedeReclamarBienvenida: true),
+        clave: 'bienvenida',
+      ),
+    );
+    expect(
+      find.text('Activar 5 créditos de bienvenida'),
+      findsOneWidget,
+    );
+    expect(find.text('Comprar créditos'), findsNothing);
+    await expectLater(
+      find.byType(CupertinoApp),
+      matchesGoldenFile('goldens/empresa_creditos_bienvenida.png'),
     );
   });
 }

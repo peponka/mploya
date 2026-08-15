@@ -250,9 +250,11 @@ class _EmpresaOfertasScreenState extends State<EmpresaOfertasScreen> {
       child: Row(
         children: [
           MpAvatar(
-            name: p.nombre,
+            name: p.nombreVisible,
             size: 46,
-            image: p.avatarUrl == null ? null : NetworkImage(p.avatarUrl!),
+            image: p.avatarUrl == null || p.confidencial
+                ? null
+                : NetworkImage(p.avatarUrl!),
           ),
           const SizedBox(width: MpTokens.space12),
           Expanded(
@@ -261,7 +263,7 @@ class _EmpresaOfertasScreenState extends State<EmpresaOfertasScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  p.nombre,
+                p.nombreVisible,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: MpTokens.title.copyWith(color: s.text, fontSize: 15),

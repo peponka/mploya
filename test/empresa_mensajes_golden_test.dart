@@ -82,6 +82,25 @@ final _conDatos = MensajesData(
   ],
 );
 
+/// Igual que `_conDatos` pero con un candidato confidencial — demuestra el
+/// enmascarado agregado el 15/8/2026 (antes la lista mostraba el nombre y
+/// avatar reales aunque `account_type` empezara con "confidenc", algo que
+/// Pipeline y el Feed de talento sí respetaban).
+final _conConfidencial = MensajesData(
+  conversaciones: [
+    ..._conDatos.conversaciones,
+    Conversacion(
+      otroId: '4',
+      nombre: 'Valentina Gómez',
+      headline: 'Senior Product Manager',
+      ultimoMensaje: 'Hola, estoy interesada en la posición.',
+      confidencial: true,
+      fecha: _hoy(9, 10),
+      sinLeer: 1,
+    ),
+  ],
+);
+
 Widget _host(Size size, MensajesData data) {
   return CupertinoApp(
     debugShowCheckedModeBanner: false,
@@ -128,6 +147,17 @@ void main() {
     await expectLater(
       find.byType(CupertinoApp),
       matchesGoldenFile('goldens/empresa_mensajes.png'),
+    );
+  });
+
+  testWidgets('golden · mensajes con candidato confidencial', (tester) async {
+    await _pump(tester, const Size(393, 852), _conConfidencial);
+    expect(tester.takeException(), isNull);
+    expect(find.text('Candidato confidencial'), findsOneWidget);
+    expect(find.text('Valentina Gómez'), findsNothing);
+    await expectLater(
+      find.byType(CupertinoApp),
+      matchesGoldenFile('goldens/empresa_mensajes_confidencial.png'),
     );
   });
 

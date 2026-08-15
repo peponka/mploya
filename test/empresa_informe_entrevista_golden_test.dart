@@ -73,6 +73,33 @@ final _informeCompleto = InformeEntrevistaData(
   ),
 );
 
+final _informeConfidencial = InformeEntrevistaData(
+  candidato: 'Nombre Real Oculto',
+  candidatoHeadline: 'Senior Product Manager',
+  candidatoAvatar: 'https://example.com/avatar-real.jpg',
+  informe: InformeEntrevista(
+    entrevista: _entrevista,
+    informe: InterviewReport(
+      id: 'r-confidencial',
+      interviewId: 'i1',
+      summary: 'Resumen disponible.',
+      score: 84,
+      createdAt: DateTime(2026, 5, 30),
+    ),
+    candidato: 'Nombre Real Oculto',
+    candidatoHeadline: 'Senior Product Manager',
+    candidatoAvatar: 'https://example.com/avatar-real.jpg',
+    candidatoConfidencial: true,
+    respuestas: const [
+      RespuestaEntrevista(
+        pregunta: 'Contanos sobre tu experiencia.',
+        transcripcion: 'Respuesta transcripta.',
+        videoUrl: 'https://example.com/respuesta-real.mp4',
+      ),
+    ],
+  ),
+);
+
 Widget _pantalla(InformeEntrevistaData d, {String clave = 'informe'}) =>
     EmpresaInformeEntrevistaScreen(
       key: ValueKey(clave),
@@ -141,6 +168,26 @@ void main() {
     expect(find.text('Veredicto de la IA'), findsOneWidget);
     expect(find.text('Resumen de la entrevista'), findsOneWidget);
     expect(find.text('Habilidades detectadas'), findsOneWidget);
+  });
+
+  testWidgets('un candidato confidencial no expone identidad ni video', (
+    tester,
+  ) async {
+    await pumpMp(
+      tester,
+      const Size(393, 1600),
+      _pantalla(_informeConfidencial, clave: 'confidencial'),
+      style: MpSurfaceStyle.dark,
+    );
+
+    expect(find.text('Candidato confidencial'), findsOneWidget);
+    expect(find.text('Nombre Real Oculto'), findsNothing);
+    expect(find.text('Senior Product Manager'), findsOneWidget);
+    expect(find.text('Ver respuesta en video'), findsNothing);
+    expect(find.byIcon(CupertinoIcons.play_circle), findsNothing);
+
+    final avatar = tester.widget<MpAvatar>(find.byType(MpAvatar));
+    expect(avatar.image, isNull);
   });
 
   testWidgets('no se inventa nada de lo que el mockup promete',

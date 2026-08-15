@@ -29,12 +29,14 @@ import 'empresa_vacantes_screen.dart';
 /// ║ No modificar salvo bug funcional o responsive concreto y demostrable. ║
 /// ╚═══════════════════════════════════════════════════════════════════════╝
 ///
-/// Auditada y contenida el 12/8/2026. El KPI dice "Ofertas aceptadas" porque
-/// eso es lo que cuenta (`job_applications.status = accepted`): el sistema no
-/// puede registrar contrataciones. El embudo ATS, la evolución de
-/// contrataciones, las fuentes y los tiempos por etapa están OCULTOS porque su
-/// backend no existe o es semánticamente inconfiable. Queda más corto que el
-/// mockup, y es a propósito.
+/// Auditada y contenida el 12/8/2026, POLISH VISUAL el 15/8/2026. El KPI dice
+/// "Ofertas aceptadas" porque eso es lo que cuenta
+/// (`job_applications.status = accepted`): el sistema no puede registrar
+/// contrataciones. El "Pipeline general" SÍ se muestra, con 4 de las 5 etapas
+/// del mockup — todas columnas reales; "Contratados" queda afuera porque
+/// ningún dato real la respalda. La evolución de contrataciones, las fuentes
+/// y los tiempos por etapa siguen OCULTOS (backend inexistente) pero ahora con
+/// un estado vacío que explica qué falta en vez de desaparecer sin más.
 ///
 class EmpresaDashboardScreen extends StatefulWidget {
   final int unreadNotifications;
@@ -59,13 +61,15 @@ class _EmpresaDashboardScreenState extends State<EmpresaDashboardScreen> {
   bool _loading = true;
   String _period = 'Este mes';
 
-  /// Colores de las 5 etapas del embudo, en el orden del mockup.
+  /// Colores de las 4 etapas reales del embudo (Postulados/Screening/
+  /// Entrevistas/Oferta), en el orden del mockup. La 5ª etapa del PNG
+  /// ("Contratados") no tiene dato real que la respalde — ver
+  /// `empresa_dashboard_data.dart`.
   static const _stageColors = <Color>[
     MpTokens.primary,
     MpTokens.catBlue,
     MpTokens.catOrange,
     MpTokens.catGreen,
-    Color(0xFF4ADE80),
   ];
 
   static const _stageIcons = <IconData>[
@@ -73,7 +77,6 @@ class _EmpresaDashboardScreenState extends State<EmpresaDashboardScreen> {
     CupertinoIcons.search,
     CupertinoIcons.person_2,
     CupertinoIcons.check_mark_circled,
-    CupertinoIcons.person_badge_plus,
   ];
 
   @override
@@ -696,17 +699,32 @@ class _EmpresaDashboardScreenState extends State<EmpresaDashboardScreen> {
     );
   }
 
-  /// Vacío compacto: mantiene la altura del bloque sin romper la composición.
+  /// Estado vacío: mantiene el volumen/jerarquía visual del bloque real (un
+  /// ícono destacado + texto), en vez de un simple mensaje suelto, pero sin
+  /// inventar ningún número. Explica qué falta, no que "hubo un error".
   Widget _noData(bool wide, IconData icon, String message) {
     final s = context.mp;
 
-    return SizedBox(
+    return Container(
       height: wide ? 150 : 118,
       width: double.infinity,
+      padding: EdgeInsets.symmetric(horizontal: wide ? 12 : 8),
+      decoration: BoxDecoration(
+        color: s.tint(s.textTertiary, alpha: 0.05),
+        borderRadius: BorderRadius.circular(MpTokens.radiusMD),
+      ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, size: wide ? 26 : 22, color: s.textTertiary),
+          Container(
+            width: wide ? 40 : 34,
+            height: wide ? 40 : 34,
+            decoration: BoxDecoration(
+              color: s.tint(s.textTertiary, alpha: 0.10),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, size: wide ? 20 : 17, color: s.textTertiary),
+          ),
           const SizedBox(height: MpTokens.space8),
           Text(
             message,

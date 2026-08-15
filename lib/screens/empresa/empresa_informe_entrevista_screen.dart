@@ -249,11 +249,11 @@ class _EmpresaInformeEntrevistaScreenState
       child: Row(
         children: [
           MpAvatar(
-            name: i.candidato,
+            name: i.candidatoVisible,
             size: 58,
-            image: i.candidatoAvatar == null
+            image: i.candidatoAvatarVisible == null
                 ? null
-                : NetworkImage(i.candidatoAvatar!),
+                : NetworkImage(i.candidatoAvatarVisible!),
           ),
           const SizedBox(width: MpTokens.space12),
           Expanded(
@@ -262,7 +262,7 @@ class _EmpresaInformeEntrevistaScreenState
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  i.candidato,
+                  i.candidatoVisible,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: MpTokens.h2.copyWith(color: s.text, fontSize: 18),
@@ -555,7 +555,7 @@ class _EmpresaInformeEntrevistaScreenState
                     ),
                   ),
                 ],
-                if (r.tieneVideo) ...[
+                if (r.tieneVideo && !i.candidatoConfidencial) ...[
                   const SizedBox(height: MpTokens.space12),
                   MpButton(
                     label: 'Ver respuesta en video',

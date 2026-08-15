@@ -51,6 +51,27 @@ final _completo = PerfilEmpresa(
   postulaciones: 4,
 );
 
+/// Igual que `_completo` pero con video de empresa — demuestra el héroe con
+/// póster de video agregado el 15/8/2026 (`EmpresaVideoPitchScreen` ya lo
+/// graba; hasta ahora nada lo mostraba en el perfil).
+final _conVideo = PerfilEmpresa(
+  empresa: const NexUser(
+    id: 'e3',
+    name: 'NovaTech',
+    headline: 'Tecnología que impulsa el futuro',
+    about: 'Creamos soluciones SaaS que ayudan a empresas de todo el mundo a '
+        'ser más productivas.',
+    location: 'Buenos Aires, Argentina',
+    accountType: 'empresa',
+    isVerified: true,
+    ratingStars: 4.8,
+    ratingCount: 12,
+    videoUrl: 'https://example.com/company-pitch.mp4',
+  ),
+  vacantes: _vacantes,
+  postulaciones: 4,
+);
+
 const _incompleto = PerfilEmpresa(
   empresa: NexUser(
     id: 'e2',
@@ -72,6 +93,21 @@ void main() {
     await expectLater(
       find.byType(CupertinoApp),
       matchesGoldenFile('goldens/empresa_perfil.png'),
+    );
+  });
+
+  testWidgets('golden · perfil con video de empresa', (tester) async {
+    await pumpMp(
+      tester,
+      const Size(393, 852),
+      _pantalla(_conVideo, clave: 'con-video'),
+    );
+    expect(tester.takeException(), isNull);
+    // Sin controller real en el póster: no debe intentar decodificar nada.
+    expect(find.text('Video de la empresa'), findsOneWidget);
+    await expectLater(
+      find.byType(CupertinoApp),
+      matchesGoldenFile('goldens/empresa_perfil_con_video.png'),
     );
   });
 

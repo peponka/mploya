@@ -82,6 +82,60 @@ class MapaData {
   static const empty = MapaData(candidatos: []);
 }
 
+/// Convierte las filas crudas de `get_explore_pins` en candidatos visibles
+/// en el mapa. Función pura y testeable sin red — es donde vive el filtro de
+/// privacidad, así que tiene que poder probarse sin depender de Supabase.
+///
+/// Empresa busca TALENTO: se descartan pines de empresa y headhunter.
+/// También los confidenciales/stealth: `get_explore_pins` (mig. 023) NO
+/// enmascara nombre/foto/coordenadas para ellos y devuelve la fila cruda —
+/// a diferencia de Pipeline, Shortlist, Mensajes, Match IA y el Perfil de
+/// Candidato, que sí ocultan identidad. Se filtra acá, en el cliente, porque
+/// el enmascarado real (o directamente no exponer sus coordenadas) tiene que
+/// resolverse en la función — fuera de esta tanda. Ver informe: deuda de
+/// privacidad de mayor prioridad.
+List<CandidatoCercano> candidatosDesdeFilas(List<Map<String, dynamic>> filas) {
+  final candidatos = <CandidatoCercano>[];
+
+  for (final fila in filas) {
+    final tipo = (fila['pin_type'] ?? 'candidato').toString().toLowerCase();
+    if (tipo == 'empresa' ||
+        tipo == 'headhunter' ||
+        tipo.startsWith('confidenc') ||
+        tipo == 'stealth') {
+      continue;
+    }
+
+    final plat = (fila['latitude'] as num?)?.toDouble() ?? 0.0;
+    final plng = (fila['longitude'] as num?)?.toDouble() ?? 0.0;
+    if (plat == 0.0 && plng == 0.0) continue;
+
+    candidatos.add(
+      CandidatoCercano(
+        id: fila['pin_id'].toString(),
+        nombre: (fila['pin_name'] ?? 'Candidato').toString(),
+        headline: (fila['pin_headline'] ?? '').toString(),
+        lat: plat,
+        lng: plng,
+        avatar: (fila['avatar_url']?.toString().isNotEmpty ?? false)
+            ? fila['avatar_url'].toString()
+            : null,
+        tieneVideo: fila['has_video'] == true,
+        distanciaKm: (fila['distance_km'] as num?)?.toDouble(),
+      ),
+    );
+  }
+
+  candidatos.sort((a, b) {
+    final da = a.distanciaKm;
+    final db = b.distanciaKm;
+    if (da == null || db == null) return 0;
+    return da.compareTo(db);
+  });
+
+  return candidatos;
+}
+
 /// Carga los candidatos con ubicación real alrededor del centro dado.
 ///
 /// A diferencia de `explore_screen.dart`, acá NO hay respaldo con pines demo:
@@ -100,39 +154,7 @@ Future<MapaData> loadCandidatosCercanos({
     );
 
     final filas = List<Map<String, dynamic>>.from(res ?? []);
-    final candidatos = <CandidatoCercano>[];
-
-    for (final fila in filas) {
-      // Empresa busca TALENTO: se descartan pines de empresa y headhunter.
-      final tipo = (fila['pin_type'] ?? 'candidato').toString();
-      if (tipo == 'empresa' || tipo == 'headhunter') continue;
-
-      final plat = (fila['latitude'] as num?)?.toDouble() ?? 0.0;
-      final plng = (fila['longitude'] as num?)?.toDouble() ?? 0.0;
-      if (plat == 0.0 && plng == 0.0) continue;
-
-      candidatos.add(
-        CandidatoCercano(
-          id: fila['pin_id'].toString(),
-          nombre: (fila['pin_name'] ?? 'Candidato').toString(),
-          headline: (fila['pin_headline'] ?? '').toString(),
-          lat: plat,
-          lng: plng,
-          avatar: (fila['avatar_url']?.toString().isNotEmpty ?? false)
-              ? fila['avatar_url'].toString()
-              : null,
-          tieneVideo: fila['has_video'] == true,
-          distanciaKm: (fila['distance_km'] as num?)?.toDouble(),
-        ),
-      );
-    }
-
-    candidatos.sort((a, b) {
-      final da = a.distanciaKm;
-      final db = b.distanciaKm;
-      if (da == null || db == null) return 0;
-      return da.compareTo(db);
-    });
+    final candidatos = candidatosDesdeFilas(filas);
 
     return MapaData(candidatos: candidatos, centroLat: lat, centroLng: lng);
   } catch (e) {
@@ -154,6 +176,17 @@ Future<MapaData> loadCandidatosCercanos({
 ///
 /// Match IA no aparece: es candidato ↔ vacante y acá no hay vacante
 /// seleccionada, así que inventar un porcentaje rompería la regla del feed.
+///
+/// POLISH VISUAL 5 (15/8/2026) — FUGA DE PRIVACIDAD REAL ENCONTRADA Y
+/// MITIGADA DEL LADO DEL CLIENTE: `get_explore_pins` (mig. 023) no filtra ni
+/// enmascara candidatos confidenciales/stealth — devuelve su `name`,
+/// `avatar_url` y coordenadas EXACTAS igual que a cualquier otro usuario, y
+/// está otorgada a `anon` además de `authenticated`. `loadCandidatosCercanos`
+/// ahora descarta esos pines igual que ya descartaba empresa/headhunter. Esto
+/// evita que ESTA pantalla los muestre, pero NO corrige la función: cualquier
+/// llamada directa a la RPC (o cualquier otro consumidor futuro) seguiría
+/// recibiendo el dato crudo. Arreglar eso de raíz requiere tocar la función
+/// SQL, fuera del alcance de esta tanda (prohibido backend/migraciones).
 /// ╔═══════════════════════════════════════════════════════════════════════╗
 /// ║ CONGELADA el 12/8/2026 — diseño Y comportamiento aprobados.           ║
 /// ║ No modificar salvo bug funcional o responsive concreto y demostrable. ║

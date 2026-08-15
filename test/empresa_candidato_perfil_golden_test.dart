@@ -20,6 +20,7 @@ final _completo = CandidatoPerfil(
     about: 'Diseñadora UX/UI con experiencia creando productos digitales '
         'intuitivos y centrados en las personas.',
     tags: const ['Figma', 'UI Design', 'UX Research', 'Prototipado'],
+    videoUrl: 'https://example.com/camila-pitch.mp4',
     isOpenToWork: true,
     isVerified: true,
     salaryExpectation: 'USD 2.500 – 3.200',
@@ -57,6 +58,8 @@ const _confidencial = CandidatoPerfil(
     headline: 'Senior Product Manager',
     accountType: 'confidencial',
     tags: ['Producto', 'Estrategia'],
+    // Con video igual: confirma que el candado también lo oculta a él.
+    videoUrl: 'https://example.com/confidencial-pitch.mp4',
   ),
 );
 
@@ -117,6 +120,18 @@ void main() {
     expect(find.text('Nombre Real Oculto'), findsNothing);
     expect(find.text('Candidato confidencial'), findsWidgets);
     expect(find.text('Compartir'), findsNothing);
+    // Aunque tenga video real, el candado también lo oculta.
+    expect(find.byIcon(CupertinoIcons.play_fill), findsNothing);
+  });
+
+  testWidgets('con video real se ofrece el botón de play', (tester) async {
+    await pumpMp(tester, const Size(393, 852), _pantalla(_completo));
+    expect(find.byIcon(CupertinoIcons.play_fill), findsOneWidget);
+  });
+
+  testWidgets('sin video no se ofrece el botón de play', (tester) async {
+    await pumpMp(tester, const Size(393, 852), _pantalla(_minimo));
+    expect(find.byIcon(CupertinoIcons.play_fill), findsNothing);
   });
 
   testWidgets('sin match no se dibuja el anillo', (tester) async {

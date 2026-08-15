@@ -29,6 +29,10 @@ class CreditosData {
   final int creditos;
   final String? plan;
 
+  /// No existe una fila en `company_wallets`, por lo que la empresa todavía
+  /// puede ejecutar una vez `claim_welcome_credits()`.
+  final bool puedeReclamarBienvenida;
+
   /// `company_wallets` no respondió.
   final bool billeteraNoDisponible;
 
@@ -40,6 +44,7 @@ class CreditosData {
   const CreditosData({
     this.creditos = 0,
     this.plan,
+    this.puedeReclamarBienvenida = false,
     this.billeteraNoDisponible = false,
     this.desbloqueos = const [],
     this.historialNoDisponible = false,
@@ -64,6 +69,25 @@ class CreditosData {
   int get creditosGastados => totalDesbloqueos;
 }
 
+enum ResultadoCreditosBienvenida { reclamados, yaReclamados, error }
+
+/// Activa el bono inicial que ya implementa el backend.
+Future<ResultadoCreditosBienvenida> reclamarCreditosBienvenida() async {
+  try {
+    final raw =
+        await Supabase.instance.client.rpc('claim_welcome_credits');
+    final res = raw is Map ? raw : <String, dynamic>{};
+    return switch (res['status']?.toString()) {
+      'success' => ResultadoCreditosBienvenida.reclamados,
+      'already_claimed' => ResultadoCreditosBienvenida.yaReclamados,
+      _ => ResultadoCreditosBienvenida.error,
+    };
+  } catch (e) {
+    debugPrint('creditos · claim_welcome_credits: $e');
+    return ResultadoCreditosBienvenida.error;
+  }
+}
+
 /// Saldo, plan e historial real de desbloqueos.
 Future<CreditosData> loadCreditos() async {
   final client = Supabase.instance.client;
@@ -72,6 +96,7 @@ Future<CreditosData> loadCreditos() async {
 
   var creditos = 0;
   String? plan;
+  var puedeReclamarBienvenida = false;
   var billeteraNoDisponible = false;
 
   try {
@@ -85,6 +110,8 @@ Future<CreditosData> loadCreditos() async {
       creditos = (fila['credits_balance'] as num?)?.toInt() ?? 0;
       final tier = fila['subscription_tier']?.toString() ?? '';
       plan = tier.isEmpty ? null : tier;
+    } else {
+      puedeReclamarBienvenida = true;
     }
     // Sin fila la billetera todavía no se creó: el saldo real es 0.
   } catch (e) {
@@ -98,16 +125,16 @@ Future<CreditosData> loadCreditos() async {
   try {
     final filas = await client
         .from('profile_unlocks')
-        .select('candidate_id, created_at')
+        .select('candidate_id, unlocked_at')
         .eq('company_id', uid)
-        .order('created_at', ascending: false) as List<dynamic>;
+        .order('unlocked_at', ascending: false) as List<dynamic>;
 
     final fechaPorId = <String, DateTime?>{};
     for (final f in filas) {
       final m = f as Map;
       final id = m['candidate_id']?.toString();
       if (id == null || id.isEmpty) continue;
-      fechaPorId[id] = DateTime.tryParse(m['created_at']?.toString() ?? '');
+      fechaPorId[id] = DateTime.tryParse(m['unlocked_at']?.toString() ?? '');
     }
 
     // Los perfiles se traen aparte: la empresa ya los desbloqueó, así que puede
@@ -152,6 +179,7 @@ Future<CreditosData> loadCreditos() async {
   return CreditosData(
     creditos: creditos,
     plan: plan,
+    puedeReclamarBienvenida: puedeReclamarBienvenida,
     billeteraNoDisponible: billeteraNoDisponible,
     desbloqueos: desbloqueos,
     historialNoDisponible: historialNoDisponible,

@@ -232,6 +232,48 @@ void main() {
     expect(find.textContaining('del centro'), findsNothing);
   });
 
+  group('candidatosDesdeFilas · filtro de privacidad (sin red)', () {
+    test('descarta confidencial/stealth igual que empresa/headhunter', () {
+      final filas = [
+        {
+          'pin_id': '1', 'pin_name': 'Ana', 'pin_headline': 'PM',
+          'pin_type': 'candidato', 'latitude': -34.6, 'longitude': -58.4,
+        },
+        {
+          'pin_id': '2', 'pin_name': 'Nombre Real Oculto',
+          'pin_headline': 'Senior', 'pin_type': 'confidencial',
+          'latitude': -34.61, 'longitude': -58.41,
+        },
+        {
+          'pin_id': '3', 'pin_name': 'Stealth Real', 'pin_headline': 'CTO',
+          'pin_type': 'stealth', 'latitude': -34.62, 'longitude': -58.42,
+        },
+        {
+          'pin_id': '4', 'pin_name': 'Empresa SA', 'pin_headline': '',
+          'pin_type': 'empresa', 'latitude': -34.63, 'longitude': -58.43,
+        },
+      ];
+
+      final resultado = candidatosDesdeFilas(filas);
+
+      expect(resultado.length, 1);
+      expect(resultado.single.nombre, 'Ana');
+      for (final id in ['2', '3', '4']) {
+        expect(resultado.any((c) => c.id == id), isFalse, reason: id);
+      }
+    });
+
+    test('sin coordenadas (0,0) no entra', () {
+      final filas = [
+        {
+          'pin_id': '1', 'pin_name': 'Sin ubicación', 'pin_type': 'candidato',
+          'latitude': 0.0, 'longitude': 0.0,
+        },
+      ];
+      expect(candidatosDesdeFilas(filas), isEmpty);
+    });
+  });
+
   testWidgets('el error de carga se distingue del vacío', (tester) async {
     await _pump(
       tester,

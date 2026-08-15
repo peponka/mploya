@@ -77,10 +77,18 @@ final _sample = EmpresaDashboardData(
   candidatosEnProceso: 156,
   entrevistasSemana: 18,
   contratacionesMes: 32,
-  // Los cuatro bloques que producción NO puede llenar van vacíos también acá:
-  // el golden tiene que mostrar la composición REAL, no una versión más rica
+  // El embudo SÍ tiene datos de muestra desde el 15/8/2026 — 4 etapas reales
+  // (Postulados/Screening/Entrevistas/Oferta), la misma composición que arma
+  // `loadEmpresaDashboard` con columnas reales. Los otros tres bloques
+  // (fuentes, tiempo por etapa, evolución) siguen vacíos también acá: el
+  // golden tiene que mostrar la composición REAL, no una versión más rica
   // que la que ve una empresa. Ver los comentarios en empresa_dashboard_data.
-  funnel: const [],
+  funnel: const [
+    EmpresaStage(label: 'Postulados', value: 210),
+    EmpresaStage(label: 'Screening', value: 96),
+    EmpresaStage(label: 'Entrevistas', value: 41),
+    EmpresaStage(label: 'Oferta', value: 32),
+  ],
   hiringTrend: const [],
   sources: const [],
   stageDays: const {},

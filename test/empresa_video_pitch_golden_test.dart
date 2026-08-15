@@ -80,6 +80,19 @@ void main() {
     expect(find.textContaining('vistas'), findsNothing);
   });
 
+  testWidgets('con video hay póster tocable; sin video no', (tester) async {
+    await pumpMp(tester, const Size(393, 1600), _pantalla(_conVideo),
+        style: MpSurfaceStyle.dark);
+    expect(find.text('Ver el video de tu empresa'), findsOneWidget);
+    expect(find.byIcon(CupertinoIcons.play_fill), findsOneWidget);
+
+    await pumpMp(tester, const Size(393, 1600),
+        _pantalla(_sinVideo, clave: 'sin-poster'),
+        style: MpSurfaceStyle.dark);
+    expect(find.text('Ver el video de tu empresa'), findsNothing);
+    expect(find.byIcon(CupertinoIcons.play_fill), findsNothing);
+  });
+
   testWidgets('el error se distingue del "sin video"', (tester) async {
     await pumpMp(
         tester,

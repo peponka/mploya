@@ -11,6 +11,11 @@ class Conversacion {
   final String headline;
   final String? avatar;
 
+  /// `account_type` empieza con "confidenc": mismo criterio que Pipeline y el
+  /// Feed de talento. `nombre`/`avatar` guardan el dato REAL — el ocultamiento
+  /// es sólo de presentación, en la fila de la lista.
+  final bool confidencial;
+
   /// Texto del último mensaje intercambiado.
   final String ultimoMensaje;
   final DateTime? fecha;
@@ -27,6 +32,7 @@ class Conversacion {
     required this.ultimoMensaje,
     this.headline = '',
     this.avatar,
+    this.confidencial = false,
     this.fecha,
     this.sinLeer = 0,
     this.ultimoEsMio = false,
@@ -142,6 +148,9 @@ Future<MensajesData> loadEmpresaConversaciones() async {
           avatar: (perfil?['avatar_url']?.toString().isNotEmpty ?? false)
               ? perfil!['avatar_url'].toString()
               : null,
+          confidencial: (perfil?['account_type']?.toString() ?? '')
+              .toLowerCase()
+              .startsWith('confidenc'),
           ultimoMensaje: fila['text']?.toString() ?? '',
           fecha: DateTime.tryParse(fila['created_at']?.toString() ?? ''),
           sinLeer: sinLeer[otro] ?? 0,

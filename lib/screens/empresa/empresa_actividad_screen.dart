@@ -140,6 +140,16 @@ Future<ActividadData> loadEmpresaActividad() async {
 /// ║ No modificar salvo bug funcional o responsive concreto y demostrable. ║
 /// ╚═══════════════════════════════════════════════════════════════════════╝
 ///
+/// POLISH VISUAL 3 (15/8/2026): se agregó "Resumen de tu actividad" al pie —
+/// el mockup tiene ahí "Insights de tu actividad" con 4 métricas Y variación
+/// porcentual vs. el período anterior ("↑18%"). De esas cuatro, sólo dos son
+/// datos reales que ya se cargan (`contarDe(candidatos)`/`contarDe(entrevistas)`
+/// — literalmente los mismos números de las píldoras de arriba). "Vistas de
+/// vacantes" no existe (`jobs` no cuenta impresiones) y "Tasa de respuesta"
+/// necesitaría comparar contra un período anterior, que no se consulta en
+/// ningún lado. Por eso el bloque nuevo NO se llama "Insights" ni muestra
+/// flechas de variación: es un recuento, no un análisis.
+///
 class EmpresaActividadScreen extends StatefulWidget {
   final ActividadData? previewData;
 
@@ -208,6 +218,7 @@ class _EmpresaActividadScreenState extends State<EmpresaActividadScreen> {
                         _categorias(),
                         const SizedBox(height: MpTokens.space20),
                         ..._listado(),
+                        if (_data.items.isNotEmpty) _resumen(),
                       ]),
                     ),
                   ),
@@ -456,6 +467,86 @@ class _EmpresaActividadScreenState extends State<EmpresaActividadScreen> {
     }
 
     return widgets;
+  }
+
+  // ── Resumen ───────────────────────────────────────────────────────────────
+
+  /// Recuento real, no analítica: sólo los dos conteos que ya se calculan
+  /// para las píldoras de categoría, presentados como cierre de la pantalla.
+  Widget _resumen() {
+    final s = context.mp;
+
+    Widget tile(IconData icon, Color color, int valor, String etiqueta) {
+      return Expanded(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            MpIconTile(icon: icon, color: color, size: 34, circular: true),
+            const SizedBox(height: MpTokens.space8),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                '$valor',
+                style: MpTokens.stat.copyWith(color: s.text, fontSize: 22),
+              ),
+            ),
+            const SizedBox(height: 2),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                etiqueta,
+                textAlign: TextAlign.center,
+                style: MpTokens.micro.copyWith(
+                  color: s.textSecondary,
+                  fontSize: 11,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return MpCard(
+      radius: MpTokens.radiusXL,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Resumen de tu actividad',
+            style: MpTokens.title.copyWith(color: s.text),
+          ),
+          const SizedBox(height: MpTokens.space16),
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                tile(
+                  CupertinoIcons.person,
+                  MpTokens.primary,
+                  _data.contarDe(ActividadTipo.candidatos),
+                  'Candidatos',
+                ),
+                const SizedBox(width: MpTokens.space8),
+                tile(
+                  CupertinoIcons.calendar,
+                  MpTokens.catGreen,
+                  _data.contarDe(ActividadTipo.entrevistas),
+                  'Entrevistas',
+                ),
+                const SizedBox(width: MpTokens.space8),
+                tile(
+                  CupertinoIcons.briefcase,
+                  MpTokens.catOrange,
+                  _data.contarDe(ActividadTipo.vacantes),
+                  'Vacantes',
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   static const _tipoColores = {

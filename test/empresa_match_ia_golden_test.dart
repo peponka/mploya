@@ -40,6 +40,23 @@ MatchIaData _sinDatos() => const MatchIaData(
       skillsQueFaltan: ['Product', 'Roadmap'],
     );
 
+/// Igual que `_completo` pero con candidato confidencial — demuestra el
+/// enmascarado agregado el 15/8/2026 (antes el encabezado mostraba nombre,
+/// foto y ciudad reales sin ningún chequeo, a diferencia del resto de
+/// Empresa).
+MatchIaData _confidencial() => const MatchIaData(
+      match: 87,
+      candidato: 'Ana Suárez',
+      candidatoHeadline: 'Senior Product Manager',
+      candidatoCiudad: 'Asunción',
+      candidatoConfidencial: true,
+      vacante: 'Product Manager',
+      empresa: 'Nexora',
+      empresaCiudad: 'Asunción',
+      skillsEnComun: ['Product', 'Roadmap'],
+      skillsQueFaltan: ['B2B SaaS'],
+    );
+
 Widget _pantalla(MatchIaData data, {String clave = 'match'}) =>
     EmpresaMatchIaScreen(
       key: ValueKey(clave),
@@ -70,6 +87,24 @@ void main() {
     await expectLater(
       find.byType(CupertinoApp),
       matchesGoldenFile('goldens/empresa_match_ia_sin_datos.png'),
+    );
+  });
+
+  testWidgets('golden · candidato confidencial', (tester) async {
+    await pumpMp(
+      tester,
+      const Size(393, 852),
+      _pantalla(_confidencial(), clave: 'match-confidencial'),
+    );
+    expect(tester.takeException(), isNull);
+    expect(find.text('Candidato confidencial'), findsOneWidget);
+    expect(find.text('Ana Suárez'), findsNothing);
+    expect(find.text('Asunción'), findsOneWidget); // sólo el de la empresa
+    // El headline SÍ se mantiene: mismo criterio que Pipeline.
+    expect(find.text('Senior Product Manager'), findsOneWidget);
+    await expectLater(
+      find.byType(CupertinoApp),
+      matchesGoldenFile('goldens/empresa_match_ia_confidencial.png'),
     );
   });
 

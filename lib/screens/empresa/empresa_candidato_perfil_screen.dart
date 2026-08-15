@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:video_player/video_player.dart';
 
 import '../../models/models.dart';
 import '../../services/share_service.dart';
@@ -31,6 +32,13 @@ import 'empresa_candidato_data.dart';
 /// (la distancia requiere la ubicación de la empresa y la del candidato, y la
 /// segunda es opcional). Cada bloque desaparece si no hay dato: no hay
 /// "Información clave" con casillas vacías.
+///
+/// POLISH VISUAL 3 (15/8/2026): el héroe reproduce el VIDEO PITCH real
+/// (`usuario.videoUrl`, la misma columna que llena `OnboardingPitchScreen`)
+/// cuando existe, con el botón de play del PNG. Antes el héroe sólo mostraba
+/// la foto — el video del candidato existía en la base pero ningún camino de
+/// Empresa lo reproducía. Sin video (o candidato confidencial, que tampoco
+/// muestra su cara), se conserva la foto/avatar de siempre.
 class EmpresaCandidatoPerfilScreen extends StatefulWidget {
   final String candidatoId;
 
@@ -230,6 +238,9 @@ class _EmpresaCandidatoPerfilScreenState
             : (u.avatarUrl?.isNotEmpty ?? false)
                 ? u.avatarUrl
                 : null;
+    final video = (!data.confidencial && (u.videoUrl?.isNotEmpty ?? false))
+        ? u.videoUrl
+        : null;
 
     return Stack(
       children: [
@@ -264,6 +275,36 @@ class _EmpresaCandidatoPerfilScreenState
             ),
           ),
         ),
+        if (video != null)
+          Positioned(
+            top: 40,
+            left: 0,
+            right: 0,
+            height: 210,
+            child: Center(
+              child: GestureDetector(
+                onTap: () => Navigator.of(context).push(
+                  CupertinoPageRoute(
+                    builder: (_) => _CandidatoVideoPlayerPage(videoUrl: video),
+                  ),
+                ),
+                child: Container(
+                  width: 64,
+                  height: 64,
+                  decoration: BoxDecoration(
+                    color: const Color(0x40000810),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: const Color(0x66FFFFFF), width: 2),
+                  ),
+                  child: const Icon(
+                    CupertinoIcons.play_fill,
+                    size: 26,
+                    color: Color(0xFFFFFFFF),
+                  ),
+                ),
+              ),
+            ),
+          ),
         Positioned(
           top: 0,
           left: 0,
@@ -997,6 +1038,108 @@ class _EmpresaCandidatoPerfilScreenState
               expand: true,
               loading: _conectando,
               onPressed: _conectar,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Reproductor a pantalla completa del video pitch del candidato. Sin datos
+/// de muestra: si falla la carga, muestra el error real.
+class _CandidatoVideoPlayerPage extends StatefulWidget {
+  final String videoUrl;
+
+  const _CandidatoVideoPlayerPage({required this.videoUrl});
+
+  @override
+  State<_CandidatoVideoPlayerPage> createState() =>
+      _CandidatoVideoPlayerPageState();
+}
+
+class _CandidatoVideoPlayerPageState extends State<_CandidatoVideoPlayerPage> {
+  VideoPlayerController? _controller;
+  bool _hasError = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final controller = VideoPlayerController.networkUrl(
+      Uri.parse(widget.videoUrl),
+    );
+    _controller = controller;
+    controller
+        .initialize()
+        .then((_) {
+          if (!mounted) return;
+          setState(() {});
+          controller.play();
+        })
+        .catchError((_) {
+          if (mounted) setState(() => _hasError = true);
+        });
+  }
+
+  @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = _controller;
+    final ready = controller != null && controller.value.isInitialized;
+
+    return CupertinoPageScaffold(
+      backgroundColor: MpTokens.darkBg,
+      child: Stack(
+        children: [
+          Center(
+            child: _hasError
+                ? Text(
+                    'No pudimos cargar el video.',
+                    style: MpTokens.body.copyWith(
+                      color: const Color(0xFFFFFFFF),
+                    ),
+                  )
+                : !ready
+                    ? const CupertinoActivityIndicator(
+                        radius: 15,
+                        color: Color(0xFFFFFFFF),
+                      )
+                    : GestureDetector(
+                        onTap: () => setState(() {
+                          controller.value.isPlaying
+                              ? controller.pause()
+                              : controller.play();
+                        }),
+                        child: AspectRatio(
+                          aspectRatio: controller.value.aspectRatio,
+                          child: VideoPlayer(controller),
+                        ),
+                      ),
+          ),
+          Positioned(
+            top: MediaQuery.of(context).padding.top + MpTokens.space8,
+            left: MpTokens.screenPadding,
+            child: GestureDetector(
+              onTap: () => Navigator.of(context).maybePop(),
+              behavior: HitTestBehavior.opaque,
+              child: Container(
+                width: 38,
+                height: 38,
+                decoration: const BoxDecoration(
+                  color: Color(0x66000810),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  CupertinoIcons.xmark,
+                  size: 18,
+                  color: Color(0xFFFFFFFF),
+                ),
+              ),
             ),
           ),
         ],

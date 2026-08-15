@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:video_player/video_player.dart';
 
 import '../../widgets/ds/mploya_ds.dart';
 import '../camera_screen.dart';
@@ -66,6 +67,13 @@ Future<bool> quitarVideoPitch() async {
 /// onboarding, el reto de pitch y el compositor; sube el video y actualiza
 /// `users.video_url`. Acá no se reimplementa la cámara: se entra y se relee el
 /// estado al volver.
+///
+/// POLISH VISUAL 6 (15/8/2026): cuando ya hay video, la pantalla mostraba sólo
+/// texto ("Tu empresa tiene video") sin ninguna forma de VERLO — la empresa no
+/// podía confirmar qué es lo que los candidatos están viendo. Se agregó un
+/// póster tocable (mismo patrón que ya usa el héroe del Perfil de Empresa) que
+/// reproduce el video real a pantalla completa. Sin video, no se dibuja: no
+/// hay nada que mostrar.
 /// ╔═══════════════════════════════════════════════════════════════════════╗
 /// ║ CONGELADA el 12/8/2026 — diseño Y comportamiento aprobados.           ║
 /// ║ No modificar salvo bug funcional o responsive concreto y demostrable. ║
@@ -218,6 +226,10 @@ class _EmpresaVideoPitchScreenState extends State<EmpresaVideoPitchScreen> {
     }
 
     return [
+      if (_data.tieneVideo) ...[
+        _CompanyVideoPitchPoster(videoUrl: _data.videoUrl!),
+        const SizedBox(height: MpTokens.space16),
+      ],
       _estado(),
       if (_aviso != null) ...[
         const SizedBox(height: MpTokens.space16),
@@ -388,6 +400,174 @@ class _EmpresaVideoPitchScreenState extends State<EmpresaVideoPitchScreen> {
         size: MpButtonSize.large,
         expand: true,
         onPressed: _data.error ? null : _grabar,
+      ),
+    );
+  }
+}
+
+/// Póster tocable del video ya publicado. Mismo lenguaje visual que el héroe
+/// de video del Perfil de Empresa: degradado + botón de play, sin decodificar
+/// nada hasta que se toca.
+class _CompanyVideoPitchPoster extends StatelessWidget {
+  final String videoUrl;
+
+  const _CompanyVideoPitchPoster({required this.videoUrl});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => Navigator.of(context).push(
+        CupertinoPageRoute(
+          builder: (_) => _CompanyVideoPitchPlayerPage(videoUrl: videoUrl),
+        ),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(MpTokens.radiusXL),
+        child: Container(
+          height: 180,
+          width: double.infinity,
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0xFF1B1436), Color(0xFF2E1F63), Color(0xFF0E0A1E)],
+            ),
+          ),
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 58,
+                  height: 58,
+                  decoration: BoxDecoration(
+                    color: const Color(0x33FFFFFF),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: const Color(0x40FFFFFF)),
+                  ),
+                  child: const Icon(
+                    CupertinoIcons.play_fill,
+                    size: 24,
+                    color: Color(0xFFFFFFFF),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  'Ver el video de tu empresa',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xE6FFFFFF),
+                    decoration: TextDecoration.none,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Reproductor a pantalla completa del video ya publicado. Sin datos de
+/// muestra: si falla la carga, muestra el error real.
+class _CompanyVideoPitchPlayerPage extends StatefulWidget {
+  final String videoUrl;
+
+  const _CompanyVideoPitchPlayerPage({required this.videoUrl});
+
+  @override
+  State<_CompanyVideoPitchPlayerPage> createState() =>
+      _CompanyVideoPitchPlayerPageState();
+}
+
+class _CompanyVideoPitchPlayerPageState
+    extends State<_CompanyVideoPitchPlayerPage> {
+  VideoPlayerController? _controller;
+  bool _hasError = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final controller = VideoPlayerController.networkUrl(
+      Uri.parse(widget.videoUrl),
+    );
+    _controller = controller;
+    controller
+        .initialize()
+        .then((_) {
+          if (!mounted) return;
+          setState(() {});
+          controller.play();
+        })
+        .catchError((_) {
+          if (mounted) setState(() => _hasError = true);
+        });
+  }
+
+  @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = _controller;
+    final ready = controller != null && controller.value.isInitialized;
+
+    return CupertinoPageScaffold(
+      backgroundColor: MpTokens.darkBg,
+      child: Stack(
+        children: [
+          Center(
+            child: _hasError
+                ? Text(
+                    'No pudimos cargar el video.',
+                    style: MpTokens.body.copyWith(
+                      color: const Color(0xFFFFFFFF),
+                    ),
+                  )
+                : !ready
+                    ? const CupertinoActivityIndicator(
+                        radius: 15,
+                        color: Color(0xFFFFFFFF),
+                      )
+                    : GestureDetector(
+                        onTap: () => setState(() {
+                          controller.value.isPlaying
+                              ? controller.pause()
+                              : controller.play();
+                        }),
+                        child: AspectRatio(
+                          aspectRatio: controller.value.aspectRatio,
+                          child: VideoPlayer(controller),
+                        ),
+                      ),
+          ),
+          Positioned(
+            top: MediaQuery.of(context).padding.top + MpTokens.space8,
+            left: MpTokens.screenPadding,
+            child: GestureDetector(
+              onTap: () => Navigator.of(context).maybePop(),
+              behavior: HitTestBehavior.opaque,
+              child: Container(
+                width: 38,
+                height: 38,
+                decoration: const BoxDecoration(
+                  color: Color(0x66000810),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  CupertinoIcons.xmark,
+                  size: 18,
+                  color: Color(0xFFFFFFFF),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

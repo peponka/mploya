@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:video_player/video_player.dart';
 
 import '../../services/share_service.dart';
 import '../../widgets/ds/mploya_ds.dart';
@@ -34,6 +35,19 @@ import 'empresa_vacantes_data.dart';
 /// las que sí existen y le importan a la empresa: vacantes, activas,
 /// postulaciones y valoración como empleador (`employer_rating_*`), esta última
 /// sólo si alguien la calificó.
+///
+/// POLISH VISUAL 15/8/2026 — héroe con VIDEO cuando `empresa.videoUrl` existe
+/// (la empresa grabó su pitch en la pantalla congelada
+/// `EmpresaVideoPitchScreen`, pero hasta ahora ningún otro lugar de la app lo
+/// mostraba). Sin video, se conserva el héroe de banner/degradado de
+/// siempre — no se inventa un video.
+///
+/// Se evaluó pasar TODA la superficie a oscuro para acercarse más al PNG (que
+/// es de fondo negro), pero se descartó: `MpSurface` documenta "perfil" como
+/// superficie CLARA a propósito (junto con empresa/headhunter/formularios), y
+/// forzar oscuro rompía el contraste de los títulos de sección (pensados
+/// contra fondo claro). El héroe, en cambio, siempre fue un bloque oscuro
+/// sobre cuerpo claro — el video sigue esa misma convención ya aprobada.
 class EmpresaPerfilScreen extends StatefulWidget {
   /// Datos ya resueltos, para los golden tests.
   final PerfilEmpresa? previewData;
@@ -149,23 +163,27 @@ class _EmpresaPerfilScreenState extends State<EmpresaPerfilScreen> {
   Widget _hero() {
     final e = _data!.empresa;
     final imagen = (e.bannerUrl?.isNotEmpty ?? false) ? e.bannerUrl : null;
+    final video = (e.videoUrl?.isNotEmpty ?? false) ? e.videoUrl : null;
 
     return Stack(
       children: [
-        Container(
-          height: 208,
-          width: double.infinity,
-          decoration: BoxDecoration(
-            gradient: imagen == null ? MpTokens.heroGradient : null,
-            image: imagen == null
-                ? null
-                : DecorationImage(
-                    image: NetworkImage(imagen),
-                    fit: BoxFit.cover,
-                  ),
+        if (video != null)
+          _CompanyVideoPoster(videoUrl: video)
+        else
+          Container(
+            height: 208,
+            width: double.infinity,
+            decoration: BoxDecoration(
+              gradient: imagen == null ? MpTokens.heroGradient : null,
+              image: imagen == null
+                  ? null
+                  : DecorationImage(
+                      image: NetworkImage(imagen),
+                      fit: BoxFit.cover,
+                    ),
+            ),
           ),
-        ),
-        if (imagen != null)
+        if (imagen != null && video == null)
           Container(
             height: 208,
             width: double.infinity,
@@ -620,6 +638,169 @@ class _EmpresaPerfilScreenState extends State<EmpresaPerfilScreen> {
               icon: CupertinoIcons.pencil,
               expand: true,
               onPressed: _editar,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Póster tocable del video de la empresa: degradado + botón de play. No
+/// decodifica el video acá (evita el costo de un `VideoPlayerController` sólo
+/// para mostrar un cuadro); reproduce a pantalla completa al tocar.
+class _CompanyVideoPoster extends StatelessWidget {
+  final String videoUrl;
+
+  const _CompanyVideoPoster({required this.videoUrl});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => Navigator.of(context).push(
+        CupertinoPageRoute(
+          builder: (_) => _CompanyVideoPlayerPage(videoUrl: videoUrl),
+        ),
+      ),
+      child: Container(
+        height: 208,
+        width: double.infinity,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFF1B1436), Color(0xFF2E1F63), Color(0xFF0E0A1E)],
+          ),
+        ),
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 62,
+                height: 62,
+                decoration: BoxDecoration(
+                  color: const Color(0x33FFFFFF),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: const Color(0x40FFFFFF)),
+                ),
+                child: const Icon(
+                  CupertinoIcons.play_fill,
+                  size: 26,
+                  color: Color(0xFFFFFFFF),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                'Video de la empresa',
+                style: MpTokens.label.copyWith(
+                  color: const Color(0xE6FFFFFF),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Reproductor a pantalla completa del video de la empresa. Sin datos de
+/// muestra: si falla la carga, muestra el error real, no un video de relleno.
+class _CompanyVideoPlayerPage extends StatefulWidget {
+  final String videoUrl;
+
+  const _CompanyVideoPlayerPage({required this.videoUrl});
+
+  @override
+  State<_CompanyVideoPlayerPage> createState() =>
+      _CompanyVideoPlayerPageState();
+}
+
+class _CompanyVideoPlayerPageState extends State<_CompanyVideoPlayerPage> {
+  VideoPlayerController? _controller;
+  bool _hasError = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final controller = VideoPlayerController.networkUrl(
+      Uri.parse(widget.videoUrl),
+    );
+    _controller = controller;
+    controller
+        .initialize()
+        .then((_) {
+          if (!mounted) return;
+          setState(() {});
+          controller.play();
+        })
+        .catchError((_) {
+          if (mounted) setState(() => _hasError = true);
+        });
+  }
+
+  @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = _controller;
+    final ready = controller != null && controller.value.isInitialized;
+
+    return CupertinoPageScaffold(
+      backgroundColor: MpTokens.darkBg,
+      child: Stack(
+        children: [
+          Center(
+            child: _hasError
+                ? Text(
+                    'No pudimos cargar el video.',
+                    style: MpTokens.body.copyWith(
+                      color: const Color(0xFFFFFFFF),
+                    ),
+                  )
+                : !ready
+                    ? const CupertinoActivityIndicator(
+                        radius: 15,
+                        color: Color(0xFFFFFFFF),
+                      )
+                    : GestureDetector(
+                        onTap: () => setState(() {
+                          controller.value.isPlaying
+                              ? controller.pause()
+                              : controller.play();
+                        }),
+                        child: AspectRatio(
+                          aspectRatio: controller.value.aspectRatio,
+                          child: VideoPlayer(controller),
+                        ),
+                      ),
+          ),
+          Positioned(
+            top: MediaQuery.of(context).padding.top + MpTokens.space8,
+            left: MpTokens.screenPadding,
+            child: GestureDetector(
+              onTap: () => Navigator.of(context).maybePop(),
+              behavior: HitTestBehavior.opaque,
+              child: Container(
+                width: 38,
+                height: 38,
+                decoration: const BoxDecoration(
+                  color: Color(0x66000810),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  CupertinoIcons.xmark,
+                  size: 18,
+                  color: Color(0xFFFFFFFF),
+                ),
+              ),
             ),
           ),
         ],

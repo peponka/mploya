@@ -17,10 +17,11 @@ import 'empresa_creditos_data.dart';
 /// escritorio; acá la jerarquía baja a una columna: saldo grande, consumo,
 /// historial de desbloqueos y cómo funciona.
 ///
-/// DATOS REALES: `company_wallets` (saldo y plan) y `profile_unlocks` (cada
-/// desbloqueo con su fecha y el perfil que se desbloqueó). Los créditos gastados
-/// no se estiman: cada desbloqueo cuesta 1 crédito según
-/// `unlock_stealth_profile`, así que gastados = desbloqueos.
+/// DATOS REALES: `company_wallets` (saldo y plan), `profile_unlocks` (cada
+/// desbloqueo con `unlocked_at`) y `claim_welcome_credits` (5 créditos una
+/// sola vez, cuando todavía no existe billetera). Los créditos gastados no se
+/// estiman: cada desbloqueo cuesta 1 crédito según `unlock_stealth_profile`,
+/// así que gastados = desbloqueos.
 ///
 /// OMITIDO, y por qué. El PNG de Planes muestra cuatro planes con precio
 /// ($49 / $149 / $299 / Personalizado), botón "Comprar créditos", "Elegir plan",
@@ -43,6 +44,7 @@ class EmpresaCreditosScreen extends StatefulWidget {
 class _EmpresaCreditosScreenState extends State<EmpresaCreditosScreen> {
   CreditosData _data = CreditosData.empty;
   bool _loading = true;
+  bool _reclamandoBienvenida = false;
 
   static const _meses = [
     'ene',
@@ -85,6 +87,33 @@ class _EmpresaCreditosScreenState extends State<EmpresaCreditosScreen> {
   String _fecha(DateTime? f) {
     if (f == null) return '';
     return '${f.day} ${_meses[f.month - 1]}';
+  }
+
+  Future<void> _reclamarBienvenida() async {
+    if (_reclamandoBienvenida || widget.previewData != null) return;
+    setState(() => _reclamandoBienvenida = true);
+    final resultado = await reclamarCreditosBienvenida();
+    if (!mounted) return;
+    setState(() => _reclamandoBienvenida = false);
+
+    if (resultado == ResultadoCreditosBienvenida.error) {
+      await showCupertinoDialog<void>(
+        context: context,
+        builder: (ctx) => CupertinoAlertDialog(
+          title: const Text('No pudimos activar los créditos'),
+          content: const Text('Probá de nuevo en unos minutos.'),
+          actions: [
+            CupertinoDialogAction(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Entendido'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    await _load();
   }
 
   // ── Build ───────────────────────────────────────────────────────────────────
@@ -248,6 +277,17 @@ class _EmpresaCreditosScreenState extends State<EmpresaCreditosScreen> {
             ),
           ),
           const SizedBox(height: MpTokens.space16),
+          if (_data.puedeReclamarBienvenida) ...[
+            MpButton(
+              label: 'Activar 5 créditos de bienvenida',
+              icon: CupertinoIcons.gift,
+              variant: MpButtonVariant.neutral,
+              expand: true,
+              loading: _reclamandoBienvenida,
+              onPressed: _reclamarBienvenida,
+            ),
+            const SizedBox(height: MpTokens.space8),
+          ],
           MpButton(
             label: 'Ver talento confidencial',
             icon: CupertinoIcons.lock_open,
@@ -422,9 +462,13 @@ class _EmpresaCreditosScreenState extends State<EmpresaCreditosScreen> {
               const SizedBox(width: MpTokens.space8),
               Expanded(
                 child: Text(
-                  'La compra de créditos y los planes todavía no están '
-                  'disponibles en la app. Por ahora el saldo se administra '
-                  'desde tu cuenta.',
+                  _data.puedeReclamarBienvenida
+                      ? 'Podés activar una vez los 5 créditos de bienvenida. '
+                          'La compra de créditos y los planes todavía no están '
+                          'disponibles en la app.'
+                      : 'La compra de créditos y los planes todavía no están '
+                          'disponibles en la app. Por ahora el saldo se '
+                          'administra desde tu cuenta.',
                   style: MpTokens.micro.copyWith(color: s.textTertiary),
                 ),
               ),

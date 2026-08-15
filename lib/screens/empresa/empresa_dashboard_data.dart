@@ -93,14 +93,15 @@ class EmpresaDashboardData {
     stageDays: {},
   );
 
-  /// Las cinco etapas del mockup, en cero. Se usa mientras carga y cuando no
-  /// hay datos, para que la composición no cambie de forma.
+  /// Las CUATRO etapas que el backend puede respaldar, en cero. Se usa
+  /// mientras carga y cuando no hay datos, para que la composición no cambie
+  /// de forma. El mockup pide una quinta ("Contratados"): queda fuera porque
+  /// ningún dato real la respalda — ver `loadEmpresaDashboard`.
   static const _emptyFunnel = [
     EmpresaStage(label: 'Postulados', value: 0),
     EmpresaStage(label: 'Screening', value: 0),
     EmpresaStage(label: 'Entrevistas', value: 0),
     EmpresaStage(label: 'Oferta', value: 0),
-    EmpresaStage(label: 'Contratados', value: 0),
   ];
 }
 
@@ -169,9 +170,10 @@ Future<EmpresaDashboardData> loadEmpresaDashboard() async {
     }
   }
 
-  // Ya no se consulta `get_my_pipeline`: su único uso acá era el embudo, que
-  // quedó oculto. Verificado el 12/8/2026 contra la base — devuelve 0 filas y
-  // el valor 'hired' no existe en `ats_status`.
+  // Ya no se consulta `get_my_pipeline`: devuelve 0 filas y el valor 'hired'
+  // no existe en `ats_status` (verificado 12/8/2026 contra la base). Por eso
+  // el embudo NO tiene una quinta etapa "Contratados" — no hay dato real que
+  // la respalde. Las otras cuatro sí son columnas reales y se muestran.
 
   int countStatus(String status) => applications
       .where((app) => (app['status']?.toString() ?? '') == status)
@@ -228,11 +230,16 @@ Future<EmpresaDashboardData> loadEmpresaDashboard() async {
         .length,
     entrevistasSemana: entrevistasSemana,
     contratacionesMes: ofertasAceptadas,
-    // EMBUDO — oculto en producción. Cuatro de sus cinco etapas son
-    // confiables, pero "Contratados" lee `ats_status = hired`, un valor que
-    // nadie escribe: los porcentajes de TODAS las etapas salían mal. Vuelve
-    // cuando el pipeline ATS funcione de punta a punta.
-    funnel: const [],
+    // EMBUDO de CUATRO etapas, todas columnas reales. La quinta del mockup
+    // ("Contratados") queda afuera: lee `ats_status = hired`, un valor que
+    // nadie escribe todavía. Mostrar 4 de 5 etapas reales es más honesto que
+    // ocultar el bloque entero por una que no se puede calcular.
+    funnel: [
+      EmpresaStage(label: 'Postulados', value: applications.length),
+      EmpresaStage(label: 'Screening', value: countStatus('viewed')),
+      EmpresaStage(label: 'Entrevistas', value: interviews.length),
+      EmpresaStage(label: 'Oferta', value: ofertasAceptadas),
+    ],
     hiringTrend: const [],
     // El backend todavía no registra origen ni tiempos por etapa.
     sources: const [],

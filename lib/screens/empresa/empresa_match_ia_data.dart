@@ -23,6 +23,11 @@ class MatchIaData {
   final String? candidatoAvatar;
   final String? candidatoCiudad;
 
+  /// `account_type` empieza con "confidenc": mismo criterio que Pipeline,
+  /// Shortlist, Mensajes y el Perfil de Candidato. `candidato`/`candidatoAvatar`
+  /// guardan el dato REAL — el ocultamiento es sólo de presentación.
+  final bool candidatoConfidencial;
+
   final String vacante;
   final String? empresa;
   final String? empresaAvatar;
@@ -49,6 +54,7 @@ class MatchIaData {
     this.candidatoHeadline,
     this.candidatoAvatar,
     this.candidatoCiudad,
+    this.candidatoConfidencial = false,
     this.vacante = '',
     this.empresa,
     this.empresaAvatar,
@@ -62,6 +68,20 @@ class MatchIaData {
   });
 
   static const vacia = MatchIaData();
+
+  /// Nombre a mostrar en el encabezado: un candidato confidencial no expone
+  /// su identidad acá tampoco, aunque `candidato` guarde el nombre real.
+  String get candidatoVisible =>
+      candidatoConfidencial ? 'Candidato confidencial' : candidato;
+
+  /// Sin foto real para un candidato confidencial — mismo criterio que el
+  /// resto de Empresa.
+  String? get candidatoAvatarVisible =>
+      candidatoConfidencial ? null : candidatoAvatar;
+
+  /// La ubicación también se oculta: el Perfil de Candidato hace lo mismo.
+  String? get candidatoCiudadVisible =>
+      candidatoConfidencial ? null : candidatoCiudad;
 
   bool get haySalario =>
       expectativaCandidato != null && rangoVacante != null;
@@ -242,6 +262,9 @@ Future<MatchIaData> loadMatchIa({
     candidatoAvatar: _textoNoVacio(candidato['avatar_url']),
     candidatoCiudad:
         _textoNoVacio(candidato['city']) ?? _textoNoVacio(candidato['location']),
+    candidatoConfidencial: (candidato['account_type']?.toString() ?? '')
+        .toLowerCase()
+        .startsWith('confidenc'),
     vacante: _textoNoVacio(vacante['title']) ?? 'Vacante',
     empresa: _textoNoVacio(empresa?['company']) ??
         _textoNoVacio(vacante['company_name']) ??
