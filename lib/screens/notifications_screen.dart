@@ -1,5 +1,6 @@
 import 'dart:math';
 import '../utils/user_columns.dart';
+import '../utils/headhunter_candidate_privacy.dart';
 import 'package:flutter/cupertino.dart';
 // Material widgets (SliverAppBar, Colors, Icons) have no Cupertino equivalent
 import 'package:flutter/material.dart';
@@ -7,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../theme/app_theme.dart';
 import '../models/models.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../providers/user_provider.dart';
 import '../services/notification_service.dart';
 import '../services/social_service.dart';
 import '../services/error_handler.dart';
@@ -16,6 +18,7 @@ import '../widgets/web_ui.dart';
 import 'profile_screen.dart';
 import 'ats_dashboard_screen.dart';
 import 'interview_flow_screen.dart';
+import 'headhunter/headhunter_interview_flow_screen.dart';
 import 'scheduling_screen.dart';
 
 /// Id de la entrevista con IA a la que invita una notificación
@@ -40,14 +43,29 @@ String? interviewIdDeNotificacion(Map<String, dynamic> n) {
   return id;
 }
 
-class NotificationsScreen extends ConsumerStatefulWidget {
-  const NotificationsScreen({super.key});
+@immutable
+class NotificationsPreviewData {
+  const NotificationsPreviewData({
+    this.notifications = const [],
+    this.viewerAccountType = 'headhunter',
+  });
 
-  @override
-  ConsumerState<NotificationsScreen> createState() => _NotificationsScreenState();
+  final List<Map<String, dynamic>> notifications;
+  final String viewerAccountType;
 }
 
-class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with TickerProviderStateMixin {
+class NotificationsScreen extends ConsumerStatefulWidget {
+  const NotificationsScreen({super.key, this.previewData});
+
+  final NotificationsPreviewData? previewData;
+
+  @override
+  ConsumerState<NotificationsScreen> createState() =>
+      _NotificationsScreenState();
+}
+
+class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
+    with TickerProviderStateMixin {
   // ── IA Insights Data ──
   int _profileViews = 0;
   int _totalMatches = 0;
@@ -68,7 +86,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
       vsync: this,
       duration: const Duration(seconds: 15),
     )..repeat();
-    _loadInsights();
+    if (widget.previewData == null) _loadInsights();
   }
 
   @override
@@ -114,10 +132,9 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
 
   /// Abre la entrevista con IA a la que invita la notificación.
   ///
-  /// Reutiliza [InterviewFlowScreen] tal como existe: carga la entrevista y sus
-  /// preguntas reales, sube cada respuesta y, al terminar, dispara
-  /// `generate-interview-report` —que del lado del servidor persiste el informe
-  /// y marca la entrevista como `completed`—.
+  /// Candidato abre el flujo de respuesta. Headhunter abre exclusivamente el
+  /// detalle de seguimiento: nunca puede grabar respuestas en nombre del
+  /// candidato ni saltarse la protección de identidad.
   void _abrirEntrevista(Map<String, dynamic> n) {
     final id = interviewIdDeNotificacion(n);
     _markAsRead(n);
@@ -143,8 +160,16 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
       return;
     }
 
+    final viewerType =
+        widget.previewData?.viewerAccountType ??
+        ref.read(currentUserProvider).valueOrNull?.accountType;
+    final isHeadhunter = viewerType?.toLowerCase() == 'headhunter';
     Navigator.of(context).push(
-      CupertinoPageRoute(builder: (_) => InterviewFlowScreen(interviewId: id)),
+      CupertinoPageRoute(
+        builder: (_) => isHeadhunter
+            ? HeadhunterInterviewFlowScreen(interviewId: id)
+            : InterviewFlowScreen(interviewId: id),
+      ),
     );
   }
 
@@ -217,12 +242,56 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
   // ── Panel enmarcado compartido móvil/web ──
   Widget _alertsPanel(BuildContext context, {required bool webMode}) {
     return StreamBuilder<List<Map<String, dynamic>>>(
-      stream: NotificationService.instance.notificationsStream,
+      stream: widget.previewData != null
+          ? Stream.value(widget.previewData!.notifications)
+          : NotificationService.instance.notificationsStream,
       builder: (context, snapshot) {
         final notifs = snapshot.data ?? const <Map<String, dynamic>>[];
         final loading =
-            snapshot.connectionState == ConnectionState.waiting && notifs.isEmpty;
-        final useDemo = !loading && notifs.isEmpty;
+            snapshot.connectionState == ConnectionState.waiting &&
+            notifs.isEmpty;
+        final viewerType =
+            widget.previewData?.viewerAccountType ??
+            ref.watch(currentUserProvider).valueOrNull?.accountType;
+        final isHeadhunter = viewerType?.toLowerCase() == 'headhunter';
+        final useDemo = !isHeadhunter && !loading && notifs.isEmpty;
+        if (isHeadhunter && notifs.isNotEmpty) {
+          return FutureBuilder<List<Map<String, dynamic>>>(
+            future: _protectNotifications(notifs, viewerType),
+            builder: (context, privacySnapshot) {
+              if (!privacySnapshot.hasData) {
+                return _alertsContainer(
+                  notifs: const [],
+                  loading: true,
+                  useDemo: false,
+                  webMode: webMode,
+                );
+              }
+              return _alertsContainer(
+                notifs: privacySnapshot.data!,
+                loading: false,
+                useDemo: false,
+                webMode: webMode,
+              );
+            },
+          );
+        }
+        return _alertsContainer(
+          notifs: notifs,
+          loading: loading,
+          useDemo: useDemo,
+          webMode: webMode,
+        );
+      },
+    );
+  }
+
+  Widget _alertsContainer({
+    required List<Map<String, dynamic>> notifs,
+    required bool loading,
+    required bool useDemo,
+    required bool webMode,
+  }) {
         final realUnread = notifs.where((n) => n['is_read'] != true).length;
         final unread = useDemo ? 3 : realUnread;
         return Container(
@@ -255,12 +324,92 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
             ],
           ),
         );
-      },
-    );
   }
 
-  Widget _panelHeader(int unread, List<Map<String, dynamic>> notifs,
-      {required bool webMode, required bool demo}) {
+  Future<List<Map<String, dynamic>>> _protectNotifications(
+    List<Map<String, dynamic>> notifications,
+    String? viewerType,
+  ) async {
+    if (viewerType?.toLowerCase() != 'headhunter') return notifications;
+
+    final actorIds = <String>{};
+    for (final notification in notifications) {
+      final data = notification['data'];
+      final maps = [notification, if (data is Map) data];
+      for (final map in maps) {
+        for (final key in const [
+          'candidate_id',
+          'requester_id',
+          'sender_id',
+          'profile_id',
+        ]) {
+          final id = map[key]?.toString() ?? '';
+          if (id.isNotEmpty) actorIds.add(id);
+        }
+      }
+    }
+
+    final accountTypes = <String, String>{};
+    for (final notification in notifications) {
+      final data = notification['data'];
+      final type =
+          notification['candidate_account_type']?.toString() ??
+          (data is Map ? data['account_type']?.toString() : null);
+      final id =
+          notification['candidate_id']?.toString() ??
+          (data is Map ? data['candidate_id']?.toString() : null);
+      if (id != null && type != null) accountTypes[id] = type;
+    }
+
+    if (widget.previewData == null && actorIds.isNotEmpty) {
+      try {
+        final users = await Supabase.instance.client
+            .from('users')
+            .select('id, account_type')
+            .inFilter('id', actorIds.toList());
+        for (final user in users) {
+          accountTypes[user['id'].toString()] =
+              user['account_type']?.toString() ?? '';
+        }
+      } catch (e) {
+        debugPrint('Notificaciones · privacidad de actores: $e');
+      }
+    }
+
+    return notifications
+        .map((notification) {
+          final data = notification['data'];
+          final ids = <String>[
+            notification['candidate_id']?.toString() ?? '',
+            notification['requester_id']?.toString() ?? '',
+            notification['sender_id']?.toString() ?? '',
+            if (data is Map) data['candidate_id']?.toString() ?? '',
+            if (data is Map) data['requester_id']?.toString() ?? '',
+            if (data is Map) data['sender_id']?.toString() ?? '',
+            if (data is Map) data['profile_id']?.toString() ?? '',
+          ];
+          final inlineType =
+              notification['candidate_account_type']?.toString() ??
+              (data is Map ? data['account_type']?.toString() : null);
+          final protected =
+              isConfidentialAccountType(inlineType) ||
+              ids.any((id) => isConfidentialAccountType(accountTypes[id]));
+          if (!protected) return notification;
+          return <String, dynamic>{
+            ...notification,
+            'title': headhunterProtectedCandidateName,
+            'body': 'La identidad de este talento está protegida.',
+          };
+        })
+        .toList(growable: false);
+  }
+
+  Widget _panelHeader(
+    int unread,
+    List<Map<String, dynamic>> notifs, {
+    required bool webMode,
+    required bool demo,
+  }) {
     return Container(
       padding: const EdgeInsets.fromLTRB(18, 16, 16, 16),
       decoration: const BoxDecoration(
@@ -280,27 +429,41 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
                 width: 44,
                 height: 44,
                 decoration: BoxDecoration(
-                  gradient: const LinearGradient(colors: [Color(0xFF4129F0), Color(0xFF6D5AF5)]),
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF4129F0), Color(0xFF6D5AF5)],
+                  ),
                   borderRadius: BorderRadius.circular(13),
                 ),
-                child: const Icon(CupertinoIcons.bell_fill, size: 21, color: Colors.white),
+                child: const Icon(
+                  CupertinoIcons.bell_fill,
+                  size: 21,
+                  color: Colors.white,
+                ),
               ),
               if (unread > 0)
                 Positioned(
                   top: -4,
                   right: -4,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 5,
+                      vertical: 1,
+                    ),
                     constraints: const BoxConstraints(minWidth: 18),
                     decoration: BoxDecoration(
                       color: const Color(0xFFD85A30),
                       borderRadius: BorderRadius.circular(9),
                       border: Border.all(color: Colors.white, width: 1.5),
                     ),
-                    child: Text('$unread',
+                    child: Text(
+                      '$unread',
                         textAlign: TextAlign.center,
                         style: const TextStyle(
-                            color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                   ),
                 ),
             ],
@@ -311,12 +474,22 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 if (!webMode)
-                  const Text('Novedades',
+                  const Text(
+                    'Novedades',
                       style: TextStyle(
-                          fontSize: 19, fontWeight: FontWeight.w800, color: Color(0xFF0F172A))),
-                Text(unread > 0 ? 'Tenés $unread sin leer' : 'Estás al día',
+                      fontSize: 19,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF0F172A),
+                    ),
+                  ),
+                Text(
+                  unread > 0 ? 'Tenés $unread sin leer' : 'Estás al día',
                     style: const TextStyle(
-                        fontSize: 13, fontWeight: FontWeight.w500, color: Color(0xFF3A6EA5))),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: Color(0xFF3A6EA5),
+                  ),
+                ),
               ],
             ),
           ),
@@ -324,7 +497,10 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
             GestureDetector(
               onTap: demo ? null : () => _markAllAsRead(notifs),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 7,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(999),
@@ -333,11 +509,20 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
                 child: const Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(CupertinoIcons.checkmark_alt, size: 14, color: Color(0xFF4129F0)),
+                    Icon(
+                      CupertinoIcons.checkmark_alt,
+                      size: 14,
+                      color: Color(0xFF4129F0),
+                    ),
                     SizedBox(width: 4),
-                    Text('Marcar leídas',
+                    Text(
+                      'Marcar leídas',
                         style: TextStyle(
-                            fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF4129F0))),
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF4129F0),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -373,16 +558,24 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: active ? const Color(0xFF4129F0) : const Color(0xFFF4F6F9),
+                    color: active
+                        ? const Color(0xFF4129F0)
+                        : const Color(0xFFF4F6F9),
                     borderRadius: BorderRadius.circular(999),
                     border: Border.all(
-                        color: active ? const Color(0xFF4129F0) : const Color(0xFFE8ECF1)),
+                      color: active
+                          ? const Color(0xFF4129F0)
+                          : const Color(0xFFE8ECF1),
+                    ),
                   ),
-                  child: Text(e.value,
+                  child: Text(
+                    e.value,
                       style: TextStyle(
                           fontSize: 12.5,
                           fontWeight: FontWeight.w600,
-                          color: active ? Colors.white : const Color(0xFF64748B))),
+                      color: active ? Colors.white : const Color(0xFF64748B),
+                    ),
+                  ),
                 ),
               ),
             );
@@ -393,15 +586,21 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
   }
 
   // Inserta labels de grupo + divisores entre filas (mismo render para demo y real).
-  List<Widget> _renderGrouped(List<({String group, String cat, Widget row})> items) {
-    final visible = items.where((i) => _alertFilter == 'all' || i.cat == _alertFilter).toList();
+  List<Widget> _renderGrouped(
+    List<({String group, String cat, Widget row})> items,
+  ) {
+    final visible = items
+        .where((i) => _alertFilter == 'all' || i.cat == _alertFilter)
+        .toList();
     if (visible.isEmpty) {
       return [
         const Padding(
           padding: EdgeInsets.symmetric(vertical: 44),
           child: Center(
-            child: Text('Nada por acá con este filtro.',
-                style: TextStyle(fontSize: 13, color: Color(0xFF94A3B8))),
+            child: Text(
+              'Nada por acá con este filtro.',
+              style: TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
+            ),
           ),
         ),
       ];
@@ -413,15 +612,31 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
       if (it.group != current) {
         current = it.group;
         firstInGroup = true;
-        widgets.add(Padding(
+        widgets.add(
+          Padding(
           padding: const EdgeInsets.fromLTRB(18, 16, 18, 8),
-          child: Text(it.group.toUpperCase(),
+            child: Text(
+              it.group.toUpperCase(),
               style: const TextStyle(
-                  fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 0.6, color: Color(0xFF9AA6B5))),
-        ));
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.6,
+                color: Color(0xFF9AA6B5),
+              ),
+            ),
+          ),
+        );
       }
       if (!firstInGroup) {
-        widgets.add(const Divider(height: 1, thickness: 0.5, indent: 18, endIndent: 18, color: Color(0xFFF0F3F7)));
+        widgets.add(
+          const Divider(
+            height: 1,
+            thickness: 0.5,
+            indent: 18,
+            endIndent: 18,
+            color: Color(0xFFF0F3F7),
+          ),
+        );
       }
       widgets.add(it.row);
       firstInGroup = false;
@@ -451,7 +666,10 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
         decoration: BoxDecoration(
           color: unread ? const Color(0xFFF6FAFE) : Colors.white,
           border: Border(
-            left: BorderSide(color: unread ? color : Colors.transparent, width: 3),
+            left: BorderSide(
+              color: unread ? color : Colors.transparent,
+              width: 3,
+            ),
           ),
         ),
         padding: const EdgeInsets.fromLTRB(16, 13, 16, 13),
@@ -468,8 +686,15 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
               ),
               child: initials != null
                   ? Center(
-                      child: Text(initials,
-                          style: TextStyle(color: color, fontWeight: FontWeight.w800, fontSize: 15)))
+                      child: Text(
+                        initials,
+                        style: TextStyle(
+                          color: color,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 15,
+                        ),
+                      ),
+                    )
                   : Icon(icon, color: color, size: 21),
             ),
             const SizedBox(width: 12),
@@ -480,43 +705,73 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
                   Row(
                     children: [
                       Flexible(
-                        child: Text(title,
+                        child: Text(
+                          title,
                             style: const TextStyle(
-                                fontSize: 15, fontWeight: FontWeight.w700, color: Color(0xFF1E293B))),
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF1E293B),
+                          ),
+                        ),
                       ),
                       if (matchPct != null) ...[
                         const SizedBox(width: 8),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
                           decoration: BoxDecoration(
-                              color: const Color(0xFFE1F5EE), borderRadius: BorderRadius.circular(999)),
-                          child: Text('$matchPct match',
+                            color: const Color(0xFFE1F5EE),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            '$matchPct match',
                               style: const TextStyle(
-                                  fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF0F6E56))),
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF0F6E56),
+                            ),
+                          ),
                         ),
                       ],
                     ],
                   ),
                   if (subtitle != null || linkText != null) ...[
                     const SizedBox(height: 3),
-                    Text.rich(TextSpan(
-                      style: const TextStyle(fontSize: 13, color: Color(0xFF64748B), height: 1.3),
+                    Text.rich(
+                      TextSpan(
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: Color(0xFF64748B),
+                          height: 1.3,
+                        ),
                       children: [
                         if (subtitle != null) TextSpan(text: subtitle),
                         if (linkText != null)
                           TextSpan(
                               text: linkText,
                               style: const TextStyle(
-                                  color: Color(0xFF4129F0), fontWeight: FontWeight.w600)),
+                                color: Color(0xFF4129F0),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
                       ],
-                    )),
+                      ),
+                    ),
                   ],
                   if (actions != null) ...[
                     const SizedBox(height: 10),
                     Row(children: actions),
                   ],
                   const SizedBox(height: 7),
-                  Text(time, style: const TextStyle(fontSize: 11.5, color: Color(0xFF94A3B8))),
+                  Text(
+                    time,
+                    style: const TextStyle(
+                      fontSize: 11.5,
+                      color: Color(0xFF94A3B8),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -555,12 +810,17 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
             // además el índice 2 hoy es Red, no Perfil. Ahora abre el perfil
             // propio por `push`.
             _miniBtn('Ver perfil', const Color(0xFF1C1C1E), Colors.white, () {
-              Navigator.of(context).push(
-                CupertinoPageRoute(builder: (_) => const ProfileScreen()),
-              );
+              Navigator.of(
+                context,
+              ).push(CupertinoPageRoute(builder: (_) => const ProfileScreen()));
             }),
             const SizedBox(width: 8),
-            _miniBtn('Guardar', const Color(0xFFF1F5F9), const Color(0xFF64748B), () {}),
+            _miniBtn(
+              'Guardar',
+              const Color(0xFFF1F5F9),
+              const Color(0xFF64748B),
+              () {},
+            ),
           ],
         ),
       ),
@@ -602,7 +862,12 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
           actions: [
             _miniBtn('Aceptar', const Color(0xFF1C1C1E), Colors.white, () {}),
             const SizedBox(width: 8),
-            _miniBtn('Rechazar', const Color(0xFFF1F5F9), const Color(0xFF64748B), () {}),
+            _miniBtn(
+              'Rechazar',
+              const Color(0xFFF1F5F9),
+              const Color(0xFF64748B),
+              () {},
+            ),
           ],
         ),
       ),
@@ -610,11 +875,16 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
   }
 
   // Notificaciones reales → filas glam agrupadas por tiempo.
-  List<({String group, String cat, Widget row})> _realRows(List<Map<String, dynamic>> notifs) {
+  List<({String group, String cat, Widget row})> _realRows(
+    List<Map<String, dynamic>> notifs,
+  ) {
     String catOf(String t) {
       if (t.startsWith('connection')) return 'connections';
       if (t.contains('interview') || t.contains('schedul')) return 'interviews';
-      if (t.contains('job') || t == 'jobAlert' || t == 'profileView' || t.contains('application')) {
+      if (t.contains('job') ||
+          t == 'jobAlert' ||
+          t == 'profileView' ||
+          t.contains('application')) {
         return 'candidates';
       }
       return 'other';
@@ -624,14 +894,16 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
       final dt = DateTime.tryParse(iso ?? '')?.toLocal();
       if (dt == null) return 'Antes';
       final now = DateTime.now();
-      if (dt.year == now.year && dt.month == now.month && dt.day == now.day) return 'Hoy';
+      if (dt.year == now.year && dt.month == now.month && dt.day == now.day)
+        return 'Hoy';
       if (now.difference(dt).inDays < 7) return 'Esta semana';
       return 'Antes';
     }
 
     // Ordena por grupo (Hoy → Esta semana → Antes) para que _renderGrouped agrupe bien.
     const order = {'Hoy': 0, 'Esta semana': 1, 'Antes': 2};
-    final sorted = [...notifs]..sort((a, b) {
+    final sorted = [...notifs]
+      ..sort((a, b) {
         final ga = order[groupOf(a['created_at']?.toString())] ?? 3;
         final gb = order[groupOf(b['created_at']?.toString())] ?? 3;
         return ga.compareTo(gb);
@@ -666,10 +938,19 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
               : () => _markAsRead(n),
           actions: (isConnection && !isRead)
               ? [
-                  _miniBtn('Aceptar', const Color(0xFF1C1C1E), Colors.white, () => _handleAccept(n)),
+                  _miniBtn(
+                    'Aceptar',
+                    const Color(0xFF1C1C1E),
+                    Colors.white,
+                    () => _handleAccept(n),
+                  ),
                   const SizedBox(width: 8),
-                  _miniBtn('Rechazar', const Color(0xFFF1F5F9), const Color(0xFF64748B),
-                      () => _handleReject(n)),
+                  _miniBtn(
+                    'Rechazar',
+                    const Color(0xFFF1F5F9),
+                    const Color(0xFF64748B),
+                    () => _handleReject(n),
+                  ),
                 ]
               : null,
         ),
@@ -717,9 +998,18 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
-        decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(9)),
-        child: Text(label,
-            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: fg)),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(9),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            color: fg,
+          ),
+        ),
       ),
     );
   }
@@ -790,7 +1080,11 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
             elevation: 0,
             title: const Text(
               'Notificaciones',
-              style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: Colors.white),
+              style: TextStyle(
+                fontWeight: FontWeight.w900,
+                fontSize: 18,
+                color: Colors.white,
+              ),
             ),
           ),
           body: SingleChildScrollView(
@@ -809,17 +1103,29 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
                     ),
                     child: Row(
                       children: [
-                        const Icon(CupertinoIcons.lightbulb_fill, color: Color(0xFFD97706), size: 18),
+                        const Icon(
+                          CupertinoIcons.lightbulb_fill,
+                          color: Color(0xFFD97706),
+                          size: 18,
+                        ),
                         const SizedBox(width: 8),
                         const Expanded(
                           child: Text(
                             "Completá tu perfil y grabá un video pitch.",
-                            style: TextStyle(color: Color(0xFF92400E), fontSize: 11.5, fontWeight: FontWeight.bold),
+                            style: TextStyle(
+                              color: Color(0xFF92400E),
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
                         GestureDetector(
                           onTap: () => setState(() => _bannerDismissed = true),
-                          child: const Icon(CupertinoIcons.xmark, color: Color(0xFF92400E), size: 14),
+                          child: const Icon(
+                            CupertinoIcons.xmark,
+                            color: Color(0xFF92400E),
+                            size: 14,
+                          ),
                         ),
                       ],
                     ),
@@ -828,7 +1134,12 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
                 // Career Quantum Explorer Header Card
                 const Text(
                   "Career Quantum Explorer",
-                  style: TextStyle(fontFamily: 'Georgia', fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+                  style: TextStyle(
+                    fontFamily: 'Georgia',
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
                 ),
                 const SizedBox(height: 10),
 
@@ -838,7 +1149,9 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
                   decoration: BoxDecoration(
                     color: const Color(0xFF1E293B),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFF475569).withOpacity(0.5)),
+                    border: Border.all(
+                      color: const Color(0xFF475569).withOpacity(0.5),
+                    ),
                   ),
                   child: Row(
                     children: [
@@ -846,24 +1159,38 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
                         clipBehavior: Clip.none,
                         children: [
                           Container(
-                            width: 44, height: 44,
+                            width: 44,
+                            height: 44,
                             decoration: const BoxDecoration(
                               shape: BoxShape.circle,
                               image: DecorationImage(
-                                image: NetworkImage("https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop"),
+                                image: NetworkImage(
+                                  "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop",
+                                ),
                                 fit: BoxFit.cover,
                               ),
                             ),
                           ),
                           Positioned(
-                            bottom: -2, right: -2,
+                            bottom: -2,
+                            right: -2,
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 4,
+                                vertical: 1,
+                              ),
                               decoration: BoxDecoration(
                                 color: const Color(0xFF4129F0),
                                 borderRadius: BorderRadius.circular(4),
                               ),
-                              child: const Text("10K", style: TextStyle(color: Colors.white, fontSize: 7, fontWeight: FontWeight.bold)),
+                              child: const Text(
+                                "10K",
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 7,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
                             ),
                           ),
                         ],
@@ -875,12 +1202,20 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
                           children: [
                             Text(
                               "Gale / Senior Engineering Lead",
-                              style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                             SizedBox(height: 2),
                             Text(
                               "(Latinaics)",
-                              style: TextStyle(color: Color(0xFF4129F0), fontSize: 10, fontWeight: FontWeight.bold),
+                              style: TextStyle(
+                                color: Color(0xFF4129F0),
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ],
                         ),
@@ -915,7 +1250,9 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
                     ),
                     child: CustomPaint(
                       size: Size.infinite,
-                      painter: QuantumNexusPainter(animationValue: _animationController.value),
+                      painter: QuantumNexusPainter(
+                        animationValue: _animationController.value,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 14),
@@ -927,16 +1264,34 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
                     ),
                     child: Row(
                       children: [
-                        const Text("Satinunics Skills", style: TextStyle(color: Color(0xFF1E293B), fontSize: 12, fontWeight: FontWeight.bold)),
+                        const Text(
+                          "Satinunics Skills",
+                          style: TextStyle(
+                            color: Color(0xFF1E293B),
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                         const Spacer(),
                         SizedBox(
-                          width: 44, height: 44,
+                          width: 44,
+                          height: 44,
                           child: CustomPaint(
-                            painter: RadarChartPainter(values: const [0.8, 0.75, 0.9, 0.65, 0.85, 0.7], labels: const []),
+                            painter: RadarChartPainter(
+                              values: const [0.8, 0.75, 0.9, 0.65, 0.85, 0.7],
+                              labels: const [],
+                            ),
                           ),
                         ),
                         const SizedBox(width: 10),
-                        const Text("98%", style: TextStyle(color: Color(0xFFC2410C), fontSize: 14, fontWeight: FontWeight.w900)),
+                        const Text(
+                          "98%",
+                          style: TextStyle(
+                            color: Color(0xFFC2410C),
+                            fontSize: 14,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -951,15 +1306,30 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text("Global Talent Mobility Map", style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                        const Text(
+                          "Global Talent Mobility Map",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                         const SizedBox(height: 4),
-                        const Text("High demand detected in Santiago, Chile for Senior DevOps.", style: TextStyle(color: Color(0xFF94A3B8), fontSize: 10)),
+                        const Text(
+                          "High demand detected in Santiago, Chile for Senior DevOps.",
+                          style: TextStyle(
+                            color: Color(0xFF94A3B8),
+                            fontSize: 10,
+                          ),
+                        ),
                         const SizedBox(height: 10),
                         SizedBox(
                           height: 180,
                           child: CustomPaint(
                             size: Size.infinite,
-                            painter: TalentMobilityMapPainter(animationValue: _animationController.value),
+                            painter: TalentMobilityMapPainter(
+                              animationValue: _animationController.value,
+                            ),
                           ),
                         ),
                       ],
@@ -976,7 +1346,14 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text("YOUR GLOBAL IMPACT SCORE", style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                        const Text(
+                          "YOUR GLOBAL IMPACT SCORE",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                         const SizedBox(height: 10),
                         SizedBox(
                           height: 150,
@@ -998,37 +1375,77 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text("NETWORK SUGGESTIONS", style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                        const Text(
+                          "NETWORK SUGGESTIONS",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                         const SizedBox(height: 10),
-                        ..._suggestions.take(3).map((s) => Padding(
+                        ..._suggestions
+                            .take(3)
+                            .map(
+                              (s) => Padding(
                           padding: const EdgeInsets.only(bottom: 8.0),
                           child: Row(
                             children: [
                               Container(
-                                width: 24, height: 24,
+                                      width: 24,
+                                      height: 24,
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
-                                  image: DecorationImage(image: NetworkImage(s["avatar"]!), fit: BoxFit.cover),
+                                        image: DecorationImage(
+                                          image: NetworkImage(s["avatar"]!),
+                                          fit: BoxFit.cover,
+                                        ),
                                 ),
                               ),
                               const SizedBox(width: 8),
                               Expanded(
-                                child: Text(s["name"]!, style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                                      child: Text(
+                                        s["name"]!,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
                               ),
                               const SizedBox(width: 4),
-                              Text(s["match"]!, style: const TextStyle(color: Color(0xFF3B82F6), fontSize: 10, fontWeight: FontWeight.bold)),
+                                    Text(
+                                      s["match"]!,
+                                      style: const TextStyle(
+                                        color: Color(0xFF3B82F6),
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
                               const SizedBox(width: 8),
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 6,
+                                        vertical: 3,
+                                      ),
                                 decoration: BoxDecoration(
                                   color: const Color(0xFF4129F0),
                                   borderRadius: BorderRadius.circular(4),
                                 ),
-                                child: const Text("Conectar", style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold)),
+                                      child: const Text(
+                                        "Conectar",
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 8,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
                               ),
                             ],
                           ),
-                        )).toList(),
+                              ),
+                            )
+                            .toList(),
                       ],
                     ),
                   ),
@@ -1050,7 +1467,9 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
           padding: const EdgeInsets.symmetric(vertical: 8),
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: isSelected ? const Color(0xFF4129F0) : const Color(0xFF1E293B),
+            color: isSelected
+                ? const Color(0xFF4129F0)
+                : const Color(0xFF1E293B),
             borderRadius: BorderRadius.circular(8),
             border: Border.all(color: const Color(0xFF475569).withOpacity(0.3)),
           ),
@@ -1067,7 +1486,6 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
     );
   }
 
-
   // ── Layout web — Cards Grid ────────────────────────────────────────────────
   final List<Map<String, String>> _suggestions = const [
     {
@@ -1075,35 +1493,40 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
       "match": "98%",
       "title": "Matching",
       "sub": "Skill stong",
-      "avatar": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop"
+      "avatar":
+          "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop",
     },
     {
       "name": "Poriard Threa",
       "match": "96%",
       "title": "Matching",
       "sub": "Skill stong",
-      "avatar": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&h=100&fit=crop"
+      "avatar":
+          "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&h=100&fit=crop",
     },
     {
       "name": "Ronnad Jones",
       "match": "93%",
       "title": "Matching",
       "sub": "Skill stong",
-      "avatar": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&h=100&fit=crop"
+      "avatar":
+          "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&h=100&fit=crop",
     },
     {
       "name": "Partsla Sehan",
       "match": "58%",
       "title": "Matching",
       "sub": "Skill stong",
-      "avatar": "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100&h=100&fit=crop"
+      "avatar":
+          "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100&h=100&fit=crop",
     },
     {
       "name": "Harlard Staney",
       "match": "85%",
       "title": "Matching",
       "sub": "Skill stong",
-      "avatar": "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop"
+      "avatar":
+          "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop",
     },
   ];
 
@@ -1121,12 +1544,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> with 
       ),
     );
   }
-
-
-
 }
-
-
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Panel de Alertas para empresas — dark, con postulantes nuevos reales
@@ -1157,8 +1575,39 @@ class _CompanyAlertsWebState extends State<_CompanyAlertsWeb> {
 
   Future<List<Map<String, dynamic>>> _fetchNewCandidates() async {
     try {
-      final res = await _supabase.rpc('get_company_candidates', params: {'p_status': 'pending'});
-      return List<Map<String, dynamic>>.from(res as List);
+      final res = await _supabase.rpc(
+        'get_company_candidates',
+        params: {'p_status': 'pending'},
+      );
+      final rows = List<Map<String, dynamic>>.from(res as List);
+      final ids = rows
+          .map((row) => row['candidate_id']?.toString() ?? '')
+          .where((id) => id.isNotEmpty)
+          .toList();
+      if (ids.isEmpty) return rows;
+      final users = await _supabase
+          .from('users')
+          .select(kUserColumns)
+          .inFilter('id', ids);
+      final usersById = <String, NexUser>{
+        for (final user in users)
+          user['id'].toString(): protectCandidateForHeadhunter(
+            NexUser.fromJson(user),
+            'headhunter',
+          ),
+      };
+      return rows.map((row) {
+        final candidate = usersById[row['candidate_id']?.toString()];
+        if (candidate == null) return row;
+        return <String, dynamic>{
+          ...row,
+          'candidate_name': candidate.name,
+          'candidate_headline': candidate.headline,
+          'candidate_avatar_url': candidate.avatarUrl,
+          'candidate_tags': candidate.tags,
+          'candidate_account_type': candidate.accountType,
+        };
+      }).toList();
     } catch (e) {
       debugPrint('Error get_company_candidates (alertas): $e');
       return [];
@@ -1176,14 +1625,27 @@ class _CompanyAlertsWebState extends State<_CompanyAlertsWeb> {
           .eq('status', 'accepted')
           .order('created_at', ascending: false)
           .limit(5);
-      final otherIds = rows.map<String>((r) {
+      final otherIds = rows
+          .map<String>((r) {
         final req = r['requester_id']?.toString() ?? '';
         final add = r['addressee_id']?.toString() ?? '';
         return req == uid ? add : req;
-      }).where((id) => id.isNotEmpty).toList();
+          })
+          .where((id) => id.isNotEmpty)
+          .toList();
       if (otherIds.isEmpty) return [];
-      final users = await _supabase.from('users').select('id, name, headline').inFilter('id', otherIds);
-      return List<Map<String, dynamic>>.from(users);
+      final users = await _supabase
+          .from('users')
+          .select(kUserColumns)
+          .inFilter('id', otherIds);
+      return users
+          .map<Map<String, dynamic>>(
+            (user) => protectCandidateForHeadhunter(
+              NexUser.fromJson(user),
+              'headhunter',
+            ).toJson(),
+          )
+          .toList();
     } catch (e) {
       debugPrint('Error connections (alertas): $e');
       return [];
@@ -1212,7 +1674,10 @@ class _CompanyAlertsWebState extends State<_CompanyAlertsWeb> {
         future: _newCandidates,
         builder: (context, snap) {
           if (!snap.hasData) {
-            return const Padding(padding: EdgeInsets.symmetric(vertical: 48), child: Center(child: CupertinoActivityIndicator()));
+            return const Padding(
+              padding: EdgeInsets.symmetric(vertical: 48),
+              child: Center(child: CupertinoActivityIndicator()),
+            );
           }
           final rows = snap.data!;
           if (rows.isEmpty) {
@@ -1221,7 +1686,8 @@ class _CompanyAlertsWebState extends State<_CompanyAlertsWeb> {
               child: WebEmptyState(
                 icon: CupertinoIcons.bell,
                 title: '¡Estás al día!',
-                subtitle: 'Sin alertas nuevas.\n(Tip: revisá tus vacantes activas.)',
+                subtitle:
+                    'Sin alertas nuevas.\n(Tip: revisá tus vacantes activas.)',
               ),
             );
           }
@@ -1238,36 +1704,41 @@ class _CompanyAlertsWebState extends State<_CompanyAlertsWeb> {
     final headline = r['candidate_headline']?.toString() ?? '';
     final jobTitle = r['job_title']?.toString() ?? 'tu vacante';
     final avatarUrl = r['candidate_avatar_url']?.toString();
-    final tags = (r['candidate_tags'] as List?)?.map((t) => t.toString()).toList() ?? [];
+    final tags =
+        (r['candidate_tags'] as List?)?.map((t) => t.toString()).toList() ?? [];
     return GestureDetector(
-      onTap: () async {
-        final data = await _supabase.from('users').select(kUserColumns).eq('id', r['candidate_id']).maybeSingle();
-        if (data != null && mounted) {
-          Navigator.of(context).push(CupertinoPageRoute(builder: (_) => ProfileScreen(user: NexUser.fromJson(data))));
-        }
-      },
+      onTap: () => _openCandidate(r['candidate_id']),
       child: WebCard(
         padding: const EdgeInsets.all(16),
-        onTap: () async {
-          final data = await _supabase.from('users').select(kUserColumns).eq('id', r['candidate_id']).maybeSingle();
-          if (data != null && mounted) {
-            Navigator.of(context).push(CupertinoPageRoute(builder: (_) => ProfileScreen(user: NexUser.fromJson(data))));
-          }
-        },
+        onTap: () => _openCandidate(r['candidate_id']),
         child: Padding(
           padding: const EdgeInsets.only(bottom: 12),
           child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Container(
-              width: 48, height: 48,
+                width: 48,
+                height: 48,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: MployaTheme.brandAccent.withValues(alpha: 0.12),
-                image: (avatarUrl != null && avatarUrl.isNotEmpty) ? DecorationImage(image: NetworkImage(avatarUrl), fit: BoxFit.cover) : null,
+                  image: (avatarUrl != null && avatarUrl.isNotEmpty)
+                      ? DecorationImage(
+                          image: NetworkImage(avatarUrl),
+                          fit: BoxFit.cover,
+                        )
+                      : null,
               ),
               child: (avatarUrl == null || avatarUrl.isEmpty)
-                  ? Center(child: Text(name.isNotEmpty ? name[0].toUpperCase() : '?', style: const TextStyle(color: MployaTheme.brandAccent, fontWeight: FontWeight.w800)))
+                    ? Center(
+                        child: Text(
+                          name.isNotEmpty ? name[0].toUpperCase() : '?',
+                          style: const TextStyle(
+                            color: MployaTheme.brandAccent,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      )
                   : null,
             ),
             const SizedBox(width: 14),
@@ -1278,7 +1749,14 @@ class _CompanyAlertsWebState extends State<_CompanyAlertsWeb> {
                   Row(
                     children: [
                       Expanded(
-                        child: Text(name, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: context.textPrimary)),
+                          child: Text(
+                            name,
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w800,
+                              color: context.textPrimary,
+                            ),
+                          ),
                       ),
                       const WebBadge(label: 'Nuevo'),
                     ],
@@ -1286,21 +1764,53 @@ class _CompanyAlertsWebState extends State<_CompanyAlertsWeb> {
                   if (headline.isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.only(top: 2),
-                      child: Text(headline, style: TextStyle(fontSize: 12.5, color: context.textTertiary)),
+                        child: Text(
+                          headline,
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            color: context.textTertiary,
+                          ),
+                        ),
                     ),
                   const SizedBox(height: 8),
-                  Text('Postuló a "$jobTitle"',
-                      style: TextStyle(fontSize: 12.5, color: context.textSecondary, fontWeight: FontWeight.w600)),
+                    Text(
+                      'Postuló a "$jobTitle"',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        color: context.textSecondary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   if (tags.isNotEmpty) ...[
                     const SizedBox(height: 8),
                     Wrap(
                       spacing: 6,
                       runSpacing: 6,
-                      children: tags.take(4).map((t) => Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                            decoration: BoxDecoration(color: context.dividerColor.withValues(alpha: 0.4), borderRadius: BorderRadius.circular(999)),
-                            child: Text('#$t', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: context.textSecondary)),
-                          )).toList(),
+                        children: tags
+                            .take(4)
+                            .map(
+                              (t) => Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 3,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: context.dividerColor.withValues(
+                                    alpha: 0.4,
+                                  ),
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                                child: Text(
+                                  '#$t',
+                                  style: TextStyle(
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: context.textSecondary,
+                                  ),
+                                ),
+                              ),
+                            )
+                            .toList(),
                     ),
                   ],
                 ],
@@ -1309,6 +1819,27 @@ class _CompanyAlertsWebState extends State<_CompanyAlertsWeb> {
           ],
           ),
         ),
+      ),
+    );
+  }
+
+  Future<void> _openCandidate(dynamic candidateId) async {
+    final id = candidateId?.toString() ?? '';
+    if (id.isEmpty) return;
+    final data = await _supabase
+        .from('users')
+        .select(kUserColumns)
+        .eq('id', id)
+        .maybeSingle();
+    if (data == null || !mounted) return;
+    final candidate = protectCandidateForHeadhunter(
+      NexUser.fromJson(data),
+      'headhunter',
+    );
+    Navigator.of(context).push(
+      CupertinoPageRoute(
+        builder: (_) =>
+            ProfileScreen(user: candidate, viewerAccountType: 'headhunter'),
       ),
     );
   }
@@ -1322,33 +1853,68 @@ class _CompanyAlertsWebState extends State<_CompanyAlertsWeb> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const WebSectionLabel('Próximas entrevistas', color: kMployaBlue),
+                const WebSectionLabel(
+                  'Próximas entrevistas',
+                  color: kMployaBlue,
+                ),
                 FutureBuilder<List<ScheduledInterview>>(
                   future: _interviews,
                   builder: (context, snap) {
-                    if (!snap.hasData) return const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: Center(child: CupertinoActivityIndicator()));
+                    if (!snap.hasData)
+                      return const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 8),
+                        child: Center(child: CupertinoActivityIndicator()),
+                      );
                     final list = snap.data!;
                     if (list.isEmpty) {
-                      return Text('Sin entrevistas agendadas.\n(Tip: programá una nueva entrevista.)',
-                          style: TextStyle(fontSize: 12.5, color: context.textTertiary, height: 1.4));
+                      return Text(
+                        'Sin entrevistas agendadas.\n(Tip: programá una nueva entrevista.)',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          color: context.textTertiary,
+                          height: 1.4,
+                        ),
+                      );
                     }
                     return Column(
-                      children: list.take(4).map((i) => Padding(
+                      children: list
+                          .take(4)
+                          .map(
+                            (i) => Padding(
                             padding: const EdgeInsets.only(bottom: 10),
                             child: Row(
                               children: [
                                 Container(
-                                  width: 30, height: 30,
-                                  decoration: BoxDecoration(color: kMployaBlue.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)),
-                                  child: const Icon(CupertinoIcons.calendar, size: 14, color: kMployaBlue),
+                                    width: 30,
+                                    height: 30,
+                                    decoration: BoxDecoration(
+                                      color: kMployaBlue.withValues(
+                                        alpha: 0.12,
+                                      ),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: const Icon(
+                                      CupertinoIcons.calendar,
+                                      size: 14,
+                                      color: kMployaBlue,
+                                    ),
                                 ),
                                 const SizedBox(width: 10),
                                 Expanded(
-                                  child: Text('${i.date} · ${i.time}', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: context.textPrimary)),
+                                    child: Text(
+                                      '${i.date} · ${i.time}',
+                                      style: TextStyle(
+                                        fontSize: 12.5,
+                                        fontWeight: FontWeight.w700,
+                                        color: context.textPrimary,
+                                      ),
+                                    ),
                                 ),
                               ],
                             ),
-                          )).toList(),
+                            ),
+                          )
+                          .toList(),
                     );
                   },
                 ),
@@ -1358,7 +1924,11 @@ class _CompanyAlertsWebState extends State<_CompanyAlertsWeb> {
                   child: WebButton(
                     icon: CupertinoIcons.add,
                     label: 'Agregar Entrevista',
-                    onTap: () => Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const SchedulingScreen(isCompany: true))),
+                    onTap: () => Navigator.of(context).push(
+                      CupertinoPageRoute(
+                        builder: (_) => const SchedulingScreen(isCompany: true),
+                      ),
+                    ),
                   ),
                 ),
               ],
@@ -1369,51 +1939,102 @@ class _CompanyAlertsWebState extends State<_CompanyAlertsWeb> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const WebSectionLabel('Conexiones recientes', color: kMployaPurple),
+                const WebSectionLabel(
+                  'Conexiones recientes',
+                  color: kMployaPurple,
+                ),
                 FutureBuilder<List<Map<String, dynamic>>>(
                   future: _connections,
                   builder: (context, snap) {
-                    if (!snap.hasData) return const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: Center(child: CupertinoActivityIndicator()));
+                    if (!snap.hasData)
+                      return const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 8),
+                        child: Center(child: CupertinoActivityIndicator()),
+                      );
                     final list = snap.data!;
                     if (list.isEmpty) {
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Row(
-                            children: List.generate(5, (i) => Padding(
+                            children: List.generate(
+                              5,
+                              (i) => Padding(
                                   padding: const EdgeInsets.only(right: 8),
                                   child: Container(
-                                    width: 30, height: 30,
+                                  width: 30,
+                                  height: 30,
                                     decoration: BoxDecoration(
                                       shape: BoxShape.circle,
-                                      border: Border.all(color: i == 0 ? MployaTheme.brandAccent : context.dividerColor, width: 1.5),
+                                    border: Border.all(
+                                      color: i == 0
+                                          ? MployaTheme.brandAccent
+                                          : context.dividerColor,
+                                      width: 1.5,
                                     ),
                                   ),
-                                )),
+                                ),
+                                    ),
+                                  ),
                           ),
                           const SizedBox(height: 10),
-                          Text('Todavía no tenés conexiones.\n(Tip: conectá con candidatos destacados.)',
-                              style: TextStyle(fontSize: 12.5, color: context.textTertiary, height: 1.4)),
+                          Text(
+                            'Todavía no tenés conexiones.\n(Tip: conectá con candidatos destacados.)',
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              color: context.textTertiary,
+                              height: 1.4,
+                            ),
+                          ),
                         ],
                       );
                     }
                     return Column(
-                      children: list.map((u) => Padding(
+                      children: list
+                          .map(
+                            (u) => Padding(
                             padding: const EdgeInsets.only(bottom: 10),
                             child: Row(
                               children: [
                                 Container(
-                                  width: 28, height: 28,
-                                  decoration: BoxDecoration(shape: BoxShape.circle, color: kMployaPurple.withValues(alpha: 0.15)),
-                                  child: Center(child: Text((u['name']?.toString() ?? '?')[0].toUpperCase(), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: kMployaPurple))),
+                                    width: 28,
+                                    height: 28,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: kMployaPurple.withValues(
+                                        alpha: 0.15,
+                                      ),
+                                    ),
+                                    child: Center(
+                                      child: Text(
+                                        (u['name']?.toString() ?? '?')[0]
+                                            .toUpperCase(),
+                                        style: const TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w800,
+                                          color: kMployaPurple,
+                                        ),
+                                      ),
+                                    ),
                                 ),
                                 const SizedBox(width: 10),
                                 Expanded(
-                                  child: Text(u['name']?.toString() ?? '', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: context.textPrimary), maxLines: 1, overflow: TextOverflow.ellipsis),
+                                    child: Text(
+                                      u['name']?.toString() ?? '',
+                                      style: TextStyle(
+                                        fontSize: 12.5,
+                                        fontWeight: FontWeight.w700,
+                                        color: context.textPrimary,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
                                 ),
                               ],
                             ),
-                          )).toList(),
+                            ),
+                          )
+                          .toList(),
                     );
                   },
                 ),
@@ -1422,7 +2043,11 @@ class _CompanyAlertsWebState extends State<_CompanyAlertsWeb> {
                   width: double.infinity,
                   child: WebButton(
                     label: 'Ver Candidatos',
-                    onTap: () => Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const AtsDashboardScreen())),
+                    onTap: () => Navigator.of(context).push(
+                      CupertinoPageRoute(
+                        builder: (_) => const AtsDashboardScreen(),
+                      ),
+                    ),
                   ),
                 ),
               ],
@@ -1438,18 +2063,21 @@ class _CompanyAlertsWebState extends State<_CompanyAlertsWeb> {
 // Alert Card Data Model & Types
 // ─────────────────────────────────────────────────────────────────────────────
 
-enum _AlertKind { talentMatch, premiumView, marketInfo, connectionRequest, generic }
-
+enum _AlertKind {
+  talentMatch,
+  premiumView,
+  marketInfo,
+  connectionRequest,
+  generic,
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Alert Card Widget — renders each card type with proper visuals
 // ─────────────────────────────────────────────────────────────────────────────
 
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Mobile Alert Card — compact card for 2-column grid
 // ─────────────────────────────────────────────────────────────────────────────
-
 
 // ── Models and Custom widgets for the Premium Presentation Layout ──
 
@@ -1478,7 +2106,6 @@ class AlertCandidate {
     required this.matchPercentage,
   });
 }
-
 
 class RadarChartPainter extends CustomPainter {
   final List<double> values;
@@ -1517,7 +2144,10 @@ class RadarChartPainter extends CustomPainter {
       final path = Path();
       for (int i = 0; i < count; i++) {
         final angle = (i * 2 * pi / count) - pi / 2;
-        final pt = Offset(center.dx + r * cos(angle), center.dy + r * sin(angle));
+        final pt = Offset(
+          center.dx + r * cos(angle),
+          center.dy + r * sin(angle),
+        );
         if (i == 0) {
           path.moveTo(pt.dx, pt.dy);
         } else {
@@ -1531,7 +2161,10 @@ class RadarChartPainter extends CustomPainter {
     // Axes
     for (int i = 0; i < count; i++) {
       final angle = (i * 2 * pi / count) - pi / 2;
-      final pt = Offset(center.dx + radius * cos(angle), center.dy + radius * sin(angle));
+      final pt = Offset(
+        center.dx + radius * cos(angle),
+        center.dy + radius * sin(angle),
+      );
       canvas.drawLine(center, pt, paintLine);
 
       // Draw axis labels
@@ -1562,7 +2195,10 @@ class RadarChartPainter extends CustomPainter {
     for (int i = 0; i < count; i++) {
       final angle = (i * 2 * pi / count) - pi / 2;
       final val = values[i].clamp(0.0, 1.0);
-      final pt = Offset(center.dx + radius * val * cos(angle), center.dy + radius * val * sin(angle));
+      final pt = Offset(
+        center.dx + radius * val * cos(angle),
+        center.dy + radius * val * sin(angle),
+      );
       if (i == 0) {
         pathValue.moveTo(pt.dx, pt.dy);
       } else {
@@ -1626,16 +2262,28 @@ class QuantumNexusPainter extends CustomPainter {
     for (var pos in satellitePositions) {
       final path = Path();
       path.moveTo(center.dx, center.dy);
-      final ctrlX = (center.dx + pos.dx) / 2 + 12 * sin(animationValue * 2 * pi);
-      final ctrlY = (center.dy + pos.dy) / 2 - 12 * cos(animationValue * 2 * pi);
+      final ctrlX =
+          (center.dx + pos.dx) / 2 + 12 * sin(animationValue * 2 * pi);
+      final ctrlY =
+          (center.dy + pos.dy) / 2 - 12 * cos(animationValue * 2 * pi);
       path.quadraticBezierTo(ctrlX, ctrlY, pos.dx, pos.dy);
       canvas.drawPath(path, linePaint);
 
       // Moving particle along the connection line
       final t = (animationValue + pos.hashCode % 10 / 10.0) % 1.0;
-      final dotX = (1 - t) * (1 - t) * center.dx + 2 * (1 - t) * t * ctrlX + t * t * pos.dx;
-      final dotY = (1 - t) * (1 - t) * center.dy + 2 * (1 - t) * t * ctrlY + t * t * pos.dy;
-      canvas.drawCircle(Offset(dotX, dotY), 3.0, Paint()..color = const Color(0xFF4129F0));
+      final dotX =
+          (1 - t) * (1 - t) * center.dx +
+          2 * (1 - t) * t * ctrlX +
+          t * t * pos.dx;
+      final dotY =
+          (1 - t) * (1 - t) * center.dy +
+          2 * (1 - t) * t * ctrlY +
+          t * t * pos.dy;
+      canvas.drawCircle(
+        Offset(dotX, dotY),
+        3.0,
+        Paint()..color = const Color(0xFF4129F0),
+      );
     }
 
     // 3. Draw Center Node (Dark orange fill with text on light theme)
@@ -1656,16 +2304,31 @@ class QuantumNexusPainter extends CustomPainter {
       children: [
         TextSpan(
           text: "QUANTUM\n",
-          style: TextStyle(color: Color(0xFF0F172A), fontSize: 8.5, fontWeight: FontWeight.bold, height: 1.1),
+          style: TextStyle(
+            color: Color(0xFF0F172A),
+            fontSize: 8.5,
+            fontWeight: FontWeight.bold,
+            height: 1.1,
+          ),
         ),
         TextSpan(
           text: "NEXUS",
-          style: TextStyle(color: Color(0xFFC2410C), fontSize: 9.5, fontWeight: FontWeight.w900),
+          style: TextStyle(
+            color: Color(0xFFC2410C),
+            fontSize: 9.5,
+            fontWeight: FontWeight.w900,
+          ),
         ),
       ],
     );
     textPainter.layout();
-    textPainter.paint(canvas, Offset(center.dx - textPainter.width / 2, center.dy - textPainter.height / 2));
+    textPainter.paint(
+      canvas,
+      Offset(
+        center.dx - textPainter.width / 2,
+        center.dy - textPainter.height / 2,
+      ),
+    );
 
     // 4. Draw satellite nodes
     final nodeLabels = [
@@ -1683,7 +2346,11 @@ class QuantumNexusPainter extends CustomPainter {
       final pos = satellitePositions[i];
       final label = nodeLabels[i];
 
-      canvas.drawCircle(pos, 16.0, Paint()..color = const Color(0xFF4129F0).withOpacity(0.12));
+      canvas.drawCircle(
+        pos,
+        16.0,
+        Paint()..color = const Color(0xFF4129F0).withOpacity(0.12),
+      );
       canvas.drawCircle(pos, 12.0, Paint()..color = const Color(0xFFCBD5E1));
       canvas.drawCircle(pos, 10.5, centerGlow);
 
@@ -1695,17 +2362,27 @@ class QuantumNexusPainter extends CustomPainter {
       if (label == "JOBS" || label == "SKILLS") {
         canvas.drawCircle(pos, 3.0, iconPaint);
       } else {
-        canvas.drawRect(Rect.fromCenter(center: pos, width: 6, height: 6), iconPaint);
+        canvas.drawRect(
+          Rect.fromCenter(center: pos, width: 6, height: 6),
+          iconPaint,
+        );
       }
 
       final labelPainter = TextPainter(
         text: TextSpan(
           text: label,
-          style: const TextStyle(color: Color(0xFF334155), fontSize: 8.5, fontWeight: FontWeight.bold),
+          style: const TextStyle(
+            color: Color(0xFF334155),
+            fontSize: 8.5,
+            fontWeight: FontWeight.bold,
+          ),
         ),
         textDirection: TextDirection.ltr,
       )..layout();
-      labelPainter.paint(canvas, Offset(pos.dx - labelPainter.width / 2, pos.dy - 18));
+      labelPainter.paint(
+        canvas,
+        Offset(pos.dx - labelPainter.width / 2, pos.dy - 18),
+      );
     }
   }
 
@@ -1722,13 +2399,38 @@ class TalentMobilityMapPainter extends CustomPainter {
     // Stylized South America Map
     final path = Path();
     path.moveTo(size.width * 0.28, size.height * 0.15);
-    path.quadraticBezierTo(size.width * 0.45, size.height * 0.08, size.width * 0.65, size.height * 0.12);
-    path.quadraticBezierTo(size.width * 0.90, size.height * 0.25, size.width * 0.75, size.height * 0.52);
-    path.quadraticBezierTo(size.width * 0.60, size.height * 0.78, size.width * 0.52, size.height * 0.86);
+    path.quadraticBezierTo(
+      size.width * 0.45,
+      size.height * 0.08,
+      size.width * 0.65,
+      size.height * 0.12,
+    );
+    path.quadraticBezierTo(
+      size.width * 0.90,
+      size.height * 0.25,
+      size.width * 0.75,
+      size.height * 0.52,
+    );
+    path.quadraticBezierTo(
+      size.width * 0.60,
+      size.height * 0.78,
+      size.width * 0.52,
+      size.height * 0.86,
+    );
     path.lineTo(size.width * 0.48, size.height * 0.96);
     path.lineTo(size.width * 0.45, size.height * 0.96);
-    path.quadraticBezierTo(size.width * 0.35, size.height * 0.68, size.width * 0.26, size.height * 0.48);
-    path.quadraticBezierTo(size.width * 0.18, size.height * 0.26, size.width * 0.28, size.height * 0.15);
+    path.quadraticBezierTo(
+      size.width * 0.35,
+      size.height * 0.68,
+      size.width * 0.26,
+      size.height * 0.48,
+    );
+    path.quadraticBezierTo(
+      size.width * 0.18,
+      size.height * 0.26,
+      size.width * 0.28,
+      size.height * 0.15,
+    );
     path.close();
 
     final mapPaint = Paint()
@@ -1761,9 +2463,15 @@ class TalentMobilityMapPainter extends CustomPainter {
       canvas.drawPath(flowPath, flowPaint);
 
       final t = (animationValue + from.hashCode % 10 / 10.0) % 1.0;
-      final dotX = (1 - t) * (1 - t) * from.dx + 2 * (1 - t) * t * ctrlX + t * t * to.dx;
-      final dotY = (1 - t) * (1 - t) * from.dy + 2 * (1 - t) * t * ctrlY + t * t * to.dy;
-      canvas.drawCircle(Offset(dotX, dotY), 2.5, Paint()..color = const Color(0xFFEF4444));
+      final dotX =
+          (1 - t) * (1 - t) * from.dx + 2 * (1 - t) * t * ctrlX + t * t * to.dx;
+      final dotY =
+          (1 - t) * (1 - t) * from.dy + 2 * (1 - t) * t * ctrlY + t * t * to.dy;
+      canvas.drawCircle(
+        Offset(dotX, dotY),
+        2.5,
+        Paint()..color = const Color(0xFFEF4444),
+      );
     }
 
     drawFlow(buenosAires, santiago);
@@ -1797,8 +2505,16 @@ class GlobalImpactScorePainter extends CustomPainter {
     canvas.drawCircle(center, radius * 0.33, bgPaint);
 
     // Cross axes
-    canvas.drawLine(Offset(center.dx - radius, center.dy), Offset(center.dx + radius, center.dy), bgPaint);
-    canvas.drawLine(Offset(center.dx, center.dy - radius), Offset(center.dx, center.dy + radius), bgPaint);
+    canvas.drawLine(
+      Offset(center.dx - radius, center.dy),
+      Offset(center.dx + radius, center.dy),
+      bgPaint,
+    );
+    canvas.drawLine(
+      Offset(center.dx, center.dy - radius),
+      Offset(center.dx, center.dy + radius),
+      bgPaint,
+    );
 
     // Blue Polygon (Flow Reach)
     final bluePoints = [
@@ -1838,4 +2554,3 @@ class GlobalImpactScorePainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
-

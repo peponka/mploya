@@ -19,7 +19,9 @@ import '../widgets/mploya_toast.dart';
 import '../services/chat_service.dart';
 import '../services/content_moderation_service.dart';
 import '../utils/time_utils.dart';
+import '../utils/headhunter_candidate_privacy.dart';
 import 'agora_call_screen.dart';
+import 'headhunter/headhunter_interviews_screen.dart';
 import 'profile_screen.dart';
 import 'scheduling_screen.dart';
 
@@ -36,11 +38,13 @@ class MessagingPreviewData {
     this.conexiones = const [],
     this.usuarios = const [],
     this.mensajes = const [],
+    this.viewerAccountType = 'candidato',
   });
 
   final List<Map<String, dynamic>> conexiones;
   final List<Map<String, dynamic>> usuarios;
   final List<Map<String, dynamic>> mensajes;
+  final String viewerAccountType;
 }
 
 class MessagingScreen extends StatefulWidget {
@@ -112,6 +116,7 @@ class _MessagingScreenState extends State<MessagingScreen> {
   List<Map<String, dynamic>>? _connectionsData;
   List<Map<String, dynamic>>? _usersData;
   List<Map<String, dynamic>>? _messagesData;
+  String? _viewerAccountType;
 
   StreamSubscription? _connectionsSub;
   StreamSubscription? _usersSub;
@@ -127,6 +132,7 @@ class _MessagingScreenState extends State<MessagingScreen> {
       _connectionsData = preview.conexiones;
       _usersData = preview.usuarios;
       _messagesData = preview.mensajes;
+      _viewerAccountType = preview.viewerAccountType;
       return;
     }
     _loadInitialData();
@@ -160,12 +166,27 @@ class _MessagingScreenState extends State<MessagingScreen> {
           .order('created_at', ascending: false)
           .limit(200);
 
-      final results = await Future.wait([connFut, usersFut, msgFut]);
+      final viewerFut = _currentUserId == null
+          ? Future<Map<String, dynamic>?>.value(null)
+          : Supabase.instance.client
+              .from('users')
+              .select('account_type')
+              .eq('id', _currentUserId!)
+              .maybeSingle();
+
+      final results = await Future.wait<dynamic>([
+        connFut,
+        usersFut,
+        msgFut,
+        viewerFut,
+      ]);
       if (mounted) {
         setState(() {
           _connectionsData = List<Map<String, dynamic>>.from(results[0]);
           _usersData = List<Map<String, dynamic>>.from(results[1]);
           _messagesData = List<Map<String, dynamic>>.from(results[2]);
+          final viewer = results[3] as Map<String, dynamic>?;
+          _viewerAccountType = viewer?['account_type']?.toString();
         });
       }
     } catch (e) {
@@ -268,6 +289,9 @@ class _MessagingScreenState extends State<MessagingScreen> {
     ).toList();
   }
 
+  NexUser _visibleUser(NexUser user) =>
+      protectCandidateForHeadhunter(user, _viewerAccountType);
+
   /// Muestra un sheet con las conexiones para iniciar un nuevo chat
   void _showNewMessageSheet(BuildContext context) {
     showCupertinoModalPopup(
@@ -314,7 +338,7 @@ class _MessagingScreenState extends State<MessagingScreen> {
                       return ListView.builder(
                         itemCount: contacts.length,
                         itemBuilder: (ctx, i) {
-                          final u = contacts[i];
+                          final u = _visibleUser(contacts[i]);
                           return CupertinoButton(
                             padding: EdgeInsets.zero,
                             onPressed: () {
@@ -323,7 +347,10 @@ class _MessagingScreenState extends State<MessagingScreen> {
                                 setState(() => _selectedUser = u);
                               } else {
                                 Navigator.of(context).push(
-                                  CupertinoPageRoute(builder: (_) => ChatDetailScreen(otherUser: u)),
+                                  CupertinoPageRoute(builder: (_) => ChatDetailScreen(
+                                    otherUser: u,
+                                    viewerAccountType: _viewerAccountType,
+                                  )),
                                 );
                               }
                             },
@@ -386,7 +413,7 @@ class _MessagingScreenState extends State<MessagingScreen> {
         .toSet();
     return _usersData!
         .where((r) => validos.contains(r['id']))
-        .map((r) => NexUser.fromJson(r))
+        .map((r) => _visibleUser(NexUser.fromJson(r)))
         .toList();
   }
 
@@ -463,7 +490,7 @@ class _MessagingScreenState extends State<MessagingScreen> {
     setState(() => _selectedUser = u);
     if (candFormatoDe(context) == CandFormato.mobile) {
       Navigator.of(context).push(
-        CupertinoPageRoute(builder: (_) => ChatDetailScreen(otherUser: u)),
+        CupertinoPageRoute(builder: (_) => _chat(u)),
       );
     }
   }
@@ -475,6 +502,7 @@ class _MessagingScreenState extends State<MessagingScreen> {
     return ChatDetailScreen(
       key: ValueKey(u.id),
       otherUser: u,
+      viewerAccountType: _viewerAccountType,
       previewData: preview == null
           ? null
           : ChatDetailPreviewData(
@@ -489,15 +517,19 @@ class _MessagingScreenState extends State<MessagingScreen> {
           icono: CupertinoIcons.person_fill,
           etiqueta: 'Ver perfil',
           onTap: () => Navigator.of(context).push(
-            CupertinoPageRoute(builder: (_) => ProfileScreen(user: u)),
+            CupertinoPageRoute(builder: (_) => _profileFor(u)),
           ),
         ),
         CandAccionContexto(
           icono: CupertinoIcons.calendar,
-          etiqueta: 'Agendar entrevista',
+          etiqueta: _viewerAccountType == 'headhunter'
+              ? 'Ver entrevistas'
+              : 'Agendar entrevista',
           onTap: () => Navigator.of(context).push(
             CupertinoPageRoute(
-              builder: (_) => const SchedulingScreen(isCompany: true),
+              builder: (_) => _viewerAccountType == 'headhunter'
+                  ? const HeadhunterInterviewsScreen()
+                  : const SchedulingScreen(isCompany: true),
             ),
           ),
         ),
@@ -513,6 +545,18 @@ class _MessagingScreenState extends State<MessagingScreen> {
               MployaToast.info(context, 'Compartir CV estará disponible pronto'),
         ),
       ];
+
+  Widget _profileFor(NexUser user) => ProfileScreen(
+        user: user,
+        viewerAccountType: _viewerAccountType,
+        previewData: widget.previewData == null
+            ? null
+            : ProfilePreviewData(
+                usuario: user.toJson(),
+                isOwnProfile: false,
+                viewerAccountType: _viewerAccountType,
+              ),
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -769,6 +813,7 @@ class ChatDetailPreviewData {
 
 class ChatDetailScreen extends StatefulWidget {
   final NexUser otherUser;
+  final String? viewerAccountType;
 
   /// Sólo lo usan los tests y el generador de capturas. En producción es
   /// `null` y el chat funciona exactamente igual que antes.
@@ -778,6 +823,7 @@ class ChatDetailScreen extends StatefulWidget {
     super.key,
     required this.otherUser,
     this.previewData,
+    this.viewerAccountType,
   });
 
   @override
@@ -792,6 +838,11 @@ class ChatDetailScreenState extends State<ChatDetailScreen> {
   RealtimeChannel? _typingChannel;
   DateTime? _lastTypingEvent;
   String _myDisplayName = 'Usuario';
+
+  NexUser get _visibleOtherUser => protectCandidateForHeadhunter(
+        widget.otherUser,
+        widget.viewerAccountType,
+      );
 
   // `late`: en render aislado Supabase no está inicializado y un inicializador
   // de campo se evalúa al construir el State. Con `late` sólo se resuelve si
@@ -1094,18 +1145,16 @@ class ChatDetailScreenState extends State<ChatDetailScreen> {
 
     final roomId = ChatService.instance.generateJitsiRoom(_currentUserId!, _otherId);
 
-    // ── 1. Obtener nombre real + avatar del usuario actual ──
+    // ── 1. Obtener nombre real del usuario actual ──
     String myName = 'Mploya User';
-    String? myAvatar;
     try {
       final row = await Supabase.instance.client
           .from('users')
-          .select('name, avatar_url')
+          .select('name')
           .eq('id', _currentUserId!)
           .maybeSingle();
       if (row != null) {
         myName = row['name']?.toString() ?? myName;
-        myAvatar = row['avatar_url']?.toString();
       }
     } catch (e) {
       debugPrint('⚠️ Jitsi: error fetching user info: $e');
@@ -1145,7 +1194,7 @@ class ChatDetailScreenState extends State<ChatDetailScreen> {
         builder: (_) => AgoraCallScreen(
           channelName: roomId,
           displayName: myName,
-          otherName: widget.otherUser.name,
+          otherName: _visibleOtherUser.name,
         ),
       ),
     );
@@ -1254,6 +1303,7 @@ class ChatDetailScreenState extends State<ChatDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final otherUser = _visibleOtherUser;
     return CupertinoPageScaffold(
       // Fondo con contraste para que resalten las burbujas
       backgroundColor: context.isDark ? NexTheme.darkBg : MpTokens.lightBg,
@@ -1264,7 +1314,7 @@ class ChatDetailScreenState extends State<ChatDetailScreen> {
         middle: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            widget.otherUser.id.startsWith('demo_')
+            otherUser.id.startsWith('demo_')
                 ? Container(
                     width: 32,
                     height: 32,
@@ -1272,9 +1322,9 @@ class ChatDetailScreenState extends State<ChatDetailScreen> {
                       shape: BoxShape.circle,
                       gradient: LinearGradient(colors: [Colors.grey.shade200, Colors.grey.shade300]),
                     ),
-                    child: Center(child: Text(widget.otherUser.avatarUrl ?? '👤', style: const TextStyle(fontSize: 16))),
+                    child: Center(child: Text(otherUser.avatarUrl ?? '👤', style: const TextStyle(fontSize: 16))),
                   )
-                : NexAvatar(user: widget.otherUser, size: 32),
+                : NexAvatar(user: otherUser, size: 32),
             const SizedBox(width: 10),
             // `Flexible` + elipsis: en el panel de tablet la barra queda con
             // ~158 px para el centro y el nombre completo desbordaba 184 px.
@@ -1284,7 +1334,7 @@ class ChatDetailScreenState extends State<ChatDetailScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    widget.otherUser.name,
+                    otherUser.name,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
@@ -1308,8 +1358,8 @@ class ChatDetailScreenState extends State<ChatDetailScreen> {
                       const SizedBox(width: 4),
                       Flexible(
                         child: Text(
-                          widget.otherUser.headline.isNotEmpty
-                              ? widget.otherUser.headline
+                          otherUser.headline.isNotEmpty
+                              ? otherUser.headline
                               : 'Conexión activa',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -1340,7 +1390,17 @@ class ChatDetailScreenState extends State<ChatDetailScreen> {
               icon: CupertinoIcons.person_fill,
               label: 'Ver Perfil',
               onTap: () => Navigator.of(context).push(
-                CupertinoPageRoute(builder: (_) => ProfileScreen(user: widget.otherUser)),
+                CupertinoPageRoute(builder: (_) => ProfileScreen(
+                  user: widget.otherUser,
+                  viewerAccountType: widget.viewerAccountType,
+                  previewData: widget.previewData == null
+                      ? null
+                      : ProfilePreviewData(
+                          usuario: widget.otherUser.toJson(),
+                          isOwnProfile: false,
+                          viewerAccountType: widget.viewerAccountType,
+                        ),
+                )),
               ),
             ),
           ],
@@ -1376,7 +1436,7 @@ class ChatDetailScreenState extends State<ChatDetailScreen> {
 
                   if (messages.isEmpty) {
                     return _EmptyChat(
-                      otherUser: widget.otherUser,
+                      otherUser: otherUser,
                       onSendHello: () {
                         _controller.text = '¡Hola! Me encantó tu perfil.';
                         _sendMessage();
@@ -1410,7 +1470,7 @@ class ChatDetailScreenState extends State<ChatDetailScreen> {
                               builder: (_) => AgoraCallScreen(
                                 channelName: channelName,
                                 displayName: _myDisplayName,
-                                otherName: widget.otherUser.name,
+                                otherName: otherUser.name,
                               ),
                             ),
                           );
@@ -1445,7 +1505,7 @@ class ChatDetailScreenState extends State<ChatDetailScreen> {
                           const _TypingDot(delay: 300),
                           const SizedBox(width: 8),
                           Text(
-                            '${widget.otherUser.name.split(' ').first} escribiendo...',
+                            '${otherUser.name.split(' ').first} escribiendo...',
                             style: TextStyle(
                               fontSize: 12,
                               color: context.textSecondary,
@@ -2279,4 +2339,3 @@ class _TypingDotState extends State<_TypingDot> with SingleTickerProviderStateMi
     );
   }
 }
-

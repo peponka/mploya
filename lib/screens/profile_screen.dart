@@ -26,6 +26,9 @@ import 'camera_screen.dart';
 import 'candidate_profile_form_screen.dart';
 import 'chat_inmail_screen.dart';
 import 'company_profile_form_screen.dart';
+import 'headhunter/headhunter_edit_profile_screen.dart';
+import 'headhunter/headhunter_settings_screen.dart';
+import 'headhunter/headhunter_video_pitch_screen.dart';
 import 'mis_postulaciones_screen.dart';
 import 'ofertas_recibidas_screen.dart';
 import 'onboarding_pitch_screen.dart';
@@ -36,6 +39,7 @@ import 'saved_jobs_screen.dart';
 import 'splash_screen.dart';
 import 'stealth_profile_form_screen.dart';
 import '../services/portfolio_service.dart';
+import '../utils/headhunter_candidate_privacy.dart';
 
 /// Perfil propio ya resuelto para render tests y capturas. Mismo patrón que
 /// `JobsPreviewData` y `NetworkPreviewData`: si llega, la pantalla NO consulta
@@ -46,6 +50,8 @@ class ProfilePreviewData {
     required this.usuario,
     this.portfolio = const [],
     this.viewCount = 0,
+    this.isOwnProfile = true,
+    this.viewerAccountType,
   });
 
   /// Fila de `users` con la forma que devuelve la base.
@@ -53,6 +59,8 @@ class ProfilePreviewData {
 
   final List<PortfolioVideo> portfolio;
   final int viewCount;
+  final bool isOwnProfile;
+  final String? viewerAccountType;
 }
 
 class ProfileScreen extends StatefulWidget {
@@ -61,8 +69,14 @@ class ProfileScreen extends StatefulWidget {
   /// Sólo lo usan los tests y el generador de capturas. En producción es `null`
   /// y el comportamiento es exactamente el de antes.
   final ProfilePreviewData? previewData;
+  final String? viewerAccountType;
 
-  const ProfileScreen({super.key, this.user, this.previewData});
+  const ProfileScreen({
+    super.key,
+    this.user,
+    this.previewData,
+    this.viewerAccountType,
+  });
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
@@ -77,6 +91,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _isSavedProfile = false;
   bool _isSavingProfile = false;
   int _selectedPublicTab = 0;
+  Future<String?>? _viewerAccountTypeFuture;
 
   @override
   void initState() {
@@ -86,10 +101,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (widget.user == null) {
       _reloadOwnProfile();
     } else {
+      if (widget.viewerAccountType == null &&
+          isConfidentialCandidate(widget.user!)) {
+        _viewerAccountTypeFuture = _loadViewerAccountType();
+      }
       ProfileViewService.instance.recordView(widget.user!.id);
       _fetchConnectionStatus(widget.user!.id);
       _loadSavedProfileStatus();
     }
+  }
+
+  Future<String?> _loadViewerAccountType() async {
+    final uid = Supabase.instance.client.auth.currentUser?.id;
+    if (uid == null) return null;
+    final row = await Supabase.instance.client
+        .from('users')
+        .select('account_type')
+        .eq('id', uid)
+        .maybeSingle();
+    return row?['account_type']?.toString();
   }
 
   void _reloadOwnProfile() {
@@ -105,10 +135,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     });
   }
 
-  Future<_ProfileBundle> _loadBundle(
-    NexUser profile,
-    bool isOwnProfile,
-  ) async {
+  Future<_ProfileBundle> _loadBundle(NexUser profile, bool isOwnProfile) async {
     final portfolioFuture = isOwnProfile
         ? PortfolioService.instance.getMyPortfolio(forceRefresh: true)
         : PortfolioService.instance.getPortfolioFor(profile.id);
@@ -116,10 +143,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ? ProfileViewService.instance.getMyViewCount()
         : Future<int>.value(profile.profileViews);
 
-    final results = await Future.wait<dynamic>([
-      portfolioFuture,
-      viewsFuture,
-    ]);
+    final results = await Future.wait<dynamic>([portfolioFuture, viewsFuture]);
 
     return _ProfileBundle(
       portfolio: results[0] as List<PortfolioVideo>,
@@ -138,7 +162,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       );
     }
     final key = '${profile.id}_${isOwnProfile ? 'own' : 'public'}';
-    return _bundleFutures.putIfAbsent(key, () => _loadBundle(profile, isOwnProfile));
+    return _bundleFutures.putIfAbsent(
+      key,
+      () => _loadBundle(profile, isOwnProfile),
+    );
   }
 
   Future<void> _loadSavedProfileStatus() async {
@@ -232,7 +259,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     showCupertinoDialog<void>(
       context: context,
       barrierDismissible: false,
-      builder: (_) => const Center(child: CupertinoActivityIndicator(radius: 16)),
+      builder: (_) =>
+          const Center(child: CupertinoActivityIndicator(radius: 16)),
     );
 
     final url = await StorageService.instance.uploadAvatar(uid, picked);
@@ -245,7 +273,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
         builder: (ctx) => CupertinoAlertDialog(
           title: const Text('No se pudo actualizar'),
           content: Text(
-            StorageService.instance.lastError ?? 'Intenta nuevamente en unos segundos.',
+            StorageService.instance.lastError ??
+                'Intenta nuevamente en unos segundos.',
           ),
           actions: [
             CupertinoDialogAction(
@@ -258,7 +287,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       return;
     }
 
-    await Supabase.instance.client.from('users').update({'avatar_url': url}).eq('id', uid);
+    await Supabase.instance.client
+        .from('users')
+        .update({'avatar_url': url})
+        .eq('id', uid);
     _reloadOwnProfile();
   }
 
@@ -266,6 +298,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final type = profile.accountType.toLowerCase();
     final route = type == 'empresa'
         ? CupertinoPageRoute(builder: (_) => const CompanyProfileFormScreen())
+        : type == 'headhunter'
+        ? CupertinoPageRoute(
+            builder: (_) => const HeadhunterEditProfileScreen(),
+          )
         : (type == 'confidencial' || type == 'stealth')
             ? CupertinoPageRoute(builder: (_) => const StealthProfileFormScreen())
             : CupertinoPageRoute(
@@ -275,19 +311,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _reloadOwnProfile();
   }
 
-  Future<void> _openVideoPitchFlow(BuildContext context, NexUser profile) async {
+  Future<void> _openVideoPitchFlow(
+    BuildContext context,
+    NexUser profile,
+  ) async {
     final type = profile.accountType.toLowerCase();
+    if (type == 'headhunter') {
+      await Navigator.of(context).push(
+        CupertinoPageRoute(builder: (_) => const HeadhunterVideoPitchScreen()),
+      );
+      _reloadOwnProfile();
+      return;
+    }
     final isCompany = type == 'empresa' || type == 'headhunter';
     await Navigator.of(context).push(
-      CupertinoPageRoute(builder: (_) => OnboardingPitchScreen(isCompany: isCompany)),
+      CupertinoPageRoute(
+        builder: (_) => OnboardingPitchScreen(isCompany: isCompany),
+      ),
     );
     _reloadOwnProfile();
   }
 
   Future<void> _openPitchCamera(BuildContext context, NexUser profile) async {
-    await Navigator.of(context).push(
-      CupertinoPageRoute(builder: (_) => const CameraScreen()),
-    );
+    await Navigator.of(
+      context,
+    ).push(CupertinoPageRoute(builder: (_) => const CameraScreen()));
     _reloadOwnProfile();
   }
 
@@ -299,7 +347,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     showCupertinoModalPopup<void>(
       context: context,
       builder: (sheetContext) => CupertinoActionSheet(
-        title: Text(isOwnProfile ? 'Tu perfil profesional' : 'Acciones del perfil'),
+        title: Text(
+          isOwnProfile ? 'Tu perfil profesional' : 'Acciones del perfil',
+        ),
         message: Text(
           isOwnProfile
               ? 'Gestioná visibilidad, edición y distribución de tu perfil.'
@@ -323,7 +373,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
               onPressed: () {
                 Navigator.pop(sheetContext);
                 Navigator.of(context).push(
-                  CupertinoPageRoute(builder: (_) => const SettingsScreen()),
+                  CupertinoPageRoute(
+                    builder: (_) => profile.accountType == 'headhunter'
+                        ? const HeadhunterSettingsScreen()
+                        : const SettingsScreen(),
+                  ),
                 );
               },
               child: const Text('Configuración y visibilidad'),
@@ -341,7 +395,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
               onPressed: () {
                 Navigator.pop(sheetContext);
                 Navigator.of(context).push(
-                  CupertinoPageRoute(builder: (_) => const MisPostulacionesScreen()),
+                  CupertinoPageRoute(
+                    builder: (_) => const MisPostulacionesScreen(),
+                  ),
                 );
               },
               child: const Text('Mis Postulaciones'),
@@ -351,7 +407,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
               onPressed: () {
                 Navigator.pop(sheetContext);
                 Navigator.of(context).push(
-                  CupertinoPageRoute(builder: (_) => const PreferenciasLaboralesScreen()),
+                  CupertinoPageRoute(
+                    builder: (_) => const PreferenciasLaboralesScreen(),
+                  ),
                 );
               },
               child: const Text('Preferencias laborales'),
@@ -361,7 +419,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
               onPressed: () {
                 Navigator.pop(sheetContext);
                 Navigator.of(context).push(
-                  CupertinoPageRoute(builder: (_) => const OfertasRecibidasScreen()),
+                  CupertinoPageRoute(
+                    builder: (_) => const OfertasRecibidasScreen(),
+                  ),
                 );
               },
               child: const Text('Ofertas recibidas'),
@@ -376,7 +436,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
               onPressed: () {
                 Navigator.pop(sheetContext);
                 Navigator.of(context).push(
-                  CupertinoPageRoute(builder: (_) => const ToolsHubEntryScreen()),
+                  CupertinoPageRoute(
+                    builder: (_) => const ToolsHubEntryScreen(),
+                  ),
                 );
               },
               child: const Text('Mis Herramientas'),
@@ -407,12 +469,36 @@ class _ProfileScreenState extends State<ProfileScreen> {
       return _buildProfileLoader(
         context,
         NexUser.fromJson(preview.usuario),
-        true,
+        preview.isOwnProfile,
+        viewerAccountType: preview.viewerAccountType,
       );
     }
 
     if (widget.user != null) {
-      return _buildProfileLoader(context, widget.user!, false);
+      final viewerType = widget.viewerAccountType;
+      final future = _viewerAccountTypeFuture;
+      if (viewerType != null || future == null) {
+        return _buildProfileLoader(
+          context,
+          widget.user!,
+          false,
+          viewerAccountType: viewerType,
+        );
+      }
+      return FutureBuilder<String?>(
+        future: future,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const _ProtectedCandidateProfile();
+          }
+          return _buildProfileLoader(
+            context,
+            widget.user!,
+            false,
+            viewerAccountType: snapshot.data,
+          );
+        },
+      );
     }
 
     if (_ownFuture == null) {
@@ -422,7 +508,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(CupertinoIcons.person_crop_circle_badge_exclam, size: 58),
+              const Icon(
+                CupertinoIcons.person_crop_circle_badge_exclam,
+                size: 58,
+              ),
               const SizedBox(height: 16),
               const Text(
                 'Inicia sesión para abrir tu perfil',
@@ -455,7 +544,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return _ProfileLoadingScaffold(
             title: 'Cargando tu perfil',
-            subtitle: 'Estamos armando tu identidad profesional con video, experiencia y señales reales.',
+            subtitle:
+                'Estamos armando tu identidad profesional con video, experiencia y señales reales.',
             onCancel: () async {
               VideoPreloadManager.instance.disposeAll();
               await Supabase.instance.client.auth.signOut();
@@ -485,7 +575,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
           );
         }
 
-        return _buildProfileLoader(context, NexUser.fromJson(snapshot.data!), true);
+        return _buildProfileLoader(
+          context,
+          NexUser.fromJson(snapshot.data!),
+          true,
+        );
       },
     );
   }
@@ -493,15 +587,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget _buildProfileLoader(
     BuildContext context,
     NexUser profile,
-    bool isOwnProfile,
-  ) {
+    bool isOwnProfile, {
+    String? viewerAccountType,
+  }) {
+    if (!isOwnProfile &&
+        shouldProtectCandidateForHeadhunter(profile, viewerAccountType)) {
+      return _ProtectedCandidateProfile(
+        profile: protectCandidateForHeadhunter(profile, viewerAccountType),
+      );
+    }
     return FutureBuilder<_ProfileBundle>(
       future: _bundleFutureFor(profile, isOwnProfile),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return _ProfileLoadingScaffold(
-            title: isOwnProfile ? 'Preparando tu perfil' : 'Preparando perfil público',
-            subtitle: 'Estamos cargando portfolio, video pitch y señales profesionales.',
+            title: isOwnProfile
+                ? 'Preparando tu perfil'
+                : 'Preparando perfil público',
+            subtitle:
+                'Estamos cargando portfolio, video pitch y señales profesionales.',
           );
         }
 
@@ -512,23 +616,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 'El perfil base está disponible, pero falló la carga complementaria. Reintentá para ver portfolio y métricas.',
             onRetry: () {
               setState(() {
-                _bundleFutures.remove('${profile.id}_${isOwnProfile ? 'own' : 'public'}');
+                _bundleFutures.remove(
+                  '${profile.id}_${isOwnProfile ? 'own' : 'public'}',
+                );
               });
             },
           );
         }
 
-        final bundle = snapshot.data ?? const _ProfileBundle(portfolio: [], viewCount: 0);
+        final bundle =
+            snapshot.data ?? const _ProfileBundle(portfolio: [], viewCount: 0);
         final facts = _ProfileFacts.fromUser(profile, bundle);
         return _ProfileShell(
           isOwnProfile: isOwnProfile,
           profile: profile,
           facts: facts,
           selectedPublicTab: _selectedPublicTab,
-          onPublicTabChanged: (value) => setState(() => _selectedPublicTab = value),
+          onPublicTabChanged: (value) =>
+              setState(() => _selectedPublicTab = value),
           onOpenEdit: () => _openEditProfile(context, profile),
           onOpenSettings: () => Navigator.of(context).push(
-            CupertinoPageRoute(builder: (_) => const SettingsScreen()),
+            CupertinoPageRoute(
+              builder: (_) => profile.accountType == 'headhunter'
+                  ? const HeadhunterSettingsScreen()
+                  : const SettingsScreen(),
+            ),
           ),
           onOpenVideoPitch: () => _openVideoPitchFlow(context, profile),
           onOpenPitchCamera: () => _openPitchCamera(context, profile),
@@ -536,9 +648,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
           onOpenTools: () => Navigator.of(context).push(
             CupertinoPageRoute(builder: (_) => const ToolsHubEntryScreen()),
           ),
-          onOpenSaved: () => Navigator.of(context).push(
-            CupertinoPageRoute(builder: (_) => const SavedJobsScreen()),
-          ),
+          onOpenSaved: () => Navigator.of(
+            context,
+          ).push(CupertinoPageRoute(builder: (_) => const SavedJobsScreen())),
           onShare: () => ShareService.instance.shareProfile(
             name: profile.name,
             headline: profile.headline,
@@ -546,7 +658,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
             accountType: profile.accountType,
           ),
           onContact: () => Navigator.of(context).push(
-            CupertinoPageRoute(builder: (_) => ChatInmailScreen(targetUser: profile)),
+            CupertinoPageRoute(
+              builder: (_) => ChatInmailScreen(targetUser: profile),
+            ),
           ),
           onInvite: () => _sendConnectionRequest(profile.id),
           connectionStatus: _connectionStatus,
@@ -565,7 +679,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             );
             setState(() {
-              _bundleFutures.remove('${profile.id}_${isOwnProfile ? 'own' : 'public'}');
+              _bundleFutures.remove(
+                '${profile.id}_${isOwnProfile ? 'own' : 'public'}',
+              );
             });
           },
           onOpenTimeline: () => Navigator.of(context).push(
@@ -588,6 +704,137 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         );
       },
+    );
+  }
+}
+
+class _ProtectedCandidateProfile extends StatelessWidget {
+  final NexUser? profile;
+
+  const _ProtectedCandidateProfile({this.profile});
+
+  @override
+  Widget build(BuildContext context) {
+    final candidate = profile;
+    return CupertinoPageScaffold(
+      backgroundColor: NexTheme.shellBg,
+      navigationBar: const CupertinoNavigationBar(
+        middle: Text('Perfil confidencial'),
+        border: null,
+      ),
+      child: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(20, 32, 20, 28),
+          children: [
+            Center(
+              child: Container(
+                width: 104,
+                height: 104,
+                decoration: BoxDecoration(
+                  color: context.brandAccent.withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  CupertinoIcons.lock_shield_fill,
+                  size: 42,
+                  color: context.brandAccent,
+                ),
+              ),
+            ),
+            const SizedBox(height: 22),
+            Text(
+              headhunterProtectedCandidateName,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 26,
+                fontWeight: FontWeight.w800,
+                color: context.textPrimary,
+              ),
+            ),
+            if (candidate?.headline.trim().isNotEmpty == true) ...[
+              const SizedBox(height: 8),
+              Text(
+                candidate!.headline,
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 16, color: context.textSecondary),
+              ),
+            ],
+            const SizedBox(height: 26),
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: context.cardColor,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x0A000000),
+                    blurRadius: 18,
+                    offset: Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: Column(
+                children: [
+                  Icon(
+                    CupertinoIcons.eye_slash_fill,
+                    color: context.brandAccent,
+                    size: 28,
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Identidad protegida',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: context.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Este candidato eligió mantener privados su nombre, foto, ubicación, video y portfolio.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 14,
+                      height: 1.45,
+                      color: context.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (candidate?.skills.isNotEmpty == true) ...[
+              const SizedBox(height: 24),
+              Text(
+                'Habilidades declaradas',
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                  color: context.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: candidate!.skills
+                    .take(6)
+                    .map((skill) => MployaPill(label: skill))
+                    .toList(),
+              ),
+            ],
+            const SizedBox(height: 24),
+            Text(
+              'No hay un desbloqueo disponible en esta pantalla. No mostramos datos reales sin una autorización existente.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 13,
+                height: 1.45,
+                color: context.textSecondary,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -745,10 +992,14 @@ class _ProfileShell extends StatelessWidget {
                       padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
                       decoration: BoxDecoration(
                         color: Colors.white.withValues(alpha: 0.96),
-                        border: Border(top: BorderSide(color: context.shellBorder)),
+                        border: Border(
+                          top: BorderSide(color: context.shellBorder),
+                        ),
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(0xFF0F172A).withValues(alpha: 0.08),
+                            color: const Color(
+                              0xFF0F172A,
+                            ).withValues(alpha: 0.08),
                             blurRadius: 24,
                             offset: const Offset(0, -8),
                           ),
@@ -776,11 +1027,15 @@ class _ProfileShell extends StatelessWidget {
                             : [
                                 Expanded(
                                   child: MployaSecondaryButton(
-                                    label: isSavedProfile ? 'Guardado' : 'Guardar',
+                                    label: isSavedProfile
+                                        ? 'Guardado'
+                                        : 'Guardar',
                                     icon: isSavedProfile
                                         ? CupertinoIcons.bookmark_fill
                                         : CupertinoIcons.bookmark,
-                                    onPressed: isSavingProfile ? null : onToggleSaved,
+                                    onPressed: isSavingProfile
+                                        ? null
+                                        : onToggleSaved,
                                   ),
                                 ),
                                 const SizedBox(width: 12),
@@ -788,7 +1043,10 @@ class _ProfileShell extends StatelessWidget {
                                   child: MployaPrimaryButton(
                                     label: _connectionLabel(connectionStatus),
                                     icon: CupertinoIcons.paperplane_fill,
-                                    onPressed: isLoadingConnection ? null : onInvite,
+                                    onPressed: isLoadingConnection
+                                        ? null
+                                        : onInvite,
+                                    compact: true,
                                   ),
                                 ),
                               ],
@@ -936,10 +1194,8 @@ class _CandidatoOwnProfileBody extends StatelessWidget {
 
   // ── Piezas compartidas por los tres formatos ──
 
-  Widget get _portada => CandPerfilPortada(
-        onCompartir: onShare,
-        onConfiguracion: onOpenSettings,
-      );
+  Widget get _portada =>
+      CandPerfilPortada(onCompartir: onShare, onConfiguracion: onOpenSettings);
 
   Widget _identidad({bool ancho = false}) => CandPerfilIdentidad(
         nombre: profile.name,
@@ -964,10 +1220,8 @@ class _CandidatoOwnProfileBody extends StatelessWidget {
         onEditar: onOpenEdit,
       );
 
-  Widget get _experienciaCard => CandPerfilExperiencia(
-        items: _experiencia,
-        onVerTodo: onOpenTimeline,
-      );
+  Widget get _experienciaCard =>
+      CandPerfilExperiencia(items: _experiencia, onVerTodo: onOpenTimeline);
 
   Widget get _confidencial => CandPerfilConfidencial(
         activo: _esConfidencial,
@@ -1179,7 +1433,12 @@ class _OwnProfileBody extends StatelessWidget {
         onMore: onShowMore,
       ),
       const SizedBox(height: 18),
-      _OwnedHero(profile: profile, facts: facts, isMobile: isMobile, onPickAvatar: onPickAvatar),
+      _OwnedHero(
+        profile: profile,
+        facts: facts,
+        isMobile: isMobile,
+        onPickAvatar: onPickAvatar,
+      ),
       const SizedBox(height: 18),
       _PrivateActionDeck(
         onOpenEdit: onOpenEdit,
@@ -1209,7 +1468,10 @@ class _OwnProfileBody extends StatelessWidget {
                 spacing: 10,
                 runSpacing: 10,
                 children: facts.preferences
-                    .map((item) => MployaPill(label: item, color: NexTheme.brandAccent))
+                    .map(
+                      (item) =>
+                          MployaPill(label: item, color: NexTheme.brandAccent),
+                    )
                     .toList(),
               ),
             ],
@@ -1245,7 +1507,10 @@ class _OwnProfileBody extends StatelessWidget {
     ];
 
     if (isMobile) {
-      return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: mainContent);
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: mainContent,
+      );
     }
 
     return Column(
@@ -1371,7 +1636,7 @@ class _PublicProfileBody extends StatelessWidget {
           isSavingProfile: isSavingProfile,
         ),
         const SizedBox(height: 18),
-        _PublicMetricsStrip(facts: facts),
+        _PublicMetricsStrip(profile: profile, facts: facts),
         const SizedBox(height: 18),
         isMobile
             ? Column(
@@ -1395,7 +1660,12 @@ class _PublicProfileBody extends StatelessWidget {
                           spacing: 8,
                           runSpacing: 8,
                           children: facts.preferences
-                              .map((item) => MployaPill(label: item, color: NexTheme.brandAccent))
+                              .map(
+                                (item) => MployaPill(
+                                  label: item,
+                                  color: NexTheme.brandAccent,
+                                ),
+                              )
                               .toList(),
                         ),
                       ],
@@ -1435,7 +1705,12 @@ class _PublicProfileBody extends StatelessWidget {
                             spacing: 8,
                             runSpacing: 8,
                             children: facts.preferences
-                                .map((item) => MployaPill(label: item, color: NexTheme.brandAccent))
+                                .map(
+                                  (item) => MployaPill(
+                                    label: item,
+                                    color: NexTheme.brandAccent,
+                                  ),
+                                )
                                 .toList(),
                           ),
                         ],
@@ -1503,7 +1778,8 @@ class _CandidatePortfolioScreen extends StatefulWidget {
   });
 
   @override
-  State<_CandidatePortfolioScreen> createState() => _CandidatePortfolioScreenState();
+  State<_CandidatePortfolioScreen> createState() =>
+      _CandidatePortfolioScreenState();
 }
 
 class _CandidatePortfolioScreenState extends State<_CandidatePortfolioScreen> {
@@ -1612,7 +1888,9 @@ class _CandidatePortfolioScreenState extends State<_CandidatePortfolioScreen> {
 
   Future<void> _editVideo(PortfolioVideo video) async {
     final titleController = TextEditingController(text: video.title);
-    final descriptionController = TextEditingController(text: video.description ?? '');
+    final descriptionController = TextEditingController(
+      text: video.description ?? '',
+    );
     var confirmed = false;
 
     await showCupertinoDialog<void>(
@@ -1695,10 +1973,14 @@ class _CandidatePortfolioScreenState extends State<_CandidatePortfolioScreen> {
             final filtered = _activeChip == 'Todos'
                 ? videos
                 : videos.where((video) {
-                    final haystack = '${video.title} ${video.description ?? ''}'.toLowerCase();
+                    final haystack = '${video.title} ${video.description ?? ''}'
+                        .toLowerCase();
                     return haystack.contains(_activeChip.toLowerCase());
                   }).toList();
-            final totalViews = videos.fold<int>(0, (sum, item) => sum + item.viewCount);
+            final totalViews = videos.fold<int>(
+              0,
+              (sum, item) => sum + item.viewCount,
+            );
 
             return Stack(
               children: [
@@ -1747,7 +2029,10 @@ class _CandidatePortfolioScreenState extends State<_CandidatePortfolioScreen> {
                               child: _SignalSummaryCard(
                                 facts: _ProfileFacts.fromUser(
                                   widget.profile,
-                                  _ProfileBundle(portfolio: videos, viewCount: widget.profile.profileViews),
+                                  _ProfileBundle(
+                                    portfolio: videos,
+                                    viewCount: widget.profile.profileViews,
+                                  ),
                                 ),
                                 ownMode: false,
                                 darkMode: true,
@@ -1782,7 +2067,9 @@ class _CandidatePortfolioScreenState extends State<_CandidatePortfolioScreen> {
                                 child: MployaPill(
                                   label: chip,
                                   active: active,
-                                  color: active ? NexTheme.brandAccent : NexTheme.brandAccentDark,
+                                  color: active
+                                      ? NexTheme.brandAccent
+                                      : NexTheme.brandAccentDark,
                                 ),
                               ),
                             );
@@ -1793,7 +2080,9 @@ class _CandidatePortfolioScreenState extends State<_CandidatePortfolioScreen> {
                       if (snapshot.connectionState == ConnectionState.waiting)
                         const Padding(
                           padding: EdgeInsets.symmetric(vertical: 48),
-                          child: Center(child: CupertinoActivityIndicator(radius: 16)),
+                          child: Center(
+                            child: CupertinoActivityIndicator(radius: 16),
+                          ),
                         )
                       else if (filtered.isEmpty)
                         MployaShellCard(
@@ -1829,7 +2118,9 @@ class _CandidatePortfolioScreenState extends State<_CandidatePortfolioScreen> {
                                   MployaPrimaryButton(
                                     label: 'Agregar proyecto visual',
                                     icon: CupertinoIcons.plus,
-                                    onPressed: _uploading ? null : _addPortfolioVideo,
+                                    onPressed: _uploading
+                                        ? null
+                                        : _addPortfolioVideo,
                                   ),
                                 ],
                               ],
@@ -1842,7 +2133,9 @@ class _CandidatePortfolioScreenState extends State<_CandidatePortfolioScreen> {
                             final columns = constraints.maxWidth >= 1120
                                 ? 3
                                 : (constraints.maxWidth >= 760 ? 2 : 1);
-                            final cardWidth = (constraints.maxWidth - ((columns - 1) * 14)) / columns;
+                            final cardWidth =
+                                (constraints.maxWidth - ((columns - 1) * 14)) /
+                                columns;
                             return Wrap(
                               spacing: 14,
                               runSpacing: 14,
@@ -1851,19 +2144,30 @@ class _CandidatePortfolioScreenState extends State<_CandidatePortfolioScreen> {
                                   width: cardWidth,
                                   child: _PortfolioProjectCard(
                                     video: video,
-                                    tags: widget.profile.skills.take(2).toList(),
+                                    tags: widget.profile.skills
+                                        .take(2)
+                                        .toList(),
                                     canEdit: widget.isOwnProfile,
                                     onTap: () {
                                       showCupertinoModalPopup<void>(
                                         context: context,
                                         builder: (_) => VideoPlayerModal(
-                                          videoUrl: resolveVideoUrl(video.videoUrl),
-                                          index: math.max(0, filtered.indexOf(video)),
+                                          videoUrl: resolveVideoUrl(
+                                            video.videoUrl,
+                                          ),
+                                          index: math.max(
+                                            0,
+                                            filtered.indexOf(video),
+                                          ),
                                         ),
                                       );
                                     },
-                                    onEdit: widget.isOwnProfile ? () => _editVideo(video) : null,
-                                    onDelete: widget.isOwnProfile ? () => _deleteVideo(video) : null,
+                                    onEdit: widget.isOwnProfile
+                                        ? () => _editVideo(video)
+                                        : null,
+                                    onDelete: widget.isOwnProfile
+                                        ? () => _deleteVideo(video)
+                                        : null,
                                   ),
                                 );
                               }).toList(),
@@ -1880,16 +2184,28 @@ class _CandidatePortfolioScreenState extends State<_CandidatePortfolioScreen> {
                         child: Row(
                           children: [
                             Expanded(
-                              child: _LargeMetric(label: 'Proyectos', value: '${videos.length}'),
+                              child: _LargeMetric(
+                                label: 'Proyectos',
+                                value: '${videos.length}',
+                              ),
                             ),
                             Expanded(
-                              child: _LargeMetric(label: 'Visualizaciones', value: _compact(totalViews)),
+                              child: _LargeMetric(
+                                label: 'Visualizaciones',
+                                value: _compact(totalViews),
+                              ),
                             ),
                             Expanded(
-                              child: _LargeMetric(label: 'Skills visibles', value: '${widget.profile.skills.length}'),
+                              child: _LargeMetric(
+                                label: 'Skills visibles',
+                                value: '${widget.profile.skills.length}',
+                              ),
                             ),
                             Expanded(
-                              child: _LargeMetric(label: 'Entregas destacadas', value: '${math.max(90, 92 + videos.length)}%'),
+                              child: _LargeMetric(
+                                label: 'Entregas destacadas',
+                                value: '${math.max(90, 92 + videos.length)}%',
+                              ),
                             ),
                           ],
                         ),
@@ -1927,9 +2243,15 @@ class _CandidatePortfolioScreenState extends State<_CandidatePortfolioScreen> {
                             ),
                             const SizedBox(width: 16),
                             MployaPrimaryButton(
-                              label: widget.isOwnProfile ? 'Agregar proyecto' : 'Solicitar más contexto',
-                              icon: widget.isOwnProfile ? CupertinoIcons.plus : CupertinoIcons.lock,
-                              onPressed: widget.isOwnProfile ? _addPortfolioVideo : null,
+                              label: widget.isOwnProfile
+                                  ? 'Agregar proyecto'
+                                  : 'Solicitar más contexto',
+                              icon: widget.isOwnProfile
+                                  ? CupertinoIcons.plus
+                                  : CupertinoIcons.lock,
+                              onPressed: widget.isOwnProfile
+                                  ? _addPortfolioVideo
+                                  : null,
                             ),
                           ],
                         ),
@@ -1940,7 +2262,9 @@ class _CandidatePortfolioScreenState extends State<_CandidatePortfolioScreen> {
                 if (_uploading)
                   Container(
                     color: Colors.black.withValues(alpha: 0.25),
-                    child: const Center(child: CupertinoActivityIndicator(radius: 18)),
+                    child: const Center(
+                      child: CupertinoActivityIndicator(radius: 18),
+                    ),
                   ),
               ],
             );
@@ -1973,7 +2297,8 @@ class _CandidateTimelineScreen extends StatelessWidget {
           children: [
             _ScreenHeader(
               title: 'Timeline Profesional',
-              subtitle: 'El recorrido completo de ${profile.name.split(' ').first}',
+              subtitle:
+                  'El recorrido completo de ${profile.name.split(' ').first}',
               onShare: () => ShareService.instance.shareProfile(
                 name: profile.name,
                 headline: profile.headline,
@@ -1990,14 +2315,13 @@ class _CandidateTimelineScreen extends StatelessWidget {
                   facts: facts,
                   ctaLabel: 'Ver perfil público',
                 );
-                final summary = _SignalSummaryCard(facts: facts, ownMode: false);
+                final summary = _SignalSummaryCard(
+                  facts: facts,
+                  ownMode: false,
+                );
                 if (stacked) {
                   return Column(
-                    children: [
-                      hero,
-                      const SizedBox(height: 16),
-                      summary,
-                    ],
+                    children: [hero, const SizedBox(height: 16), summary],
                   );
                 }
                 return Row(
@@ -2012,7 +2336,13 @@ class _CandidateTimelineScreen extends StatelessWidget {
             ),
             const SizedBox(height: 18),
             _TabStrip(
-              items: const ['Experiencia', 'Educación', 'Certificaciones', 'Logros', 'Todo'],
+              items: const [
+                'Experiencia',
+                'Educación',
+                'Certificaciones',
+                'Logros',
+                'Todo',
+              ],
               selectedIndex: 4,
               onChanged: (_) {},
             ),
@@ -2020,16 +2350,28 @@ class _CandidateTimelineScreen extends StatelessWidget {
             Row(
               children: [
                 Expanded(
-                  child: _LargeMetric(label: 'Experiencia total', value: facts.experienceYearsLabel),
+                  child: _LargeMetric(
+                    label: 'Experiencia total',
+                    value: facts.experienceYearsLabel,
+                  ),
                 ),
                 Expanded(
-                  child: _LargeMetric(label: 'Proyectos', value: '${math.max(3, facts.portfolio.length)}'),
+                  child: _LargeMetric(
+                    label: 'Proyectos',
+                    value: '${math.max(3, facts.portfolio.length)}',
+                  ),
                 ),
                 Expanded(
-                  child: _LargeMetric(label: 'Empresas', value: '${math.max(1, profile.experience.length)}'),
+                  child: _LargeMetric(
+                    label: 'Empresas',
+                    value: '${math.max(1, profile.experience.length)}',
+                  ),
                 ),
                 Expanded(
-                  child: _LargeMetric(label: 'Skills aplicados', value: '${profile.skills.length}+'),
+                  child: _LargeMetric(
+                    label: 'Skills aplicados',
+                    value: '${profile.skills.length}+',
+                  ),
                 ),
               ],
             ),
@@ -2041,11 +2383,7 @@ class _CandidateTimelineScreen extends StatelessWidget {
                 final sidebar = _TimelineSidebar(facts: facts);
                 if (stacked) {
                   return Column(
-                    children: [
-                      timeline,
-                      const SizedBox(height: 16),
-                      sidebar,
-                    ],
+                    children: [timeline, const SizedBox(height: 16), sidebar],
                   );
                 }
                 return Row(
@@ -2093,7 +2431,9 @@ class _CandidateTimelineScreen extends StatelessWidget {
                   const SizedBox(width: 16),
                   MployaPrimaryButton(
                     label: isOwnProfile ? 'Editar experiencia' : 'Abrir perfil',
-                    icon: isOwnProfile ? CupertinoIcons.pencil : CupertinoIcons.person,
+                    icon: isOwnProfile
+                        ? CupertinoIcons.pencil
+                        : CupertinoIcons.person,
                     onPressed: null,
                   ),
                 ],
@@ -2122,8 +2462,12 @@ class _CandidateReferencesScreen extends StatelessWidget {
     final referenceSignals = <_ReferenceMetric>[
       _ReferenceMetric(
         label: 'Calificación promedio',
-        value: profile.ratingStars > 0 ? profile.ratingStars.toStringAsFixed(1) : '0.0',
-        helper: profile.ratingCount > 0 ? '${profile.ratingCount} evaluaciones' : 'Sin referencias verificadas',
+        value: profile.ratingStars > 0
+            ? profile.ratingStars.toStringAsFixed(1)
+            : '0.0',
+        helper: profile.ratingCount > 0
+            ? '${profile.ratingCount} evaluaciones'
+            : 'Sin referencias verificadas',
       ),
       _ReferenceMetric(
         label: 'Referencias verificadas',
@@ -2143,12 +2487,24 @@ class _CandidateReferencesScreen extends StatelessWidget {
     ];
 
     final competencies = [
-      _ReferenceCompetency('Calidad de trabajo', profile.ratingStars > 0 ? profile.ratingStars : 4.5),
-      _ReferenceCompetency('Comunicación', profile.skills.length > 4 ? 4.6 : 4.2),
-      _ReferenceCompetency('Trabajo en equipo', profile.connections > 8 ? 4.7 : 4.1),
+      _ReferenceCompetency(
+        'Calidad de trabajo',
+        profile.ratingStars > 0 ? profile.ratingStars : 4.5,
+      ),
+      _ReferenceCompetency(
+        'Comunicación',
+        profile.skills.length > 4 ? 4.6 : 4.2,
+      ),
+      _ReferenceCompetency(
+        'Trabajo en equipo',
+        profile.connections > 8 ? 4.7 : 4.1,
+      ),
       _ReferenceCompetency('Iniciativa', profile.isPremium ? 4.8 : 4.3),
       _ReferenceCompetency('Adaptabilidad', profile.isOpenToWork ? 4.7 : 4.0),
-      _ReferenceCompetency('Responsabilidad', profile.profileViews > 0 ? 4.6 : 4.2),
+      _ReferenceCompetency(
+        'Responsabilidad',
+        profile.profileViews > 0 ? 4.6 : 4.2,
+      ),
     ];
 
     return CupertinoPageScaffold(
@@ -2160,14 +2516,20 @@ class _CandidateReferencesScreen extends StatelessWidget {
           children: [
             _ScreenHeader(
               title: 'Referencias Laborales',
-              subtitle: 'Verificá experiencia, señales y preparación del candidato',
+              subtitle:
+                  'Verificá experiencia, señales y preparación del candidato',
               primaryAction: isOwnProfile ? 'Solicitar referencia' : null,
             ),
             const SizedBox(height: 18),
             _ReferencesHero(profile: profile, facts: facts),
             const SizedBox(height: 18),
             _TabStrip(
-              items: const ['Resumen', 'Referencias', 'Historial', 'Solicitudes'],
+              items: const [
+                'Resumen',
+                'Referencias',
+                'Historial',
+                'Solicitudes',
+              ],
               selectedIndex: 0,
               onChanged: (_) {},
             ),
@@ -2219,15 +2581,17 @@ class _CandidateReferencesScreen extends StatelessWidget {
             LayoutBuilder(
               builder: (context, constraints) {
                 final stacked = constraints.maxWidth < 1080;
-                final summary = _ReferenceSummaryPanel(competencies: competencies);
-                final side = _ReferenceSidebar(profile: profile, facts: facts, isOwnProfile: isOwnProfile);
+                final summary = _ReferenceSummaryPanel(
+                  competencies: competencies,
+                );
+                final side = _ReferenceSidebar(
+                  profile: profile,
+                  facts: facts,
+                  isOwnProfile: isOwnProfile,
+                );
                 if (stacked) {
                   return Column(
-                    children: [
-                      summary,
-                      const SizedBox(height: 16),
-                      side,
-                    ],
+                    children: [summary, const SizedBox(height: 16), side],
                   );
                 }
                 return Row(
@@ -2343,10 +2707,7 @@ class _TopBar extends StatelessWidget {
               const SizedBox(height: 4),
               Text(
                 subtitle,
-                style: TextStyle(
-                  fontSize: 15,
-                  color: context.textSecondary,
-                ),
+                style: TextStyle(fontSize: 15, color: context.textSecondary),
               ),
             ],
           ),
@@ -2368,7 +2729,10 @@ class _TopBar extends StatelessWidget {
               borderRadius: BorderRadius.circular(18),
               border: Border.all(color: context.shellBorder),
             ),
-            child: const Icon(CupertinoIcons.ellipsis, color: Color(0xFF111827)),
+            child: const Icon(
+              CupertinoIcons.ellipsis,
+              color: Color(0xFF111827),
+            ),
           ),
         ),
       ],
@@ -2424,9 +2788,13 @@ class _OwnedHero extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       MployaPill(
-                        label: profile.isOpenToWork ? 'Disponible ahora' : 'Perfil activo',
+                        label: profile.isOpenToWork
+                            ? 'Disponible ahora'
+                            : 'Perfil activo',
                         icon: CupertinoIcons.circle_fill,
-                        color: profile.isOpenToWork ? NexTheme.brandMint : NexTheme.brandSky,
+                        color: profile.isOpenToWork
+                            ? NexTheme.brandMint
+                            : NexTheme.brandSky,
                       ),
                       const SizedBox(height: 18),
                       Text(
@@ -2440,7 +2808,9 @@ class _OwnedHero extends StatelessWidget {
                       ),
                       const SizedBox(height: 10),
                       Text(
-                        profile.headline.isNotEmpty ? profile.headline : 'Talento en construcción',
+                        profile.headline.isNotEmpty
+                            ? profile.headline
+                            : 'Talento en construcción',
                         style: TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.w700,
@@ -2480,7 +2850,9 @@ class _OwnedHero extends StatelessWidget {
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           border: Border.all(color: Colors.white, width: 3),
-                          image: profile.avatarUrl != null && profile.avatarUrl!.isNotEmpty
+                          image:
+                              profile.avatarUrl != null &&
+                                  profile.avatarUrl!.isNotEmpty
                               ? DecorationImage(
                                   image: NetworkImage(profile.avatarUrl!),
                                   fit: BoxFit.cover,
@@ -2488,7 +2860,9 @@ class _OwnedHero extends StatelessWidget {
                               : null,
                           color: Colors.white.withValues(alpha: 0.14),
                         ),
-                        child: profile.avatarUrl == null || profile.avatarUrl!.isEmpty
+                        child:
+                            profile.avatarUrl == null ||
+                                profile.avatarUrl!.isEmpty
                             ? Center(
                                 child: Text(
                                   profile.initials,
@@ -2503,7 +2877,10 @@ class _OwnedHero extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    _ScoreRing(score: facts.profileStrengthScore, label: 'Perfil listo'),
+                    _ScoreRing(
+                      score: facts.profileStrengthScore,
+                      label: 'Perfil listo',
+                    ),
                   ],
                 ),
               ],
@@ -2514,7 +2891,10 @@ class _OwnedHero extends StatelessWidget {
                 Expanded(
                   child: _GlassActionMetric(
                     title: 'Video Pitch',
-                    value: profile.videoUrl != null && profile.videoUrl!.isNotEmpty ? 'Activo' : 'Pendiente',
+                    value:
+                        profile.videoUrl != null && profile.videoUrl!.isNotEmpty
+                        ? 'Activo'
+                        : 'Pendiente',
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -2569,10 +2949,7 @@ class _PublicHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scoreLabel = profile.matchPercentage > 0 ? 'Afinidad estimada' : 'Señal IA';
-    final scoreHelper = profile.matchPercentage > 0
-        ? 'Según skills y búsquedas activas'
-        : 'Perfil con señales profesionales visibles';
+    final hasContextualScore = profile.matchPercentage > 0;
 
     return Container(
       decoration: BoxDecoration(
@@ -2603,8 +2980,13 @@ class _PublicHero extends StatelessWidget {
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     border: Border.all(color: Colors.white, width: 3),
-                    image: profile.avatarUrl != null && profile.avatarUrl!.isNotEmpty
-                        ? DecorationImage(image: NetworkImage(profile.avatarUrl!), fit: BoxFit.cover)
+                    image:
+                        profile.avatarUrl != null &&
+                            profile.avatarUrl!.isNotEmpty
+                        ? DecorationImage(
+                            image: NetworkImage(profile.avatarUrl!),
+                            fit: BoxFit.cover,
+                          )
                         : null,
                     color: Colors.white.withValues(alpha: 0.10),
                   ),
@@ -2640,7 +3022,9 @@ class _PublicHero extends StatelessWidget {
                         children: [
                           Flexible(
                             child: Text(
-                              profile.headline.isNotEmpty ? profile.headline : 'Perfil profesional',
+                              profile.headline.isNotEmpty
+                                  ? profile.headline
+                                  : 'Perfil profesional',
                               style: TextStyle(
                                 fontSize: 20,
                                 fontWeight: FontWeight.w700,
@@ -2650,8 +3034,12 @@ class _PublicHero extends StatelessWidget {
                           ),
                           const SizedBox(width: 10),
                           MployaPill(
-                            label: profile.isOpenToWork ? 'Abierta a oportunidades' : 'Perfil activo',
-                            color: profile.isOpenToWork ? NexTheme.brandAccentDark : NexTheme.brandMint,
+                            label: profile.isOpenToWork
+                                ? 'Abierta a oportunidades'
+                                : 'Perfil activo',
+                            color: profile.isOpenToWork
+                                ? NexTheme.brandAccentDark
+                                : NexTheme.brandMint,
                             active: true,
                           ),
                         ],
@@ -2661,14 +3049,17 @@ class _PublicHero extends StatelessWidget {
                         spacing: 14,
                         runSpacing: 10,
                         children: [
+                          if ((profile.location ?? '').trim().isNotEmpty)
                           _HeroMeta(
                             icon: CupertinoIcons.location_solid,
                             label: facts.locationLabel,
                           ),
+                          if (profile.isOpenToWork)
                           _HeroMeta(
                             icon: CupertinoIcons.airplane,
                             label: facts.availabilityLine,
                           ),
+                          if (facts.modalityLabel != 'Modalidad no informada')
                           _HeroMeta(
                             icon: CupertinoIcons.briefcase_fill,
                             label: facts.modalityLabel,
@@ -2678,22 +3069,28 @@ class _PublicHero extends StatelessWidget {
                     ],
                   ),
                 ),
-                if (!isMobile)
+                if (!isMobile && hasContextualScore)
                   Container(
                     width: 220,
                     padding: const EdgeInsets.all(18),
                     decoration: BoxDecoration(
                       color: Colors.white.withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(24),
-                      border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.10),
+                      ),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _ScoreRing(score: facts.contextualScore, label: scoreLabel, darkMode: true),
+                        _ScoreRing(
+                          score: facts.contextualScore,
+                          label: 'Afinidad estimada',
+                          darkMode: true,
+                        ),
                         const SizedBox(height: 10),
                         Text(
-                          scoreHelper,
+                          'Según el match disponible para esta búsqueda',
                           style: TextStyle(
                             color: Colors.white.withValues(alpha: 0.76),
                             fontSize: 13.5,
@@ -2706,10 +3103,14 @@ class _PublicHero extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 20),
-            if (isMobile) ...[
+            if (isMobile && hasContextualScore) ...[
               Align(
                 alignment: Alignment.centerLeft,
-                child: _ScoreRing(score: facts.contextualScore, label: scoreLabel, darkMode: true),
+                child: _ScoreRing(
+                  score: facts.contextualScore,
+                  label: 'Afinidad estimada',
+                  darkMode: true,
+                ),
               ),
               const SizedBox(height: 16),
             ],
@@ -2729,7 +3130,9 @@ class _PublicHero extends StatelessWidget {
                 ),
                 MployaSecondaryButton(
                   label: isSavedProfile ? 'Guardado' : 'Guardar',
-                  icon: isSavedProfile ? CupertinoIcons.bookmark_fill : CupertinoIcons.bookmark,
+                  icon: isSavedProfile
+                      ? CupertinoIcons.bookmark_fill
+                      : CupertinoIcons.bookmark,
                   onPressed: isSavingProfile ? null : onToggleSaved,
                 ),
                 MployaSecondaryButton(
@@ -2747,9 +3150,10 @@ class _PublicHero extends StatelessWidget {
 }
 
 class _PublicMetricsStrip extends StatelessWidget {
+  final NexUser profile;
   final _ProfileFacts facts;
 
-  const _PublicMetricsStrip({required this.facts});
+  const _PublicMetricsStrip({required this.profile, required this.facts});
 
   @override
   Widget build(BuildContext context) {
@@ -2759,11 +3163,36 @@ class _PublicMetricsStrip extends StatelessWidget {
         spacing: 14,
         runSpacing: 14,
         children: [
-          _MiniMetric(icon: CupertinoIcons.briefcase_fill, title: facts.experienceYearsLabel, subtitle: 'Experiencia'),
-          _MiniMetric(icon: CupertinoIcons.sparkles, title: facts.specialtyLabel, subtitle: 'Especialidad'),
-          _MiniMetric(icon: CupertinoIcons.time, title: facts.availabilityShort, subtitle: 'Disponibilidad'),
-          _MiniMetric(icon: CupertinoIcons.house_alt_fill, title: facts.modalityLabel, subtitle: 'Modalidad'),
-          _MiniMetric(icon: CupertinoIcons.globe, title: facts.languagesSummary, subtitle: 'Idiomas'),
+          if (profile.experience.isNotEmpty)
+            _MiniMetric(
+              icon: CupertinoIcons.briefcase_fill,
+              title: facts.experienceYearsLabel,
+              subtitle: 'Experiencia',
+            ),
+          if (profile.headline.isNotEmpty)
+            _MiniMetric(
+              icon: CupertinoIcons.sparkles,
+              title: facts.specialtyLabel,
+              subtitle: 'Especialidad',
+            ),
+          if (profile.isOpenToWork)
+            _MiniMetric(
+              icon: CupertinoIcons.time,
+              title: facts.availabilityShort,
+              subtitle: 'Disponibilidad',
+            ),
+          if (facts.modalityLabel != 'Modalidad no informada')
+            _MiniMetric(
+              icon: CupertinoIcons.house_alt_fill,
+              title: facts.modalityLabel,
+              subtitle: 'Modalidad',
+            ),
+          if (facts.languages.isNotEmpty)
+            _MiniMetric(
+              icon: CupertinoIcons.globe,
+              title: facts.languagesSummary,
+              subtitle: 'Idiomas',
+            ),
         ],
       ),
     );
@@ -2788,17 +3217,38 @@ class _PrivateActionDeck extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final items = [
-      _ActionDeckItem(icon: CupertinoIcons.pencil, label: 'Editar', onTap: onOpenEdit),
-      _ActionDeckItem(icon: CupertinoIcons.play_rectangle_fill, label: 'Video pitch', onTap: onOpenVideoPitch),
-      _ActionDeckItem(icon: CupertinoIcons.camera_fill, label: 'Grabar', onTap: onOpenPitchCamera),
-      _ActionDeckItem(icon: CupertinoIcons.share, label: 'Compartir', onTap: onShare),
-      _ActionDeckItem(icon: CupertinoIcons.ellipsis, label: 'Más', onTap: onShowMore),
+      _ActionDeckItem(
+        icon: CupertinoIcons.pencil,
+        label: 'Editar',
+        onTap: onOpenEdit,
+      ),
+      _ActionDeckItem(
+        icon: CupertinoIcons.play_rectangle_fill,
+        label: 'Video pitch',
+        onTap: onOpenVideoPitch,
+      ),
+      _ActionDeckItem(
+        icon: CupertinoIcons.camera_fill,
+        label: 'Grabar',
+        onTap: onOpenPitchCamera,
+      ),
+      _ActionDeckItem(
+        icon: CupertinoIcons.share,
+        label: 'Compartir',
+        onTap: onShare,
+      ),
+      _ActionDeckItem(
+        icon: CupertinoIcons.ellipsis,
+        label: 'Más',
+        onTap: onShowMore,
+      ),
     ];
 
     return MployaShellCard(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
       child: Row(
-        children: items
+        children:
+            items
             .map((item) => Expanded(child: item))
             .expand((widget) => [widget, const SizedBox(width: 8)])
             .toList()
@@ -2903,11 +3353,31 @@ class _InfoGridSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final items = [
-      _GridInfoItem('Experiencia', facts.experienceYearsLabel, CupertinoIcons.briefcase_fill),
-      _GridInfoItem('Ubicación', facts.locationLabel, CupertinoIcons.location_solid),
-      _GridInfoItem('Modalidad', facts.modalityLabel, CupertinoIcons.house_alt_fill),
-      _GridInfoItem('Disponibilidad', facts.availabilityShort, CupertinoIcons.time),
-      _GridInfoItem('Salario esperado', facts.salaryLabel, CupertinoIcons.money_dollar_circle_fill),
+      _GridInfoItem(
+        'Experiencia',
+        facts.experienceYearsLabel,
+        CupertinoIcons.briefcase_fill,
+      ),
+      _GridInfoItem(
+        'Ubicación',
+        facts.locationLabel,
+        CupertinoIcons.location_solid,
+      ),
+      _GridInfoItem(
+        'Modalidad',
+        facts.modalityLabel,
+        CupertinoIcons.house_alt_fill,
+      ),
+      _GridInfoItem(
+        'Disponibilidad',
+        facts.availabilityShort,
+        CupertinoIcons.time,
+      ),
+      _GridInfoItem(
+        'Salario esperado',
+        facts.salaryLabel,
+        CupertinoIcons.money_dollar_circle_fill,
+      ),
       _GridInfoItem('Idiomas', facts.languagesSummary, CupertinoIcons.globe),
     ];
 
@@ -2927,11 +3397,14 @@ class _InfoGridSection extends StatelessWidget {
           LayoutBuilder(
             builder: (context, constraints) {
               final columns = constraints.maxWidth >= 880 ? 3 : 2;
-              final width = (constraints.maxWidth - ((columns - 1) * 12)) / columns;
+              final width =
+                  (constraints.maxWidth - ((columns - 1) * 12)) / columns;
               return Wrap(
                 spacing: 12,
                 runSpacing: 12,
-                children: items.map((item) => SizedBox(width: width, child: item)).toList(),
+                children: items
+                    .map((item) => SizedBox(width: width, child: item))
+                    .toList(),
               );
             },
           ),
@@ -3031,15 +3504,28 @@ class _SkillsSection extends StatelessWidget {
               spacing: 10,
               runSpacing: 10,
               children: [
-                ...skills.map((skill) => MployaPill(label: skill, color: NexTheme.brandAccent)),
-                ...extra.take(5).map((skill) => MployaPill(label: skill, color: NexTheme.brandAccentDark)),
+                ...skills.map(
+                  (skill) =>
+                      MployaPill(label: skill, color: NexTheme.brandAccent),
+                ),
+                ...extra
+                    .take(5)
+                    .map(
+                      (skill) => MployaPill(
+                        label: skill,
+                        color: NexTheme.brandAccentDark,
+                      ),
+                    ),
               ],
             )
           else
             Column(
               children: [
                 for (var i = 0; i < skills.length; i++) ...[
-                  _SkillMeter(label: skills[i], value: math.max(0.42, 0.92 - (i * 0.08))),
+                  _SkillMeter(
+                    label: skills[i],
+                    value: math.max(0.42, 0.92 - (i * 0.08)),
+                  ),
                   if (i != skills.length - 1) const SizedBox(height: 14),
                 ],
               ],
@@ -3139,10 +3625,15 @@ class _QuickDestinationStrip extends StatelessWidget {
           ),
         ];
         if (vertical) {
-          return Column(children: items.expand((e) => [e, const SizedBox(height: 12)]).toList()..removeLast());
+          return Column(
+            children:
+                items.expand((e) => [e, const SizedBox(height: 12)]).toList()
+                  ..removeLast(),
+          );
         }
         return Row(
-          children: items
+          children:
+              items
               .map((item) => Expanded(child: item))
               .expand((widget) => [widget, const SizedBox(width: 12)])
               .toList()
@@ -3220,10 +3711,7 @@ class _ExperiencePreview extends StatelessWidget {
   final _ProfileFacts facts;
   final VoidCallback onOpenTimeline;
 
-  const _ExperiencePreview({
-    required this.facts,
-    required this.onOpenTimeline,
-  });
+  const _ExperiencePreview({required this.facts, required this.onOpenTimeline});
 
   @override
   Widget build(BuildContext context) {
@@ -3264,7 +3752,9 @@ class _ExperiencePreview extends StatelessWidget {
                     title: item.role,
                     subtitle: item.company,
                     meta: item.duration,
-                    description: item.description ?? 'Experiencia profesional activa dentro del perfil.',
+                    description:
+                        item.description ??
+                        'Experiencia profesional activa dentro del perfil.',
                   ),
                 );
               }).toList(),
@@ -3309,7 +3799,9 @@ class _EducationPreview extends StatelessWidget {
                     title: item.degree,
                     subtitle: item.school,
                     meta: item.years,
-                    description: item.field ?? 'Formación vinculada a la identidad profesional.',
+                    description:
+                        item.field ??
+                        'Formación vinculada a la identidad profesional.',
                     accent: const Color(0xFF3B82F6),
                   ),
                 );
@@ -3392,13 +3884,17 @@ class _SignalSummaryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final foreground = darkMode ? Colors.white : context.textPrimary;
-    final sub = darkMode ? Colors.white.withValues(alpha: 0.72) : context.textSecondary;
+    final sub = darkMode
+        ? Colors.white.withValues(alpha: 0.72)
+        : context.textSecondary;
     return Container(
       decoration: BoxDecoration(
         color: darkMode ? Colors.white.withValues(alpha: 0.06) : Colors.white,
         borderRadius: BorderRadius.circular(28),
         border: Border.all(
-          color: darkMode ? Colors.white.withValues(alpha: 0.10) : context.shellBorder,
+          color: darkMode
+              ? Colors.white.withValues(alpha: 0.10)
+              : context.shellBorder,
         ),
       ),
       padding: const EdgeInsets.all(20),
@@ -3418,13 +3914,33 @@ class _SignalSummaryCard extends StatelessWidget {
             style: TextStyle(fontSize: 14.5, height: 1.5, color: sub),
           ),
           const SizedBox(height: 18),
-          _SignalRow(label: 'Video pitch', value: facts.pitchStatus, foreground: foreground, subtitle: sub),
+          _SignalRow(
+            label: 'Video pitch',
+            value: facts.pitchStatus,
+            foreground: foreground,
+            subtitle: sub,
+          ),
           const SizedBox(height: 10),
-          _SignalRow(label: 'Portfolio', value: '${facts.portfolio.length} piezas', foreground: foreground, subtitle: sub),
+          _SignalRow(
+            label: 'Portfolio',
+            value: '${facts.portfolio.length} piezas',
+            foreground: foreground,
+            subtitle: sub,
+          ),
           const SizedBox(height: 10),
-          _SignalRow(label: 'Skills visibles', value: '${facts.primarySkills.length}+ ', foreground: foreground, subtitle: sub),
+          _SignalRow(
+            label: 'Skills visibles',
+            value: '${facts.primarySkills.length}+ ',
+            foreground: foreground,
+            subtitle: sub,
+          ),
           const SizedBox(height: 10),
-          _SignalRow(label: 'Vistas', value: '${facts.viewCount}', foreground: foreground, subtitle: sub),
+          _SignalRow(
+            label: 'Vistas',
+            value: '${facts.viewCount}',
+            foreground: foreground,
+            subtitle: sub,
+          ),
         ],
       ),
     );
@@ -3452,7 +3968,11 @@ class _SignalRow extends StatelessWidget {
         const Spacer(),
         Text(
           value,
-          style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: foreground),
+          style: TextStyle(
+            fontSize: 14.5,
+            fontWeight: FontWeight.w800,
+            color: foreground,
+          ),
         ),
       ],
     );
@@ -3498,10 +4018,7 @@ class _VideoPitchCard extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             subtitle,
-            style: TextStyle(
-              fontSize: 14.5,
-              color: context.textSecondary,
-            ),
+            style: TextStyle(fontSize: 14.5, color: context.textSecondary),
           ),
           const SizedBox(height: 16),
           GestureDetector(
@@ -3510,7 +4027,8 @@ class _VideoPitchCard extends StatelessWidget {
                 : () {
                     showCupertinoModalPopup<void>(
                       context: context,
-                      builder: (_) => VideoPlayerModal(videoUrl: effectiveUrl, index: 0),
+                      builder: (_) =>
+                          VideoPlayerModal(videoUrl: effectiveUrl, index: 0),
                     );
                   },
             child: Container(
@@ -3518,7 +4036,11 @@ class _VideoPitchCard extends StatelessWidget {
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(24),
                 gradient: const LinearGradient(
-                  colors: [Color(0xFF1A2234), Color(0xFF0E1422), Color(0xFF2A3154)],
+                  colors: [
+                    Color(0xFF1A2234),
+                    Color(0xFF0E1422),
+                    Color(0xFF2A3154),
+                  ],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
@@ -3567,7 +4089,10 @@ class _VideoPitchCard extends StatelessWidget {
                         ),
                         if (effectiveUrl.isNotEmpty)
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 6,
+                            ),
                             decoration: BoxDecoration(
                               color: Colors.black.withValues(alpha: 0.28),
                               borderRadius: BorderRadius.circular(999),
@@ -3634,12 +4159,17 @@ class _TabStrip extends StatelessWidget {
             child: GestureDetector(
               onTap: () => onChanged(index),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 18,
+                  vertical: 12,
+                ),
                 decoration: BoxDecoration(
                   color: selected ? context.primaryAccent : Colors.white,
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(
-                    color: selected ? context.primaryAccent : context.shellBorder,
+                    color: selected
+                        ? context.primaryAccent
+                        : context.shellBorder,
                   ),
                 ),
                 child: Text(
@@ -3681,15 +4211,15 @@ class _PublicTabContent extends StatelessWidget {
         return LayoutBuilder(
           builder: (context, constraints) {
             final stacked = constraints.maxWidth < 980;
-            final experience = _ExperienceColumn(profile: profile, facts: facts, onOpenTimeline: onOpenTimeline);
+            final experience = _ExperienceColumn(
+              profile: profile,
+              facts: facts,
+              onOpenTimeline: onOpenTimeline,
+            );
             final side = _ExperienceSideColumn(facts: facts);
             if (stacked) {
               return Column(
-                children: [
-                  experience,
-                  const SizedBox(height: 16),
-                  side,
-                ],
+                children: [experience, const SizedBox(height: 16), side],
               );
             }
             return Row(
@@ -3729,7 +4259,12 @@ class _PublicTabContent extends StatelessWidget {
                     spacing: 10,
                     runSpacing: 10,
                     children: facts.preferences
-                        .map((item) => MployaPill(label: item, color: NexTheme.brandAccentDark))
+                        .map(
+                          (item) => MployaPill(
+                            label: item,
+                            color: NexTheme.brandAccentDark,
+                          ),
+                        )
                         .toList(),
                   ),
                 ],
@@ -3756,14 +4291,22 @@ class _PublicTabContent extends StatelessWidget {
               if (facts.certifications.isEmpty)
                 Text(
                   'Todavía no hay certificaciones estructuradas en el backend actual.',
-                  style: TextStyle(fontSize: 14.5, color: context.textSecondary),
+                  style: TextStyle(
+                    fontSize: 14.5,
+                    color: context.textSecondary,
+                  ),
                 )
               else
                 Wrap(
                   spacing: 10,
                   runSpacing: 10,
                   children: facts.certifications
-                      .map((item) => MployaPill(label: item, color: NexTheme.brandAccentDark))
+                      .map(
+                        (item) => MployaPill(
+                          label: item,
+                          color: NexTheme.brandAccentDark,
+                        ),
+                      )
                       .toList(),
                 ),
             ],
@@ -3787,14 +4330,17 @@ class _PublicTabContent extends StatelessWidget {
                 title: 'Perfil video-first listo para procesos',
                 subtitle: 'Video pitch + experiencia + portfolio',
                 meta: '${facts.contextualScore}%',
-                description: 'La identidad profesional ya está armada dentro del nuevo sistema de Mploya.',
+                description:
+                    'La identidad profesional ya está armada dentro del nuevo sistema de Mploya.',
               ),
               const SizedBox(height: 14),
               _TimelinePreviewItem(
                 title: 'Señales visibles de mercado',
-                subtitle: '${facts.viewCount} vistas · ${profile.connections} conexiones',
+                subtitle:
+                    '${facts.viewCount} vistas · ${profile.connections} conexiones',
                 meta: facts.experienceYearsLabel,
-                description: 'El perfil conserva sus métricas reales sin volver al formato legacy.',
+                description:
+                    'El perfil conserva sus métricas reales sin volver al formato legacy.',
                 accent: const Color(0xFF10B981),
               ),
             ],
@@ -3818,7 +4364,12 @@ class _PublicTabContent extends StatelessWidget {
                 spacing: 10,
                 runSpacing: 10,
                 children: facts.languages
-                    .map((language) => MployaPill(label: language, color: const Color(0xFF2563EB)))
+                    .map(
+                      (language) => MployaPill(
+                        label: language,
+                        color: const Color(0xFF2563EB),
+                      ),
+                    )
                     .toList(),
               ),
             ],
@@ -3880,8 +4431,13 @@ class _ExperienceColumn extends StatelessWidget {
                     title: experience.role,
                     subtitle: experience.company,
                     meta: experience.duration,
-                    description: experience.description ?? 'Experiencia real cargada en el perfil.',
-                    tags: _extractTags(experience.description, fallback: facts.primarySkills.take(3).toList()),
+                    description:
+                        experience.description ??
+                        'Experiencia real cargada en el perfil.',
+                    tags: _extractTags(
+                      experience.description,
+                      fallback: facts.primarySkills.take(3).toList(),
+                    ),
                   ),
                 );
               }).toList(),
@@ -3925,7 +4481,12 @@ class _ExperienceSideColumn extends StatelessWidget {
                 spacing: 8,
                 runSpacing: 8,
                 children: facts.preferences
-                    .map((item) => MployaPill(label: item, color: NexTheme.brandAccentDark))
+                    .map(
+                      (item) => MployaPill(
+                        label: item,
+                        color: NexTheme.brandAccentDark,
+                      ),
+                    )
                     .toList(),
               ),
             ],
@@ -4005,7 +4566,9 @@ class _ProjectShowcase extends StatelessWidget {
           else
             LayoutBuilder(
               builder: (context, constraints) {
-                final width = isMobile ? constraints.maxWidth : (constraints.maxWidth - 24) / 3;
+                final width = isMobile
+                    ? constraints.maxWidth
+                    : (constraints.maxWidth - 24) / 3;
                 return Wrap(
                   spacing: 12,
                   runSpacing: 12,
@@ -4044,13 +4607,21 @@ class _CompactProjectCard extends StatelessWidget {
             height: 140,
             decoration: const BoxDecoration(
               gradient: LinearGradient(
-                colors: [Color(0xFF2B3155), Color(0xFF0E1726), Color(0xFF1B2441)],
+                colors: [
+                  Color(0xFF2B3155),
+                  Color(0xFF0E1726),
+                  Color(0xFF1B2441),
+                ],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
             ),
             child: const Center(
-              child: Icon(CupertinoIcons.play_circle, color: Colors.white, size: 42),
+              child: Icon(
+                CupertinoIcons.play_circle,
+                color: Colors.white,
+                size: 42,
+              ),
             ),
           ),
           Padding(
@@ -4133,10 +4704,7 @@ class _ScreenHeader extends StatelessWidget {
               const SizedBox(height: 4),
               Text(
                 subtitle,
-                style: TextStyle(
-                  fontSize: 15,
-                  color: context.textSecondary,
-                ),
+                style: TextStyle(fontSize: 15, color: context.textSecondary),
               ),
             ],
           ),
@@ -4194,7 +4762,10 @@ class _DarkSummaryHero extends StatelessWidget {
               shape: BoxShape.circle,
               border: Border.all(color: Colors.white, width: 3),
               image: profile.avatarUrl != null && profile.avatarUrl!.isNotEmpty
-                  ? DecorationImage(image: NetworkImage(profile.avatarUrl!), fit: BoxFit.cover)
+                  ? DecorationImage(
+                      image: NetworkImage(profile.avatarUrl!),
+                      fit: BoxFit.cover,
+                    )
                   : null,
               color: Colors.white.withValues(alpha: 0.10),
             ),
@@ -4202,7 +4773,11 @@ class _DarkSummaryHero extends StatelessWidget {
                 ? Center(
                     child: Text(
                       profile.initials,
-                      style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.w800),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 28,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
                   )
                 : null,
@@ -4214,17 +4789,29 @@ class _DarkSummaryHero extends StatelessWidget {
               children: [
                 Text(
                   profile.name,
-                  style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: Colors.white),
+                  style: const TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  profile.headline.isNotEmpty ? profile.headline : 'Perfil profesional',
-                  style: TextStyle(fontSize: 18, color: Colors.white.withValues(alpha: 0.88)),
+                  profile.headline.isNotEmpty
+                      ? profile.headline
+                      : 'Perfil profesional',
+                  style: TextStyle(
+                    fontSize: 18,
+                    color: Colors.white.withValues(alpha: 0.88),
+                  ),
                 ),
                 const SizedBox(height: 12),
                 Text(
                   '${profile.location ?? 'Ubicación por definir'} • ${profile.isOpenToWork ? 'Disponible para trabajar' : 'Perfil activo'}',
-                  style: TextStyle(fontSize: 14.5, color: Colors.white.withValues(alpha: 0.74)),
+                  style: TextStyle(
+                    fontSize: 14.5,
+                    color: Colors.white.withValues(alpha: 0.74),
+                  ),
                 ),
               ],
             ),
@@ -4258,7 +4845,10 @@ class _LightSummaryHero extends StatelessWidget {
               shape: BoxShape.circle,
               border: Border.all(color: Colors.white, width: 3),
               image: profile.avatarUrl != null && profile.avatarUrl!.isNotEmpty
-                  ? DecorationImage(image: NetworkImage(profile.avatarUrl!), fit: BoxFit.cover)
+                  ? DecorationImage(
+                      image: NetworkImage(profile.avatarUrl!),
+                      fit: BoxFit.cover,
+                    )
                   : null,
               color: const Color(0xFFF1F3FD),
             ),
@@ -4290,11 +4880,10 @@ class _LightSummaryHero extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  profile.headline.isNotEmpty ? profile.headline : 'Perfil profesional',
-                  style: TextStyle(
-                    fontSize: 18,
-                    color: context.textPrimary,
-                  ),
+                  profile.headline.isNotEmpty
+                      ? profile.headline
+                      : 'Perfil profesional',
+                  style: TextStyle(fontSize: 18, color: context.textPrimary),
                 ),
                 const SizedBox(height: 12),
                 Text(
@@ -4328,21 +4917,32 @@ class _TimelineRail extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final items = <_TimelineNode>[
-      ...profile.experience.map((item) => _TimelineNode(
+      ...profile.experience.map(
+        (item) => _TimelineNode(
             leftLabel: item.duration.isEmpty ? 'Experiencia' : item.duration,
             title: item.role,
             subtitle: item.company,
-            description: item.description ?? 'Experiencia profesional activa dentro del perfil.',
-            tags: _extractTags(item.description, fallback: facts.primarySkills.take(4).toList()),
-          )),
-      ...facts.education.map((item) => _TimelineNode(
+          description:
+              item.description ??
+              'Experiencia profesional activa dentro del perfil.',
+          tags: _extractTags(
+            item.description,
+            fallback: facts.primarySkills.take(4).toList(),
+          ),
+        ),
+      ),
+      ...facts.education.map(
+        (item) => _TimelineNode(
             leftLabel: item.years,
             title: item.degree,
             subtitle: item.school,
-            description: item.field ?? 'Formación conectada con la trayectoria profesional.',
+          description:
+              item.field ??
+              'Formación conectada con la trayectoria profesional.',
             tags: _extractTags(item.field, fallback: const ['Educación']),
             accent: const Color(0xFF2563EB),
-          )),
+        ),
+      ),
     ];
 
     return MployaShellCard(
@@ -4350,7 +4950,9 @@ class _TimelineRail extends StatelessWidget {
         children: List.generate(items.length, (index) {
           final item = items[index];
           return Padding(
-            padding: EdgeInsets.only(bottom: index == items.length - 1 ? 0 : 18),
+            padding: EdgeInsets.only(
+              bottom: index == items.length - 1 ? 0 : 18,
+            ),
             child: _TimelineRailItem(item: item),
           );
         }),
@@ -4374,16 +4976,40 @@ class _TimelineSidebar extends StatelessWidget {
             children: [
               Text(
                 'Vista rápida',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: context.textPrimary),
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: context.textPrimary,
+                ),
               ),
               const SizedBox(height: 14),
-              _SignalRow(label: 'Experiencia', value: facts.experienceYearsLabel, foreground: context.textPrimary, subtitle: context.textSecondary),
+              _SignalRow(
+                label: 'Experiencia',
+                value: facts.experienceYearsLabel,
+                foreground: context.textPrimary,
+                subtitle: context.textSecondary,
+              ),
               const SizedBox(height: 10),
-              _SignalRow(label: 'Empresas', value: '${facts.experience.length}', foreground: context.textPrimary, subtitle: context.textSecondary),
+              _SignalRow(
+                label: 'Empresas',
+                value: '${facts.experience.length}',
+                foreground: context.textPrimary,
+                subtitle: context.textSecondary,
+              ),
               const SizedBox(height: 10),
-              _SignalRow(label: 'Industrias', value: '${math.max(1, facts.preferences.length)}', foreground: context.textPrimary, subtitle: context.textSecondary),
+              _SignalRow(
+                label: 'Industrias',
+                value: '${math.max(1, facts.preferences.length)}',
+                foreground: context.textPrimary,
+                subtitle: context.textSecondary,
+              ),
               const SizedBox(height: 10),
-              _SignalRow(label: 'Skills', value: '${facts.primarySkills.length}+ ', foreground: context.textPrimary, subtitle: context.textSecondary),
+              _SignalRow(
+                label: 'Skills',
+                value: '${facts.primarySkills.length}+ ',
+                foreground: context.textPrimary,
+                subtitle: context.textSecondary,
+              ),
             ],
           ),
         ),
@@ -4394,12 +5020,23 @@ class _TimelineSidebar extends StatelessWidget {
             children: [
               Text(
                 'Industrias',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: context.textPrimary),
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: context.textPrimary,
+                ),
               ),
               const SizedBox(height: 14),
               for (final item in facts.preferences.take(4)) ...[
-                _IndustryBar(label: item, value: math.max(0.14, 0.72 - (facts.preferences.indexOf(item) * 0.14))),
-                if (facts.preferences.take(4).last != item) const SizedBox(height: 12),
+                _IndustryBar(
+                  label: item,
+                  value: math.max(
+                    0.14,
+                    0.72 - (facts.preferences.indexOf(item) * 0.14),
+                  ),
+                ),
+                if (facts.preferences.take(4).last != item)
+                  const SizedBox(height: 12),
               ],
             ],
           ),
@@ -4411,14 +5048,28 @@ class _TimelineSidebar extends StatelessWidget {
             children: [
               Text(
                 'Logros destacados',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: context.textPrimary),
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: context.textPrimary,
+                ),
               ),
               const SizedBox(height: 14),
-              _AchievementLine(title: 'Perfil video-first', subtitle: 'Conecta pitch, skills y experiencia'),
+              _AchievementLine(
+                title: 'Perfil video-first',
+                subtitle: 'Conecta pitch, skills y experiencia',
+              ),
               const SizedBox(height: 12),
-              _AchievementLine(title: 'Portfolio activo', subtitle: '${facts.portfolio.length} piezas listas para revisión'),
+              _AchievementLine(
+                title: 'Portfolio activo',
+                subtitle:
+                    '${facts.portfolio.length} piezas listas para revisión',
+              ),
               const SizedBox(height: 12),
-              _AchievementLine(title: 'Señal profesional', subtitle: '${facts.contextualScore}% de lectura contextual'),
+              _AchievementLine(
+                title: 'Señal profesional',
+                subtitle: '${facts.contextualScore}% de lectura contextual',
+              ),
             ],
           ),
         ),
@@ -4489,12 +5140,20 @@ class _ReferenceSidebar extends StatelessWidget {
             children: [
               Text(
                 'Estado de verificaciones',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: context.textPrimary),
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: context.textPrimary,
+                ),
               ),
               const SizedBox(height: 14),
               Text(
                 'Todavía no hay referencias verificadas conectadas. Dejamos esta vista lista para mostrar quien respondió, su relación profesional y la validación real apenas el backend esté disponible.',
-                style: TextStyle(fontSize: 14.5, height: 1.55, color: context.textSecondary),
+                style: TextStyle(
+                  fontSize: 14.5,
+                  height: 1.55,
+                  color: context.textSecondary,
+                ),
               ),
             ],
           ),
@@ -4506,12 +5165,20 @@ class _ReferenceSidebar extends StatelessWidget {
             children: [
               Text(
                 'IA Insights',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: context.textPrimary),
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: context.textPrimary,
+                ),
               ),
               const SizedBox(height: 14),
               Text(
                 'Con los datos reales ya visibles, el perfil destaca por ${facts.primarySkills.take(2).join(' y ').toLowerCase()}, una narrativa clara en video y una identidad profesional consistente.',
-                style: TextStyle(fontSize: 14.5, height: 1.55, color: context.textSecondary),
+                style: TextStyle(
+                  fontSize: 14.5,
+                  height: 1.55,
+                  color: context.textSecondary,
+                ),
               ),
             ],
           ),
@@ -4523,7 +5190,11 @@ class _ReferenceSidebar extends StatelessWidget {
             children: [
               Text(
                 'Solicitudes de referencia',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: context.textPrimary),
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: context.textPrimary,
+                ),
               ),
               const SizedBox(height: 14),
               _SignalRow(
@@ -4544,7 +5215,11 @@ class _ReferenceSidebar extends StatelessWidget {
                 isOwnProfile
                     ? 'La UI ya está lista para que puedas pedir referencias reales sin inventar registros.'
                     : 'La experiencia pública mostrará respuestas verificadas cuando esa capa exista en backend.',
-                style: TextStyle(fontSize: 14.5, height: 1.55, color: context.textSecondary),
+                style: TextStyle(
+                  fontSize: 14.5,
+                  height: 1.55,
+                  color: context.textSecondary,
+                ),
               ),
             ],
           ),
@@ -4571,7 +5246,10 @@ class _ReferencesHero extends StatelessWidget {
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               image: profile.avatarUrl != null && profile.avatarUrl!.isNotEmpty
-                  ? DecorationImage(image: NetworkImage(profile.avatarUrl!), fit: BoxFit.cover)
+                  ? DecorationImage(
+                      image: NetworkImage(profile.avatarUrl!),
+                      fit: BoxFit.cover,
+                    )
                   : null,
               color: const Color(0xFFF3F4FA),
             ),
@@ -4603,11 +5281,10 @@ class _ReferencesHero extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  profile.headline.isNotEmpty ? profile.headline : 'Perfil profesional',
-                  style: TextStyle(
-                    fontSize: 16.5,
-                    color: context.textPrimary,
-                  ),
+                  profile.headline.isNotEmpty
+                      ? profile.headline
+                      : 'Perfil profesional',
+                  style: TextStyle(fontSize: 16.5, color: context.textPrimary),
                 ),
                 const SizedBox(height: 12),
                 Text(
@@ -4620,7 +5297,10 @@ class _ReferencesHero extends StatelessWidget {
               ],
             ),
           ),
-          _ScoreRing(score: math.max(0, (profile.ratingStars * 20).round()), label: 'Reputación'),
+          _ScoreRing(
+            score: math.max(0, (profile.ratingStars * 20).round()),
+            label: 'Reputación',
+          ),
         ],
       ),
     );
@@ -4708,7 +5388,9 @@ class _TimelinePreviewItem extends StatelessWidget {
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
-                  children: tags.map((tag) => MployaPill(label: tag, color: accent)).toList(),
+                  children: tags
+                      .map((tag) => MployaPill(label: tag, color: accent))
+                      .toList(),
                 ),
               ],
             ],
@@ -4756,11 +5438,7 @@ class _TimelineRailItem extends StatelessWidget {
                   color: item.accent,
                 ),
               ),
-              Container(
-                width: 2,
-                height: 140,
-                color: const Color(0xFFE7EBF4),
-              ),
+              Container(width: 2, height: 140, color: const Color(0xFFE7EBF4)),
             ],
           ),
         ),
@@ -4806,7 +5484,11 @@ class _TimelineRailItem extends StatelessWidget {
                   Wrap(
                     spacing: 8,
                     runSpacing: 8,
-                    children: item.tags.map((tag) => MployaPill(label: tag, color: item.accent)).toList(),
+                    children: item.tags
+                        .map(
+                          (tag) => MployaPill(label: tag, color: item.accent),
+                        )
+                        .toList(),
                   ),
                 ],
               ],
@@ -4845,7 +5527,9 @@ class _ReferenceCompetencyRow extends StatelessWidget {
               value: item.score / 5,
               minHeight: 8,
               backgroundColor: const Color(0xFFE5E7F7),
-              valueColor: const AlwaysStoppedAnimation<Color>(NexTheme.brandAccent),
+              valueColor: const AlwaysStoppedAnimation<Color>(
+                NexTheme.brandAccent,
+              ),
             ),
           ),
         ),
@@ -4902,7 +5586,11 @@ class _PortfolioProjectCard extends StatelessWidget {
               height: 220,
               decoration: const BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [Color(0xFF151C30), Color(0xFF29304C), Color(0xFF101624)],
+                  colors: [
+                    Color(0xFF151C30),
+                    Color(0xFF29304C),
+                    Color(0xFF101624),
+                  ],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
@@ -4910,7 +5598,11 @@ class _PortfolioProjectCard extends StatelessWidget {
               child: Stack(
                 children: [
                   const Center(
-                    child: Icon(CupertinoIcons.play_circle, color: Colors.white, size: 54),
+                    child: Icon(
+                      CupertinoIcons.play_circle,
+                      color: Colors.white,
+                      size: 54,
+                    ),
                   ),
                   if (canEdit)
                     Positioned(
@@ -4953,7 +5645,11 @@ class _PortfolioProjectCard extends StatelessWidget {
                             color: Colors.black.withValues(alpha: 0.22),
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          child: const Icon(CupertinoIcons.ellipsis, color: Colors.white, size: 18),
+                          child: const Icon(
+                            CupertinoIcons.ellipsis,
+                            color: Colors.white,
+                            size: 18,
+                          ),
                         ),
                       ),
                     ),
@@ -4975,7 +5671,9 @@ class _PortfolioProjectCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    (video.description ?? 'Proyecto profesional presentado en formato visual.').trim(),
+                    (video.description ??
+                            'Proyecto profesional presentado en formato visual.')
+                        .trim(),
                     maxLines: 3,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
@@ -4989,15 +5687,26 @@ class _PortfolioProjectCard extends StatelessWidget {
                     spacing: 8,
                     runSpacing: 8,
                     children: tags
-                        .map((tag) => MployaPill(label: tag, color: NexTheme.brandAccentDark))
+                        .map(
+                          (tag) => MployaPill(
+                            label: tag,
+                            color: NexTheme.brandAccentDark,
+                          ),
+                        )
                         .toList(),
                   ),
                   const SizedBox(height: 14),
                   Row(
                     children: [
-                      _InlineMetric(icon: CupertinoIcons.calendar, value: _yearFromDate(video.createdAt)),
+                      _InlineMetric(
+                        icon: CupertinoIcons.calendar,
+                        value: _yearFromDate(video.createdAt),
+                      ),
                       const SizedBox(width: 16),
-                      _InlineMetric(icon: CupertinoIcons.eye, value: _compact(video.viewCount)),
+                      _InlineMetric(
+                        icon: CupertinoIcons.eye,
+                        value: _compact(video.viewCount),
+                      ),
                       const Spacer(),
                       const Icon(CupertinoIcons.bookmark, size: 18),
                     ],
@@ -5052,7 +5761,9 @@ class _ScoreRing extends StatelessWidget {
   Widget build(BuildContext context) {
     final value = score.clamp(0, 100) / 100;
     final text = darkMode ? Colors.white : context.textPrimary;
-    final helper = darkMode ? Colors.white.withValues(alpha: 0.72) : context.textSecondary;
+    final helper = darkMode
+        ? Colors.white.withValues(alpha: 0.72)
+        : context.textSecondary;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -5069,7 +5780,9 @@ class _ScoreRing extends StatelessWidget {
                   backgroundColor: darkMode
                       ? Colors.white.withValues(alpha: 0.14)
                       : const Color(0xFFE8EAF6),
-                  valueColor: const AlwaysStoppedAnimation<Color>(NexTheme.brandAccent),
+                  valueColor: const AlwaysStoppedAnimation<Color>(
+                    NexTheme.brandAccent,
+                  ),
                 ),
               ),
               Text(
@@ -5097,7 +5810,9 @@ class _ScoreRing extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              score >= 85 ? 'Muy alto' : (score >= 70 ? 'Fuerte' : 'En progreso'),
+              score >= 85
+                  ? 'Muy alto'
+                  : (score >= 70 ? 'Fuerte' : 'En progreso'),
               style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w700,
@@ -5147,10 +5862,7 @@ class _MiniMetric extends StatelessWidget {
           const SizedBox(height: 4),
           Text(
             subtitle,
-            style: TextStyle(
-              fontSize: 13.5,
-              color: context.textSecondary,
-            ),
+            style: TextStyle(fontSize: 13.5, color: context.textSecondary),
           ),
         ],
       ),
@@ -5187,10 +5899,7 @@ class _GlassActionMetric extends StatelessWidget {
   final String title;
   final String value;
 
-  const _GlassActionMetric({
-    required this.title,
-    required this.value,
-  });
+  const _GlassActionMetric({required this.title, required this.value});
 
   @override
   Widget build(BuildContext context) {
@@ -5230,10 +5939,7 @@ class _LargeMetric extends StatelessWidget {
   final String label;
   final String value;
 
-  const _LargeMetric({
-    required this.label,
-    required this.value,
-  });
+  const _LargeMetric({required this.label, required this.value});
 
   @override
   Widget build(BuildContext context) {
@@ -5253,10 +5959,7 @@ class _LargeMetric extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             label,
-            style: TextStyle(
-              fontSize: 14.5,
-              color: context.textSecondary,
-            ),
+            style: TextStyle(fontSize: 14.5, color: context.textSecondary),
           ),
         ],
       ),
@@ -5280,7 +5983,11 @@ class _IndustryBar extends StatelessWidget {
             Expanded(
               child: Text(
                 label,
-                style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700, color: context.textPrimary),
+                style: TextStyle(
+                  fontSize: 14.5,
+                  fontWeight: FontWeight.w700,
+                  color: context.textPrimary,
+                ),
               ),
             ),
             Text(
@@ -5296,7 +6003,9 @@ class _IndustryBar extends StatelessWidget {
             value: value,
             minHeight: 8,
             backgroundColor: const Color(0xFFE7EBF6),
-            valueColor: const AlwaysStoppedAnimation<Color>(NexTheme.brandAccent),
+            valueColor: const AlwaysStoppedAnimation<Color>(
+              NexTheme.brandAccent,
+            ),
           ),
         ),
       ],
@@ -5308,10 +6017,7 @@ class _AchievementLine extends StatelessWidget {
   final String title;
   final String subtitle;
 
-  const _AchievementLine({
-    required this.title,
-    required this.subtitle,
-  });
+  const _AchievementLine({required this.title, required this.subtitle});
 
   @override
   Widget build(BuildContext context) {
@@ -5325,7 +6031,11 @@ class _AchievementLine extends StatelessWidget {
             color: context.primaryAccent.withValues(alpha: 0.10),
             borderRadius: BorderRadius.circular(12),
           ),
-          child: Icon(CupertinoIcons.star_fill, size: 18, color: context.primaryAccent),
+          child: Icon(
+            CupertinoIcons.star_fill,
+            size: 18,
+            color: context.primaryAccent,
+          ),
         ),
         const SizedBox(width: 12),
         Expanded(
@@ -5334,7 +6044,11 @@ class _AchievementLine extends StatelessWidget {
             children: [
               Text(
                 title,
-                style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.w800, color: context.textPrimary),
+                style: TextStyle(
+                  fontSize: 15.5,
+                  fontWeight: FontWeight.w800,
+                  color: context.textPrimary,
+                ),
               ),
               const SizedBox(height: 4),
               Text(
@@ -5426,7 +6140,11 @@ class _ProfileErrorScaffold extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(CupertinoIcons.exclamationmark_triangle_fill, size: 56, color: Color(0xFFF59E0B)),
+              const Icon(
+                CupertinoIcons.exclamationmark_triangle_fill,
+                size: 56,
+                color: Color(0xFFF59E0B),
+              ),
               const SizedBox(height: 16),
               Text(
                 title,
@@ -5507,10 +6225,7 @@ class _ProfileBundle {
   final List<PortfolioVideo> portfolio;
   final int viewCount;
 
-  const _ProfileBundle({
-    required this.portfolio,
-    required this.viewCount,
-  });
+  const _ProfileBundle({required this.portfolio, required this.viewCount});
 }
 
 class _ProfileFacts {
@@ -5604,19 +6319,32 @@ class _ProfileFacts {
     final languages = splitValues(readLine('Idiomas:'));
     final certifications = splitValues(readLine('Certificaciones:'));
 
-    final tags = profile.tags.where((item) => item.trim().isNotEmpty).map((item) => item.trim()).toList();
-    final skills = profile.skills.where((item) => item.trim().isNotEmpty).map((item) => item.trim()).toList();
+    final tags = profile.tags
+        .where((item) => item.trim().isNotEmpty)
+        .map((item) => item.trim())
+        .toList();
+    final skills = profile.skills
+        .where((item) => item.trim().isNotEmpty)
+        .map((item) => item.trim())
+        .toList();
     final chips = <String>{...skills, ...tags}.toList();
     final modality = preferences.firstWhere(
-      (item) => item.toLowerCase().contains('remoto') || item.toLowerCase().contains('hibr') || item.toLowerCase().contains('presencial'),
+      (item) =>
+          item.toLowerCase().contains('remoto') ||
+          item.toLowerCase().contains('hibr') ||
+          item.toLowerCase().contains('presencial'),
       orElse: () => tags.firstWhere(
-        (item) => item.toLowerCase().contains('remote') || item.toLowerCase().contains('remoto') || item.toLowerCase().contains('hibrido') || item.toLowerCase().contains('híbrido'),
-        orElse: () => 'Remoto / Híbrido',
+        (item) =>
+            item.toLowerCase().contains('remote') ||
+            item.toLowerCase().contains('remoto') ||
+            item.toLowerCase().contains('hibrido') ||
+            item.toLowerCase().contains('híbrido'),
+        orElse: () => 'Modalidad no informada',
       ),
     );
 
-    final yearsEstimate = profile.experience.isEmpty ? 0 : math.max(1, profile.experience.length * 2);
-    final profileScoreBase = 55 +
+    final profileScoreBase =
+        55 +
         (profile.videoUrl != null && profile.videoUrl!.isNotEmpty ? 16 : 0) +
         (profile.skills.isNotEmpty ? 10 : 0) +
         (profile.about != null && profile.about!.trim().isNotEmpty ? 8 : 0) +
@@ -5625,7 +6353,7 @@ class _ProfileFacts {
 
     final contextualScore = profile.matchPercentage > 0
         ? profile.matchPercentage.round().clamp(0, 100)
-        : math.min(98, 72 + skills.length * 3 + (bundle.portfolio.isNotEmpty ? 6 : 0));
+        : 0;
 
     return _ProfileFacts(
       aboutText: narrativeLines.isEmpty
@@ -5638,22 +6366,28 @@ class _ProfileFacts {
       modalityLabel: modality,
       salaryLabel: profile.salaryExpectation?.trim().isNotEmpty == true
           ? profile.salaryExpectation!.trim()
-          : 'A convenir',
-      availabilityShort: profile.isOpenToWork ? 'Inmediata' : 'Activa',
-      availabilityLine: profile.isOpenToWork ? 'Disponible para trabajar' : 'Perfil activo',
-      specialtyLabel: profile.headline.isNotEmpty ? profile.headline.split(' ').take(2).join(' ') : 'Especialidad',
-      experienceYearsLabel: yearsEstimate == 0 ? '0 años' : '$yearsEstimate+ años',
-      pitchStatus: profile.videoUrl != null && profile.videoUrl!.isNotEmpty ? 'Activo' : 'Pendiente',
+          : 'No informado',
+      availabilityShort: profile.isOpenToWork ? 'Disponible' : 'No informada',
+      availabilityLine: profile.isOpenToWork
+          ? 'Disponible para trabajar'
+          : 'Disponibilidad no informada',
+      specialtyLabel: profile.headline.isNotEmpty
+          ? profile.headline.split(' ').take(2).join(' ')
+          : 'Especialidad',
+      experienceYearsLabel: profile.experience.isEmpty
+          ? 'Sin datos'
+          : '${profile.experience.length} ${profile.experience.length == 1 ? 'registro' : 'registros'}',
+      pitchStatus: profile.videoUrl != null && profile.videoUrl!.isNotEmpty
+          ? 'Activo'
+          : 'Pendiente',
       connectionsSummary: profile.connections > 0
           ? 'Tiene ${profile.connections} conexiones visibles dentro de Mploya.'
           : 'Todavía no hay conexiones visibles en común.',
       viewCount: bundle.viewCount,
       contextualScore: contextualScore,
       profileStrengthScore: profileScoreBase.clamp(0, 100),
-      languages: languages.isEmpty ? const ['Español', 'Inglés'] : languages,
-      preferences: preferences.isEmpty
-          ? (tags.take(4).isEmpty ? const ['Remoto', 'Híbrido', 'Producto'] : tags.take(4).toList())
-          : preferences,
+      languages: languages,
+      preferences: preferences,
       certifications: certifications,
       primarySkills: chips.take(6).toList(),
       secondarySkills: chips.skip(6).take(6).toList(),

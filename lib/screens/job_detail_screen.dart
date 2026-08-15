@@ -1,5 +1,5 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart' show Divider, Colors, Icons;
+import 'package:flutter/material.dart' show Colors;
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
@@ -17,6 +17,8 @@ class JobDetailScreen extends StatefulWidget {
   final int? matchScore;
   final bool isApplied;
   final VoidCallback? onApply;
+  final String? viewerAccountType;
+  final bool previewMode;
 
   const JobDetailScreen({
     super.key,
@@ -24,6 +26,8 @@ class JobDetailScreen extends StatefulWidget {
     this.matchScore,
     this.isApplied = false,
     this.onApply,
+    this.viewerAccountType,
+    this.previewMode = false,
   });
 
   @override
@@ -39,9 +43,14 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
   void initState() {
     super.initState();
     _applied = widget.isApplied;
+    if (!widget.previewMode && !_isHeadhunter) {
     _loadCompanyVideo();
     _computeDistance();
   }
+  }
+
+  bool get _isHeadhunter =>
+      widget.viewerAccountType?.toLowerCase() == 'headhunter';
 
   Map<String, dynamic> get job => widget.job;
 
@@ -60,7 +69,10 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
       cleanUrl = 'https://$cleanUrl';
     }
     try {
-      await launchUrl(Uri.parse(cleanUrl), mode: LaunchMode.externalApplication);
+      await launchUrl(
+        Uri.parse(cleanUrl),
+        mode: LaunchMode.externalApplication,
+      );
     } catch (_) {}
   }
 
@@ -85,7 +97,12 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
     try {
       final pos = await Geolocator.getLastKnownPosition();
       if (pos == null || !mounted) return;
-      final meters = Geolocator.distanceBetween(pos.latitude, pos.longitude, _lat!, _lng!);
+      final meters = Geolocator.distanceBetween(
+        pos.latitude,
+        pos.longitude,
+        _lat!,
+        _lng!,
+      );
       setState(() => _distanceKm = meters / 1000);
     } catch (_) {}
   }
@@ -162,6 +179,7 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isHeadhunter) return _buildHeadhunterDetail(context);
     final parsed = _parseDescription(job['description']?.toString());
     
     return CupertinoPageScaffold(
@@ -178,16 +196,282 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
     );
   }
 
+  Widget _buildHeadhunterDetail(BuildContext context) {
+    final title = job['title']?.toString().trim() ?? '';
+    final company =
+        (job['users'] as Map?)?['name']?.toString().trim() ??
+        job['company_name']?.toString().trim() ??
+        job['company']?.toString().trim() ??
+        '';
+    final location = job['location']?.toString().trim() ?? '';
+    final salary =
+        (job['salary_range'] ?? job['salary'])?.toString().trim() ?? '';
+    final modality = switch (job['modality']?.toString()) {
+      'remote' => 'Remoto',
+      'hybrid' => 'Híbrido',
+      'onsite' => 'Presencial',
+      final value when value != null => value,
+      _ => '',
+    };
+    final seniority = job['seniority']?.toString().trim() ?? '';
+    final description = job['description']?.toString().trim() ?? '';
+    final tags = ((job['tags'] as List?) ?? const [])
+        .map((tag) => tag.toString().trim())
+        .where((tag) => tag.isNotEmpty)
+        .toList();
+    final facts = [
+      location,
+      modality,
+      seniority,
+    ].where((value) => value.isNotEmpty).toList();
+
+    return CupertinoPageScaffold(
+      backgroundColor: const Color(0xFFF6F8FB),
+      child: SafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 20, 8),
+              child: Row(
+                children: [
+                  CupertinoButton(
+                    padding: const EdgeInsets.all(8),
+                    minimumSize: const Size(40, 40),
+                    onPressed: () => Navigator.of(context).maybePop(),
+                    child: const Icon(
+                      CupertinoIcons.chevron_back,
+                      color: Color(0xFF263247),
+                    ),
+                  ),
+                  const Expanded(
+                    child: Text(
+                      'Detalle de vacante',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF263247),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 40),
+                ],
+              ),
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 40),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF173B63), Color(0xFF185FA5)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(22),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            width: 48,
+                            height: 48,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.14),
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: const Icon(
+                              CupertinoIcons.briefcase_fill,
+                              color: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(height: 18),
+                          Text(
+                            title.isEmpty ? 'Vacante sin título' : title,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 25,
+                              height: 1.12,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: -0.5,
+                            ),
+                          ),
+                          if (company.isNotEmpty) ...[
+                            const SizedBox(height: 7),
+                            Text(
+                              company,
+                              style: const TextStyle(
+                                color: Color(0xFFD8E8F8),
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                          if (salary.isNotEmpty) ...[
+                            const SizedBox(height: 13),
+                            Text(
+                              salary,
+                              style: const TextStyle(
+                                color: Color(0xFFFFC267),
+                                fontSize: 15,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    if (facts.isNotEmpty) ...[
+                      const SizedBox(height: 18),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: facts
+                            .map(
+                              (fact) => Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 11,
+                                  vertical: 7,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(999),
+                                  border: Border.all(
+                                    color: const Color(0xFFE2E8F0),
+                                  ),
+                                ),
+                                child: Text(
+                                  fact,
+                                  style: const TextStyle(
+                                    fontSize: 12.5,
+                                    color: Color(0xFF58667A),
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            )
+                            .toList(),
+                      ),
+                    ],
+                    if (description.isNotEmpty) ...[
+                      const SizedBox(height: 25),
+                      const Text(
+                        'Sobre la posición',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF263247),
+                        ),
+                      ),
+                      const SizedBox(height: 9),
+                      Text(
+                        description,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          height: 1.55,
+                          color: Color(0xFF657287),
+                        ),
+                      ),
+                    ],
+                    if (tags.isNotEmpty) ...[
+                      const SizedBox(height: 24),
+                      const Text(
+                        'Skills publicadas',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF263247),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: tags
+                            .map(
+                              (tag) => Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 11,
+                                  vertical: 7,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFEAF3FC),
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                                child: Text(
+                                  tag,
+                                  style: const TextStyle(
+                                    color: Color(0xFF185FA5),
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            )
+                            .toList(),
+                      ),
+                    ],
+                    const SizedBox(height: 24),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(15),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFF7E8),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: const Color(0xFFFFE0AA)),
+                      ),
+                      child: const Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                            CupertinoIcons.info_circle_fill,
+                            color: Color(0xFFD4740A),
+                            size: 19,
+                          ),
+                          SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'Vista informativa para Headhunter. Las postulaciones corresponden al rol Candidato.',
+                              style: TextStyle(
+                                fontSize: 12.5,
+                                height: 1.4,
+                                color: Color(0xFF855111),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   // ───────────────────────────────────────────────────────────────────────────
   // MOBILE LAYOUT (Ancho <= 800px)
   // ───────────────────────────────────────────────────────────────────────────
   Widget _buildMobileLayout(BuildContext context, Map<String, String?> parsed) {
     final title = job['title']?.toString() ?? 'Oferta';
-    final companyName = (job['users'] as Map<String, dynamic>?)?['name']?.toString()
-        ?? job['company_name']?.toString()
-        ?? 'Empresa';
-    final salary = job['salary_range']?.toString() ?? job['salary']?.toString() ?? 'A convenir';
-    final location = parsed['ubicacion'] ?? job['location']?.toString() ?? 'Asunción';
+    final companyName =
+        (job['users'] as Map<String, dynamic>?)?['name']?.toString() ??
+        job['company_name']?.toString() ??
+        'Empresa';
+    final salary =
+        job['salary_range']?.toString() ??
+        job['salary']?.toString() ??
+        'A convenir';
+    final location =
+        parsed['ubicacion'] ?? job['location']?.toString() ?? 'Asunción';
     final tags = (job['tags'] is List)
         ? (job['tags'] as List).map((t) => t.toString()).toList()
         : <String>[];
@@ -197,7 +481,10 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
         // ── Custom Dark Header ──
         Container(
           color: const Color(0xFF22211F),
-          padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top + 8, bottom: 16),
+          padding: EdgeInsets.only(
+            top: MediaQuery.of(context).padding.top + 8,
+            bottom: 16,
+          ),
           child: Row(
             children: [
               const SizedBox(width: 8),
@@ -210,7 +497,11 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                     color: Colors.white.withValues(alpha: 0.1),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(CupertinoIcons.chevron_back, color: Colors.white, size: 20),
+                  child: const Icon(
+                    CupertinoIcons.chevron_back,
+                    color: Colors.white,
+                    size: 20,
+                  ),
                 ),
               ),
               Expanded(
@@ -230,7 +521,9 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
               CupertinoButton(
                 padding: EdgeInsets.zero,
                 onPressed: () {
-                  Share.share('Mirá esta oferta de empleo en Mploya: $title en $companyName');
+                  Share.share(
+                    'Mirá esta oferta de empleo en Mploya: $title en $companyName',
+                  );
                 },
                 child: Container(
                   padding: const EdgeInsets.all(8),
@@ -238,7 +531,11 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                     color: Colors.white.withValues(alpha: 0.1),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(CupertinoIcons.share, color: Colors.white, size: 20),
+                  child: const Icon(
+                    CupertinoIcons.share,
+                    color: Colors.white,
+                    size: 20,
+                  ),
                 ),
               ),
               const SizedBox(width: 8),
@@ -338,10 +635,17 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
 
         // ── Pinned CTA Button at Bottom ──
         Container(
-          padding: EdgeInsets.fromLTRB(20, 12, 20, MediaQuery.of(context).padding.bottom + 12),
+          padding: EdgeInsets.fromLTRB(
+            20,
+            12,
+            20,
+            MediaQuery.of(context).padding.bottom + 12,
+          ),
           decoration: const BoxDecoration(
             color: Color(0xFFFAF8F5),
-            border: Border(top: BorderSide(color: Color(0xFFE2DFD5), width: 0.5)),
+            border: Border(
+              top: BorderSide(color: Color(0xFFE2DFD5), width: 0.5),
+            ),
           ),
           child: _buildGoldCTA(context),
         ),
@@ -350,9 +654,12 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
   }
 
   Widget _buildMobileGrid(Map<String, String?> parsed, String location) {
-    final tipo = parsed['tipo']?.isNotEmpty == true ? parsed['tipo']! : 'Startup';
-    final tamano = parsed['tamano']?.isNotEmpty == true ? parsed['tamano']! : '20 empleados';
-    final fundada = parsed['fundada']?.isNotEmpty == true ? parsed['fundada']! : '2022';
+    final tipo = parsed['tipo']?.isNotEmpty == true
+        ? parsed['tipo']!
+        : 'Startup';
+    final fundada = parsed['fundada']?.isNotEmpty == true
+        ? parsed['fundada']!
+        : '2022';
     final web = parsed['web']?.isNotEmpty == true ? parsed['web']! : 'jilo.com';
 
     return GridView.count(
@@ -450,7 +757,12 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
           // ── Top Dark Banner Block ──
           Container(
             color: const Color(0xFF22211F),
-            padding: const EdgeInsets.fromLTRB(40, 24, 40, 60), // Extra bottom padding for overlap
+            padding: const EdgeInsets.fromLTRB(
+              40,
+              24,
+              40,
+              60,
+            ), // Extra bottom padding for overlap
             child: Center(
               child: Container(
                 constraints: const BoxConstraints(maxWidth: 1100),
@@ -469,7 +781,11 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                               color: Colors.white.withValues(alpha: 0.1),
                               shape: BoxShape.circle,
                             ),
-                            child: const Icon(CupertinoIcons.chevron_back, color: Colors.white, size: 20),
+                            child: const Icon(
+                              CupertinoIcons.chevron_back,
+                              color: Colors.white,
+                              size: 20,
+                            ),
                           ),
                         ),
                         Text(
@@ -485,7 +801,9 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                         CupertinoButton(
                           padding: EdgeInsets.zero,
                           onPressed: () {
-                            Share.share('Mirá esta oferta de empleo en Mploya: $title en $companyName');
+                            Share.share(
+                              'Mirá esta oferta de empleo en Mploya: $title en $companyName',
+                            );
                           },
                           child: Container(
                             padding: const EdgeInsets.all(8),
@@ -493,7 +811,11 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                               color: Colors.white.withValues(alpha: 0.1),
                               shape: BoxShape.circle,
                             ),
-                            child: const Icon(CupertinoIcons.share, color: Colors.white, size: 20),
+                            child: const Icon(
+                              CupertinoIcons.share,
+                              color: Colors.white,
+                              size: 20,
+                            ),
                           ),
                         ),
                       ],
@@ -516,7 +838,11 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                                     borderRadius: BorderRadius.circular(16),
                                   ),
                                   child: const Center(
-                                    child: Icon(CupertinoIcons.video_camera_solid, color: Colors.white24, size: 48),
+                                    child: Icon(
+                                      CupertinoIcons.video_camera_solid,
+                                      color: Colors.white24,
+                                      size: 48,
+                                    ),
                                   ),
                                 ),
                         ),
@@ -528,15 +854,27 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.start,
                             children: [
-                              _infoListCard(CupertinoIcons.briefcase, '$tipo | $tamano'),
-                              _infoListCard(CupertinoIcons.calendar, 'Fundada: $fundada'),
-                              _infoListCard(CupertinoIcons.location, 'Ubicación: $location | Modalidad: $modalidad'),
+                              _infoListCard(
+                                CupertinoIcons.briefcase,
+                                '$tipo | $tamano',
+                              ),
+                              _infoListCard(
+                                CupertinoIcons.calendar,
+                                'Fundada: $fundada',
+                              ),
+                              _infoListCard(
+                                CupertinoIcons.location,
+                                'Ubicación: $location | Modalidad: $modalidad',
+                              ),
                               GestureDetector(
                                 behavior: HitTestBehavior.opaque,
                                 onTap: () => _openWeb(web),
                                 child: MouseRegion(
                                   cursor: SystemMouseCursors.click,
-                                  child: _infoListCard(CupertinoIcons.globe, 'Website: $web'),
+                                  child: _infoListCard(
+                                    CupertinoIcons.globe,
+                                    'Website: $web',
+                                  ),
                                 ),
                               ),
                             ],
@@ -649,7 +987,10 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                           decoration: BoxDecoration(
                             color: const Color(0xFFF6F4EE),
                             borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: const Color(0xFFE2DFD5), width: 1),
+                            border: Border.all(
+                              color: const Color(0xFFE2DFD5),
+                              width: 1,
+                            ),
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -694,7 +1035,10 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.1), width: 1),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.1),
+          width: 1,
+        ),
       ),
       child: Row(
         children: [
@@ -766,7 +1110,7 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
               color: Colors.black.withValues(alpha: 0.4),
               blurRadius: 20,
               offset: const Offset(0, 10),
-            )
+            ),
           ],
         ),
         child: Stack(
@@ -778,13 +1122,21 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: 0.15),
                   shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white.withValues(alpha: 0.3), width: 1.5),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.3),
+                    width: 1.5,
+                  ),
                 ),
-                child: const Icon(CupertinoIcons.play_fill, color: Colors.white, size: 26),
+                child: const Icon(
+                  CupertinoIcons.play_fill,
+                  color: Colors.white,
+                  size: 26,
+                ),
               ),
             ),
             const Positioned(
-              top: 12, left: 12,
+              top: 12,
+              left: 12,
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   color: Color(0x7F000000),
@@ -794,7 +1146,11 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                   padding: EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   child: Text(
                     'Pitch de la empresa',
-                    style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
               ),
@@ -805,7 +1161,11 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
     );
   }
 
-  Widget _buildChips(BuildContext context, String? location, List<String> tags) {
+  Widget _buildChips(
+    BuildContext context,
+    String? location,
+    List<String> tags,
+  ) {
     final chips = <Widget>[];
 
     if (widget.matchScore != null && widget.matchScore! > 0) {
@@ -874,7 +1234,14 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('•  ', style: TextStyle(fontSize: 14, color: Color(0xFFDCAE50), fontWeight: FontWeight.bold)),
+                    const Text(
+                      '•  ',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Color(0xFFDCAE50),
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                     Expanded(
                       child: Text(
                         item,
@@ -905,7 +1272,9 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
               options: MapOptions(
                 initialCenter: point,
                 initialZoom: 14,
-                interactionOptions: const InteractionOptions(flags: InteractiveFlag.none),
+                interactionOptions: const InteractionOptions(
+                  flags: InteractiveFlag.none,
+                ),
               ),
               children: [
                 TileLayer(
@@ -915,38 +1284,65 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                       'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
                   userAgentPackageName: 'ai.mploya.app',
                 ),
-                MarkerLayer(markers: [
+                MarkerLayer(
+                  markers: [
                   Marker(
                     point: point,
                     width: 40,
                     height: 40,
-                    child: const Icon(CupertinoIcons.location_solid, color: MployaTheme.brandAccent, size: 32),
+                      child: const Icon(
+                        CupertinoIcons.location_solid,
+                        color: MployaTheme.brandAccent,
+                        size: 32,
+                      ),
+                    ),
+                  ],
                   ),
-                ]),
               ],
             ),
             if (location != null && location.isNotEmpty)
               Positioned(
-                top: 12, left: 12, right: 12,
+                top: 12,
+                left: 12,
+                right: 12,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
                   decoration: BoxDecoration(
                     color: CupertinoColors.white,
                     borderRadius: BorderRadius.circular(10),
-                    boxShadow: const [BoxShadow(color: Color(0x14000000), blurRadius: 8, offset: Offset(0, 2))],
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x14000000),
+                        blurRadius: 8,
+                        offset: Offset(0, 2),
+                      ),
+                    ],
                   ),
-                  child: Row(children: [
-                    const Icon(CupertinoIcons.location_solid, size: 15, color: MployaTheme.brandAccent),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        CupertinoIcons.location_solid,
+                        size: 15,
+                        color: MployaTheme.brandAccent,
+                  ),
                     const SizedBox(width: 6),
                     Expanded(
                       child: Text(
                         location,
-                        style: const TextStyle(fontSize: 12.5, color: Color(0xFF22211F), fontWeight: FontWeight.w600),
+                          style: const TextStyle(
+                            fontSize: 12.5,
+                            color: Color(0xFF22211F),
+                            fontWeight: FontWeight.w600,
+                          ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                  ]),
+                    ],
+                  ),
                 ),
               ),
           ],
@@ -980,16 +1376,20 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                     color: const Color(0xFFDCAE50).withValues(alpha: 0.3),
                     blurRadius: 12,
                     offset: const Offset(0, 4),
-                  )
+                  ),
                 ],
         ),
         child: Center(
           child: Text(
-            _applied ? '✓ Postulación enviada' : 'Postularme con mi Video-Pitch',
+            _applied
+                ? '✓ Postulación enviada'
+                : 'Postularme con mi Video-Pitch',
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w700,
-              color: _applied ? CupertinoColors.systemGrey : const Color(0xFF22211F), // Dark charcoal text on gold
+              color: _applied
+                  ? CupertinoColors.systemGrey
+                  : const Color(0xFF22211F), // Dark charcoal text on gold
             ),
           ),
         ),

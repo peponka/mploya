@@ -7,9 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../screens/ats_dashboard_screen.dart';
 import '../screens/create_story_screen.dart';
-import '../screens/empresa_panel_hub_screen.dart';
 import '../screens/empresa/empresa_actividad_screen.dart';
 import '../screens/empresa/empresa_dashboard_screen.dart';
 import '../screens/empresa/empresa_herramientas_screen.dart';
@@ -23,11 +21,14 @@ import '../screens/empresa/empresa_talent_feed_screen.dart';
 import '../screens/empresa/empresa_vacantes_screen.dart';
 import '../screens/explore_screen.dart';
 import '../screens/home_feed_screen.dart';
+import '../screens/headhunter/headhunter_clients_screen.dart';
+import '../screens/headhunter/headhunter_dashboard_screen.dart';
+import '../screens/headhunter/headhunter_publish_job_screen.dart';
+import '../screens/headhunter/headhunter_talent_pool_screen.dart';
 import '../screens/jobs_screen.dart';
 import '../screens/messaging_screen.dart';
 import '../screens/network_screen.dart';
 import '../screens/notifications_screen.dart';
-import '../screens/nueva_vacante_screen.dart';
 import '../screens/onboarding_pitch_screen.dart';
 import '../screens/post_composer_screen.dart';
 import '../screens/profile_screen.dart';
@@ -68,9 +69,10 @@ class _MainNavigationState extends State<MainNavigation> {
   // FINAL_SCREENS_CODEX. Las pantallas legacy siguen en el repo para los otros
   // roles hasta que les toque su tanda.
   static const _companyTalentFeed = EmpresaTalentFeedScreen(embedded: true);
-  static const _explore = ExploreScreen();
   static const _network = NetworkScreen();
-  static const _atsDashboard = AtsDashboardScreen();
+  static const _headhunterClients = HeadhunterClientsScreen();
+  static const _headhunterDashboard = HeadhunterDashboardScreen();
+  static const _headhunterTalentPool = HeadhunterTalentPoolScreen();
   static const _notifications = NotificationsScreen();
   static const _profile = ProfileScreen();
   static const _messages = MessagingScreen();
@@ -97,11 +99,13 @@ class _MainNavigationState extends State<MainNavigation> {
     // 1 · Empresa: Pipeline · Headhunter: ATS · Candidato: Vacantes
     _accountType == 'empresa'
         ? const EmpresaPipelineScreen()
-        : (_accountType == 'headhunter' ? _atsDashboard : const JobsScreen()),
+        : (_accountType == 'headhunter'
+              ? _headhunterClients
+              : const JobsScreen()),
     // 2 · Empresa: Mapa · Headhunter: Explorar · Candidato: Red
     _accountType == 'empresa'
         ? const EmpresaMapaScreen()
-        : (_accountType == 'headhunter' ? _explore : _network),
+        : (_accountType == 'headhunter' ? _headhunterTalentPool : _network),
     // 3 · Actividad / Notificaciones. Candidato llega desde Inicio, no por barra.
     _accountType == 'empresa'
         ? const EmpresaActividadScreen()
@@ -129,7 +133,7 @@ class _MainNavigationState extends State<MainNavigation> {
     _accountType == 'empresa'
         ? _companyDashboard
         : (_accountType == 'headhunter'
-              ? const EmpresaPanelHubScreen()
+              ? _headhunterDashboard
               : const SizedBox.shrink()),
     // 8 · Herramientas. Candidato: vacía por ahora; su acceso será un push desde
     //     Perfil en el paso siguiente del bloque.
@@ -426,7 +430,7 @@ class _MainNavigationState extends State<MainNavigation> {
         builder: (sheetContext) => CupertinoActionSheet(
           title: const Text('Acción rápida'),
           message: const Text(
-            'La navegación principal ya está reservada para Dashboard, Clientes, Búsquedas y Talent Pool.',
+            'Podés publicar una vacante real o abrir tus mensajes.',
           ),
           actions: [
             CupertinoActionSheetAction(
@@ -434,11 +438,11 @@ class _MainNavigationState extends State<MainNavigation> {
                 Navigator.pop(sheetContext);
                 navigator.push(
                   CupertinoPageRoute(
-                    builder: (_) => const NuevaVacanteScreen(),
+                    builder: (_) => const HeadhunterPublishJobScreen(),
                   ),
                 );
               },
-              child: const Text('Nueva búsqueda'),
+              child: const Text('Publicar vacante'),
             ),
             CupertinoActionSheetAction(
               onPressed: () {

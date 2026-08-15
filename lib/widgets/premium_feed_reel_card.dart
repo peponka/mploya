@@ -11,6 +11,7 @@ import '../models/models.dart';
 import '../navigation/main_navigation.dart';
 import '../providers/user_provider.dart';
 import '../theme/mploya_tokens.dart';
+import '../utils/headhunter_candidate_privacy.dart';
 import '../screens/profile_screen.dart';
 import '../services/coach_mark_service.dart';
 import '../services/social_service.dart';
@@ -25,6 +26,7 @@ class PremiumFeedReelCard extends ConsumerStatefulWidget {
   /// Render aislado (tests y capturas): no abre el video ni consulta el estado
   /// de guardado. En producción es `false` y el comportamiento es el de antes.
   final bool esPreview;
+  final String? viewerAccountType;
 
   const PremiumFeedReelCard({
     super.key,
@@ -32,6 +34,7 @@ class PremiumFeedReelCard extends ConsumerStatefulWidget {
     this.webMode = false,
     this.isFirstCard = false,
     this.esPreview = false,
+    this.viewerAccountType,
   });
 
   @override
@@ -97,7 +100,11 @@ class _CirculoPlayIdle extends StatelessWidget {
           width: 2,
         ),
       ),
-      child: const Icon(CupertinoIcons.play_fill, size: 30, color: Colors.white),
+      child: const Icon(
+        CupertinoIcons.play_fill,
+        size: 30,
+        color: Colors.white,
+      ),
     );
   }
 }
@@ -336,9 +343,14 @@ class _PremiumFeedReelCardState extends ConsumerState<PremiumFeedReelCard>
   }
 
   void _openProfile() {
-    Navigator.of(
-      context,
-    ).push(CupertinoPageRoute(builder: (_) => ProfileScreen(user: widget.post.author)));
+    Navigator.of(context).push(
+      CupertinoPageRoute(
+        builder: (_) => ProfileScreen(
+          user: widget.post.author,
+          viewerAccountType: widget.viewerAccountType,
+        ),
+      ),
+    );
   }
 
   @override
@@ -346,9 +358,12 @@ class _PremiumFeedReelCardState extends ConsumerState<PremiumFeedReelCard>
     final author = widget.post.author;
     // `valueOrNull` y no `value`: con la sesión en error, `value` relanza la
     // excepción y tira abajo el render de la tarjeta entera.
-    final currentUser =
-        widget.esPreview ? null : ref.watch(currentUserProvider).valueOrNull;
-    final viewerType = (currentUser?.accountType ?? 'candidato').toLowerCase();
+    final currentUser = widget.esPreview
+        ? null
+        : ref.watch(currentUserProvider).valueOrNull;
+    final viewerType =
+        (widget.viewerAccountType ?? currentUser?.accountType ?? 'candidato')
+            .toLowerCase();
     final seesVacancy = viewerType == 'candidato';
     // Sin match calculado no se dibuja el badge. Antes caía en un 82 % fijo:
     // un número inventado presentado como resultado de la IA.
@@ -367,9 +382,11 @@ class _PremiumFeedReelCardState extends ConsumerState<PremiumFeedReelCard>
     final playing = _controller?.value.isPlaying ?? false;
     // El reel llega a Supabase sin abrir el video en el render aislado
     // (tests, capturas): ahí queda siempre en el fondo violeta de espera.
-    final mostrarFondoIdle = (author.videoUrl ?? '').isNotEmpty &&
-        !_isInitialized &&
-        !_hasError;
+    final mostrarFondoIdle =
+        (author.videoUrl ?? '').isNotEmpty && !_isInitialized && !_hasError;
+    final protectedForHeadhunter =
+        widget.viewerAccountType?.toLowerCase() == 'headhunter' &&
+        isConfidentialAccountType(author.accountType);
 
     Widget glassPill(IconData icon, String label) {
       return Container(
@@ -463,7 +480,38 @@ class _PremiumFeedReelCardState extends ConsumerState<PremiumFeedReelCard>
         GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: _togglePlayPause,
-          child: mostrarFondoIdle
+          child: protectedForHeadhunter
+              ? const DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [Color(0xFF14233A), Color(0xFF24476D)],
+                    ),
+                  ),
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          CupertinoIcons.lock_shield_fill,
+                          size: 54,
+                          color: Color(0xFFD6E7F7),
+                        ),
+                        SizedBox(height: 12),
+                        Text(
+                          'Identidad protegida',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              : mostrarFondoIdle
               ? _fondoVideoIdle()
               : ReelVideoBackground(
                   author: author,
@@ -511,7 +559,7 @@ class _PremiumFeedReelCardState extends ConsumerState<PremiumFeedReelCard>
             ],
           ),
         ),
-        if (mostrarFondoIdle)
+        if (mostrarFondoIdle || protectedForHeadhunter)
           const SizedBox.shrink()
         else if (!_hasError && !_isInitialized)
           const Center(
@@ -673,8 +721,9 @@ class _PremiumFeedReelCardState extends ConsumerState<PremiumFeedReelCard>
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                       style: TextStyle(
-                                        color: Colors.black
-                                            .withValues(alpha: 0.8),
+                                        color: Colors.black.withValues(
+                                          alpha: 0.8,
+                                        ),
                                         fontSize: 17,
                                         fontWeight: FontWeight.w800,
                                       ),

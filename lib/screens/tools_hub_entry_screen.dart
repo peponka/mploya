@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/models.dart';
 import '../utils/user_columns.dart';
+import 'headhunter/headhunter_tools_screen.dart';
 import 'mis_herramientas_screen.dart';
 
 class ToolsHubEntryScreen extends StatefulWidget {
@@ -52,6 +53,9 @@ class _ToolsHubEntryScreenState extends State<ToolsHubEntryScreen> {
         }
 
         final profile = NexUser.fromJson(data);
+        if (profile.accountType == 'headhunter') {
+          return const HeadhunterToolsScreen();
+        }
         final isAdmin = data['is_admin'] == true;
         return MisHerramientasScreen(profile: profile, isAdmin: isAdmin);
       },

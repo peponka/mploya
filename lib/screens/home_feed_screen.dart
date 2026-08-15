@@ -15,6 +15,7 @@ import '../services/feed_service.dart';
 import '../services/notification_service.dart';
 import '../services/video_preload_manager.dart';
 import '../theme/mploya_tokens.dart';
+import '../utils/headhunter_candidate_privacy.dart';
 import '../widgets/candidato/cand_inicio.dart';
 import '../widgets/candidato/cand_red.dart' show CandPersonaVista;
 import '../widgets/candidato/cand_ui.dart';
@@ -201,13 +202,13 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
 
   bool _keywordMatch(String haystack, String keyword) {
     if (keyword.length > 3) return haystack.contains(keyword);
-    final re = RegExp(
-      '(^|[^a-z])${RegExp.escape(keyword)}([^a-z]|\$)',
-    );
+    final re = RegExp('(^|[^a-z])${RegExp.escape(keyword)}([^a-z]|\$)');
     return re.hasMatch(haystack);
   }
 
-  List<Map<String, dynamic>> _filterByCategory(List<Map<String, dynamic>> items) {
+  List<Map<String, dynamic>> _filterByCategory(
+    List<Map<String, dynamic>> items,
+  ) {
     if (_selectedCategory == 'todos') return items;
     final keywords = _categoryKeywords[_selectedCategory] ?? const [];
     return items.where((row) {
@@ -241,6 +242,21 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
     return FeedService.instance.userRowToPost(row, likedUserIds: _likedUserIds);
   }
 
+  String? get _viewerAccountType {
+    final previewType = widget.previewData?.usuario?['account_type']
+        ?.toString();
+    if (previewType != null) return previewType;
+    return ref.read(currentUserProvider).valueOrNull?.accountType;
+  }
+
+  List<Map<String, dynamic>> _protectFeedRows(List<Map<String, dynamic>> rows) {
+    final viewerType = _viewerAccountType;
+    if (viewerType?.toLowerCase() != 'headhunter') return rows;
+    return rows
+        .map((row) => protectCandidateRowForHeadhunter(row, viewerType))
+        .toList(growable: false);
+  }
+
   void _openJobs() {
     HapticFeedback.selectionClick();
     Navigator.of(
@@ -257,29 +273,33 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final preview = widget.previewData;
+    if (preview == null) {
     ref.listen(feedProvider, (prev, next) {
       if (prev?.items != next.items) {
-        final urls = next.items
+          final urls = _protectFeedRows(next.items)
             .map((row) => row['video_url']?.toString() ?? '')
             .where((url) => url.isNotEmpty)
             .toList();
         VideoPreloadManager.instance.updateFeedUrls(urls);
       }
     });
+    }
 
-    final preview = widget.previewData;
     final feedState = preview != null
         ? FeedState(items: preview.feed, hasMore: false)
         : ref.watch(feedProvider);
-    final items = feedState.items;
+    final items = _protectFeedRows(feedState.items);
+    final safeFeedState = preview != null
+        ? FeedState(items: items, hasMore: false)
+        : feedState;
     final rows = _filterByCategory(items);
 
     // Los tres formatos de la tanda. El reel domina en mobile; en tablet y
     // desktop se acota y aparece la columna de contexto.
     final formato = candFormatoDe(context);
     final ancho = formato != CandFormato.mobile;
-    final bottomInset =
-        ancho ? 0.0 : MediaQuery.paddingOf(context).bottom + 94;
+    final bottomInset = ancho ? 0.0 : MediaQuery.paddingOf(context).bottom + 94;
 
     return CupertinoPageScaffold(
       backgroundColor: ancho ? MpTokens.lightBg : const Color(0xFF07111F),
@@ -288,7 +308,7 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
               bottom: false,
               child: _buildBody(
                 context: context,
-                feedState: feedState,
+                feedState: safeFeedState,
                 rows: rows,
                 allItems: items,
                 webMode: true,
@@ -312,7 +332,7 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
                 bottom: false,
                 child: _buildBody(
                   context: context,
-                  feedState: feedState,
+                  feedState: safeFeedState,
                   rows: rows,
                   allItems: items,
                   webMode: false,
@@ -467,14 +487,17 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
           ? null
           : 'Completá tu video pitch: los perfiles con video reciben más '
               'visitas de empresas.',
-      onPerfil: () => Navigator.of(context).push(
-        CupertinoPageRoute<void>(builder: (_) => const ProfileScreen()),
-      ),
+      onPerfil: () => Navigator.of(
+        context,
+      ).push(CupertinoPageRoute<void>(builder: (_) => const ProfileScreen())),
       onVerVacantes: _openJobs,
       onVacante: (_) => _openJobs(),
       onPersona: (p) => Navigator.of(context).push(
         CupertinoPageRoute<void>(
-          builder: (_) => ProfileScreen(user: _autorPorId(rows, p.id)),
+          builder: (_) => ProfileScreen(
+            user: _autorPorId(rows, p.id),
+            viewerAccountType: _viewerAccountType,
+          ),
         ),
       ),
     );
@@ -554,6 +577,7 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
                                 webMode: true,
                                 isFirstCard: index == 0,
                                 esPreview: widget.previewData != null,
+                                viewerAccountType: _viewerAccountType,
                               ),
                             );
                           },
@@ -774,6 +798,7 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
                       webMode: false,
                       isFirstCard: index == 0,
                       esPreview: widget.previewData != null,
+                      viewerAccountType: _viewerAccountType,
                     );
                     // El hint de onboarding lee preferencias del dispositivo;
                     // en render aislado no hay plugin, así que no se monta.

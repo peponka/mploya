@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../theme/app_theme.dart';
 import '../models/models.dart';
 import '../widgets/nex_avatar.dart';
+import '../utils/headhunter_candidate_privacy.dart';
 import 'profile_screen.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -17,8 +18,21 @@ import 'profile_screen.dart';
 //  • Eliminar el bookmark (swipe o botón)
 // ─────────────────────────────────────────────────────────────────────────────
 
+@immutable
+class SavedProfilesPreviewData {
+  const SavedProfilesPreviewData({
+    this.profiles = const [],
+    this.viewerAccountType = 'headhunter',
+  });
+
+  final List<Map<String, dynamic>> profiles;
+  final String viewerAccountType;
+}
+
 class SavedProfilesScreen extends StatefulWidget {
-  const SavedProfilesScreen({super.key});
+  const SavedProfilesScreen({super.key, this.previewData});
+
+  final SavedProfilesPreviewData? previewData;
 
   @override
   State<SavedProfilesScreen> createState() => _SavedProfilesScreenState();
@@ -27,10 +41,18 @@ class SavedProfilesScreen extends StatefulWidget {
 class _SavedProfilesScreenState extends State<SavedProfilesScreen> {
   List<Map<String, dynamic>> _savedProfiles = [];
   bool _isLoading = true;
+  String? _viewerAccountType;
 
   @override
   void initState() {
     super.initState();
+    final preview = widget.previewData;
+    if (preview != null) {
+      _savedProfiles = List<Map<String, dynamic>>.from(preview.profiles);
+      _viewerAccountType = preview.viewerAccountType;
+      _isLoading = false;
+      return;
+    }
     _loadSavedProfiles();
   }
 
@@ -48,6 +70,12 @@ class _SavedProfilesScreenState extends State<SavedProfilesScreen> {
           .eq('user_id', uid)
           .order('created_at', ascending: false);
 
+      final viewerRowFuture = Supabase.instance.client
+          .from('users')
+          .select('account_type')
+          .eq('id', uid)
+          .maybeSingle();
+
       if (savedRows.isEmpty) {
         if (mounted) setState(() => _isLoading = false);
         return;
@@ -62,10 +90,12 @@ class _SavedProfilesScreenState extends State<SavedProfilesScreen> {
           .from('users')
           .select(kUserColumns)
           .inFilter('id', savedIds);
+      final viewerRow = await viewerRowFuture;
 
       if (mounted) {
         setState(() {
           _savedProfiles = List<Map<String, dynamic>>.from(users);
+          _viewerAccountType = viewerRow?['account_type']?.toString();
           _isLoading = false;
         });
       }
@@ -76,6 +106,12 @@ class _SavedProfilesScreenState extends State<SavedProfilesScreen> {
   }
 
   Future<void> _removeBookmark(String savedUserId) async {
+    if (widget.previewData != null) {
+      setState(() {
+        _savedProfiles.removeWhere((p) => p['id'] == savedUserId);
+      });
+      return;
+    }
     final uid = Supabase.instance.client.auth.currentUser?.id;
     if (uid == null) return;
     try {
@@ -174,7 +210,8 @@ class _SavedProfilesScreenState extends State<SavedProfilesScreen> {
         itemCount: _savedProfiles.length,
         itemBuilder: (context, index) {
           final data = _savedProfiles[index];
-          final user = NexUser.fromJson(data);
+          final rawUser = NexUser.fromJson(data);
+          final user = protectCandidateForHeadhunter(rawUser, _viewerAccountType);
           return Dismissible(
             key: Key(user.id),
             direction: DismissDirection.endToStart,
@@ -197,7 +234,17 @@ class _SavedProfilesScreenState extends State<SavedProfilesScreen> {
               user: user,
               onTap: () {
                 Navigator.of(context).push(
-                  CupertinoPageRoute(builder: (_) => ProfileScreen(user: user)),
+                  CupertinoPageRoute(builder: (_) => ProfileScreen(
+                    user: rawUser,
+                    viewerAccountType: _viewerAccountType,
+                    previewData: widget.previewData == null
+                        ? null
+                        : ProfilePreviewData(
+                            usuario: rawUser.toJson(),
+                            isOwnProfile: false,
+                            viewerAccountType: _viewerAccountType,
+                          ),
+                  )),
                 );
               },
               onRemove: () => _removeBookmark(user.id),
@@ -235,6 +282,8 @@ class _SavedProfileCard extends StatelessWidget {
         roleColor = NexTheme.accentDark;
         break;
       case 'confidencial':
+      case 'confidential':
+      case 'stealth':
         roleLabel = 'Stealth';
         roleColor = const Color(0xFF5F3DC4);
         break;
