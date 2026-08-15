@@ -224,8 +224,8 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
   }
 
   // Alertas mobile — panel enmarcado con header, filtros y filas agrupadas por
-  // tiempo. Con notificaciones reales las muestra; si no hay, muestra contenido
-  // DEMO (intencional mientras no haya usuarios reales) para que se vea vivo.
+  // tiempo. Con notificaciones reales las muestra; si no hay, usa el estado
+  // vacio honesto compartido con Headhunter.
   Widget _buildMobileAlerts(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF6F8FB),
@@ -254,7 +254,6 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
             widget.previewData?.viewerAccountType ??
             ref.watch(currentUserProvider).valueOrNull?.accountType;
         final isHeadhunter = viewerType?.toLowerCase() == 'headhunter';
-        final useDemo = !isHeadhunter && !loading && notifs.isEmpty;
         if (isHeadhunter && notifs.isNotEmpty) {
           return FutureBuilder<List<Map<String, dynamic>>>(
             future: _protectNotifications(notifs, viewerType),
@@ -279,7 +278,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
         return _alertsContainer(
           notifs: notifs,
           loading: loading,
-          useDemo: useDemo,
+          useDemo: false,
           webMode: webMode,
         );
       },

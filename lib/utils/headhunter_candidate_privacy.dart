@@ -1,6 +1,8 @@
 import '../models/models.dart';
 
 const headhunterProtectedCandidateName = 'Talento confidencial';
+const headhunterProtectedMessageText =
+    'Contenido oculto para proteger la identidad.';
 
 bool isConfidentialAccountType(String? accountType) {
   final type = accountType?.toLowerCase() ?? '';
@@ -31,6 +33,7 @@ NexUser protectCandidateForHeadhunter(
 
   final protected = Map<String, dynamic>.from(candidate.toJson())
     ..['name'] = headhunterProtectedCandidateName
+    ..['headline'] = ''
     ..['company'] = null
     ..['location'] = null
     ..['avatar_url'] = null

@@ -440,12 +440,20 @@ class _MessagingScreenState extends State<MessagingScreen> {
   CandConversacionVista _conversacionDe(NexUser u) {
     final msgs = _mensajesCon(u);
     final ultimo = msgs.isNotEmpty ? msgs.first : null;
+    final ultimoProtegido =
+        ultimo != null &&
+        shouldProtectCandidateForHeadhunter(u, _viewerAccountType) &&
+        ultimo['sender_id']?.toString() == u.id;
     return CandConversacionVista(
       id: u.id,
       nombre: u.name,
       avatarUrl: u.avatarUrl,
       ultimo: ultimo != null
-          ? (ultimo['content']?.toString() ?? ultimo['text']?.toString() ?? '')
+          ? (ultimoProtegido
+                ? headhunterProtectedMessageText
+                : (ultimo['content']?.toString() ??
+                      ultimo['text']?.toString() ??
+                      ''))
           : 'Todavía no se escribieron.',
       hora: ultimo != null ? timeAgo(ultimo['created_at']) : '',
       sinLeer: _sinLeerDe(u),
@@ -532,17 +540,6 @@ class _MessagingScreenState extends State<MessagingScreen> {
                   : const SchedulingScreen(isCompany: true),
             ),
           ),
-        ),
-        CandAccionContexto(
-          icono: CupertinoIcons.star_fill,
-          etiqueta: 'Guardar contacto',
-          onTap: () => MployaToast.saved(context, 'Contacto guardado'),
-        ),
-        CandAccionContexto(
-          icono: CupertinoIcons.doc_on_doc_fill,
-          etiqueta: 'Compartir CV',
-          onTap: () =>
-              MployaToast.info(context, 'Compartir CV estará disponible pronto'),
         ),
       ];
 
@@ -840,6 +837,11 @@ class ChatDetailScreenState extends State<ChatDetailScreen> {
   String _myDisplayName = 'Usuario';
 
   NexUser get _visibleOtherUser => protectCandidateForHeadhunter(
+        widget.otherUser,
+        widget.viewerAccountType,
+      );
+
+  bool get _protectOtherIdentity => shouldProtectCandidateForHeadhunter(
         widget.otherUser,
         widget.viewerAccountType,
       );
@@ -1380,12 +1382,14 @@ class ChatDetailScreenState extends State<ChatDetailScreen> {
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _headerAction(
-              icon: CupertinoIcons.video_camera_solid,
-              label: 'Video',
-              onTap: () => _startJitsiCall(),
-            ),
-            const SizedBox(width: 8),
+            if (!_protectOtherIdentity) ...[
+              _headerAction(
+                icon: CupertinoIcons.video_camera_solid,
+                label: 'Video',
+                onTap: () => _startJitsiCall(),
+              ),
+              const SizedBox(width: 8),
+            ],
             _headerAction(
               icon: CupertinoIcons.person_fill,
               label: 'Ver Perfil',
@@ -1452,29 +1456,45 @@ class ChatDetailScreenState extends State<ChatDetailScreen> {
                     itemCount: messages.length,
                     itemBuilder: (context, index) {
                       final msg = messages[index];
-                      final isMe = msg['sender_id']?.toString() == _currentUserId;
+                      final isMe =
+                          msg['sender_id']?.toString() == _currentUserId;
+                      final protectedIncoming = _protectOtherIdentity && !isMe;
                       // Logicas de agrupación (quitar colas si hay mensajes seguidos) se pueden hacer aquí.
                       return _MessageBubble(
-                        text: msg['text']?.toString() ?? msg['content']?.toString() ?? '',
+                        text: protectedIncoming
+                            ? headhunterProtectedMessageText
+                            : msg['text']?.toString() ??
+                                  msg['content']?.toString() ??
+                                  '',
                         isMe: isMe,
                         time: timeAgo(msg['created_at']),
-                        fileUrl: msg['file_url']?.toString(),
-                        fileName: msg['file_name']?.toString(),
-                        fileType: msg['file_type']?.toString(),
-                        fileSizeBytes: msg['file_size_bytes'] as int?,
+                        fileUrl: protectedIncoming
+                            ? null
+                            : msg['file_url']?.toString(),
+                        fileName: protectedIncoming
+                            ? null
+                            : msg['file_name']?.toString(),
+                        fileType: protectedIncoming
+                            ? null
+                            : msg['file_type']?.toString(),
+                        fileSizeBytes: protectedIncoming
+                            ? null
+                            : msg['file_size_bytes'] as int?,
                         isRead: msg['is_read'] == true,
-                        onJoinCall: (channelName) {
-                          Navigator.push(
-                            context,
-                            CupertinoPageRoute(
-                              builder: (_) => AgoraCallScreen(
-                                channelName: channelName,
-                                displayName: _myDisplayName,
-                                otherName: otherUser.name,
-                              ),
-                            ),
-                          );
-                        },
+                        onJoinCall: protectedIncoming
+                            ? null
+                            : (channelName) {
+                                Navigator.push(
+                                  context,
+                                  CupertinoPageRoute(
+                                    builder: (_) => AgoraCallScreen(
+                                      channelName: channelName,
+                                      displayName: _myDisplayName,
+                                      otherName: otherUser.name,
+                                    ),
+                                  ),
+                                );
+                              },
                       );
                     },
                   );

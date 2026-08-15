@@ -21,37 +21,44 @@ import 'mp_golden_host.dart';
 /// (#4129F0) / `primaryLight` (#6D5AF5) — 23 ocurrencias, mismo patrón que
 /// portfolio_section.dart en Tanda 3.
 ///
-/// Sin Supabase en el test, `NotificationService.instance.notificationsStream`
-/// no entrega datos → la pantalla cae sola en su propio estado DEMO ya
-/// existente (`useDemo`, ver notifications_screen.dart:218) — comportamiento
-/// preexistente, no algo que este cambio haya introducido.
-const _destino = 'design-reference/Candidato_Tanda1_Productivo_Final/notificaciones';
+/// Cuando no hay notificaciones reales, la pantalla muestra su estado vacio y
+/// nunca completa la lista con identidades o actividad de demostracion.
+const _destino =
+    'design-reference/Candidato_Tanda1_Productivo_Final/notificaciones';
 
 void main() {
   setUpAll(() async {
     await loadMpFonts();
   });
 
-  testWidgets('monta sin overflow ni excepción (cae en demo sin Supabase)', (tester) async {
-    tester.view.physicalSize = const Size(390, 844);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
-    await tester.pumpWidget(
-      const ProviderScope(
-        child: CupertinoApp(
-          debugShowCheckedModeBanner: false,
-          home: MediaQuery(
-            data: MediaQueryData(size: Size(390, 844)),
-            child: NotificationsScreen(),
+  for (final width in [400.0, 424.0, 430.0]) {
+    testWidgets('estado vacio real sin overflow a ${width.toInt()} px', (
+      tester,
+    ) async {
+      tester.view.physicalSize = Size(width, 852);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        const ProviderScope(
+          child: CupertinoApp(
+            debugShowCheckedModeBanner: false,
+            home: NotificationsScreen(
+              previewData: NotificationsPreviewData(
+                viewerAccountType: 'candidato',
+              ),
+            ),
           ),
         ),
-      ),
-    );
-    await tester.pump(const Duration(milliseconds: 32));
-    await tester.pump(const Duration(milliseconds: 500));
-    expect(tester.takeException(), isNull);
-    expect(find.text('Novedades'), findsOneWidget);
-  });
+      );
+      await tester.pump(const Duration(milliseconds: 32));
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(tester.takeException(), isNull);
+      expect(find.text('Novedades'), findsOneWidget);
+      expect(find.text('Estás al día'), findsOneWidget);
+      expect(find.text('María López'), findsNothing);
+      expect(find.text('Nada por acá con este filtro.'), findsOneWidget);
+    });
+  }
 
   testWidgets('captura final — mobile 390x844', (tester) async {
     final key = GlobalKey();

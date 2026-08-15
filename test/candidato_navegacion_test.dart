@@ -197,7 +197,7 @@ void main() {
     // Las ranuras 7 y 8 sólo deben montar algo real para empresa o headhunter.
     // Se mira la ÚLTIMA aparición de cada nombre —el uso dentro de `_screens`—
     // y no la primera, que es la declaración del campo o el import.
-    for (final pantalla in ['EmpresaPanelHubScreen', '_tools']) {
+    for (final pantalla in ['_headhunterDashboard', '_tools']) {
       final indice = fuente.lastIndexOf(pantalla);
       expect(indice, greaterThan(-1), reason: '$pantalla desapareció.');
       final contexto = fuente.substring(

@@ -70,7 +70,10 @@ MessagingPreviewData _messages(Map<String, dynamic> candidate) {
         'id': 'message-1',
         'sender_id': candidate['id'],
         'receiver_id': _viewerId,
-        'content': 'Gracias por contactarme. Coordinemos una entrevista.',
+        'content':
+            isConfidentialAccountType(candidate['account_type']?.toString())
+            ? 'Soy Lucia Benitez. Escribime a lucia@example.com.'
+            : 'Gracias por contactarme. Coordinemos una entrevista.',
         'created_at': DateTime.now()
             .subtract(const Duration(minutes: 8))
             .toIso8601String(),
@@ -119,6 +122,8 @@ Future<void> _pump(
 
 void _expectNoRealIdentity() {
   expect(find.text('Lucia Benitez'), findsNothing);
+  expect(find.textContaining('lucia@example.com'), findsNothing);
+  expect(find.text('Product Designer'), findsNothing);
   expect(find.text('Asuncion, Paraguay'), findsNothing);
   expect(find.text('Empresa identificable'), findsNothing);
   expect(find.text('Biografia identificable'), findsNothing);
@@ -151,6 +156,7 @@ void main() {
       for (final protected in [confidential, stealth]) {
         final visible = protectCandidateForHeadhunter(protected, 'headhunter');
         expect(visible.name, headhunterProtectedCandidateName);
+        expect(visible.headline, isEmpty);
         expect(visible.avatarUrl, isNull);
         expect(visible.location, isNull);
         expect(visible.videoUrl, isNull);
@@ -172,6 +178,7 @@ void main() {
       );
 
       expect(find.text(headhunterProtectedCandidateName), findsOneWidget);
+      expect(find.text(headhunterProtectedMessageText), findsOneWidget);
       _expectNoRealIdentity();
     });
 
@@ -184,6 +191,7 @@ void main() {
       );
 
       expect(find.text(headhunterProtectedCandidateName), findsOneWidget);
+      expect(find.text(headhunterProtectedMessageText), findsOneWidget);
       _expectNoRealIdentity();
     });
 
@@ -197,6 +205,7 @@ void main() {
 
       expect(find.byType(ChatDetailScreen), findsOneWidget);
       expect(find.text('Lucia Benitez'), findsOneWidget);
+      expect(find.byIcon(CupertinoIcons.video_camera_solid), findsOneWidget);
     });
 
     testWidgets('chat y navegacion al perfil permanecen protegidos', (
@@ -216,6 +225,8 @@ void main() {
       );
 
       expect(find.text(headhunterProtectedCandidateName), findsOneWidget);
+      expect(find.text(headhunterProtectedMessageText), findsOneWidget);
+      expect(find.byIcon(CupertinoIcons.video_camera_solid), findsNothing);
       _expectNoRealIdentity();
       await tester.tap(find.byIcon(CupertinoIcons.person_fill));
       await tester.pumpAndSettle();
@@ -319,9 +330,7 @@ void main() {
       _expectNoRealIdentity();
       await expectLater(
         find.byType(CupertinoApp),
-        matchesGoldenFile(
-          'goldens/headhunter/01_chat_confidencial_final.png',
-        ),
+        matchesGoldenFile('goldens/headhunter/01_chat_confidencial_final.png'),
       );
     });
 
