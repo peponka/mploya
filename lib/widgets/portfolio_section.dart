@@ -1,9 +1,9 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import '../theme/app_theme.dart';
 import '../services/portfolio_service.dart';
+import '../theme/mploya_tokens.dart';
+import '../widgets/ds/mp_surface.dart';
 import '../widgets/spring_interaction.dart';
 import 'profile_video_widgets.dart';
 // Grabador web (getUserMedia + MediaRecorder). En móvil resuelve al stub que usa
@@ -16,6 +16,11 @@ import '../screens/micro_pitch_web_stub.dart'
 //
 // Muestra hasta 3 vídeos de portfolio del usuario en una galería horizontal.
 // Si es perfil propio, permite agregar/eliminar vídeos.
+//
+// CANDIDATO — TANDA 3: modernizado de `NexTheme` a `MpTokens`/`widgets/ds/*`
+// (referencia: `portfolio.png` de FINAL_SCREENS_CODEX). Cero cambios de
+// lógica: carga, subida, borrado y límite de 3 videos siguen exactamente
+// igual — sólo color/tipografía.
 // ─────────────────────────────────────────────────────────────────────────────
 
 class PortfolioSection extends StatefulWidget {
@@ -61,6 +66,8 @@ class _PortfolioSectionState extends State<PortfolioSection> {
 
   @override
   Widget build(BuildContext context) {
+    final s = context.mp;
+
     if (_isLoading) {
       return const Padding(
         padding: EdgeInsets.symmetric(vertical: 16),
@@ -75,9 +82,9 @@ class _PortfolioSectionState extends State<PortfolioSection> {
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 20, 16, 0),
       decoration: BoxDecoration(
-        color: context.cardColor,
-        borderRadius: BorderRadius.circular(NexTheme.radiusMD),
-        boxShadow: context.cardShadow,
+        color: s.card,
+        borderRadius: BorderRadius.circular(MpTokens.radiusMD),
+        boxShadow: s.cardShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -91,29 +98,21 @@ class _PortfolioSectionState extends State<PortfolioSection> {
                   padding: const EdgeInsets.all(6),
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
-                      colors: [NexTheme.premiumStart, NexTheme.premiumEnd],
+                      colors: [MpTokens.premium, MpTokens.premiumBright],
                     ),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: const Icon(CupertinoIcons.film, size: 16, color: Colors.white),
+                  child: const Icon(CupertinoIcons.film, size: 16, color: CupertinoColors.white),
                 ),
                 const SizedBox(width: 10),
                 Text(
                   'Portfolio',
-                  style: TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w700,
-                    color: context.textPrimary,
-                  ),
+                  style: MpTokens.title.copyWith(fontSize: 17, color: s.text),
                 ),
                 const SizedBox(width: 6),
                 Text(
                   '${_videos.length}/${PortfolioService.maxPortfolioVideos}',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: context.textTertiary,
-                    fontWeight: FontWeight.w500,
-                  ),
+                  style: MpTokens.caption.copyWith(color: s.textTertiary, fontWeight: FontWeight.w500),
                 ),
                 const Spacer(),
                 if (widget.isOwnProfile && _videos.length < PortfolioService.maxPortfolioVideos)
@@ -122,21 +121,17 @@ class _PortfolioSectionState extends State<PortfolioSection> {
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                       decoration: BoxDecoration(
-                        color: NexTheme.brandAccent.withValues(alpha: 0.10),
-                        borderRadius: BorderRadius.circular(NexTheme.radiusPill),
+                        color: s.tint(s.accent),
+                        borderRadius: BorderRadius.circular(MpTokens.radiusPill),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(CupertinoIcons.plus, size: 14, color: context.brandAccent),
+                          Icon(CupertinoIcons.plus, size: 14, color: s.accent),
                           const SizedBox(width: 4),
                           Text(
                             'Agregar',
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: context.brandAccent,
-                            ),
+                            style: MpTokens.label.copyWith(color: s.accent, fontWeight: FontWeight.w600),
                           ),
                         ],
                       ),
@@ -154,42 +149,31 @@ class _PortfolioSectionState extends State<PortfolioSection> {
                 width: double.infinity,
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [NexTheme.premiumStart.withValues(alpha: 0.07), NexTheme.premiumEnd.withValues(alpha: 0.04)],
-                    begin: Alignment.topLeft, end: Alignment.bottomRight,
-                  ),
+                  color: s.tint(MpTokens.premium, alpha: 0.06),
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: NexTheme.premiumEnd.withValues(alpha: 0.16), width: 0.5),
+                  border: Border.all(color: MpTokens.premium.withValues(alpha: 0.18), width: 0.5),
                 ),
                 child: Column(
                   children: [
                     Container(
                       width: 52, height: 52,
                       decoration: BoxDecoration(
-                        gradient: const LinearGradient(colors: [NexTheme.premiumStart, NexTheme.premiumEnd]),
+                        gradient: const LinearGradient(colors: [MpTokens.premium, MpTokens.premiumBright]),
                         borderRadius: BorderRadius.circular(15),
-                        boxShadow: [BoxShadow(color: NexTheme.premiumEnd.withValues(alpha: 0.3), blurRadius: 14, offset: const Offset(0, 6))],
+                        boxShadow: [BoxShadow(color: MpTokens.premium.withValues(alpha: 0.3), blurRadius: 14, offset: const Offset(0, 6))],
                       ),
-                      child: const Icon(CupertinoIcons.film_fill, size: 24, color: Colors.white),
+                      child: const Icon(CupertinoIcons.film_fill, size: 24, color: CupertinoColors.white),
                     ),
                     const SizedBox(height: 14),
                     Text(
                       'Mostrá tu trabajo en acción',
-                      style: TextStyle(
-                        fontSize: 15.5,
-                        fontWeight: FontWeight.w700,
-                        color: context.textPrimary,
-                      ),
+                      style: MpTokens.title.copyWith(fontSize: 15.5, color: s.text),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       'Subí hasta 3 vídeos de 60s con proyectos,\nhabilidades o resultados.',
                       textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: context.textSecondary,
-                        height: 1.4,
-                      ),
+                      style: MpTokens.caption.copyWith(color: s.textSecondary, height: 1.4),
                     ),
                     if (widget.isOwnProfile) ...[
                       const SizedBox(height: 16),
@@ -198,13 +182,13 @@ class _PortfolioSectionState extends State<PortfolioSection> {
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
                           decoration: BoxDecoration(
-                            gradient: const LinearGradient(colors: [NexTheme.premiumStart, NexTheme.premiumEnd]),
+                            gradient: s.accentGradient,
                             borderRadius: BorderRadius.circular(999),
                           ),
                           child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                            Icon(CupertinoIcons.plus, size: 15, color: Colors.white),
+                            Icon(CupertinoIcons.plus, size: 15, color: CupertinoColors.white),
                             SizedBox(width: 6),
-                            Text('Agregar video', style: TextStyle(color: Colors.white, fontSize: 13.5, fontWeight: FontWeight.w700)),
+                            Text('Agregar video', style: TextStyle(color: CupertinoColors.white, fontSize: 13.5, fontWeight: FontWeight.w700)),
                           ]),
                         ),
                       ),
@@ -220,7 +204,7 @@ class _PortfolioSectionState extends State<PortfolioSection> {
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                 itemCount: _videos.length,
-                itemBuilder: (context, i) => _buildVideoCard(_videos[i], i),
+                itemBuilder: (context, i) => _buildVideoCard(context, _videos[i], i),
               ),
             ),
         ],
@@ -228,7 +212,7 @@ class _PortfolioSectionState extends State<PortfolioSection> {
     );
   }
 
-  Widget _buildVideoCard(PortfolioVideo video, int index) {
+  Widget _buildVideoCard(BuildContext context, PortfolioVideo video, int index) {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: () {
@@ -244,19 +228,15 @@ class _PortfolioSectionState extends State<PortfolioSection> {
         width: 200,
         margin: EdgeInsets.only(right: index < _videos.length - 1 ? 12 : 0),
         decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFF1A0A00), Color(0xFF3D1800)],
-          ),
+          color: MpTokens.darkCard,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: NexTheme.brandAccent.withValues(alpha: 0.30),
+            color: MpTokens.primary.withValues(alpha: 0.30),
             width: 0.5,
           ),
           boxShadow: [
             BoxShadow(
-              color: NexTheme.brandAccent.withValues(alpha: 0.15),
+              color: MpTokens.primary.withValues(alpha: 0.15),
               blurRadius: 12,
               offset: const Offset(0, 4),
             ),
@@ -275,34 +255,32 @@ class _PortfolioSectionState extends State<PortfolioSection> {
                         width: 40,
                         height: 40,
                         decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [NexTheme.brandAccent, NexTheme.premiumEnd],
-                          ),
+                          gradient: MpTokens.primaryGradient,
                           shape: BoxShape.circle,
                           boxShadow: [
                             BoxShadow(
-                              color: NexTheme.brandAccent.withValues(alpha: 0.4),
+                              color: MpTokens.primary.withValues(alpha: 0.4),
                               blurRadius: 8,
                             ),
                           ],
                         ),
-                        child: const Icon(CupertinoIcons.play_fill, color: Colors.white, size: 20),
+                        child: const Icon(CupertinoIcons.play_fill, color: CupertinoColors.white, size: 20),
                       ),
                       const Spacer(),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                         decoration: BoxDecoration(
-                          color: NexTheme.brandAccent.withValues(alpha: 0.20),
+                          color: MpTokens.primary.withValues(alpha: 0.20),
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(
-                            color: NexTheme.brandAccent.withValues(alpha: 0.3),
+                            color: MpTokens.primary.withValues(alpha: 0.3),
                           ),
                         ),
                         child: Text(
                           '${video.durationSeconds}s',
                           style: const TextStyle(
                             fontSize: 11,
-                            color: Color(0xFFFFBB8A),
+                            color: MpTokens.darkText,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
@@ -313,7 +291,7 @@ class _PortfolioSectionState extends State<PortfolioSection> {
                   Text(
                     video.title,
                     style: const TextStyle(
-                      color: Colors.white,
+                      color: CupertinoColors.white,
                       fontSize: 14,
                       fontWeight: FontWeight.w700,
                     ),
@@ -323,23 +301,23 @@ class _PortfolioSectionState extends State<PortfolioSection> {
                   const SizedBox(height: 4),
                   Row(
                     children: [
-                      Icon(CupertinoIcons.eye, size: 12, color: Colors.white.withValues(alpha: 0.5)),
+                      Icon(CupertinoIcons.eye, size: 12, color: CupertinoColors.white.withValues(alpha: 0.5)),
                       const SizedBox(width: 4),
                       Text(
                         '${video.viewCount}',
                         style: TextStyle(
                           fontSize: 11,
-                          color: Colors.white.withValues(alpha: 0.6),
+                          color: CupertinoColors.white.withValues(alpha: 0.6),
                         ),
                       ),
                       const SizedBox(width: 10),
-                      Icon(CupertinoIcons.heart, size: 12, color: Colors.white.withValues(alpha: 0.5)),
+                      Icon(CupertinoIcons.heart, size: 12, color: CupertinoColors.white.withValues(alpha: 0.5)),
                       const SizedBox(width: 4),
                       Text(
                         '${video.likeCount}',
                         style: TextStyle(
                           fontSize: 11,
-                          color: Colors.white.withValues(alpha: 0.6),
+                          color: CupertinoColors.white.withValues(alpha: 0.6),
                         ),
                       ),
                     ],
@@ -358,10 +336,10 @@ class _PortfolioSectionState extends State<PortfolioSection> {
                     width: 24,
                     height: 24,
                     decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.5),
+                      color: CupertinoColors.black.withValues(alpha: 0.5),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(CupertinoIcons.xmark, size: 12, color: Colors.white),
+                    child: const Icon(CupertinoIcons.xmark, size: 12, color: CupertinoColors.white),
                   ),
                 ),
               ),

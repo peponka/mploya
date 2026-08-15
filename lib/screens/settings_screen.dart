@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../theme/app_theme.dart';
+import '../theme/mploya_tokens.dart';
 import '../services/auth_service.dart';
 import '../services/blind_hiring_service.dart';
 import '../services/push_notification_service.dart';
@@ -181,7 +182,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               children: [
                 _SettingsTile(
                   icon: CupertinoIcons.person_fill,
-                  iconBg: MployaTheme.brandAccent,
+                  iconBg: MpTokens.primary,
                   title: 'Información de cuenta',
                   onTap: _showAccountInfo,
                 ),
@@ -254,7 +255,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
                 _SettingsToggle(
                   icon: CupertinoIcons.mail_solid,
-                  iconBg: MployaTheme.brandAccent,
+                  iconBg: MpTokens.primary,
                   title: 'Notificaciones por email',
                   value: _emailNotifications,
                   onChanged: (v) {
@@ -264,7 +265,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
                 _SettingsToggle(
                   icon: CupertinoIcons.briefcase_fill,
-                  iconBg: MployaTheme.brandAccent,
+                  iconBg: MpTokens.primary,
                   title: 'Alertas de trabajo',
                   value: _jobAlerts,
                   onChanged: (v) {
@@ -374,7 +375,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 children: [
                   _SettingsTile(
                     icon: CupertinoIcons.shield_lefthalf_fill,
-                    iconBg: MployaTheme.brandAccent,
+                    iconBg: MpTokens.primary,
                     title: 'Panel de administración',
                     subtitle: 'Usuarios, ofertas, reportes y métricas',
                     onTap: () {
@@ -395,7 +396,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               children: [
                 _SettingsTile(
                   icon: CupertinoIcons.question_circle_fill,
-                  iconBg: MployaTheme.brandAccent,
+                  iconBg: MpTokens.primary,
                   title: 'Centro de ayuda',
                   onTap: () => _openUrl('https://mploya.ai/help'),
                 ),
@@ -1003,7 +1004,7 @@ class _SettingsToggle extends StatelessWidget {
           ),
           CupertinoSwitch(
             value: value,
-            activeTrackColor: MployaTheme.brandAccent,
+            activeTrackColor: MpTokens.primary,
             onChanged: onChanged,
           ),
         ],

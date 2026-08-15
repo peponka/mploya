@@ -1,8 +1,13 @@
 import 'package:flutter/cupertino.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:mploya/models/models.dart';
+import 'package:mploya/services/storage_service.dart';
+import 'package:mploya/widgets/candidato/cand_ui.dart';
+import 'package:mploya/widgets/ds/mploya_ds.dart';
 import 'package:mploya/widgets/onboarding/assistant_fields.dart';
 import 'package:mploya/widgets/onboarding/assistant_shell.dart';
+import 'package:mploya/widgets/portfolio_section.dart';
 import 'package:mploya/widgets/unsaved_changes_guard.dart';
 import 'package:mploya/screens/onboarding_pitch_screen.dart';
 
@@ -47,6 +52,13 @@ class _CandidateProfileFormScreenState
   int _stepIndex = 0;
   final Set<String> _selectedSkills = <String>{};
   final Set<String> _selectedPreferences = <String>{};
+
+  // Solo para `widget.isEditing`: pestañas de "Editar perfil"
+  // (design-reference/FINAL_SCREENS_CODEX/.../editar perfil candidato.png).
+  // El onboarding (isEditing == false) no usa nada de esto.
+  int _editTabIndex = 0;
+  String? _avatarUrl;
+  bool _avatarBusy = false;
 
   static const List<_TalentStep> _steps = [
     _TalentStep.identity,
@@ -99,11 +111,12 @@ class _CandidateProfileFormScreenState
       final row = await Supabase.instance.client
           .from('users')
           .select(
-            'name, headline, tags, city, about, experience, education, skills, salary_expectation',
+            'name, headline, tags, city, about, experience, education, skills, salary_expectation, avatar_url',
           )
           .eq('id', uid)
           .maybeSingle();
       if (row != null && mounted) {
+        _avatarUrl = row['avatar_url']?.toString();
         _nombreController.text = row['name']?.toString() ?? '';
         _headlineController.text = row['headline']?.toString() ?? '';
         _aboutController.text = row['about']?.toString() ?? '';
@@ -164,6 +177,53 @@ class _CandidateProfileFormScreenState
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  // Mismo patrón que `ProfileScreen._pickAndUploadAvatar`: ImagePicker →
+  // StorageService.uploadAvatar → persistir en `users.avatar_url`. Se guarda
+  // al toque, independiente del botón "Guardar cambios" del resto del form.
+  Future<void> _pickAndUploadAvatar() async {
+    final picked = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 800,
+      maxHeight: 800,
+      imageQuality: 85,
+    );
+    if (picked == null) return;
+    final uid = Supabase.instance.client.auth.currentUser?.id;
+    if (uid == null) return;
+
+    setState(() => _avatarBusy = true);
+    final url = await StorageService.instance.uploadAvatar(uid, picked);
+    if (!mounted) return;
+
+    if (url == null) {
+      setState(() => _avatarBusy = false);
+      _showAlert(
+        'No se pudo actualizar',
+        StorageService.instance.lastError ?? 'Intenta nuevamente en unos segundos.',
+      );
+      return;
+    }
+
+    await Supabase.instance.client.from('users').update({'avatar_url': url}).eq('id', uid);
+    if (!mounted) return;
+    setState(() {
+      _avatarUrl = url;
+      _avatarBusy = false;
+    });
+  }
+
+  Future<void> _removeAvatar() async {
+    final uid = Supabase.instance.client.auth.currentUser?.id;
+    if (uid == null) return;
+    setState(() => _avatarBusy = true);
+    await Supabase.instance.client.from('users').update({'avatar_url': null}).eq('id', uid);
+    if (!mounted) return;
+    setState(() {
+      _avatarUrl = null;
+      _avatarBusy = false;
+    });
   }
 
   void _prefillFromAbout(String about) {
@@ -956,6 +1016,354 @@ class _CandidateProfileFormScreenState
     }
   }
 
+  // ───────────────────────────────────────────────────────────────────────
+  // "Editar perfil" (widget.isEditing == true) — pestañas basadas en
+  // design-reference/FINAL_SCREENS_CODEX/.../editar perfil candidato.png.
+  // El onboarding (isEditing == false, wizard de arriba) no toca nada de esto.
+  // ───────────────────────────────────────────────────────────────────────
+
+  static const List<String> _editTabLabels = [
+    'Información',
+    'Experiencia',
+    'Habilidades',
+    'Video pitch',
+    'Portafolio',
+  ];
+
+  static const List<IconData> _editTabIcons = [
+    CupertinoIcons.person_crop_circle,
+    CupertinoIcons.briefcase_fill,
+    CupertinoIcons.star_fill,
+    CupertinoIcons.videocam_fill,
+    CupertinoIcons.photo_on_rectangle,
+  ];
+
+  Widget _buildEditTabsLayout(BuildContext context) {
+    final s = context.mp;
+    return Column(
+      children: [
+        Expanded(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(
+              MpTokens.space16,
+              MpTokens.space20,
+              MpTokens.space16,
+              MpTokens.space16,
+            ),
+            children: [
+              _buildAvatarHeader(context),
+              const SizedBox(height: MpTokens.space20),
+              _buildEditTabBar(context),
+              const SizedBox(height: MpTokens.space24),
+              _buildEditTabContent(context),
+            ],
+          ),
+        ),
+        Container(
+          padding: const EdgeInsets.all(MpTokens.space16),
+          decoration: BoxDecoration(
+            color: s.card,
+            border: Border(top: BorderSide(color: s.border)),
+          ),
+          child: SafeArea(
+            top: false,
+            child: MpButton(
+              label: 'Guardar cambios',
+              expand: true,
+              loading: _isLoading,
+              onPressed: _guardarPerfilYContinuar,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAvatarHeader(BuildContext context) {
+    final s = context.mp;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        CandAvatar(
+          nombre: _nombreController.text.trim().isEmpty
+              ? 'Talento'
+              : _nombreController.text.trim(),
+          imagenUrl: _avatarUrl,
+          tamano: 72,
+        ),
+        const SizedBox(width: MpTokens.space16),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Foto de perfil',
+                style: MpTokens.label.copyWith(
+                  color: s.text,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: MpTokens.space4),
+              Text(
+                'Tu foto es lo primero que verán.',
+                style: MpTokens.caption.copyWith(color: s.textTertiary),
+              ),
+              const SizedBox(height: MpTokens.space8),
+              Wrap(
+                spacing: MpTokens.space8,
+                runSpacing: MpTokens.space8,
+                children: [
+                  MpButton(
+                    label: 'Cambiar foto',
+                    size: MpButtonSize.small,
+                    variant: MpButtonVariant.outline,
+                    loading: _avatarBusy,
+                    onPressed: _avatarBusy ? null : _pickAndUploadAvatar,
+                  ),
+                  if (_avatarUrl != null && _avatarUrl!.trim().isNotEmpty)
+                    MpButton(
+                      label: 'Eliminar',
+                      size: MpButtonSize.small,
+                      variant: MpButtonVariant.ghost,
+                      color: MpTokens.danger,
+                      onPressed: _avatarBusy ? null : _removeAvatar,
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // Las 5 pestañas en fila, ícono arriba + etiqueta abajo — como
+  // `editar perfil candidato.png`. `MpSegmentedFilter` (solo texto, en una
+  // fila) no entra sin scroll con 5 etiquetas en 390px; este layout compacto
+  // sí entra completo, así que las 5 quedan visibles y accesibles al abrir
+  // la pantalla, sin recortar texto ni encogerlo por debajo de `MpTokens.micro`
+  // (el tamaño que el propio sistema de diseño reserva para etiquetas de nav).
+  Widget _buildEditTabBar(BuildContext context) {
+    final s = context.mp;
+    return Container(
+      padding: const EdgeInsets.all(MpTokens.space4),
+      decoration: BoxDecoration(
+        color: s.fill,
+        borderRadius: BorderRadius.circular(MpTokens.radiusLG),
+        border: Border.all(color: s.border),
+      ),
+      child: Row(
+        children: [
+          for (int i = 0; i < _editTabLabels.length; i++)
+            Expanded(
+              child: _EditTabSegment(
+                icon: _editTabIcons[i],
+                label: _editTabLabels[i],
+                active: i == _editTabIndex,
+                onTap: () => setState(() => _editTabIndex = i),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEditTabContent(BuildContext context) {
+    switch (_editTabIndex) {
+      case 0:
+        return _buildEditInfoTab();
+      case 1:
+        return _buildEditExperienceTab();
+      case 2:
+        return _buildEditSkillsTab();
+      case 3:
+        return _buildEditVideoTab(context);
+      case 4:
+        return _buildEditPortfolioTab();
+      default:
+        return const SizedBox.shrink();
+    }
+  }
+
+  Widget _buildEditInfoTab() {
+    // Subconjunto de `_preferenceOptions` que representa modalidad — el resto
+    // (Full Time, Freelance, Viajes, etc.) sigue viviendo en Preferencias, que
+    // no forma parte de esta tanda.
+    const modalidades = ['Remoto', 'Presencial', 'Hibrido'];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const MpFieldLabel('Nombre completo'),
+        MpTextField(controller: _nombreController, placeholder: 'Ej: Camila Ruiz'),
+        const SizedBox(height: MpTokens.space16),
+        const MpFieldLabel('Título profesional'),
+        MpTextField(
+          controller: _headlineController,
+          placeholder: 'Ej: Product Designer enfocada en fintech',
+        ),
+        const SizedBox(height: MpTokens.space16),
+        const MpFieldLabel('Ubicación'),
+        Row(
+          children: [
+            Expanded(
+              child: MpTextField(controller: _ciudadController, placeholder: 'Ciudad'),
+            ),
+            const SizedBox(width: MpTokens.space12),
+            Expanded(
+              child: MpTextField(controller: _paisController, placeholder: 'País'),
+            ),
+          ],
+        ),
+        const SizedBox(height: MpTokens.space16),
+        const MpFieldLabel('Modalidad preferida'),
+        Wrap(
+          spacing: MpTokens.space8,
+          runSpacing: MpTokens.space8,
+          children: [
+            for (final m in modalidades)
+              CandChip(
+                m,
+                activo: _selectedPreferences.contains(m),
+                onTap: () => _togglePreference(m),
+              ),
+          ],
+        ),
+        const SizedBox(height: MpTokens.space16),
+        const MpFieldLabel('Sobre mí'),
+        MpTextField(
+          controller: _aboutController,
+          maxLines: 4,
+          placeholder: 'Tu tono, tu foco y el tipo de impacto que generás.',
+        ),
+        const SizedBox(height: MpTokens.space16),
+        const MpFieldLabel(
+          'Expectativa salarial',
+          helper: 'Opcional. Mejora el matching con oportunidades reales.',
+        ),
+        MpTextField(controller: _salaryController, placeholder: 'Ej: USD 2.500 - 3.500 / mes'),
+      ],
+    );
+  }
+
+  Widget _buildEditExperienceTab() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const MpFieldLabel(
+          'Experiencia laboral',
+          helper: 'Una línea por experiencia. Ej: Rol · Empresa · Período.',
+        ),
+        MpTextField(
+          controller: _experienceController,
+          maxLines: 6,
+          placeholder:
+              'Ej:\nSenior Product Designer · Uala · 2022-Actual\nUX Designer · Globant · 2020-2022',
+        ),
+        const SizedBox(height: MpTokens.space20),
+        const MpFieldLabel('Educación', helper: 'Una línea por formación.'),
+        MpTextField(
+          controller: _educationController,
+          maxLines: 5,
+          placeholder: 'Ej:\nLic. en Marketing · UCA · 2018-2022',
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEditSkillsTab() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const MpFieldLabel('Habilidades principales'),
+        Wrap(
+          spacing: MpTokens.space8,
+          runSpacing: MpTokens.space8,
+          children: [
+            for (final skill in _skillOptions)
+              CandChip(
+                skill,
+                activo: _selectedSkills.contains(skill),
+                onTap: () => _toggleSkill(skill),
+              ),
+          ],
+        ),
+        const SizedBox(height: MpTokens.space20),
+        const MpFieldLabel('Hashtags personalizados', helper: 'Separados por coma.'),
+        MpTextField(
+          controller: _hashtagsController,
+          maxLines: 3,
+          placeholder: '#producto, #liderazgo, #uxresearch',
+        ),
+        const SizedBox(height: MpTokens.space20),
+        const MpFieldLabel('Idiomas'),
+        MpTextField(
+          controller: _languagesController,
+          maxLines: 3,
+          placeholder: 'Español nativo, Inglés C1, Portugués intermedio',
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEditVideoTab(BuildContext context) {
+    final s = context.mp;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const MpFieldLabel(
+          'Video pitch',
+          helper:
+              'Se graba desde el flujo real de cámara — no es un campo de texto, así que no hay nada que "escribir" acá.',
+        ),
+        Container(
+          padding: const EdgeInsets.all(MpTokens.space16),
+          decoration: BoxDecoration(
+            color: s.fill,
+            borderRadius: BorderRadius.circular(MpTokens.radiusMD),
+            border: Border.all(color: s.border),
+          ),
+          child: Row(
+            children: [
+              Icon(CupertinoIcons.videocam_fill, color: s.accent, size: 28),
+              const SizedBox(width: MpTokens.space12),
+              Expanded(
+                child: Text(
+                  'Grabá o actualizá tu video de presentación (máx. 60 segundos).',
+                  style: MpTokens.body.copyWith(color: s.textSecondary),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: MpTokens.space16),
+        MpButton(
+          label: 'Ir a grabar video pitch',
+          icon: CupertinoIcons.videocam_fill,
+          expand: true,
+          onPressed: () => Navigator.of(context).push(
+            CupertinoPageRoute(
+              builder: (_) => const OnboardingPitchScreen(isCompany: false),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEditPortfolioTab() {
+    final uid = Supabase.instance.client.auth.currentUser?.id;
+    if (uid == null) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const MpFieldLabel('Portafolio', helper: 'Hasta 3 proyectos con video, imagen o link.'),
+        // Widget real ya existente (`portfolio_service.dart`) que hasta esta
+        // tanda no estaba montado en ninguna pantalla productiva.
+        PortfolioSection(userId: uid, isOwnProfile: true),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return UnsavedChangesGuard(
@@ -965,12 +1373,14 @@ class _CandidateProfileFormScreenState
           _aboutController.text.trim().isNotEmpty ||
           _selectedSkills.isNotEmpty,
       child: CupertinoPageScaffold(
-        backgroundColor: const Color(0xFFFFFBF7),
+        backgroundColor: widget.isEditing
+            ? MpSurfaceStyle.light.bg
+            : const Color(0xFFFFFBF7),
         navigationBar: widget.isEditing
             ? CupertinoNavigationBar(
-                backgroundColor: const Color(0xFFFFFBF7),
+                backgroundColor: MpSurfaceStyle.light.bg,
                 border: null,
-                middle: const Text('Editar perfil de talento'),
+                middle: const Text('Editar perfil'),
                 leading: CupertinoButton(
                   padding: EdgeInsets.zero,
                   onPressed: () => Navigator.of(context).maybePop(),
@@ -980,6 +1390,11 @@ class _CandidateProfileFormScreenState
             : null,
         child: _isLoading
             ? const Center(child: CupertinoActivityIndicator(radius: 16))
+            : widget.isEditing
+            ? MpSurface(
+                style: MpSurfaceStyle.light,
+                child: _buildEditTabsLayout(context),
+              )
             : AssistantShell(
                 eyebrow: _eyebrow,
                 title: _title,
@@ -1008,6 +1423,66 @@ class _CandidateProfileFormScreenState
                 ),
                 child: _buildStepContent(),
               ),
+      ),
+    );
+  }
+}
+
+/// Un segmento de la barra de "Editar perfil": ícono arriba, etiqueta abajo.
+/// Privado del archivo — no es parte de `widgets/ds/*`, es específico de esta
+/// pantalla.
+class _EditTabSegment extends StatelessWidget {
+  const _EditTabSegment({
+    required this.icon,
+    required this.label,
+    required this.active,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = context.mp;
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        curve: Curves.easeOutCubic,
+        padding: const EdgeInsets.symmetric(
+          vertical: MpTokens.space8,
+          horizontal: MpTokens.space4,
+        ),
+        decoration: BoxDecoration(
+          color: active ? s.card : const Color(0x00000000),
+          borderRadius: BorderRadius.circular(MpTokens.radiusMD),
+          boxShadow: active ? s.cardShadow : null,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 19,
+              color: active ? s.accent : s.textTertiary,
+            ),
+            const SizedBox(height: MpTokens.space4),
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: MpTokens.micro.copyWith(
+                color: active ? s.accent : s.textSecondary,
+                fontWeight: active ? FontWeight.w700 : FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

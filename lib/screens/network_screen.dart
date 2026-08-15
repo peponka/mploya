@@ -1,20 +1,34 @@
 import 'package:flutter/cupertino.dart';
 import '../utils/user_columns.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../theme/app_theme.dart';
+import '../theme/mploya_tokens.dart';
 import '../models/models.dart';
-import '../widgets/connection_card.dart';
-import '../widgets/skeleton_loader.dart';
-import '../widgets/nex_avatar.dart';
 import '../services/social_service.dart';
 import '../services/error_handler.dart';
+import '../widgets/candidato/cand_perfil.dart' show CandMetrica;
+import '../widgets/candidato/cand_red.dart';
+import '../widgets/candidato/cand_ui.dart';
 import 'profile_screen.dart';
 import 'messaging_screen.dart';
 import 'explore_screen.dart';
-import 'jobs_screen.dart';
-import '../widgets/web_ui.dart';
 
-/// Datos ya resueltos para el modo preview local. Mismo patrón que
+/// ─────────────────────────────────────────────────────────────────────────────
+/// RED — la agenda del propio candidato.
+///
+/// Composición aprobada de la Tanda 1:
+/// `design-reference/Candidato_Tanda1_Final/*/03_red.png`.
+///
+/// Reemplaza a la pantalla «Matches», que explicaba el producto en vez de
+/// mostrar la red: tenía tarjeta de explicación, «Primeros pasos» con badges
+/// decorativos y un carrusel de recomendados sin jerarquía. Las tres secciones
+/// —Conexiones, Solicitudes y Nexus— son ahora pestañas reales.
+///
+/// Los datos siguen siendo los mismos y salen de los mismos lugares:
+/// `connections` para conexiones y solicitudes, `users` para las fichas y el
+/// RPC de recomendados para Nexus.
+/// ─────────────────────────────────────────────────────────────────────────────
+
+/// Datos ya resueltos para el render aislado. Mismo patrón que
 /// `JobsPreviewData`: si llega, la pantalla NO consulta Supabase.
 @immutable
 class NetworkPreviewData {
@@ -35,9 +49,12 @@ class NetworkPreviewData {
   final List<Map<String, dynamic>> personas;
 }
 
+/// Las tres secciones de la pantalla.
+enum _Seccion { conexiones, solicitudes, nexus }
+
 class NetworkScreen extends StatefulWidget {
-  /// Sólo lo usa `lib/preview/`. En producción es `null` y el comportamiento
-  /// es exactamente el de antes.
+  /// Sólo lo usan los tests y el generador de capturas. En producción es
+  /// `null` y el camino de datos es el real.
   final NetworkPreviewData? previewData;
 
   const NetworkScreen({super.key, this.previewData});
@@ -47,8 +64,8 @@ class NetworkScreen extends StatefulWidget {
 }
 
 class _NetworkScreenState extends State<NetworkScreen> {
-  // `late`: ver la nota de jobs_screen.dart. El inicializador ansioso lanzaba
-  // al construir el State cuando Supabase no está inicializado (modo preview).
+  // `late`: `Supabase.instance.client` LANZA si Supabase no está inicializado,
+  // y un inicializador de campo se evalúa al construir el State.
   late final _supabase = Supabase.instance.client;
   String? get _uid => _supabase.auth.currentUser?.id;
 
@@ -56,12 +73,22 @@ class _NetworkScreenState extends State<NetworkScreen> {
   List<NexUser>? _connections;
   bool _loadingConnections = true;
 
+  _Seccion _seccion = _Seccion.conexiones;
+  String _busqueda = '';
+  final TextEditingController _buscador = TextEditingController();
+
+  /// Persona abierta en el panel de detalle de desktop.
+  String? _seleccionada;
+
+  /// Solicitudes que están respondiéndose ahora mismo.
+  final Set<String> _respondiendo = {};
+
   @override
   void initState() {
     super.initState();
     final preview = widget.previewData;
     if (preview != null) {
-      // Preview local: datos ya resueltos, sin tocar la red.
+      // Render aislado: datos ya resueltos, sin tocar la red.
       _connections = preview.conexiones;
       _recommended = preview.recomendados;
       _loadingConnections = false;
@@ -70,12 +97,18 @@ class _NetworkScreenState extends State<NetworkScreen> {
     _loadData();
   }
 
+  @override
+  void dispose() {
+    _buscador.dispose();
+    super.dispose();
+  }
+
   // ── ÚNICOS PUNTOS DE BIFURCACIÓN preview / producción ───────────────────
   // Todo acceso a datos de esta pantalla pasa por acá. Con `previewData == null`
-  // el camino es exactamente el productivo de antes.
+  // el camino es exactamente el productivo.
 
-  /// Solicitudes pendientes. En producción es un stream en vivo; en preview,
-  /// un stream de un solo valor, sin websocket ni suscripción que cerrar.
+  /// Solicitudes pendientes. En producción es un stream en vivo; en render
+  /// aislado, un stream de un solo valor, sin websocket que cerrar.
   Stream<List<Map<String, dynamic>>> get _solicitudesStream {
     final preview = widget.previewData;
     if (preview != null) return Stream.value(preview.solicitudes);
@@ -100,6 +133,24 @@ class _NetworkScreenState extends State<NetworkScreen> {
         .maybeSingle();
   }
 
+  /// Ficha completa para las sugerencias de Nexus.
+  Future<Map<String, dynamic>?> _perfilCompleto(String userId) {
+    final preview = widget.previewData;
+    if (preview != null) {
+      return Future.value(
+        preview.personas.cast<Map<String, dynamic>?>().firstWhere(
+          (p) => p?['id'] == userId,
+          orElse: () => null,
+        ),
+      );
+    }
+    return _supabase
+        .from('users')
+        .select(kUserColumns)
+        .eq('id', userId)
+        .maybeSingle();
+  }
+
   Future<void> _loadData() async {
     await Future.wait([_loadRecommended(), _loadConnections()]);
   }
@@ -113,7 +164,15 @@ class _NetworkScreenState extends State<NetworkScreen> {
     setState(() => _loadingConnections = true);
     try {
       final uid = _uid;
-      if (uid == null) return;
+      if (uid == null) {
+        if (mounted) {
+          setState(() {
+            _connections = [];
+            _loadingConnections = false;
+          });
+        }
+        return;
+      }
 
       final rows = await _supabase
           .from('connections')
@@ -131,1070 +190,559 @@ class _NetworkScreenState extends State<NetworkScreen> {
           .toList();
 
       if (otherIds.isEmpty) {
-        if (mounted) setState(() { _connections = []; _loadingConnections = false; });
+        if (mounted) {
+          setState(() {
+            _connections = [];
+            _loadingConnections = false;
+          });
+        }
         return;
       }
 
-      final users = await _supabase.from('users').select(kUserColumns).inFilter('id', otherIds);
-      if (mounted) setState(() {
-        _connections = users.map((r) => NexUser.fromJson(r)).toList();
-        _loadingConnections = false;
-      });
+      final users =
+          await _supabase.from('users').select(kUserColumns).inFilter('id', otherIds);
+      if (mounted) {
+        setState(() {
+          _connections = users.map((r) => NexUser.fromJson(r)).toList();
+          _loadingConnections = false;
+        });
+      }
     } catch (e) {
       debugPrint('❌ _loadConnections: $e');
-      if (mounted) setState(() { _connections = []; _loadingConnections = false; });
+      if (mounted) {
+        setState(() {
+          _connections = [];
+          _loadingConnections = false;
+        });
+      }
     }
   }
+
+  /// Acepta o ignora una solicitud. Es la misma llamada que hacía la pantalla
+  /// anterior; sólo cambió quién la dispara.
+  Future<void> _responder(String requesterId, String accion) async {
+    if (widget.previewData != null) return;
+    setState(() => _respondiendo.add(requesterId));
+    await MployaErrorHandler.instance.wrapAsync(
+      context,
+      () => SocialService.instance.respondConnection(requesterId, accion),
+      successMessage:
+          accion == 'accept' ? 'Conexión aceptada ✅' : 'Solicitud ignorada',
+      errorMessage: 'No se pudo procesar',
+    );
+    if (!mounted) return;
+    setState(() => _respondiendo.remove(requesterId));
+    await _loadConnections();
+  }
+
+  // ── Traducción a lo que dibujan los componentes ─────────────────────────
+
+  CandPersonaVista _deUsuario(NexUser u) => CandPersonaVista(
+        id: u.id,
+        nombre: u.name,
+        titulo: u.headline,
+        ciudad: (u.location ?? '').trim(),
+        avatarUrl: u.avatarUrl,
+        verificado: u.isVerified,
+        etiquetas: u.skills.where((s) => s.trim().isNotEmpty).take(6).toList(),
+      );
+
+  CandPersonaVista _deFila(String id, Map<String, dynamic>? fila) =>
+      CandPersonaVista(
+        id: id,
+        nombre: fila?['name']?.toString() ?? 'Usuario',
+        titulo: fila?['headline']?.toString() ?? '',
+        ciudad: fila?['city']?.toString() ?? fila?['location']?.toString() ?? '',
+        avatarUrl: fila?['avatar_url']?.toString(),
+        verificado: fila?['is_verified'] == true,
+      );
+
+  List<NexUser> get _conexionesFiltradas {
+    final todas = _connections ?? const <NexUser>[];
+    if (_busqueda.trim().isEmpty) return todas;
+    final q = _busqueda.trim().toLowerCase();
+    return todas
+        .where((u) =>
+            u.name.toLowerCase().contains(q) ||
+            u.headline.toLowerCase().contains(q))
+        .toList();
+  }
+
+  // ── Acciones ────────────────────────────────────────────────────────────
+
+  void _abrirPerfil(NexUser u) => Navigator.of(context).push(
+        CupertinoPageRoute(builder: (_) => ProfileScreen(user: u)),
+      );
+
+  void _abrirChat(NexUser u) => Navigator.of(context).push(
+        CupertinoPageRoute(builder: (_) => ChatDetailScreen(otherUser: u)),
+      );
+
+  void _abrirExplorar() => Navigator.of(context).push(
+        CupertinoPageRoute(builder: (_) => const ExploreScreen()),
+      );
+
+  // ── Construcción ────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
     return CupertinoPageScaffold(
-      backgroundColor: context.isDark ? NexTheme.darkBg : CupertinoColors.white,
+      backgroundColor: MpTokens.lightBg,
       child: StreamBuilder<List<Map<String, dynamic>>>(
         stream: _solicitudesStream,
-        builder: (context, pendingSnap) {
-          final pending = pendingSnap.data ?? [];
-          if (isWebWide(context)) return _buildWeb(context, pending);
-          return CustomScrollView(
-            physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-            slivers: [
-              // ── Nav bar ──
-              CupertinoSliverNavigationBar(
-                backgroundColor: context.isDark ? NexTheme.darkBg : CupertinoColors.white,
-                border: null,
-                transitionBetweenRoutes: false,
-                largeTitle: Text(
-                  'Matches',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: -0.5,
-                    color: context.textPrimary,
-                  ),
-                ),
-              ),
-
-              // ── Subtítulo explicativo ──
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-                  child: Column(
-                    children: [
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: MployaTheme.brandAccent.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: const Icon(CupertinoIcons.bolt_fill, color: MployaTheme.brandAccent, size: 16),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              'Cuando ambos se conectan, aparecen acá. Explorá el feed para encontrar tu próxima oportunidad.',
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: context.textSecondary,
-                                height: 1.4,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      _webExplainerCard(context),
-                      const SizedBox(height: 16),
-                      _webFirstStepsCard(context),
-                    ],
-                  ),
-                ),
-              ),
-
-              // ── Solicitudes pendientes ──
-              if (pending.isNotEmpty) ...[
-                _sectionHeader(
-                  context,
-                  'SOLICITUDES PENDIENTES',
-                  trailing: pending.length > 2
-                      ? GestureDetector(
-                          onTap: () => _showAllPending(context, pending),
-                          child: Text(
-                            'Ver todas (${pending.length})',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: MployaTheme.brandAccent,
-                            ),
-                          ),
-                        )
-                      : null,
-                ),
-                SliverToBoxAdapter(
-                  child: Column(
-                    children: pending.take(2).map((req) {
-                      final requesterId = req['requester_id']?.toString() ?? '';
-                      return FutureBuilder<Map<String, dynamic>?>(
-                        future: _perfilBreve(requesterId),
-                        builder: (context, snap) {
-                          final name = snap.data?['name']?.toString() ?? '...';
-                          final headline = snap.data?['headline']?.toString() ?? '';
-                          final avatar = snap.data?['avatar_url']?.toString();
-                          return _PendingInlineTile(
-                            name: name,
-                            headline: headline,
-                            avatarUrl: avatar,
-                            requesterId: requesterId,
-                            onDone: _loadConnections,
-                          );
-                        },
-                      );
-                    }).toList(),
-                  ),
-                ),
-                SliverToBoxAdapter(child: SizedBox(height: 8)),
-              ],
-
-              // ── Para conectar (carrusel recomendados) ──
-              _sectionHeader(context, 'PARA CONECTAR'),
-              SliverToBoxAdapter(
-                child: SizedBox(
-                  height: 260,
-                  child: _buildRecommendedCarousel(context),
-                ),
-              ),
-
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
-                  child: Container(height: 0.5, color: context.dividerColor),
-                ),
-              ),
-
-              // ── Tus conexiones ──
-              _sectionHeader(
-                context,
-                'TUS CONEXIONES',
-                trailing: _connections != null && _connections!.isNotEmpty
-                    ? Text(
-                        '${_connections!.length}',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: context.textSecondary,
-                        ),
-                      )
-                    : null,
-              ),
-              _buildConnectionsList(context),
-
-              const SliverToBoxAdapter(child: SizedBox(height: 100)),
-            ],
-          );
+        builder: (context, snap) {
+          final pendientes = snap.data ?? const <Map<String, dynamic>>[];
+          return switch (candFormatoDe(context)) {
+            CandFormato.desktop => _desktop(pendientes),
+            CandFormato.tablet => _ancho(pendientes, padding: 24, columnas: 2),
+            CandFormato.mobile => _ancho(pendientes, padding: 20, columnas: 1),
+          };
         },
       ),
     );
   }
 
-  // ── Layout web: Primeros Pasos + solicitudes + para conectar + conexiones ──
-  Widget _buildWeb(BuildContext context, List<Map<String, dynamic>> pending) {
-    return WebPage(
-      title: 'Matches',
-      subtitle: 'Tu viaje profesional empieza acá',
-      child: ListView(
-        physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.only(bottom: 40),
-        children: [
-          IntrinsicHeight(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Expanded(flex: 3, child: _webExplainerCard(context)),
-                const SizedBox(width: 16),
-                Expanded(flex: 2, child: _webFirstStepsCard(context)),
-              ],
-            ),
-          ),
-          if (pending.isNotEmpty) ...[
-            const SizedBox(height: 24),
-            const WebSectionLabel('Solicitudes pendientes'),
-            WebCard(
-              padding: EdgeInsets.zero,
-              child: Column(
-                children: pending.map((req) {
-                  final requesterId = req['requester_id']?.toString() ?? '';
-                  return FutureBuilder<Map<String, dynamic>?>(
-                    future: _perfilBreve(requesterId),
-                    builder: (context, snap) {
-                      final name = snap.data?['name']?.toString() ?? '...';
-                      final headline = snap.data?['headline']?.toString() ?? '';
-                      final avatar = snap.data?['avatar_url']?.toString();
-                      return _PendingInlineTile(
-                        name: name,
-                        headline: headline,
-                        avatarUrl: avatar,
-                        requesterId: requesterId,
-                        onDone: _loadConnections,
-                      );
-                    },
-                  );
-                }).toList(),
-              ),
-            ),
-          ],
-          const SizedBox(height: 24),
-          const WebSectionLabel('Tus matches recientes'),
-          _buildMatchesGrid(context),
-          const SizedBox(height: 24),
-          Row(
-            children: [
-              const WebSectionLabel('Tus conexiones'),
-              const Spacer(),
-              if (_connections != null && _connections!.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: Text('${_connections!.length}',
-                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: context.textSecondary)),
-                ),
-            ],
-          ),
-          _webConnectionsCard(context),
-        ],
-      ),
-    );
+  String _subtitulo(int pendientes) {
+    final n = _connections?.length ?? 0;
+    final conexiones = '$n ${n == 1 ? 'conexión' : 'conexiones'}';
+    if (pendientes == 0) return conexiones;
+    return '$conexiones · $pendientes '
+        '${pendientes == 1 ? 'solicitud' : 'solicitudes'}';
   }
 
-  Widget _webExplainerCard(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: CupertinoColors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFF185FA5).withValues(alpha: 0.35), width: 1.5),
-        boxShadow: const [
-          BoxShadow(color: Color(0x0A000000), blurRadius: 15, offset: Offset(0, 8)),
-        ],
-      ),
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Center(
-            child: Container(
-              width: 72, height: 72,
-              decoration: BoxDecoration(
-                color: CupertinoColors.white,
-                shape: BoxShape.circle,
-                border: Border.all(color: const Color(0xFFE2E8F0), width: 2),
-                boxShadow: const [
-                  BoxShadow(color: Color(0x1F000000), blurRadius: 10, offset: Offset(0, 4)),
-                ],
-              ),
-              child: const Icon(CupertinoIcons.play_fill, color: Color(0xFF185FA5), size: 30),
-            ),
-          ),
-          const SizedBox(height: 36),
-          const Text(
-            'Cómo encontrar tus Matches Ideales',
-            style: TextStyle(
-              fontSize: 17,
-              fontWeight: FontWeight.w800,
-              color: Color(0xFF185FA5),
-            ),
-          ),
-          const SizedBox(height: 6),
-          const Text(
-            'Explorá el feed, conectá con empresas que buscan tu perfil y respondé a tiempo.',
-            style: TextStyle(
-              fontSize: 13,
-              color: Color(0xFF475569),
-              height: 1.4,
-            ),
-          ),
-        ],
-      ),
-    );
+  List<Widget> _chipsSeccion(int pendientes) {
+    final n = _connections?.length ?? 0;
+    Widget chip(String texto, _Seccion s) => CandChip(
+          texto,
+          activo: _seccion == s,
+          onTap: () => setState(() => _seccion = s),
+        );
+    return [
+      chip('Conexiones · $n', _Seccion.conexiones),
+      chip('Solicitudes · $pendientes', _Seccion.solicitudes),
+      chip('Nexus', _Seccion.nexus),
+    ];
   }
 
-  Widget _webFirstStepsCard(BuildContext context) {
-    return WebCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Primeros pasos', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: context.textPrimary)),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              _buildFirstStepBadge(CupertinoIcons.person_fill, false),
-              const SizedBox(width: 8),
-              _buildFirstStepBadge(CupertinoIcons.heart_fill, true),
-              const SizedBox(width: 8),
-              _buildFirstStepBadge(CupertinoIcons.compass_fill, false),
-              const SizedBox(width: 8),
-              _buildFirstStepBadge(CupertinoIcons.person_2_fill, false),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Text('Tu red profesional empieza acá',
-              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: context.textPrimary)),
-          const SizedBox(height: 3),
-          Text('Explora el feed y connect con empresas que buscan tu perfil.',
-              style: TextStyle(fontSize: 12, color: context.textTertiary, height: 1.4)),
-          const SizedBox(height: 16),
-          _firstStepButton(
-            context,
-            icon: CupertinoIcons.person_fill,
-            backgroundColor: const Color(0xFF185FA5),
-            textColor: CupertinoColors.white,
-            label: 'Completá tu perfil',
-            onTap: () => Navigator.of(context).push(CupertinoPageRoute(builder: (_) => ProfileScreen(user: null))),
-          ),
-          const SizedBox(height: 8),
-          _firstStepButton(
-            context,
-            icon: CupertinoIcons.heart_fill,
-            backgroundColor: const Color(0xFFF1F5F9),
-            textColor: const Color(0xFF475569),
-            label: 'Definí tus Intereses',
-            onTap: () => Navigator.of(context).push(CupertinoPageRoute(builder: (_) => ProfileScreen(user: null))),
-          ),
-          const SizedBox(height: 8),
-          // Estos dos botones escribían `currentMainTabNotifier` creyendo que
-          // eso cambiaba de pestaña. NO lo hace: `MainNavigation` sólo ESCRIBE
-          // ese notifier —para que los reels sepan si están en el feed— y nunca
-          // lo escucha. Eran botones muertos. Además el índice 1, que uno de
-          // ellos usaba pensando en "Explorar", hoy es Vacantes.
-          // Ahora navegan de verdad, por `push`.
-          _firstStepButton(
-            context,
-            icon: CupertinoIcons.compass_fill,
-            backgroundColor: const Color(0xFFF1F5F9),
-            textColor: const Color(0xFF475569),
-            label: 'Descubrí gente cerca',
-            onTap: () => Navigator.of(context).push(
-              CupertinoPageRoute(builder: (_) => const ExploreScreen()),
-            ),
-          ),
-          const SizedBox(height: 8),
-          _firstStepButton(
-            context,
-            icon: CupertinoIcons.paperplane_fill,
-            backgroundColor: const Color(0xFFF1F5F9),
-            textColor: const Color(0xFF475569),
-            label: 'Mirá vacantes',
-            onTap: () => Navigator.of(context).push(
-              CupertinoPageRoute(builder: (_) => const JobsScreen()),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFirstStepBadge(IconData icon, bool isActive) {
-    return Container(
-      width: 34,
-      height: 34,
-      decoration: BoxDecoration(
-        color: isActive ? const Color(0xFF185FA5) : const Color(0xFFF1F5F9),
-        shape: BoxShape.circle,
-      ),
-      child: Icon(
-        icon,
-        color: isActive ? CupertinoColors.white : const Color(0xFF64748B),
-        size: 15,
-      ),
-    );
-  }
-
-  Widget _firstStepButton(BuildContext context, {
-    required IconData icon,
-    required Color backgroundColor,
-    required Color textColor,
-    required String label,
-    required VoidCallback onTap,
+  /// Mobile y tablet: una columna con el selector arriba.
+  Widget _ancho(
+    List<Map<String, dynamic>> pendientes, {
+    required double padding,
+    required int columnas,
   }) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
-        decoration: BoxDecoration(color: backgroundColor, borderRadius: BorderRadius.circular(12)),
-        child: Row(
-          children: [
-            Icon(icon, size: 16, color: textColor),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                label,
-                style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: textColor),
-              ),
+    return ListView(
+      padding: EdgeInsets.zero,
+      children: [
+        SizedBox(height: candTopInset(context)),
+        CandEncabezado(
+          titulo: 'Red',
+          subtitulo: _subtitulo(pendientes.length),
+          padding: EdgeInsets.fromLTRB(padding, 12, padding, 12),
+          acciones: [
+            CandAccion(
+              icono: CupertinoIcons.person_badge_plus,
+              onTap: _abrirExplorar,
             ),
           ],
         ),
-      ),
+        Padding(
+          padding: EdgeInsets.fromLTRB(padding, 0, padding, 12),
+          child: CandBuscador(
+            controller: _buscador,
+            placeholder: 'Buscar en tu red',
+            onChanged: (v) => setState(() => _busqueda = v),
+          ),
+        ),
+        CandFilaChips(padding: padding, children: _chipsSeccion(pendientes.length)),
+        const SizedBox(height: 14),
+        ..._contenido(pendientes, padding: padding, columnas: columnas),
+        const SizedBox(height: 12),
+      ],
     );
   }
 
-  // ── Grilla de matches recientes: foto real + % de afinidad real (RPC) +
-  // skills reales + acciones. Si no hay recomendados todavía, cae al grid
-  // fantasma (no inventa gente). ──
-  Widget _buildMatchesGrid(BuildContext context) {
-    if (_recommended == null) {
-      return WebGrid(children: List.generate(3, (_) => const WebCard(child: SizedBox(height: 220))));
-    }
-    if (_recommended!.isEmpty) {
-      return _ghostProfileGrid(context, caption: 'Perfil sugerido');
-    }
-    return WebGrid(
-      children: _recommended!.map((r) {
-        final userId = r['user_id']?.toString() ?? r['id']?.toString() ?? '';
-        final affinity = (r['affinity_score'] as num?)?.toDouble() ?? 0;
-        return FutureBuilder<Map<String, dynamic>?>(
-          future: _supabase.from('users').select(kUserColumns).eq('id', userId).maybeSingle(),
-          builder: (context, snap) {
-            if (!snap.hasData || snap.data == null) {
-              return const WebCard(child: SizedBox(height: 220));
-            }
-            final user = NexUser.fromJson(snap.data!);
-            return _MatchGridCard(user: user, matchScore: affinity.round());
-          },
-        );
-      }).toList(),
-    );
-  }
+  Widget _desktop(List<Map<String, dynamic>> pendientes) {
+    final conexiones = _conexionesFiltradas;
+    final NexUser? elegida = _elegida(conexiones);
 
-  // Grilla de placeholders "Perfil sugerido" — mismo rol que un skeleton: no
-  // inventa datos falsos, solo indica dónde van a aparecer las sugerencias.
-  Widget _ghostProfileGrid(BuildContext context, {required String caption}) {
-    return WebGrid(
-      gap: 12,
-      children: List.generate(6, (i) {
-        final pending = i.isEven;
-        return WebCard(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+    return Row(
+      children: [
+        Expanded(
+          flex: 5,
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(28, 26, 14, 24),
             children: [
-              Container(
-                width: 48, height: 48,
-                decoration: BoxDecoration(
-                  color: context.isDark ? NexTheme.darkSurface : const Color(0xFFF2F2F7),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(CupertinoIcons.person_fill, size: 22, color: context.textTertiary.withValues(alpha: 0.5)),
+              Row(
+                children: [
+                  Expanded(
+                    child: CandTituloDesktop(
+                      'Red',
+                      subtitulo: _subtitulo(pendientes.length),
+                    ),
+                  ),
+                  CandBoton(
+                    'Invitar contactos',
+                    icono: CupertinoIcons.person_badge_plus,
+                    secundario: true,
+                    onTap: _abrirExplorar,
+                  ),
+                ],
               ),
-              const SizedBox(height: 10),
-              Text(pending ? 'Invitación pendiente' : caption,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: context.textTertiary)),
+              const SizedBox(height: 18),
+              CandBuscador(
+                controller: _buscador,
+                placeholder: 'Buscar en tu red',
+                onChanged: (v) => setState(() => _busqueda = v),
+              ),
+              const SizedBox(height: 14),
+              CandFilaChips(padding: 0, children: _chipsSeccion(pendientes.length)),
+              const SizedBox(height: 18),
+              ..._contenido(pendientes, padding: 0, columnas: 2),
             ],
           ),
-        );
-      }),
+        ),
+        CandDetallePersona(
+          persona: elegida == null ? null : _deUsuario(elegida),
+          metricas: elegida == null ? const [] : _metricasDe(elegida),
+          onMensaje: elegida == null ? null : () => _abrirChat(elegida),
+          onVerPerfil: elegida == null ? null : () => _abrirPerfil(elegida),
+        ),
+      ],
     );
   }
 
-  Widget _webConnectionsCard(BuildContext context) {
-    if (_loadingConnections) {
-      return const WebCard(child: SizedBox(height: 120, child: Center(child: CupertinoActivityIndicator())));
+  /// La conexión abierta en el panel de detalle: la elegida, o la primera de la
+  /// lista para que el panel no arranque vacío.
+  NexUser? _elegida(List<NexUser> conexiones) {
+    for (final u in conexiones) {
+      if (u.id == _seleccionada) return u;
     }
-    final conns = _connections ?? [];
-    if (conns.isEmpty) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _ghostProfileGrid(context, caption: 'Perfil sugerido'),
-          const SizedBox(height: 16),
-          Text('Todavía no tenés conexiones activas. Enviá solicitudes para verlas acá.',
-              style: TextStyle(fontSize: 13, color: context.textTertiary)),
+    return conexiones.isEmpty ? null : conexiones.first;
+  }
+
+  /// Métricas de la ficha: sólo lo que la fila de `users` trae de verdad.
+  List<CandMetrica> _metricasDe(NexUser u) => [
+        CandMetrica('${u.connections}', 'Conexiones'),
+        CandMetrica('${u.skills.length}', 'Skills'),
+        if (u.matchPercentage > 0)
+          CandMetrica('${u.matchPercentage.round()}%', 'Afinidad')
+        else
+          CandMetrica(u.isVerified ? 'Sí' : 'No', 'Verificado'),
+      ];
+
+  // ── Secciones ───────────────────────────────────────────────────────────
+
+  List<Widget> _contenido(
+    List<Map<String, dynamic>> pendientes, {
+    required double padding,
+    required int columnas,
+  }) {
+    return switch (_seccion) {
+      _Seccion.solicitudes => _seccionSolicitudes(pendientes, padding, columnas),
+      _Seccion.nexus => _seccionNexus(padding, columnas),
+      _Seccion.conexiones => [
+          if (pendientes.isNotEmpty) ...[
+            ..._seccionSolicitudes(pendientes, padding, columnas, resumida: true),
+            const SizedBox(height: 6),
+          ],
+          _bannerNexus(padding),
+          Padding(
+            padding: EdgeInsets.fromLTRB(padding, 18, padding, 10),
+            child: const CandTitulo('Tus conexiones'),
+          ),
+          ..._grillaConexiones(padding, columnas),
         ],
+    };
+  }
+
+  List<Widget> _seccionSolicitudes(
+    List<Map<String, dynamic>> pendientes,
+    double padding,
+    int columnas, {
+    bool resumida = false,
+  }) {
+    if (pendientes.isEmpty) {
+      return [
+        Padding(
+          padding: EdgeInsets.symmetric(horizontal: padding),
+          child: const CandVacio(
+            icono: CupertinoIcons.person_badge_plus,
+            titulo: 'No tenés solicitudes',
+            detalle: 'Cuando alguien quiera conectar con vos, va a aparecer acá.',
+          ),
+        ),
+      ];
+    }
+
+    final visibles = resumida ? pendientes.take(2).toList() : pendientes;
+
+    Widget tarjeta(Map<String, dynamic> req) {
+      final requesterId = req['requester_id']?.toString() ?? '';
+      return FutureBuilder<Map<String, dynamic>?>(
+        future: _perfilBreve(requesterId),
+        builder: (context, snap) => CandTarjetaSolicitud(
+          persona: _deFila(requesterId, snap.data),
+          cargando: _respondiendo.contains(requesterId),
+          onAceptar: () => _responder(requesterId, 'accept'),
+          onIgnorar: () => _responder(requesterId, 'reject'),
+        ),
       );
     }
-    return WebCard(
-      padding: EdgeInsets.zero,
-      child: Column(children: conns.map((u) => _ConnectionListItem(user: u)).toList()),
-    );
-  }
 
-  // ── Section header helper ──
-  Widget _sectionHeader(BuildContext context, String title, {Widget? trailing}) {
-    return SliverToBoxAdapter(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+    return [
+      Padding(
+        padding: EdgeInsets.symmetric(horizontal: padding),
         child: Row(
           children: [
-            Text(
-              title,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 1.1,
-                color: context.textSecondary,
+            const CandTitulo('Solicitudes'),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+              decoration: BoxDecoration(
+                color: MpTokens.danger,
+                borderRadius: BorderRadius.circular(MpTokens.radiusPill),
+              ),
+              child: Text(
+                '${pendientes.length}',
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  color: CupertinoColors.white,
+                ),
               ),
             ),
             const Spacer(),
-            if (trailing != null) trailing,
+            if (resumida && pendientes.length > 2)
+              GestureDetector(
+                onTap: () => setState(() => _seccion = _Seccion.solicitudes),
+                behavior: HitTestBehavior.opaque,
+                child: Text(
+                  'Ver todas (${pendientes.length})',
+                  style: const TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                    color: MpTokens.primary,
+                  ),
+                ),
+              ),
           ],
         ),
       ),
-    );
+      const SizedBox(height: 10),
+      ..._enGrilla(
+        visibles.map(tarjeta).toList(),
+        padding: padding,
+        columnas: columnas,
+      ),
+    ];
   }
 
-  // ── Carrusel de recomendados ──
-  Widget _buildRecommendedCarousel(BuildContext context) {
-    if (_recommended == null) {
-      return ListView.builder(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        itemCount: 4,
-        itemBuilder: (_, __) => const Padding(
-          padding: EdgeInsets.only(right: 12),
-          child: ConnectionCardSkeleton(),
-        ),
-      );
-    }
+  Widget _bannerNexus(double padding) {
+    final sugeridos = _recommended ?? const <Map<String, dynamic>>[];
+    if (sugeridos.isEmpty) return const SizedBox.shrink();
 
-    // Usamos todos los recomendados (cross-type ya viene filtrado del RPC)
-    final users = _recommended!;
+    final ids = sugeridos
+        .take(3)
+        .map((r) => r['user_id']?.toString() ?? r['id']?.toString() ?? '')
+        .where((id) => id.isNotEmpty)
+        .toList();
 
-    if (users.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 32),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(CupertinoIcons.person_2, size: 44, color: context.textTertiary),
-              const SizedBox(height: 12),
-              Text(
-                'Tu red profesional empieza acá',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: context.textPrimary),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Explorá el feed y conectá con empresas que buscan tu perfil.',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 13, color: context.textSecondary),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    return ListView.builder(
-      scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      itemCount: users.length,
-      itemBuilder: (context, index) {
-        final r = users[index];
-        final userId = r['user_id']?.toString() ?? r['id']?.toString() ?? '';
-        final mutualCount = (r['mutual_count'] as num?)?.toInt() ?? 0;
-        final affinity = (r['affinity_score'] as num?)?.toDouble() ?? 0;
-
-        return FutureBuilder<Map<String, dynamic>?>(
-          future: _supabase.from('users').select(kUserColumns).eq('id', userId).maybeSingle(),
-          builder: (context, snap) {
-            if (!snap.hasData || snap.data == null) {
-              return const Padding(
-                padding: EdgeInsets.only(right: 12),
-                child: ConnectionCardSkeleton(),
-              );
-            }
-            final user = NexUser.fromJson(snap.data!);
-            return Padding(
-              padding: const EdgeInsets.only(right: 12),
-              child: ConnectionCard(
-                user: user,
-                mutualConnections: mutualCount,
-                affinityScore: affinity,
-              ),
-            );
-          },
+    return FutureBuilder<List<Map<String, dynamic>?>>(
+      future: Future.wait(ids.map(_perfilBreve)),
+      builder: (context, snap) {
+        final avatares = <CandPersonaVista>[];
+        final filas = snap.data;
+        if (filas != null) {
+          for (var i = 0; i < ids.length && i < filas.length; i++) {
+            avatares.add(_deFila(ids[i], filas[i]));
+          }
+        }
+        return CandBannerNexus(
+          padding: padding,
+          titulo: 'Nexus encontró ${sugeridos.length} '
+              '${sugeridos.length == 1 ? 'persona afín' : 'personas afines'}',
+          detalle:
+              'Sugerencias calculadas sobre tu perfil, tus skills y tu red actual.',
+          avatares: avatares,
+          onVer: () => setState(() => _seccion = _Seccion.nexus),
         );
       },
     );
   }
 
-  // ── Lista de conexiones aceptadas ──
-  Widget _buildConnectionsList(BuildContext context) {
+  List<Widget> _grillaConexiones(double padding, int columnas) {
     if (_loadingConnections) {
-      return const NetworkListSkeleton();
+      return [
+        const CandCargandoLista(
+          cantidad: 3,
+          padding: EdgeInsets.symmetric(horizontal: 20),
+        ),
+      ];
     }
 
-    final conns = _connections ?? [];
-    if (conns.isEmpty) {
-      return SliverToBoxAdapter(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 24),
-          child: Column(
-            children: [
-              Icon(CupertinoIcons.person_2, size: 44, color: context.textTertiary.withValues(alpha: 0.4)),
-              const SizedBox(height: 12),
-              Text(
-                'Todavía no tenés conexiones',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: context.textPrimary,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Cuando alguien acepte tu solicitud, aparecerá acá.',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 13, color: context.textSecondary, height: 1.4),
-              ),
-            ],
+    final conexiones = _conexionesFiltradas;
+    if (conexiones.isEmpty) {
+      return [
+        Padding(
+          padding: EdgeInsets.symmetric(horizontal: padding),
+          child: CandVacio(
+            icono: CupertinoIcons.person_2,
+            titulo: _busqueda.trim().isEmpty
+                ? 'Todavía no tenés conexiones'
+                : 'Nadie coincide con esa búsqueda',
+            detalle: _busqueda.trim().isEmpty
+                ? 'Cuando alguien acepte tu solicitud, va a aparecer acá.'
+                : 'Probá con otro nombre o con el puesto que buscás.',
+            accion: _busqueda.trim().isEmpty ? 'Descubrir gente' : null,
+            onAccion: _abrirExplorar,
           ),
         ),
+      ];
+    }
+
+    return _enGrilla(
+      [
+        for (final u in conexiones)
+          CandTarjetaPersona(
+            persona: _deUsuario(u),
+            seleccionada: _seleccionada == u.id,
+            onTap: () {
+              if (candFormatoDe(context) == CandFormato.desktop) {
+                setState(() => _seleccionada = u.id);
+              } else {
+                _abrirPerfil(u);
+              }
+            },
+            onMensaje: () => _abrirChat(u),
+          ),
+      ],
+      padding: padding,
+      columnas: columnas,
+    );
+  }
+
+  List<Widget> _seccionNexus(double padding, int columnas) {
+    final sugeridos = _recommended;
+
+    if (sugeridos == null) {
+      return [
+        const CandCargandoLista(
+          cantidad: 3,
+          padding: EdgeInsets.symmetric(horizontal: 20),
+        ),
+      ];
+    }
+
+    if (sugeridos.isEmpty) {
+      return [
+        Padding(
+          padding: EdgeInsets.symmetric(horizontal: padding),
+          child: CandVacio(
+            icono: CupertinoIcons.bolt_fill,
+            titulo: 'Nexus todavía no tiene sugerencias',
+            detalle:
+                'Completá tus skills y tu experiencia para que pueda encontrar '
+                'gente afín.',
+            accion: 'Explorar',
+            onAccion: _abrirExplorar,
+          ),
+        ),
+      ];
+    }
+
+    Widget tarjeta(Map<String, dynamic> r) {
+      final id = r['user_id']?.toString() ?? r['id']?.toString() ?? '';
+      return FutureBuilder<Map<String, dynamic>?>(
+        future: _perfilCompleto(id),
+        builder: (context, snap) {
+          final fila = snap.data;
+          if (fila == null) {
+            return const CandTarjeta(
+              padding: EdgeInsets.all(13),
+              child: Row(
+                children: [
+                  CandSkeleton(ancho: 46, alto: 46, radio: 23),
+                  SizedBox(width: 11),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        CandSkeleton(ancho: 120, alto: 14),
+                        SizedBox(height: 7),
+                        CandSkeleton(ancho: 80, alto: 12),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }
+          final u = NexUser.fromJson(fila);
+          return CandTarjetaPersona(
+            persona: _deUsuario(u),
+            seleccionada: _seleccionada == u.id,
+            onTap: () {
+              if (candFormatoDe(context) == CandFormato.desktop) {
+                setState(() => _seleccionada = u.id);
+              } else {
+                _abrirPerfil(u);
+              }
+            },
+            onMensaje: () => _abrirChat(u),
+          );
+        },
       );
     }
 
-    return SliverList(
-      delegate: SliverChildBuilderDelegate(
-        (context, index) => _ConnectionListItem(user: conns[index]),
-        childCount: conns.length,
+    return [
+      Padding(
+        padding: EdgeInsets.symmetric(horizontal: padding),
+        child: const CandTitulo('Sugerencias de Nexus'),
       ),
-    );
+      const SizedBox(height: 10),
+      ..._enGrilla(
+        sugeridos.map(tarjeta).toList(),
+        padding: padding,
+        columnas: columnas,
+      ),
+    ];
   }
 
-  // ── Modal "Ver todas las solicitudes" ──
-  void _showAllPending(BuildContext context, List<Map<String, dynamic>> pending) {
-    showCupertinoModalPopup(
-      context: context,
-      builder: (ctx) => Container(
-        height: MediaQuery.of(context).size.height * 0.6,
-        decoration: BoxDecoration(
-          color: ctx.isDark ? NexTheme.darkCard : CupertinoColors.white,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              Center(
-                child: Container(
-                  margin: const EdgeInsets.only(top: 12, bottom: 8),
-                  width: 36, height: 4,
-                  decoration: BoxDecoration(color: ctx.dividerColor, borderRadius: BorderRadius.circular(2)),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text('Solicitudes (${pending.length})',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: ctx.textPrimary)),
-                    CupertinoButton(
-                      padding: EdgeInsets.zero,
-                      minimumSize: Size.zero,
-                      onPressed: () => Navigator.pop(ctx),
-                      child: Icon(CupertinoIcons.xmark_circle_fill, color: ctx.textTertiary, size: 28),
-                    ),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: ListView.separated(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  itemCount: pending.length,
-                  separatorBuilder: (_, __) => Container(height: 0.5, color: ctx.dividerColor),
-                  itemBuilder: (context, index) {
-                    final req = pending[index];
-                    final requesterId = req['requester_id']?.toString() ?? '';
-                    return FutureBuilder<Map<String, dynamic>?>(
-                      future: _perfilBreve(requesterId),
-                      builder: (context, snap) {
-                        final name = snap.data?['name']?.toString() ?? 'Usuario';
-                        final headline = snap.data?['headline']?.toString() ?? '';
-                        final avatar = snap.data?['avatar_url']?.toString();
-                        return _PendingInlineTile(
-                          name: name,
-                          headline: headline,
-                          avatarUrl: avatar,
-                          requesterId: requesterId,
-                          onDone: () { _loadConnections(); if (ctx.mounted) Navigator.pop(ctx); },
-                        );
-                      },
-                    );
-                  },
-                ),
-              ),
-            ],
+  /// Coloca las tarjetas en una o dos columnas según el formato.
+  List<Widget> _enGrilla(
+    List<Widget> tarjetas, {
+    required double padding,
+    required int columnas,
+  }) {
+    if (tarjetas.isEmpty) return const [];
+
+    if (columnas == 1) {
+      return [
+        for (final t in tarjetas)
+          Padding(
+            padding: EdgeInsets.fromLTRB(padding, 0, padding, 10),
+            child: t,
           ),
-        ),
-      ),
-    );
-  }
-}
+      ];
+    }
 
-// ── Solicitud pendiente inline ──
-class _PendingInlineTile extends StatefulWidget {
-  final String name;
-  final String headline;
-  final String? avatarUrl;
-  final String requesterId;
-  final VoidCallback onDone;
-
-  const _PendingInlineTile({
-    required this.name,
-    required this.headline,
-    this.avatarUrl,
-    required this.requesterId,
-    required this.onDone,
-  });
-
-  @override
-  State<_PendingInlineTile> createState() => _PendingInlineTileState();
-}
-
-class _PendingInlineTileState extends State<_PendingInlineTile> {
-  bool _loading = false;
-
-  Future<void> _respond(String action) async {
-    setState(() => _loading = true);
-    await MployaErrorHandler.instance.wrapAsync(
-      context,
-      () => SocialService.instance.respondConnection(widget.requesterId, action),
-      successMessage: action == 'accept' ? 'Conexión aceptada ✅' : 'Solicitud rechazada',
-      errorMessage: 'No se pudo procesar',
-    );
-    if (mounted) widget.onDone();
-    if (mounted) setState(() => _loading = false);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(20, 0, 20, 10),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: context.cardColor,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: MployaTheme.brandAccent.withValues(alpha: 0.2)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 44, height: 44,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: MployaTheme.brandAccent.withValues(alpha: 0.1),
-              image: (widget.avatarUrl != null && widget.avatarUrl!.isNotEmpty)
-                  ? DecorationImage(image: NetworkImage(widget.avatarUrl!), fit: BoxFit.cover)
-                  : null,
-            ),
-            child: (widget.avatarUrl == null || widget.avatarUrl!.isEmpty)
-                ? Center(
-                    child: Text(
-                      widget.name.isNotEmpty ? widget.name[0].toUpperCase() : '?',
-                      style: const TextStyle(color: MployaTheme.brandAccent, fontSize: 18, fontWeight: FontWeight.w800),
-                    ),
-                  )
-                : null,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(widget.name,
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: context.textPrimary)),
-                if (widget.headline.isNotEmpty)
-                  Text(widget.headline,
-                      style: TextStyle(fontSize: 12, color: context.textSecondary),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          if (_loading)
-            const CupertinoActivityIndicator()
-          else ...[
-            GestureDetector(
-              onTap: () => _respond('accept'),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-                decoration: BoxDecoration(
-                  color: context.isDark ? CupertinoColors.white : const Color(0xFF1C1C1E),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(
-                  'Aceptar',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: context.isDark ? CupertinoColors.black : CupertinoColors.white,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            GestureDetector(
-              onTap: () => _respond('reject'),
-              child: Icon(CupertinoIcons.xmark, size: 18, color: context.textTertiary),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-// ── Connection List Item ──
-// ── Card de match recomendado (estilo mockup): foto + badge de % real +
-// skills reales + Conectar/Ver Perfil. ──
-class _MatchGridCard extends StatefulWidget {
-  final NexUser user;
-  final int matchScore;
-  const _MatchGridCard({required this.user, required this.matchScore});
-
-  @override
-  State<_MatchGridCard> createState() => _MatchGridCardState();
-}
-
-class _MatchGridCardState extends State<_MatchGridCard> {
-  String _status = 'none';
-  bool _loading = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _fetchStatus();
-  }
-
-  Future<void> _fetchStatus() async {
-    final res = await SocialService.instance.getConnectionStatus(widget.user.id);
-    if (res['status'] != null && mounted) setState(() => _status = res['status'] as String);
-  }
-
-  Future<void> _connect() async {
-    setState(() { _loading = true; _status = 'pending'; });
-    await SocialService.instance.sendConnectionRequest(widget.user.id);
-    if (mounted) setState(() => _loading = false);
-  }
-
-  int _getCompleteness(NexUser user) {
-    if (user.name.toLowerCase().contains('gulo')) return 10;
-    if (user.name.toLowerCase().contains('qa') || user.name.toLowerCase().contains('empresa')) return 19;
-    if (user.name.toLowerCase().contains('mploya')) return 15;
-    return (user.name.length * 7) % 30 + 10;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final skills = widget.user.tags.isNotEmpty ? widget.user.tags : widget.user.skills;
-    return WebCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    return [
+      for (var i = 0; i < tarjetas.length; i += 2)
+        Padding(
+          padding: EdgeInsets.fromLTRB(padding, 0, padding, 12),
+          child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Avatar con completitud
-              Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  Container(
-                    width: 52, height: 52,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: const Color(0xFFE2E8F0),
-                      image: (widget.user.avatarUrl != null && widget.user.avatarUrl!.isNotEmpty)
-                          ? DecorationImage(image: NetworkImage(widget.user.avatarUrl!), fit: BoxFit.cover)
-                          : null,
-                    ),
-                    child: (widget.user.avatarUrl == null || widget.user.avatarUrl!.isEmpty)
-                        ? Center(
-                            child: Text(
-                              widget.user.initials,
-                              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF475569)),
-                            ),
-                          )
-                        : null,
-                  ),
-                  Positioned(
-                    right: -4,
-                    bottom: -2,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF1E293B),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        '${_getCompleteness(widget.user)}%',
-                        style: const TextStyle(fontSize: 8, fontWeight: FontWeight.w800, color: CupertinoColors.white),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              
-              // Score azul arriba a la derecha
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFEFF6FF),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: const Color(0xFFBFDBFE), width: 1),
-                ),
-                child: Text(
-                  '${widget.matchScore > 0 ? widget.matchScore : 15}%',
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xFF2563EB),
-                  ),
-                ),
+              Expanded(child: tarjetas[i]),
+              const SizedBox(width: 12),
+              Expanded(
+                child: i + 1 < tarjetas.length
+                    ? tarjetas[i + 1]
+                    : const SizedBox.shrink(),
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          Text(widget.user.name,
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: context.textPrimary),
-              maxLines: 1, overflow: TextOverflow.ellipsis),
-          Text(widget.user.headline.isNotEmpty ? widget.user.headline : 'Sin descripción',
-              style: TextStyle(fontSize: 12.5, color: context.textTertiary),
-              maxLines: 1, overflow: TextOverflow.ellipsis),
-          const SizedBox(height: 8),
-          if (skills.isNotEmpty) ...[
-            Wrap(
-              spacing: 5,
-              runSpacing: 5,
-              children: skills.take(3).map((t) => Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(999)),
-                    child: Text('#$t', style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: Color(0xFF475569))),
-                  )).toList(),
-            ),
-          ] else
-            const SizedBox(height: 18),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                child: _status == 'none'
-                    ? GestureDetector(
-                        onTap: _loading ? null : _connect,
-                        child: Container(
-                          height: 36,
-                          alignment: Alignment.center,
-                          decoration: BoxDecoration(color: const Color(0xFF185FA5), borderRadius: BorderRadius.circular(10)),
-                          child: _loading
-                              ? const CupertinoActivityIndicator(color: CupertinoColors.white, radius: 8)
-                              : const Text('Conectar', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: CupertinoColors.white)),
-                        ),
-                      )
-                    : Container(
-                        height: 36,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF1F5F9),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Text(_status == 'pending' ? 'Pendiente' : 'Conectado',
-                            style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: Color(0xFF475569))),
-                      ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: GestureDetector(
-                  onTap: () => Navigator.of(context).push(CupertinoPageRoute(builder: (_) => ProfileScreen(user: widget.user))),
-                  child: Container(
-                    height: 36,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF1F5F9),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text('Ver Perfil', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: context.textPrimary)),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ConnectionListItem extends StatelessWidget {
-  final NexUser user;
-  const _ConnectionListItem({required this.user});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () => Navigator.of(context).push(
-        CupertinoPageRoute(builder: (_) => ProfileScreen(user: user)),
-      ),
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-        decoration: BoxDecoration(
-          border: Border(bottom: BorderSide(color: context.dividerColor.withValues(alpha: 0.6), width: 0.5)),
         ),
-        child: Row(
-          children: [
-            NexAvatar(user: user, size: 48, showBadge: true),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(user.name,
-                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: context.textPrimary)),
-                  const SizedBox(height: 2),
-                  Text(
-                    user.headline.isNotEmpty ? user.headline : 'Sin descripción',
-                    style: TextStyle(fontSize: 13, color: context.textSecondary),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ),
-            ),
-            // Tipo de cuenta
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(
-                  color: (user.accountType == 'empresa' || user.accountType == 'headhunter')
-                      ? MployaTheme.brandAccent.withValues(alpha: 0.3)
-                      : context.dividerColor,
-                ),
-              ),
-              child: Text(
-                user.accountType == 'empresa' ? 'Empresa'
-                    : user.accountType == 'headhunter' ? 'Hunter'
-                    : 'Candidato',
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
-                  color: (user.accountType == 'empresa' || user.accountType == 'headhunter')
-                      ? MployaTheme.brandAccent
-                      : context.textSecondary,
-                ),
-              ),
-            ),
-            const SizedBox(width: 10),
-            // Botón mensaje
-            GestureDetector(
-              onTap: () => Navigator.of(context).push(
-                CupertinoPageRoute(builder: (_) => ChatDetailScreen(otherUser: user)),
-              ),
-              child: Icon(CupertinoIcons.chat_bubble, size: 20, color: context.textTertiary),
-            ),
-          ],
-        ),
-      ),
-    );
+    ];
   }
 }

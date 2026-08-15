@@ -4,7 +4,7 @@ import 'package:flutter/cupertino.dart';
 // Material widgets (SliverAppBar, Colors, Icons) have no Cupertino equivalent
 import 'package:flutter/material.dart';
 import '../services/ia_coach_service.dart';
-import '../theme/app_theme.dart';
+import '../theme/mploya_tokens.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // IACoachResultScreen — Pantalla de resultados del IA Coach
@@ -80,8 +80,8 @@ class _IACoachResultScreenState extends State<IACoachResultScreen>
   }
 
   Color _scoreColor(int score) {
-    if (score >= 85) return NexTheme.premiumEnd;
-    if (score >= 70) return MployaTheme.brandAccent;
+    if (score >= 85) return MpTokens.premiumBright;
+    if (score >= 70) return MpTokens.primary;
     if (score >= 50) return const Color(0xFFF5B300);
     return const Color(0xFFEF4444);
   }
@@ -138,18 +138,18 @@ class _IACoachResultScreenState extends State<IACoachResultScreen>
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                         decoration: BoxDecoration(
-                          color: MployaTheme.brandAccent.withValues(alpha: 0.15),
+                          color: MpTokens.primary.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: const Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(CupertinoIcons.wand_stars, size: 14, color: MployaTheme.brandAccent),
+                            Icon(CupertinoIcons.wand_stars, size: 14, color: MpTokens.primary),
                             SizedBox(width: 6),
                             Text(
                               'IA Coach',
                               style: TextStyle(
-                                color: MployaTheme.brandAccent,
+                                color: MpTokens.primary,
                                 fontWeight: FontWeight.w700,
                                 fontSize: 13,
                               ),
@@ -346,13 +346,13 @@ class _IACoachResultScreenState extends State<IACoachResultScreen>
                                   begin: Alignment.topLeft,
                                   end: Alignment.bottomRight,
                                   colors: [
-                                    MployaTheme.brandAccent.withValues(alpha: 0.08),
-                                    NexTheme.premiumEnd.withValues(alpha: 0.04),
+                                    MpTokens.primary.withValues(alpha: 0.08),
+                                    MpTokens.premiumBright.withValues(alpha: 0.04),
                                   ],
                                 ),
                                 borderRadius: BorderRadius.circular(20),
                                 border: Border.all(
-                                  color: MployaTheme.brandAccent.withValues(alpha: 0.15),
+                                  color: MpTokens.primary.withValues(alpha: 0.15),
                                 ),
                               ),
                               child: Column(
@@ -383,14 +383,14 @@ class _IACoachResultScreenState extends State<IACoachResultScreen>
                                             width: 22,
                                             height: 22,
                                             decoration: BoxDecoration(
-                                              color: MployaTheme.brandAccent.withValues(alpha: 0.2),
+                                              color: MpTokens.primary.withValues(alpha: 0.2),
                                               borderRadius: BorderRadius.circular(7),
                                             ),
                                             child: Center(
                                               child: Text(
                                                 '${entry.key + 1}',
                                                 style: const TextStyle(
-                                                  color: MployaTheme.brandAccent,
+                                                  color: MpTokens.primary,
                                                   fontSize: 12,
                                                   fontWeight: FontWeight.w800,
                                                 ),
@@ -486,7 +486,7 @@ class _IACoachResultScreenState extends State<IACoachResultScreen>
                         flex: 2,
                         child: CupertinoButton(
                           padding: const EdgeInsets.symmetric(vertical: 14),
-                          color: MployaTheme.brandAccent,
+                          color: MpTokens.primary,
                           borderRadius: BorderRadius.circular(14),
                           onPressed: () {
                             Navigator.of(context).pop();
@@ -711,7 +711,7 @@ class _CategoryCard extends StatelessWidget {
                                 : CupertinoIcons.lightbulb_fill,
                             size: 16,
                             color: isPositive
-                                ? NexTheme.premiumEnd
+                                ? MpTokens.premiumBright
                                 : const Color(0xFFF5B300),
                           ),
                           const SizedBox(width: 10),
@@ -766,7 +766,7 @@ class _StatPill extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 16, color: MployaTheme.brandAccent),
+          Icon(icon, size: 16, color: MpTokens.primary),
           const SizedBox(height: 4),
           Text(
             label,

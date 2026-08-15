@@ -5,9 +5,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../theme/app_theme.dart';
+import '../theme/mploya_tokens.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/user_provider.dart';
 import 'camera_screen.dart';
+import '../widgets/candidato/cand_ui.dart';
+import '../widgets/candidato/cand_vacantes.dart';
 import '../widgets/job_heatmap_bar.dart';
 import '../services/ghost_apply_service.dart';
 import '../services/saved_jobs_service.dart';
@@ -52,6 +55,17 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
   String _selectedFilter = 'Para Ti';
   Map<String, int> _matchScores = {};
   final Set<String> _appliedJobIds = {};
+
+  /// Vacantes guardadas. Se leen una vez con el listado en lugar de una
+  /// consulta por tarjeta, que era lo que hacía la tarjeta vieja.
+  final Set<String> _savedJobIds = {};
+
+  /// Vacante abierta en el panel de detalle de desktop.
+  String? _selectedJobId;
+
+  /// Buscador de la composición aprobada. Escribe sobre `_titleSearch`, el
+  /// mismo filtro que ya usaba la barra web.
+  final TextEditingController _searchController = TextEditingController();
 
   /// Guard de doble envío de `_applyToJob`. No se lee en `build`, así que se
   /// asigna sin `setState`: sirve para bloquear reentradas, no para pintar.
@@ -165,6 +179,50 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
       return;
     }
     _fetchJobs();
+    _loadSavedJobs();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  /// Ids guardados del usuario. Sin sesión devuelve vacío y las tarjetas se
+  /// dibujan sin marcar, que es lo honesto.
+  Future<void> _loadSavedJobs() async {
+    final rows = await SavedJobsService.instance.fetchSavedJobs();
+    if (!mounted) return;
+    setState(() {
+      _savedJobIds
+        ..clear()
+        ..addAll(
+          rows
+              .map((r) => r['job_id']?.toString() ?? '')
+              .where((id) => id.isNotEmpty),
+        );
+    });
+  }
+
+  Future<void> _toggleSaved(String jobId) async {
+    HapticFeedback.selectionClick();
+    final estaba = _savedJobIds.contains(jobId);
+    setState(() {
+      if (estaba) {
+        _savedJobIds.remove(jobId);
+      } else {
+        _savedJobIds.add(jobId);
+      }
+    });
+    // En render aislado no hay sesión: se cambia sólo el estado visual.
+    if (widget.previewData != null) return;
+    await SavedJobsService.instance.toggleSave(jobId);
+    if (!mounted) return;
+    if (estaba) {
+      MployaToast.removed(context, 'Vacante eliminada de guardados');
+    } else {
+      MployaToast.saved(context, 'Vacante guardada');
+    }
   }
 
   // Token anti-carrera: si el usuario cambia de filtro rápido, solo el último
@@ -529,8 +587,466 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
     }
   }
 
+  // ───────────────────────────────────────────────────────────────────────────
+  // VACANTES DE CANDIDATO — composición aprobada de la Tanda 1
+  //
+  // Referencia: design-reference/Candidato_Tanda1_Final/*/02_vacantes.png
+  //
+  // Empresa y Headhunter conservan intacto el cuerpo anterior: esta tanda es
+  // sólo de Candidato y sus pantallas no se tocan.
+  // ───────────────────────────────────────────────────────────────────────────
+
+  bool get _esCandidato {
+    if (widget.previewData != null) return true;
+    // `valueOrNull` y no `value`: con la sesión en error, `value` relanza.
+    final tipo =
+        ref.watch(currentUserProvider).valueOrNull?.accountType.toLowerCase();
+    // Sin tipo resuelto todavía se asume candidato: es el rol para el que esta
+    // pantalla es la pestaña «Vacantes» de la barra canónica.
+    return tipo != 'empresa' && tipo != 'headhunter';
+  }
+
+  /// Cuánto hace que se publicó, a partir del `created_at` real. Sin fecha,
+  /// cadena vacía: la tarjeta simplemente no muestra la línea.
+  String _publicada(String? iso) {
+    if (iso == null || iso.isEmpty) return '';
+    final fecha = DateTime.tryParse(iso);
+    if (fecha == null) return '';
+    final d = DateTime.now().toUtc().difference(fecha.toUtc());
+    if (d.inMinutes < 60) return 'Hace ${d.inMinutes.clamp(1, 59)} min';
+    if (d.inHours < 24) return 'Hace ${d.inHours} h';
+    if (d.inDays == 1) return 'Ayer';
+    if (d.inDays < 30) return 'Hace ${d.inDays} días';
+    final meses = (d.inDays / 30).floor();
+    return 'Hace $meses ${meses == 1 ? 'mes' : 'meses'}';
+  }
+
+  bool _esNueva(String? iso) {
+    if (iso == null || iso.isEmpty) return false;
+    final fecha = DateTime.tryParse(iso);
+    if (fecha == null) return false;
+    return DateTime.now().toUtc().difference(fecha.toUtc()).inHours < 48;
+  }
+
+  /// Traduce una fila real de `jobs` a lo que la tarjeta necesita. Ningún campo
+  /// se completa con un valor de ejemplo: lo que no está, viaja vacío.
+  CandVacanteVista _vista(Map<String, dynamic> job) {
+    final id = job['id']?.toString() ?? '';
+    final empresa = ((job['users'] as Map?)?['name']?.toString() ??
+            job['company']?.toString() ??
+            '')
+        .trim();
+    final logo = (job['users'] as Map?)?['avatar_url']?.toString();
+    final tagsRaw = job['tags'];
+    final match = _matchScores[id];
+    final creado = job['created_at']?.toString();
+
+    return CandVacanteVista(
+      id: id,
+      puesto: job['title']?.toString().trim() ?? 'Sin título',
+      empresa: empresa.isEmpty ? 'Empresa' : empresa,
+      logoEmpresa: (logo != null && logo.isNotEmpty) ? logo : null,
+      ubicacion: job['location']?.toString().trim() ?? '',
+      modalidad: _modalityLabels[job['modality']?.toString()] ?? '',
+      salario: (job['salary_range']?.toString() ??
+              job['salary']?.toString() ??
+              '')
+          .trim(),
+      match: (match != null && match > 0) ? match : null,
+      etiquetas: tagsRaw is List
+          ? tagsRaw
+              .map((t) => t.toString().trim())
+              .where((t) => t.isNotEmpty)
+              .toList()
+          : const [],
+      publicada: _publicada(creado),
+      nueva: _esNueva(creado),
+      descripcion: job['description']?.toString().trim() ?? '',
+    );
+  }
+
+  void _abrirDetalle(Map<String, dynamic> job) {
+    final jobId = job['id']?.toString() ?? '';
+    final score = _matchScores[jobId];
+    Navigator.of(context).push(
+      CupertinoPageRoute(
+        builder: (_) => JobDetailScreen(
+          job: job,
+          matchScore: (score != null && score > 0) ? score : null,
+          isApplied: _appliedJobIds.contains(jobId),
+          onApply: () => _applyToJob(jobId, job['title']?.toString() ?? 'Vacante'),
+        ),
+      ),
+    );
+  }
+
+  /// Chips de la fila superior. Cada uno mueve un filtro real que ya existía.
+  List<Widget> _chipsFiltro() {
+    Widget chip(String texto, bool activo, VoidCallback onTap) =>
+        CandChip(texto, activo: activo, onTap: onTap);
+
+    return [
+      chip('Para vos', _selectedFilter == 'Para Ti', () {
+        setState(() => _selectedFilter = 'Para Ti');
+        if (widget.previewData == null) _fetchJobs();
+      }),
+      chip('Remoto', _modalityFilter == 'remote', () {
+        setState(() => _modalityFilter =
+            _modalityFilter == 'remote' ? null : 'remote');
+      }),
+      chip('Híbrido', _modalityFilter == 'hybrid', () {
+        setState(() => _modalityFilter =
+            _modalityFilter == 'hybrid' ? null : 'hybrid');
+      }),
+      chip('Con salario', _onlySalary, () {
+        setState(() => _onlySalary = !_onlySalary);
+      }),
+      chip('Senior', _seniorityFilter == 'senior', () {
+        setState(() => _seniorityFilter =
+            _seniorityFilter == 'senior' ? null : 'senior');
+      }),
+    ];
+  }
+
+  /// Grupos del panel persistente de desktop, con conteos reales sobre las
+  /// vacantes cargadas.
+  List<CandGrupoFiltro> _gruposFiltro() {
+    int contar(bool Function(Map<String, dynamic>) test) =>
+        _jobs.where(test).length;
+
+    final modalidades = _modalityLabels.entries
+        .map(
+          (e) => CandOpcionFiltro(
+            etiqueta: e.value,
+            cantidad: contar((j) => j['modality']?.toString() == e.key),
+            activo: _modalityFilter == e.key,
+            onTap: () => setState(
+              () => _modalityFilter = _modalityFilter == e.key ? null : e.key,
+            ),
+          ),
+        )
+        .where((o) => o.cantidad > 0 || o.activo)
+        .toList();
+
+    final seniorities = _seniorityLabels.entries
+        .map(
+          (e) => CandOpcionFiltro(
+            etiqueta: e.value,
+            cantidad: contar((j) => j['seniority']?.toString() == e.key),
+            activo: _seniorityFilter == e.key,
+            onTap: () => setState(
+              () => _seniorityFilter = _seniorityFilter == e.key ? null : e.key,
+            ),
+          ),
+        )
+        .where((o) => o.cantidad > 0 || o.activo)
+        .toList();
+
+    final skills = _availableSkills
+        .take(6)
+        .map(
+          (s) => CandOpcionFiltro(
+            etiqueta: s,
+            cantidad: contar(
+              (j) => ((j['tags'] as List?) ?? [])
+                  .map((t) => t.toString().toLowerCase())
+                  .contains(s),
+            ),
+            activo: _skillsFilter.contains(s),
+            onTap: () => setState(
+              () => _skillsFilter.contains(s)
+                  ? _skillsFilter.remove(s)
+                  : _skillsFilter.add(s),
+            ),
+          ),
+        )
+        .toList();
+
+    return [
+      CandGrupoFiltro(titulo: 'Modalidad', opciones: modalidades),
+      CandGrupoFiltro(titulo: 'Experiencia', opciones: seniorities),
+      CandGrupoFiltro(titulo: 'Skills', opciones: skills),
+    ];
+  }
+
+  bool get _hayFiltrosActivos =>
+      _skillsFilter.isNotEmpty ||
+      _companyFilter.isNotEmpty ||
+      _onlySalary ||
+      _locationFilter != null ||
+      _modalityFilter != null ||
+      _seniorityFilter != null ||
+      _titleSearch.isNotEmpty;
+
+  void _limpiarFiltros() {
+    setState(() {
+      _skillsFilter.clear();
+      _companyFilter = '';
+      _onlySalary = false;
+      _locationFilter = null;
+      _modalityFilter = null;
+      _seniorityFilter = null;
+      _titleSearch = '';
+      _searchController.clear();
+    });
+  }
+
+  void _abrirCerca() => Navigator.of(context).push(
+        CupertinoPageRoute(
+          builder: (_) => const ExploreScreen(filtroInicial: 'empresa'),
+        ),
+      );
+
+  void _abrirGuardados() => Navigator.of(context).push(
+        CupertinoPageRoute(builder: (_) => const SavedJobsScreen()),
+      );
+
+  Widget _tarjeta(Map<String, dynamic> job, {bool ancha = false}) {
+    final vista = _vista(job);
+    return CandTarjetaVacante(
+      vacante: vista,
+      ancha: ancha,
+      guardada: _savedJobIds.contains(vista.id),
+      postulada: _appliedJobIds.contains(vista.id),
+      seleccionada: _selectedJobId == vista.id,
+      onTap: () {
+        if (candFormatoDe(context) == CandFormato.desktop) {
+          setState(() => _selectedJobId = vista.id);
+        } else {
+          _abrirDetalle(job);
+        }
+      },
+      onGuardar: () => _toggleSaved(vista.id),
+      onPostularme: () => _applyToJob(vista.id, vista.puesto),
+    );
+  }
+
+  /// Cuántas empresas distintas están contratando en el listado cargado.
+  String _detalleCerca() {
+    final empresas = <String>{};
+    for (final j in _jobs) {
+      final nombre = ((j['users'] as Map?)?['name']?.toString() ??
+              j['company']?.toString() ??
+              '')
+          .trim();
+      if (nombre.isNotEmpty) empresas.add(nombre);
+    }
+    if (empresas.isEmpty) return 'Explorá el mapa de empresas';
+    return '${empresas.length} '
+        '${empresas.length == 1 ? 'empresa contratando' : 'empresas contratando'}';
+  }
+
+  Widget _buildCandidato(BuildContext context) {
+    final formato = candFormatoDe(context);
+    return CupertinoPageScaffold(
+      backgroundColor: MpTokens.lightBg,
+      child: _isLoading
+          ? _cargandoCandidato(formato)
+          : switch (formato) {
+              CandFormato.desktop => _candidatoDesktop(),
+              CandFormato.tablet => _candidatoAncho(padding: 24),
+              CandFormato.mobile => _candidatoAncho(padding: 20),
+            },
+    );
+  }
+
+  Widget _cargandoCandidato(CandFormato formato) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (!formato.esDesktop) SizedBox(height: candTopInset(context)),
+        const CandEncabezado(titulo: 'Vacantes', subtitulo: 'Buscando…'),
+        const Expanded(child: CandCargandoLista(cantidad: 3)),
+      ],
+    );
+  }
+
+  /// Mobile y tablet comparten la columna; cambian el padding y la grilla.
+  Widget _candidatoAncho({required double padding}) {
+    final visible = _visibleJobs;
+    final esTablet = padding == 24;
+
+    return ListView(
+      padding: EdgeInsets.zero,
+      children: [
+        SizedBox(height: candTopInset(context)),
+        CandEncabezado(
+          titulo: 'Vacantes',
+          subtitulo: _subtitulo(visible.length),
+          padding: EdgeInsets.fromLTRB(padding, 12, padding, 12),
+          acciones: [
+            CandAccion(
+              icono: CupertinoIcons.map_pin_ellipse,
+              onTap: _abrirCerca,
+            ),
+            CandAccion(
+              icono: CupertinoIcons.bookmark_fill,
+              onTap: _abrirGuardados,
+            ),
+            CandAccion(icono: CupertinoIcons.refresh, onTap: _fetchJobs),
+          ],
+        ),
+        Padding(
+          padding: EdgeInsets.fromLTRB(padding, 0, padding, 12),
+          child: CandBuscador(
+            controller: _searchController,
+            placeholder: 'Buscar puesto, empresa o skill',
+            onChanged: (v) => setState(() => _titleSearch = v),
+          ),
+        ),
+        CandFilaChips(padding: padding, children: _chipsFiltro()),
+        CandBannerCerca(
+          padding: padding,
+          detalle: _detalleCerca(),
+          onTap: _abrirCerca,
+        ),
+        const SizedBox(height: 4),
+        if (visible.isEmpty)
+          _vacioCandidato()
+        else if (esTablet)
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: padding),
+            child: Column(
+              children: [
+                for (var i = 0; i < visible.length; i += 2)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 14),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(child: _tarjeta(visible[i])),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: i + 1 < visible.length
+                              ? _tarjeta(visible[i + 1])
+                              : const SizedBox.shrink(),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          )
+        else
+          for (final job in visible)
+            Padding(
+              padding: EdgeInsets.fromLTRB(padding, 0, padding, 12),
+              child: _tarjeta(job),
+            ),
+        const SizedBox(height: 12),
+      ],
+    );
+  }
+
+  Widget _candidatoDesktop() {
+    final visible = _visibleJobs;
+    final seleccionada = visible.firstWhere(
+      (j) => j['id']?.toString() == _selectedJobId,
+      orElse: () =>
+          visible.isEmpty ? <String, dynamic>{} : visible.first,
+    );
+    final hayDetalle = seleccionada.isNotEmpty;
+
+    return Row(
+      children: [
+        CandPanelFiltros(
+          grupos: _gruposFiltro(),
+          onLimpiar: _hayFiltrosActivos ? _limpiarFiltros : null,
+        ),
+        Expanded(
+          flex: 5,
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(24, 26, 12, 24),
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: CandTituloDesktop(
+                      'Vacantes',
+                      subtitulo: _subtitulo(visible.length),
+                    ),
+                  ),
+                  CandBoton(
+                    'Empresas cerca tuyo',
+                    icono: CupertinoIcons.map_pin_ellipse,
+                    secundario: true,
+                    onTap: _abrirCerca,
+                  ),
+                  const SizedBox(width: 10),
+                  CandBoton(
+                    'Guardados',
+                    icono: CupertinoIcons.bookmark_fill,
+                    secundario: true,
+                    onTap: _abrirGuardados,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              CandBuscador(
+                controller: _searchController,
+                placeholder: 'Buscar puesto, empresa o skill',
+                onChanged: (v) => setState(() => _titleSearch = v),
+              ),
+              const SizedBox(height: 16),
+              if (visible.isEmpty)
+                _vacioCandidato()
+              else
+                for (final job in visible)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: _tarjeta(job, ancha: true),
+                  ),
+            ],
+          ),
+        ),
+        CandDetalleVacante(
+          vacante: hayDetalle ? _vista(seleccionada) : null,
+          guardada: hayDetalle &&
+              _savedJobIds.contains(seleccionada['id']?.toString()),
+          postulada: hayDetalle &&
+              _appliedJobIds.contains(seleccionada['id']?.toString()),
+          onPostularme: hayDetalle
+              ? () => _applyToJob(
+                    seleccionada['id']?.toString() ?? '',
+                    seleccionada['title']?.toString() ?? 'Vacante',
+                  )
+              : null,
+          onGuardar: hayDetalle
+              ? () => _toggleSaved(seleccionada['id']?.toString() ?? '')
+              : null,
+          onAbrir: hayDetalle ? () => _abrirDetalle(seleccionada) : null,
+        ),
+      ],
+    );
+  }
+
+  String _subtitulo(int cantidad) {
+    if (cantidad == 0) return 'Sin resultados con estos filtros';
+    return '$cantidad ${cantidad == 1 ? 'oportunidad' : 'oportunidades'} '
+        'para vos';
+  }
+
+  Widget _vacioCandidato() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 20),
+      child: CandVacio(
+        icono: CupertinoIcons.briefcase,
+        titulo: _hayFiltrosActivos
+            ? 'Ninguna vacante coincide'
+            : 'Todavía no hay vacantes',
+        detalle: _hayFiltrosActivos
+            ? 'Probá quitando algún filtro para ver más oportunidades.'
+            : 'Cuando las empresas publiquen, las vas a ver acá.',
+        accion: _hayFiltrosActivos ? 'Limpiar filtros' : 'Actualizar',
+        onAccion: _hayFiltrosActivos ? _limpiarFiltros : _fetchJobs,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (_esCandidato) return _buildCandidato(context);
+
     return CupertinoPageScaffold(
       navigationBar: CupertinoNavigationBar(
         backgroundColor: context.bgColor.withValues(alpha: 0.8),

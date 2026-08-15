@@ -30,12 +30,16 @@ class NotificationService {
 
   /// Stream de notificaciones del usuario actual, ordenadas por fecha.
   Stream<List<Map<String, dynamic>>> get notificationsStream {
-    if (_uid == null) return const Stream.empty();
+    // Todo el cuerpo va dentro del try: `_uid` ya evalúa `Supabase.instance`,
+    // que lanza una excepción síncrona si Supabase no se inicializó — antes
+    // ese chequeo vivía FUERA del try y rompía el getter entero.
     try {
+      final uid = _uid;
+      if (uid == null) return const Stream.empty();
       return _db
           .from('notifications')
           .stream(primaryKey: ['id'])
-          .eq('user_id', _uid!)
+          .eq('user_id', uid)
           .order('created_at', ascending: false)
           .limit(60)
           .handleError((e) {

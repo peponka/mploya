@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:ui' show PointerDeviceKind;
 
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart' show Colors;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -10,19 +9,50 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/models.dart';
 import '../providers/feed_provider.dart';
+import '../providers/user_provider.dart';
 import '../services/coach_mark_service.dart';
 import '../services/feed_service.dart';
 import '../services/notification_service.dart';
 import '../services/video_preload_manager.dart';
+import '../theme/mploya_tokens.dart';
+import '../widgets/candidato/cand_inicio.dart';
+import '../widgets/candidato/cand_red.dart' show CandPersonaVista;
+import '../widgets/candidato/cand_ui.dart';
+import '../widgets/candidato/cand_vacantes.dart' show CandVacanteVista;
 import '../widgets/feature_hint.dart';
 import '../widgets/mploya_toast.dart';
 import '../widgets/onboarding_tour.dart';
 import '../widgets/premium_feed_reel_card.dart';
 import 'jobs_screen.dart';
 import 'notifications_screen.dart';
+import 'profile_screen.dart';
+
+/// Datos ya resueltos para el render aislado. Mismo patrón que
+/// `JobsPreviewData`: si llega, la pantalla NO consulta Supabase ni abre video.
+@immutable
+class HomeFeedPreviewData {
+  const HomeFeedPreviewData({
+    this.feed = const [],
+    this.vacantes = const [],
+    this.usuario,
+  });
+
+  /// Filas del feed con la forma que devuelve `FeedService`.
+  final List<Map<String, dynamic>> feed;
+
+  /// Filas de `jobs` para la columna lateral.
+  final List<Map<String, dynamic>> vacantes;
+
+  /// Fila de `users` del propio candidato.
+  final Map<String, dynamic>? usuario;
+}
 
 class HomeFeedScreen extends ConsumerStatefulWidget {
-  const HomeFeedScreen({super.key});
+  /// Sólo lo usan los tests y el generador de capturas. En producción es
+  /// `null` y el camino de datos es el real.
+  final HomeFeedPreviewData? previewData;
+
+  const HomeFeedScreen({super.key, this.previewData});
 
   @override
   ConsumerState<HomeFeedScreen> createState() => _HomeFeedScreenState();
@@ -91,9 +121,20 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
     'diseno': ['disen', 'design', 'ux', 'ui', 'product designer', 'creativ'],
   };
 
+  /// Vacantes de la columna lateral. Son filas reales de `jobs`; si la consulta
+  /// falla o no trae nada, el bloque no se dibuja.
+  List<Map<String, dynamic>> _vacantesPanel = const [];
+
   @override
   void initState() {
     super.initState();
+    final preview = widget.previewData;
+    if (preview != null) {
+      // Render aislado: datos ya resueltos, sin tour, sin streams y sin video.
+      _vacantesPanel = preview.vacantes;
+      return;
+    }
+    _cargarVacantesPanel();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
       VideoPreloadManager.instance.pauseAll();
@@ -134,6 +175,21 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
     _likesSub?.cancel();
     VideoPreloadManager.instance.pauseAll();
     super.dispose();
+  }
+
+  /// Últimas vacantes publicadas, para la columna lateral de tablet y desktop.
+  Future<void> _cargarVacantesPanel() async {
+    try {
+      final res = await Supabase.instance.client
+          .from('jobs')
+          .select('*, users!jobs_company_id_fkey(name, avatar_url)')
+          .order('created_at', ascending: false)
+          .limit(3);
+      if (!mounted) return;
+      setState(() => _vacantesPanel = List<Map<String, dynamic>>.from(res));
+    } catch (e) {
+      debugPrint('feed · vacantes del panel: $e');
+    }
   }
 
   String _haystackFor(Map<String, dynamic> row) => [
@@ -211,53 +267,60 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
       }
     });
 
-    final feedState = ref.watch(feedProvider);
+    final preview = widget.previewData;
+    final feedState = preview != null
+        ? FeedState(items: preview.feed, hasMore: false)
+        : ref.watch(feedProvider);
     final items = feedState.items;
     final rows = _filterByCategory(items);
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final webMode = kIsWeb && constraints.maxWidth >= 980;
-        final bottomInset = webMode
-            ? 0.0
-            : MediaQuery.paddingOf(context).bottom + 94;
+    // Los tres formatos de la tanda. El reel domina en mobile; en tablet y
+    // desktop se acota y aparece la columna de contexto.
+    final formato = candFormatoDe(context);
+    final ancho = formato != CandFormato.mobile;
+    final bottomInset =
+        ancho ? 0.0 : MediaQuery.paddingOf(context).bottom + 94;
 
-        return CupertinoPageScaffold(
-          backgroundColor: const Color(0xFF07111F),
-          child: DecoratedBox(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Color(0xFF09111E),
-                  Color(0xFF111B2D),
-                  Color(0xFF050814),
-                ],
-              ),
-            ),
-            child: SafeArea(
+    return CupertinoPageScaffold(
+      backgroundColor: ancho ? MpTokens.lightBg : const Color(0xFF07111F),
+      child: ancho
+          ? SafeArea(
               bottom: false,
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(
-                  webMode ? 24 : 0,
-                  webMode ? 18 : 0,
-                  webMode ? 24 : 0,
-                  0,
+              child: _buildBody(
+                context: context,
+                feedState: feedState,
+                rows: rows,
+                allItems: items,
+                webMode: true,
+                bottomInset: 0,
+                formato: formato,
+              ),
+            )
+          : DecoratedBox(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Color(0xFF09111E),
+                    Color(0xFF111B2D),
+                    Color(0xFF050814),
+                  ],
                 ),
+              ),
+              child: SafeArea(
+                bottom: false,
                 child: _buildBody(
                   context: context,
                   feedState: feedState,
                   rows: rows,
                   allItems: items,
-                  webMode: webMode,
+                  webMode: false,
                   bottomInset: bottomInset,
+                  formato: formato,
                 ),
               ),
             ),
-          ),
-        );
-      },
     );
   }
 
@@ -268,6 +331,7 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
     required List<Map<String, dynamic>> allItems,
     required bool webMode,
     required double bottomInset,
+    required CandFormato formato,
   }) {
     if (feedState.isInitialLoading) {
       return _FeedLoadingState(webMode: webMode);
@@ -302,531 +366,331 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
     }
 
     return webMode
-        ? _buildDesktopFeed(context, feedState, rows)
+        ? _buildAnchoFeed(context, feedState, rows, formato)
         : _buildMobileFeed(context, feedState, rows, bottomInset);
   }
 
-  Widget _buildDesktopFeed(
+  // ───────────────────────────────────────────────────────────────────────────
+  // TABLET Y DESKTOP — composición aprobada de la Tanda 1
+  //
+  // Referencia: design-reference/Candidato_Tanda1_Final/{tablet,desktop}/
+  //             01_inicio.png
+  //
+  // El reel deja de estirarse a todo el ancho y se acota en proporción
+  // vertical, con la columna de contexto al costado. La barra lateral de
+  // navegación la pone el shell, así que acá no se repite.
+  // ───────────────────────────────────────────────────────────────────────────
+
+  /// Perfil propio para la tarjeta de la columna lateral.
+  NexUser? get _miPerfil {
+    final preview = widget.previewData;
+    if (preview != null) {
+      final fila = preview.usuario;
+      return fila == null ? null : NexUser.fromJson(Map.of(fila));
+    }
+    // `valueOrNull` y no `value`: con la sesión en error, `value` relanza.
+    return ref.watch(currentUserProvider).valueOrNull;
+  }
+
+  /// Vacantes reales de la columna lateral.
+  List<CandVacanteVista> get _vacantesVista => _vacantesPanel.map((job) {
+        final empresa = ((job['users'] as Map?)?['name']?.toString() ??
+                job['company']?.toString() ??
+                '')
+            .trim();
+        return CandVacanteVista(
+          id: job['id']?.toString() ?? '',
+          puesto: job['title']?.toString().trim() ?? 'Vacante',
+          empresa: empresa.isEmpty ? 'Empresa' : empresa,
+          logoEmpresa: (job['users'] as Map?)?['avatar_url']?.toString(),
+          modalidad: switch (job['modality']?.toString()) {
+            'remote' => 'Remoto',
+            'hybrid' => 'Híbrido',
+            'onsite' => 'Presencial',
+            _ => '',
+          },
+        );
+      }).toList();
+
+  /// Gente del propio feed: son perfiles reales, los mismos que el reel muestra
+  /// más adelante. No se inventa ninguno.
+  List<CandPersonaVista> _personasVista(
+    List<Map<String, dynamic>> rows,
+    int activeIndex,
+    int cantidad,
+  ) {
+    final otras = <CandPersonaVista>[];
+    for (var i = 0; i < rows.length && otras.length < cantidad; i++) {
+      if (i == activeIndex) continue;
+      final autor = _userToPost(rows[i]).author;
+      if (autor.isCompanyAct) continue;
+      otras.add(
+        CandPersonaVista(
+          id: autor.id,
+          nombre: autor.name,
+          titulo: autor.headline,
+          ciudad: (autor.location ?? '').trim(),
+          avatarUrl: autor.avatarUrl,
+          verificado: autor.isVerified,
+        ),
+      );
+    }
+    return otras;
+  }
+
+  Widget _buildAnchoFeed(
     BuildContext context,
     FeedState feedState,
     List<Map<String, dynamic>> rows,
+    CandFormato formato,
   ) {
+    final esDesktop = formato == CandFormato.desktop;
     final itemCount = rows.length + (feedState.isLoading ? 1 : 0);
     final visibleEntries = _visibleCategoryEntries(feedState.items).toList();
     final activeIndex = _currentPage.clamp(0, rows.length - 1);
-    final activeAuthor = _userToPost(rows[activeIndex]).author;
-    final activeTags = activeAuthor.tags.take(4).toList();
+    final perfil = _miPerfil;
 
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Container(
-          width: 272,
-          padding: const EdgeInsets.fromLTRB(20, 22, 20, 20),
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.06),
-            borderRadius: BorderRadius.circular(28),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'mploya',
-                style: TextStyle(
-                  fontSize: 30,
-                  fontWeight: FontWeight.w900,
-                  color: Color(0xFFFF6A1A),
-                  letterSpacing: -1.2,
-                ),
-              ),
-              const SizedBox(height: 10),
-              const Text(
-                'Feed principal',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w800,
-                  color: Colors.white,
-                ),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Una oportunidad activa por vez, video vertical al centro y contexto real alrededor.',
-                style: TextStyle(
-                  fontSize: 13.5,
-                  color: Color(0xB3FFFFFF),
-                  height: 1.45,
-                ),
-              ),
-              const SizedBox(height: 22),
-              Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                children: visibleEntries
-                    .map(
-                      (entry) => GestureDetector(
-                        onTap: () => setState(() => _selectedCategory = entry.key),
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 180),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 10,
-                          ),
-                          decoration: BoxDecoration(
-                            color: _selectedCategory == entry.key
-                                ? const Color(0xFFFF6A1A)
-                                : Colors.white.withValues(alpha: 0.08),
-                            borderRadius: BorderRadius.circular(999),
-                            border: Border.all(
-                              color: _selectedCategory == entry.key
-                                  ? const Color(0xFFFF8E4D)
-                                  : Colors.white.withValues(alpha: 0.08),
-                            ),
-                          ),
-                          child: Text(
-                            entry.value,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ),
-                    )
-                    .toList(),
-              ),
-              const SizedBox(height: 24),
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.05),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Modo descubrimiento',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFFB7C2D4),
-                        letterSpacing: 0.4,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    _DesktopSignalRow(
-                      icon: CupertinoIcons.play_circle_fill,
-                      label: 'Video activo',
-                      value: '${activeIndex + 1}/${rows.length}',
-                    ),
-                    const SizedBox(height: 10),
-                    _DesktopSignalRow(
-                      icon: CupertinoIcons.sparkles,
-                      label: 'Match IA',
-                      value: '${activeAuthor.matchPercentage.round()}%',
-                    ),
-                    const SizedBox(height: 10),
-                    _DesktopSignalRow(
-                      icon: CupertinoIcons.location_solid,
-                      label: 'Ubicacion',
-                      value: activeAuthor.location?.isNotEmpty == true
-                          ? activeAuthor.location!
-                          : 'Flexible',
-                    ),
-                  ],
-                ),
-              ),
-              const Spacer(),
-              Row(
-                children: [
-                  Expanded(
-                    child: _DesktopArrow(
-                      icon: CupertinoIcons.chevron_up,
-                      onTap: activeIndex > 0
-                          ? () => _pageController.previousPage(
-                                duration: const Duration(milliseconds: 260),
-                                curve: Curves.easeOutCubic,
-                              )
-                          : null,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _DesktopArrow(
-                      icon: CupertinoIcons.chevron_down,
-                      onTap: () => _pageController.nextPage(
-                        duration: const Duration(milliseconds: 260),
-                        curve: Curves.easeOutCubic,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
+    final panel = CandPanelInicio(
+      nombre: perfil?.name ?? '',
+      avatarUrl: perfil?.avatarUrl,
+      detallePerfil: perfil == null
+          ? ''
+          : [
+              perfil.headline.trim(),
+              (perfil.location ?? '').trim(),
+            ].where((p) => p.isNotEmpty).join(' · '),
+      vacantes: _vacantesVista,
+      personas: _personasVista(rows, activeIndex, esDesktop ? 3 : 2),
+      // En desktop el tip vive al pie de la barra lateral del shell: repetirlo
+      // acá lo duplicaba en la misma pantalla.
+      tip: esDesktop
+          ? null
+          : 'Completá tu video pitch: los perfiles con video reciben más '
+              'visitas de empresas.',
+      onPerfil: () => Navigator.of(context).push(
+        CupertinoPageRoute<void>(builder: (_) => const ProfileScreen()),
+      ),
+      onVerVacantes: _openJobs,
+      onVacante: (_) => _openJobs(),
+      onPersona: (p) => Navigator.of(context).push(
+        CupertinoPageRoute<void>(
+          builder: (_) => ProfileScreen(user: _autorPorId(rows, p.id)),
         ),
-        const SizedBox(width: 22),
-        Expanded(
-          child: Row(
-            children: [
-              Expanded(
-                flex: 10,
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.05),
-                    borderRadius: BorderRadius.circular(32),
-                    border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.08),
-                    ),
-                  ),
-                  padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
-                  child: Column(
+      ),
+    );
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        esDesktop ? 28 : 20,
+        esDesktop ? 26 : 20,
+        esDesktop ? 28 : 20,
+        esDesktop ? 26 : 16,
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            flex: 3,
+            child: Column(
+              children: [
+                _barraSuperior(claro: true, cantidad: rows.length),
+                const SizedBox(height: 14),
+                if (visibleEntries.length > 1) ...[
+                  CandFilaChips(
+                    padding: 0,
                     children: [
-                      Row(
-                        children: [
-                          const Text(
-                            'Para vos',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 26,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          const SizedBox(width: 14),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 7,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.08),
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: Text(
-                              '${rows.length} oportunidades',
-                              style: const TextStyle(
-                                color: Color(0xFFD9E2F2),
-                                fontSize: 12.5,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                          const Spacer(),
-                          _TopCircleButton(
-                            key: cmFeedJobsBtnKey,
-                            icon: CupertinoIcons.search,
-                            onTap: _openJobs,
-                          ),
-                          const SizedBox(width: 10),
-                          StreamBuilder<List<Map<String, dynamic>>>(
-                            stream:
-                                NotificationService.instance.notificationsStream,
-                            builder: (context, snap) {
-                              final uid =
-                                  Supabase.instance.client.auth.currentUser?.id;
-                              final unread = (snap.data ?? [])
-                                  .where(
-                                    (n) =>
-                                        n['user_id']?.toString() == uid &&
-                                        n['is_read'] != true,
-                                  )
-                                  .length;
-                              return _TopCircleButton(
-                                key: cmFeedBellBtnKey,
-                                icon: CupertinoIcons.bell,
-                                badgeCount: unread,
-                                onTap: _openNotifications,
-                              );
-                            },
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 18),
-                      Expanded(
-                        child: NotificationListener<OverscrollNotification>(
-                          onNotification: (_) => false,
-                          child: ScrollConfiguration(
-                            behavior: ScrollConfiguration.of(context).copyWith(
-                              dragDevices: {
-                                PointerDeviceKind.touch,
-                                PointerDeviceKind.mouse,
-                                PointerDeviceKind.trackpad,
-                              },
-                            ),
-                            child: PageView.builder(
-                              controller: _pageController,
-                              scrollDirection: Axis.vertical,
-                              physics: const BouncingScrollPhysics(),
-                              onPageChanged: (index) {
-                                setState(() => _currentPage = index);
-                                VideoPreloadManager.instance.onPageChanged(index);
-                                if (feedState.hasMore &&
-                                    !feedState.isLoading &&
-                                    index >= rows.length - 2) {
-                                  ref.read(feedProvider.notifier).loadMore();
-                                }
-                              },
-                              itemCount: itemCount,
-                              itemBuilder: (context, index) {
-                                if (index >= rows.length) {
-                                  return const Center(
-                                    child: CupertinoActivityIndicator(
-                                      radius: 14,
-                                      color: Color(0xFFFF6A1A),
-                                    ),
-                                  );
-                                }
-                                return Padding(
-                                  padding: const EdgeInsets.symmetric(vertical: 6),
-                                  child: PremiumFeedReelCard(
-                                    post: _userToPost(rows[index]),
-                                    webMode: true,
-                                    isFirstCard: index == 0,
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
+                      for (final entry in visibleEntries)
+                        CandChip(
+                          entry.value,
+                          activo: _selectedCategory == entry.key,
+                          onTap: () =>
+                              setState(() => _selectedCategory = entry.key),
                         ),
-                      ),
                     ],
                   ),
-                ),
-              ),
-              const SizedBox(width: 22),
-              Container(
-                width: 344,
-                padding: const EdgeInsets.fromLTRB(20, 22, 20, 22),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(28),
-                  boxShadow: const [
-                    BoxShadow(
-                      color: Color(0x18000000),
-                      blurRadius: 30,
-                      offset: Offset(0, 16),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        const Text(
-                          'Contexto rapido',
-                          style: TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.w800,
-                            color: Color(0xFF0F172A),
-                          ),
-                        ),
-                        const Spacer(),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF4F7FB),
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                          child: Text(
-                            '${activeIndex + 1} de ${rows.length}',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                              color: Color(0xFF475569),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      activeAuthor.isCompanyAct
-                          ? activeAuthor.name
-                          : activeAuthor.headline,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF0F172A),
+                  const SizedBox(height: 14),
+                ],
+                Expanded(
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxWidth: esDesktop ? 470 : 520,
                       ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      activeAuthor.isCompanyAct
-                          ? activeAuthor.headline
-                          : activeAuthor.name,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        color: Color(0xFF64748B),
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 18),
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFF101A30), Color(0xFF1E293B)],
+                      child: ScrollConfiguration(
+                        behavior: ScrollConfiguration.of(context).copyWith(
+                          dragDevices: {
+                            PointerDeviceKind.touch,
+                            PointerDeviceKind.mouse,
+                            PointerDeviceKind.trackpad,
+                          },
                         ),
-                        borderRadius: BorderRadius.circular(22),
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 58,
-                            height: 58,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: Colors.white.withValues(alpha: 0.12),
-                            ),
-                            alignment: Alignment.center,
-                            child: Text(
-                              '${activeAuthor.matchPercentage.round()}%',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 16,
-                                fontWeight: FontWeight.w800,
+                        child: PageView.builder(
+                          controller: _pageController,
+                          scrollDirection: Axis.vertical,
+                          physics: const BouncingScrollPhysics(),
+                          onPageChanged: (index) {
+                            setState(() => _currentPage = index);
+                            VideoPreloadManager.instance.onPageChanged(index);
+                            if (feedState.hasMore &&
+                                !feedState.isLoading &&
+                                index >= rows.length - 2) {
+                              ref.read(feedProvider.notifier).loadMore();
+                            }
+                          },
+                          itemCount: itemCount,
+                          itemBuilder: (context, index) {
+                            if (index >= rows.length) {
+                              return const Center(
+                                child: CupertinoActivityIndicator(
+                                  radius: 14,
+                                  color: MpTokens.primary,
+                                ),
+                              );
+                            }
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 6),
+                              child: PremiumFeedReelCard(
+                                post: _userToPost(rows[index]),
+                                webMode: true,
+                                isFirstCard: index == 0,
+                                esPreview: widget.previewData != null,
                               ),
-                            ),
-                          ),
-                          const SizedBox(width: 14),
-                          const Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Match IA',
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w700,
-                                    color: Color(0xFFCED7E8),
-                                  ),
-                                ),
-                                SizedBox(height: 4),
-                                Text(
-                                  'Desktop suma contexto lateral sin romper la logica TikTok de una oportunidad principal activa.',
-                                  style: TextStyle(
-                                    fontSize: 12.5,
-                                    color: Colors.white,
-                                    height: 1.45,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
+                            );
+                          },
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 18),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        if ((activeAuthor.location ?? '').isNotEmpty)
-                          _DesktopInfoPill(
-                            icon: CupertinoIcons.location_solid,
-                            label: activeAuthor.location!,
-                          ),
-                        if ((activeAuthor.salaryExpectation ?? '').isNotEmpty)
-                          _DesktopInfoPill(
-                            icon: CupertinoIcons.money_dollar_circle,
-                            label: activeAuthor.salaryExpectation!,
-                          ),
-                        _DesktopInfoPill(
-                          icon: CupertinoIcons.sparkles,
-                          label: activeAuthor.isCompanyAct
-                              ? 'Vacante en video'
-                              : 'Talento en video',
-                        ),
-                      ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    SizedBox(
+                      width: 120,
+                      child: _DesktopArrow(
+                        icon: CupertinoIcons.chevron_up,
+                        onTap: activeIndex > 0
+                            ? () => _pageController.previousPage(
+                                  duration: const Duration(milliseconds: 260),
+                                  curve: Curves.easeOutCubic,
+                                )
+                            : null,
+                      ),
                     ),
-                    if (activeAuthor.about?.trim().isNotEmpty == true) ...[
-                      const SizedBox(height: 18),
-                      const Text(
-                        'Resumen',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF94A3B8),
-                          letterSpacing: 0.4,
-                        ),
+                    const SizedBox(width: 12),
+                    Text(
+                      '${activeIndex + 1} de ${rows.length}',
+                      style: const TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                        color: MpTokens.lightTextTertiary,
                       ),
-                      const SizedBox(height: 8),
-                      Text(
-                        activeAuthor.about!.trim(),
-                        maxLines: 6,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          height: 1.55,
-                          color: Color(0xFF334155),
-                        ),
-                      ),
-                    ],
-                    if (activeTags.isNotEmpty) ...[
-                      const SizedBox(height: 18),
-                      const Text(
-                        'Skills y senales',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF94A3B8),
-                          letterSpacing: 0.4,
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: activeTags
-                            .map((tag) => _DesktopTag(label: tag))
-                            .toList(),
-                      ),
-                    ],
-                    const Spacer(),
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF8FAFC),
-                        borderRadius: BorderRadius.circular(22),
-                      ),
-                      child: Column(
-                        children: [
-                          _DesktopSignalRow(
-                            icon: CupertinoIcons.location,
-                            label: 'Distancia',
-                            value: _distanceLabel(activeAuthor),
-                            dark: false,
-                          ),
-                          const SizedBox(height: 10),
-                          _DesktopSignalRow(
-                            icon: CupertinoIcons.clock,
-                            label: 'Tiempo estimado',
-                            value: '${12 + (activeIndex % 4) * 6} min',
-                            dark: false,
-                          ),
-                          const SizedBox(height: 10),
-                          _DesktopSignalRow(
-                            icon: CupertinoIcons.eye,
-                            label: 'Listo para decidir',
-                            value: 'Guardar, compartir o abrir detalle',
-                            dark: false,
-                          ),
-                        ],
+                    ),
+                    const SizedBox(width: 12),
+                    SizedBox(
+                      width: 120,
+                      child: _DesktopArrow(
+                        icon: CupertinoIcons.chevron_down,
+                        onTap: activeIndex < rows.length - 1
+                            ? () => _pageController.nextPage(
+                                  duration: const Duration(milliseconds: 260),
+                                  curve: Curves.easeOutCubic,
+                                )
+                            : null,
                       ),
                     ),
                   ],
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
+          SizedBox(width: esDesktop ? 24 : 16),
+          if (esDesktop)
+            SizedBox(width: 360, child: panel)
+          else
+            Expanded(flex: 2, child: panel),
+        ],
+      ),
+    );
+  }
+
+  /// Devuelve el autor real de una fila del feed por id, para abrir su perfil.
+  NexUser? _autorPorId(List<Map<String, dynamic>> rows, String id) {
+    for (final row in rows) {
+      final autor = _userToPost(row).author;
+      if (autor.id == id) return autor;
+    }
+    return null;
+  }
+
+  /// Barra superior de la pantalla: logotipo, acceso a Vacantes y campana.
+  ///
+  /// `claro` la pinta para la superficie clara de tablet y desktop; en mobile
+  /// va sobre el video, que es oscuro por diseño.
+  Widget _barraSuperior({required bool claro, required int cantidad}) {
+    return Row(
+      children: [
+        CandLogotipo(claro: !claro),
+        const SizedBox(width: 14),
+        if (cantidad > 0)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+            decoration: BoxDecoration(
+              color: claro
+                  ? MpTokens.lightFill
+                  : Colors.white.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Text(
+              '$cantidad ${cantidad == 1 ? 'oportunidad' : 'oportunidades'}',
+              style: TextStyle(
+                color: claro ? MpTokens.lightTextSecondary : Colors.white,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        const Spacer(),
+        _TopCircleButton(
+          key: cmFeedJobsBtnKey,
+          icon: CupertinoIcons.briefcase,
+          onTap: _openJobs,
+          claro: claro,
         ),
+        const SizedBox(width: 10),
+        _campana(claro: claro),
       ],
+    );
+  }
+
+  /// Campana con el contador real de notificaciones sin leer.
+  Widget _campana({required bool claro}) {
+    if (widget.previewData != null) {
+      return _TopCircleButton(
+        key: cmFeedBellBtnKey,
+        icon: CupertinoIcons.bell,
+        onTap: _openNotifications,
+        claro: claro,
+      );
+    }
+    return StreamBuilder<List<Map<String, dynamic>>>(
+      stream: NotificationService.instance.notificationsStream,
+      builder: (context, snap) {
+        final uid = Supabase.instance.client.auth.currentUser?.id;
+        final unread = (snap.data ?? [])
+            .where(
+              (n) => n['user_id']?.toString() == uid && n['is_read'] != true,
+            )
+            .length;
+        return _TopCircleButton(
+          key: cmFeedBellBtnKey,
+          icon: CupertinoIcons.bell,
+          badgeCount: unread,
+          onTap: _openNotifications,
+          claro: claro,
+        );
+      },
     );
   }
 
@@ -897,19 +761,23 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
                       return const Center(
                         child: CupertinoActivityIndicator(
                           radius: 14,
-                          color: Color(0xFFFF6A1A),
+                          color: MpTokens.primary,
                         ),
                       );
                     }
-                    final card = Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-                      child: PremiumFeedReelCard(
-                        post: _userToPost(rows[index]),
-                        webMode: false,
-                        isFirstCard: index == 0,
-                      ),
+                    // Sin margen ni padding: el reel es la superficie
+                    // principal de la pantalla, no una tarjeta flotando
+                    // dentro de otra — así lo muestra la composición
+                    // aprobada.
+                    final card = PremiumFeedReelCard(
+                      post: _userToPost(rows[index]),
+                      webMode: false,
+                      isFirstCard: index == 0,
+                      esPreview: widget.previewData != null,
                     );
-                    if (index == 0) {
+                    // El hint de onboarding lee preferencias del dispositivo;
+                    // en render aislado no hay plugin, así que no se monta.
+                    if (index == 0 && widget.previewData == null) {
                       return FeatureHints.doubleTapInterest(child: card);
                     }
                     return card;
@@ -938,45 +806,7 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
             ),
             child: Column(
               children: [
-                Row(
-                  children: [
-                    const Text(
-                      'mploya',
-                      style: TextStyle(
-                        fontSize: 32,
-                        fontWeight: FontWeight.w900,
-                        color: Color(0xFFFF6A1A),
-                        letterSpacing: -1.3,
-                      ),
-                    ),
-                    const Spacer(),
-                    _TopCircleButton(
-                      key: cmFeedJobsBtnKey,
-                      icon: CupertinoIcons.search,
-                      onTap: _openJobs,
-                    ),
-                    const SizedBox(width: 10),
-                    StreamBuilder<List<Map<String, dynamic>>>(
-                      stream: NotificationService.instance.notificationsStream,
-                      builder: (context, snap) {
-                        final uid = Supabase.instance.client.auth.currentUser?.id;
-                        final unread = (snap.data ?? [])
-                            .where(
-                              (n) =>
-                                  n['user_id']?.toString() == uid &&
-                                  n['is_read'] != true,
-                            )
-                            .length;
-                        return _TopCircleButton(
-                          key: cmFeedBellBtnKey,
-                          icon: CupertinoIcons.bell,
-                          badgeCount: unread,
-                          onTap: _openNotifications,
-                        );
-                      },
-                    ),
-                  ],
-                ),
+                _barraSuperior(claro: false, cantidad: 0),
                 const SizedBox(height: 14),
                 SizedBox(
                   height: 44,
@@ -997,12 +827,12 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
                           ),
                           decoration: BoxDecoration(
                             color: selected
-                                ? const Color(0xFFFF6A1A)
+                                ? MpTokens.primary
                                 : Colors.white.withValues(alpha: 0.08),
                             borderRadius: BorderRadius.circular(999),
                             border: Border.all(
                               color: selected
-                                  ? const Color(0xFFFF9A63)
+                                  ? MpTokens.primaryLight
                                   : Colors.white.withValues(alpha: 0.08),
                             ),
                           ),
@@ -1030,7 +860,7 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
             child: Center(
               child: CupertinoActivityIndicator(
                 radius: 12,
-                color: Color(0xFFFF6A1A),
+                color: MpTokens.primary,
               ),
             ),
           ),
@@ -1038,11 +868,6 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
     );
   }
 
-  String _distanceLabel(NexUser user) {
-    if (user.latitude == null || user.longitude == null) return 'Compatible';
-    final seed = (user.latitude!.abs() + user.longitude!.abs()) % 4.8;
-    return '${(0.8 + seed).toStringAsFixed(1)} km';
-  }
 }
 
 class _TopCircleButton extends StatelessWidget {
@@ -1050,15 +875,21 @@ class _TopCircleButton extends StatelessWidget {
   final VoidCallback onTap;
   final int badgeCount;
 
+  /// `true` sobre la superficie clara de tablet y desktop; `false` sobre el
+  /// video de mobile, que es oscuro por diseño.
+  final bool claro;
+
   const _TopCircleButton({
     super.key,
     required this.icon,
     required this.onTap,
     this.badgeCount = 0,
+    this.claro = false,
   });
 
   @override
   Widget build(BuildContext context) {
+    final frente = claro ? MpTokens.lightText : Colors.white;
     return GestureDetector(
       onTap: onTap,
       child: Stack(
@@ -1068,11 +899,17 @@ class _TopCircleButton extends StatelessWidget {
             width: 42,
             height: 42,
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.08),
+              color: claro
+                  ? MpTokens.lightFill
+                  : Colors.white.withValues(alpha: 0.08),
               shape: BoxShape.circle,
-              border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+              border: Border.all(
+                color: claro
+                    ? MpTokens.lightBorder
+                    : Colors.white.withValues(alpha: 0.08),
+              ),
             ),
-            child: Icon(icon, color: Colors.white, size: 20),
+            child: Icon(icon, color: frente, size: 20),
           ),
           if (badgeCount > 0)
             Positioned(
@@ -1082,7 +919,7 @@ class _TopCircleButton extends StatelessWidget {
                 width: 18,
                 height: 18,
                 decoration: const BoxDecoration(
-                  color: Color(0xFFFF6A1A),
+                  color: MpTokens.danger,
                   shape: BoxShape.circle,
                 ),
                 alignment: Alignment.center,
@@ -1102,114 +939,6 @@ class _TopCircleButton extends StatelessWidget {
   }
 }
 
-class _DesktopSignalRow extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String value;
-  final bool dark;
-
-  const _DesktopSignalRow({
-    required this.icon,
-    required this.label,
-    required this.value,
-    this.dark = true,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final primary = dark ? Colors.white : const Color(0xFF0F172A);
-    final secondary = dark ? const Color(0xFFB7C2D4) : const Color(0xFF64748B);
-
-    return Row(
-      children: [
-        Icon(icon, size: 17, color: secondary),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 13,
-              color: secondary,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-        const SizedBox(width: 10),
-        Flexible(
-          child: Text(
-            value,
-            textAlign: TextAlign.right,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 13,
-              color: primary,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _DesktopInfoPill extends StatelessWidget {
-  final IconData icon;
-  final String label;
-
-  const _DesktopInfoPill({required this.icon, required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 15, color: const Color(0xFF475569)),
-          const SizedBox(width: 8),
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 12.5,
-              color: Color(0xFF334155),
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _DesktopTag extends StatelessWidget {
-  final String label;
-
-  const _DesktopTag({required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF4F1FF),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        label.startsWith('#') ? label : '#$label',
-        style: const TextStyle(
-          fontSize: 12,
-          color: Color(0xFF5A36D8),
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-    );
-  }
-}
-
 class _DesktopArrow extends StatelessWidget {
   final IconData icon;
   final VoidCallback? onTap;
@@ -1218,24 +947,22 @@ class _DesktopArrow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Las flechas viven sobre la superficie clara de tablet y desktop, no sobre
+    // el video: con los blancos translúcidos de antes quedaban invisibles.
     final enabled = onTap != null;
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        height: 52,
+        height: 44,
         decoration: BoxDecoration(
-          color: enabled
-              ? Colors.white.withValues(alpha: 0.08)
-              : Colors.white.withValues(alpha: 0.04),
+          color: MpTokens.lightFill,
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: Colors.white.withValues(alpha: enabled ? 0.12 : 0.06),
-          ),
+          border: Border.all(color: MpTokens.lightBorderStrong),
         ),
         alignment: Alignment.center,
         child: Icon(
           icon,
-          color: enabled ? Colors.white : const Color(0xFF6B778C),
+          color: enabled ? MpTokens.lightText : MpTokens.lightTextTertiary,
           size: 20,
         ),
       ),
@@ -1262,7 +989,7 @@ class _FeedLoadingState extends StatelessWidget {
         child: const Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            CupertinoActivityIndicator(radius: 14, color: Color(0xFFFF6A1A)),
+            CupertinoActivityIndicator(radius: 14, color: MpTokens.primary),
             SizedBox(height: 18),
             Text(
               'Preparando el feed en video...',
@@ -1351,7 +1078,7 @@ class _FeedEmptyState extends StatelessWidget {
             ),
             const SizedBox(height: 22),
             CupertinoButton(
-              color: const Color(0xFFFF6A1A),
+              color: MpTokens.primary,
               borderRadius: BorderRadius.circular(18),
               onPressed: onPrimaryTap,
               child: Text(

@@ -10,13 +10,15 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:video_player/video_player.dart';
 import '../theme/app_theme.dart';
+import '../theme/mploya_tokens.dart';
 import '../models/models.dart';
+import '../widgets/candidato/cand_mensajes.dart';
+import '../widgets/candidato/cand_ui.dart';
 import '../widgets/nex_avatar.dart';
 import '../widgets/mploya_toast.dart';
 import '../services/chat_service.dart';
 import '../services/content_moderation_service.dart';
 import '../utils/time_utils.dart';
-import '../widgets/web_ui.dart';
 import 'agora_call_screen.dart';
 import 'profile_screen.dart';
 import 'scheduling_screen.dart';
@@ -358,470 +360,262 @@ class _MessagingScreenState extends State<MessagingScreen> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final wide = MediaQuery.of(context).size.width > 900;
+  // ───────────────────────────────────────────────────────────────────────────
+  // MENSAJES — composición aprobada de la Tanda 1
+  //
+  // Referencia: design-reference/Candidato_Tanda1_Final/*/04_mensajes.png
+  //
+  // Reemplaza a la bandeja anterior, que además del lenguaje visual viejo tenía
+  // un `Row` de tres chips que pedía ~502 px y desbordaba 112 px en mobile y
+  // 103 px en el panel de desktop. Ahora el selector es una fila desplazable.
+  //
+  // La conversación en sí la sigue dibujando `ChatDetailScreen`: envío,
+  // adjuntos, videollamada y agenda no se tocaron.
+  // ───────────────────────────────────────────────────────────────────────────
 
-    if (!wide) {
-      return CupertinoPageScaffold(
-        backgroundColor: context.isDark ? NexTheme.darkBg : const Color(0xFFF9F9FA),
-        child: _buildListPane(
-          context,
-          selectedUser: _selectedUser,
-          onTapUser: (u) {
-            setState(() => _selectedUser = u);
-            Navigator.of(context).push(
-              CupertinoPageRoute(builder: (_) => ChatDetailScreen(otherUser: u)),
-            );
-          },
-        ),
-      );
-    }
-
-    final loading = _connectionsData == null || _usersData == null;
-
-    if (loading) {
-      return const CupertinoPageScaffold(
-        backgroundColor: Color(0xFFF1F1F4),
-        child: Center(child: CupertinoActivityIndicator()),
-      );
-    }
-
-    // Sin conversaciones no se preselecciona a nadie: antes caía en
-    // `_demoUsers.first` y el panel de la derecha abría un chat inventado.
-    final selected = _selectedUser;
-
-    return CupertinoPageScaffold(
-      backgroundColor: const Color(0xFFF1F1F4),
-      child: SafeArea(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Container(
-              width: 400,
-              margin: const EdgeInsets.fromLTRB(16, 16, 0, 16),
-              decoration: BoxDecoration(
-                color: context.cardColor,
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: const Color(0x0F000000), width: 0.5),
-                boxShadow: const [BoxShadow(color: Color(0x0A000000), blurRadius: 18, offset: Offset(0, 6))],
-              ),
-              clipBehavior: Clip.antiAlias,
-              child: _buildListPane(
-                context,
-                selectedUser: selected,
-                onTapUser: (u) => setState(() => _selectedUser = u),
-              ),
-            ),
-            if (selected == null)
-              Expanded(
-                child: Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        width: 84, height: 84,
-                        decoration: BoxDecoration(color: MployaTheme.brandAccent.withValues(alpha: 0.10), borderRadius: BorderRadius.circular(24)),
-                        child: Icon(CupertinoIcons.chat_bubble_2_fill, size: 38, color: MployaTheme.brandAccent.withValues(alpha: 0.6)),
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Elegí una conversación',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: context.textPrimary, letterSpacing: -0.4, fontFamily: '.SF Pro Display'),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Seleccioná un chat de la lista para ver los mensajes.',
-                        style: TextStyle(fontSize: 13, color: context.textTertiary),
-                      ),
-                    ],
-                  ),
-                ),
-              )
-            else ...[
-              Expanded(
-                child: Container(
-                  margin: const EdgeInsets.fromLTRB(16, 16, 0, 16),
-                  decoration: BoxDecoration(
-                    color: context.cardColor,
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: const Color(0x0F000000), width: 0.5),
-                    boxShadow: const [BoxShadow(color: Color(0x0A000000), blurRadius: 18, offset: Offset(0, 6))],
-                  ),
-                  clipBehavior: Clip.antiAlias,
-                  child: ChatDetailScreen(key: ValueKey(selected.id), otherUser: selected),
-                ),
-              ),
-              SizedBox(
-                width: 260,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-                  child: _quickActionsSidebar(context, selected),
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildListPane(BuildContext context, {required void Function(NexUser) onTapUser, NexUser? selectedUser}) {
-    return CustomScrollView(
-        physics: const BouncingScrollPhysics(
-          parent: AlwaysScrollableScrollPhysics(),
-        ),
-        slivers: [
-          // ── Glassmorphic Navigation Bar ──
-          CupertinoSliverNavigationBar(
-            transitionBetweenRoutes: false,
-            backgroundColor: context.isDark
-                ? const Color(0xDD000000)
-                : const Color(0xDDFFFFFF), // Blurred backing
-            border: null, // "No-Line" Rule
-            largeTitle: Text(
-              'Mensajes',
-              style: TextStyle(
-                fontWeight: FontWeight.w900,
-                letterSpacing: -0.8,
-                color: context.textPrimary,
-                fontFamily: '.SF Pro Display',
-              ),
-            ),
-            trailing: CupertinoButton(
-              padding: EdgeInsets.zero,
-              minimumSize: Size.zero,
-              onPressed: () {
-                // Abrir selector de contactos para nuevo mensaje
-                _showNewMessageSheet(context);
-              },
-              child: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: MployaTheme.brandAccent.withValues(alpha: 0.1),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  CupertinoIcons.square_pencil,
-                  color: MployaTheme.brandAccent,
-                  size: 20,
-                ),
-              ),
-            ),
-          ),
-
-          // ── Search Bar (Pill style) ──
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 10, 20, 16),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: context.cardColor,
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: const [
-                    BoxShadow(
-                      color: Color(0x0A000000),
-                      blurRadius: 16,
-                      offset: Offset(0, 4),
-                    )
-                  ],
-                ),
-                child: CupertinoSearchTextField(
-                  placeholder: 'Buscar conexiones, mensajes...',
-                  backgroundColor: const Color(0x00000000), // Transparent
-                  borderRadius: BorderRadius.circular(20),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-                  style: TextStyle(
-                    fontFamily: '.SF Pro Text',
-                    fontSize: 15,
-                    color: context.textPrimary,
-                  ),
-                  prefixIcon: const Padding(
-                    padding: EdgeInsets.only(left: 14, top: 4, right: 0),
-                    child: Icon(CupertinoIcons.search, color: Color(0xFFAEAEB2), size: 20),
-                  ),
-                  onChanged: (value) {
-                    setState(() => _searchQuery = value);
-                  },
-                ),
-              ),
-            ),
-          ),
-
-          // ── Chips de filtro (Todos / Talento Match / No leídos) ──
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 4),
-              child: Row(
-                children: [
-                  _filterChip('todos', 'Todos'),
-                  const SizedBox(width: 8),
-                  _filterChip('match', 'Talento Match'),
-                  const SizedBox(width: 8),
-                  _filterChip('noleidos', 'No leídos'),
-                ],
-              ),
-            ),
-          ),
-
-          // ── Contenido Real (Matches + Inbox) ──
-          _buildRealContentSliver(context, onTapUser: onTapUser, selectedUser: selectedUser),
-        ],
-    );
-  }
-
-  Widget _buildRealContentSliver(BuildContext context, {required void Function(NexUser) onTapUser, NexUser? selectedUser}) {
-    if (_connectionsData == null || _usersData == null) {
-      return SliverToBoxAdapter(
-        child: Padding(
-          padding: const EdgeInsets.only(top: 24),
-          child: _buildInboxSkeleton(),
-        ),
-      );
-    }
-
-    // Extraer IDs con las que conecté
-    final validUserIds = _connectionsData!
+  /// Mis conexiones aceptadas, que son las personas con las que puedo hablar.
+  List<NexUser> get _contactos {
+    if (_connectionsData == null || _usersData == null) return const [];
+    final validos = _connectionsData!
         .where((c) => c['status'] == 'accepted')
-        .map((c) => c['requester_id'] == _currentUserId ? c['addressee_id'] : c['requester_id'])
+        .map(
+          (c) => c['requester_id'] == _currentUserId
+              ? c['addressee_id']
+              : c['requester_id'],
+        )
         .toSet();
-
-    final allUsers = _usersData!
-        .where((r) => validUserIds.contains(r['id']))
+    return _usersData!
+        .where((r) => validos.contains(r['id']))
         .map((r) => NexUser.fromJson(r))
         .toList();
+  }
 
-    // Aplicar filtro de búsqueda
-    final users = _applySearch(allUsers);
+  List<Map<String, dynamic>> _mensajesCon(NexUser u) {
+    final todos = _messagesData ?? const <Map<String, dynamic>>[];
+    return todos
+        .where(
+          (m) =>
+              (m['sender_id'] == _currentUserId && m['receiver_id'] == u.id) ||
+              (m['sender_id'] == u.id && m['receiver_id'] == _currentUserId),
+        )
+        .toList();
+  }
 
-    if (allUsers.isEmpty) {
-      return _buildEmptyInbox(context, onTapUser: onTapUser, selectedUser: selectedUser);
+  int _sinLeerDe(NexUser u) => _mensajesCon(u)
+      .where((m) => m['receiver_id'] == _currentUserId && m['is_read'] != true)
+      .length;
+
+  bool _esEmpresa(NexUser u) =>
+      u.accountType == 'empresa' || u.accountType == 'headhunter';
+
+  /// Conversación lista para dibujar. El último mensaje y la hora salen de
+  /// `messages`; si todavía no hay ninguno se dice, no se inventa un texto.
+  CandConversacionVista _conversacionDe(NexUser u) {
+    final msgs = _mensajesCon(u);
+    final ultimo = msgs.isNotEmpty ? msgs.first : null;
+    return CandConversacionVista(
+      id: u.id,
+      nombre: u.name,
+      avatarUrl: u.avatarUrl,
+      ultimo: ultimo != null
+          ? (ultimo['content']?.toString() ?? ultimo['text']?.toString() ?? '')
+          : 'Todavía no se escribieron.',
+      hora: ultimo != null ? timeAgo(ultimo['created_at']) : '',
+      sinLeer: _sinLeerDe(u),
+    );
+  }
+
+  /// Contactos visibles según el buscador y el filtro elegido.
+  List<NexUser> get _conversacionesVisibles {
+    final base = _applySearch(_contactos);
+    return base.where((u) {
+      switch (_convFilter) {
+        case 'noleidos':
+          return _sinLeerDe(u) > 0;
+        case 'empresas':
+          return _esEmpresa(u);
+        default:
+          return true;
+      }
+    }).toList();
+  }
+
+  List<Widget> _chipsFiltro() {
+    final total = _contactos.length;
+    final sinLeer = _contactos.where((u) => _sinLeerDe(u) > 0).length;
+    final empresas = _contactos.where(_esEmpresa).length;
+
+    Widget chip(String texto, String valor) => CandChip(
+          texto,
+          compacto: true,
+          activo: _convFilter == valor,
+          onTap: () => setState(() => _convFilter = valor),
+        );
+
+    return [
+      chip('Todos · $total', 'todos'),
+      chip('Sin leer · $sinLeer', 'noleidos'),
+      chip('Empresas · $empresas', 'empresas'),
+    ];
+  }
+
+  void _abrirConversacion(NexUser u) {
+    setState(() => _selectedUser = u);
+    if (candFormatoDe(context) == CandFormato.mobile) {
+      Navigator.of(context).push(
+        CupertinoPageRoute(builder: (_) => ChatDetailScreen(otherUser: u)),
+      );
     }
+  }
 
-    if (users.isEmpty && _searchQuery.isNotEmpty) {
-      return SliverToBoxAdapter(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 60, horizontal: 40),
-          child: Column(
-            children: [
-              Icon(CupertinoIcons.search, size: 48, color: const Color(0xFFAEAEB2).withValues(alpha: 0.5)),
-              const SizedBox(height: 16),
-              Text(
-                'Sin resultados para "$_searchQuery"',
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 16, color: Color(0xFF8E8E93), fontWeight: FontWeight.w600),
-              ),
-            ],
+  /// El chat productivo. En render aislado recibe los mensajes ya resueltos,
+  /// así que no abre streams contra Supabase.
+  Widget _chat(NexUser u) {
+    final preview = widget.previewData;
+    return ChatDetailScreen(
+      key: ValueKey(u.id),
+      otherUser: u,
+      previewData: preview == null
+          ? null
+          : ChatDetailPreviewData(
+              miId: _currentUserId ?? '',
+              mensajes: preview.mensajes,
+            ),
+    );
+  }
+
+  List<CandAccionContexto> _accionesDe(NexUser u) => [
+        CandAccionContexto(
+          icono: CupertinoIcons.person_fill,
+          etiqueta: 'Ver perfil',
+          onTap: () => Navigator.of(context).push(
+            CupertinoPageRoute(builder: (_) => ProfileScreen(user: u)),
           ),
         ),
+        CandAccionContexto(
+          icono: CupertinoIcons.calendar,
+          etiqueta: 'Agendar entrevista',
+          onTap: () => Navigator.of(context).push(
+            CupertinoPageRoute(
+              builder: (_) => const SchedulingScreen(isCompany: true),
+            ),
+          ),
+        ),
+        CandAccionContexto(
+          icono: CupertinoIcons.star_fill,
+          etiqueta: 'Guardar contacto',
+          onTap: () => MployaToast.saved(context, 'Contacto guardado'),
+        ),
+        CandAccionContexto(
+          icono: CupertinoIcons.doc_on_doc_fill,
+          etiqueta: 'Compartir CV',
+          onTap: () =>
+              MployaToast.info(context, 'Compartir CV estará disponible pronto'),
+        ),
+      ];
+
+  @override
+  Widget build(BuildContext context) {
+    // Sin conversación elegida no se preselecciona a nadie en mobile; en los
+    // formatos anchos se abre la primera para que el panel no quede vacío.
+    final formato = candFormatoDe(context);
+    return CupertinoPageScaffold(
+      backgroundColor: MpTokens.lightBg,
+      child: switch (formato) {
+        CandFormato.desktop => _desktop(),
+        CandFormato.tablet => _tablet(),
+        CandFormato.mobile => _mobile(),
+      },
+    );
+  }
+
+  NexUser? get _elegido {
+    final visibles = _conversacionesVisibles;
+    final sel = _selectedUser;
+    if (sel != null) {
+      for (final u in visibles) {
+        if (u.id == sel.id) return u;
+      }
+    }
+    return visibles.isEmpty ? null : visibles.first;
+  }
+
+  bool get _cargando => _connectionsData == null || _usersData == null;
+
+  Widget _mobile() {
+    if (_cargando) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(height: candTopInset(context)),
+          const CandEncabezado(titulo: 'Mensajes', subtitulo: 'Cargando…'),
+          const Expanded(child: CandCargandoLista(cantidad: 4)),
+        ],
       );
     }
 
-    return SliverList(
-      delegate: SliverChildListDelegate([
-        // 1. Matches Horizontales (Bumble/Tinder style)
-        _buildNuevosMatches(users, context),
-        
+    final visibles = _conversacionesVisibles;
+    return ListView(
+      padding: EdgeInsets.zero,
+      children: [
+        SizedBox(height: candTopInset(context)),
+        CandEncabezado(
+          titulo: 'Mensajes',
+          subtitulo: _subtitulo(),
+          acciones: [
+            CandAccion(
+              icono: CupertinoIcons.square_pencil,
+              onTap: () => _showNewMessageSheet(context),
+            ),
+          ],
+        ),
         Padding(
-          padding: const EdgeInsets.fromLTRB(24, 24, 24, 12),
-          child: Text(
-            'Mensajes Recientes',
-            style: TextStyle(
-              fontSize: 17,
-              fontWeight: FontWeight.w800,
-              color: context.textPrimary,
-              letterSpacing: -0.4,
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+          child: CandBuscador(
+            placeholder: 'Buscar conversaciones',
+            onChanged: (v) => setState(() => _searchQuery = v),
+          ),
+        ),
+        CandFilaChips(alto: 34, children: _chipsFiltro()),
+        const SizedBox(height: 8),
+        if (visibles.isEmpty)
+          _vacio()
+        else
+          for (final u in visibles)
+            CandFilaConversacion(
+              conversacion: _conversacionDe(u),
+              seleccionada: _selectedUser?.id == u.id,
+              onTap: () => _abrirConversacion(u),
             ),
-          ),
-        ),
-
-        // 2. Lista Vertical de Chats
-        Builder(
-          builder: (context) {
-            final allMsgs = _messagesData ?? [];
-
-            // ── Filtro por chip (sobre datos reales) ──
-            bool userHasUnread(NexUser u) => allMsgs.any((m) =>
-                m['sender_id'] == u.id && m['receiver_id'] == _currentUserId && m['is_read'] != true);
-            final visibleUsers = users.where((u) {
-              switch (_convFilter) {
-                case 'match':
-                  return u.isPremium || u.isVerified;
-                case 'noleidos':
-                  return userHasUnread(u);
-                default:
-                  return true;
-              }
-            }).toList();
-
-            if (visibleUsers.isEmpty) {
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 40),
-                child: Center(
-                  child: Text(
-                    _convFilter == 'noleidos'
-                        ? 'No tenés mensajes sin leer.'
-                        : 'Sin conversaciones en este filtro.',
-                    style: TextStyle(fontSize: 13.5, color: context.textTertiary),
-                  ),
-                ),
-              );
-            }
-
-            return Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: context.cardColor,
-                  borderRadius: BorderRadius.circular(30),
-                  boxShadow: const [
-                    BoxShadow(color: Color(0x08000000), blurRadius: 24, offset: Offset(0, 8))
-                  ],
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(30),
-                  child: Column(
-                    children: visibleUsers.asMap().entries.map((entry) {
-                      final i = entry.key;
-                      final user = entry.value;
-
-                      // Extraer último mensaje
-                      final userMsgs = allMsgs.where((m) =>
-                          (m['sender_id'] == _currentUserId && m['receiver_id'] == user.id) ||
-                          (m['sender_id'] == user.id && m['receiver_id'] == _currentUserId));
-                      final lastMsg = userMsgs.isNotEmpty ? userMsgs.first : null;
-                      final unreadCount = userMsgs.where((m) => m['receiver_id'] == _currentUserId && m['is_read'] != true).length;
-                      final hasUnread = unreadCount > 0;
-                      final previewText = lastMsg != null
-                          ? (lastMsg['text']?.toString() ?? lastMsg['content']?.toString() ?? '')
-                          : (user.headline.isNotEmpty ? user.headline : 'Inicia la conversación...');
-                      final timeText = lastMsg != null ? timeAgo(lastMsg['created_at']) : '';
-
-                      return _ConversationTile(
-                        user: user,
-                        isLast: i == visibleUsers.length - 1,
-                        previewText: previewText,
-                        timeText: timeText,
-                        hasUnread: hasUnread,
-                        isSelected: selectedUser?.id == user.id,
-                        onTap: () => onTapUser(user),
-                      );
-                    }).toList(),
-                  ),
-                ),
-              ),
-            );
-          }
-        ),
-        const SizedBox(height: 100),
-      ]),
+        const SizedBox(height: 12),
+      ],
     );
   }
 
-  Widget _filterChip(String value, String label) {
-    final active = _convFilter == value;
-    return GestureDetector(
-      onTap: () => setState(() => _convFilter = value),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-        decoration: BoxDecoration(
-          color: active ? MployaTheme.brandAccent.withValues(alpha: 0.12) : context.cardColor,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: active ? MployaTheme.brandAccent : context.dividerColor.withValues(alpha: 0.5),
-            width: active ? 1.2 : 0.5,
-          ),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w700,
-            color: active ? MployaTheme.brandAccent : context.textSecondary,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _quickActionsSidebar(BuildContext context, NexUser user) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Column(
+  Widget _tablet() {
+    final elegido = _elegido;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 40, 20, 14),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // ── Videollamada HD Card ──
-          WebCard(
-            child: Column(
-              children: [
-                Container(
-                  width: 80, height: 80,
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF185FA5), Color(0xFF0C447C)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(color: const Color(0xFF185FA5).withValues(alpha: 0.3), blurRadius: 16, offset: const Offset(0, 6)),
-                    ],
-                  ),
-                  child: const Icon(CupertinoIcons.videocam_fill, size: 36, color: CupertinoColors.white),
-                ),
-                const SizedBox(height: 12),
-                Text('Iniciar Videollamada HD', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: context.textPrimary), textAlign: TextAlign.center),
-                const SizedBox(height: 4),
-                Text('Conectá cara a cara', style: TextStyle(fontSize: 11.5, color: context.textTertiary)),
-              ],
+          SizedBox(
+            width: 316,
+            child: CandTarjeta(
+              padding: EdgeInsets.zero,
+              child: _panelLista(),
             ),
           ),
-          const SizedBox(height: 12),
-          // ── Perfil del contacto ──
-          WebCard(
-            child: Column(
-              children: [
-                user.id.startsWith('demo_')
-                    ? Container(
-                        width: 52,
-                        height: 52,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: LinearGradient(colors: [Colors.grey.shade200, Colors.grey.shade300]),
-                        ),
-                        child: Center(child: Text(user.avatarUrl ?? '👤', style: const TextStyle(fontSize: 26))),
-                      )
-                    : NexAvatar(user: user, size: 52, showBadge: true),
-                const SizedBox(height: 10),
-                Text(user.name, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: context.textPrimary), textAlign: TextAlign.center),
-                const SizedBox(height: 2),
-                Text(user.headline, style: TextStyle(fontSize: 12, color: context.textTertiary, height: 1.3), textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis),
-                const SizedBox(height: 12),
-                // Online indicator
-                Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                  Container(width: 8, height: 8, decoration: const BoxDecoration(color: Color(0xFF34C759), shape: BoxShape.circle)),
-                  const SizedBox(width: 5),
-                  Text('Online', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: const Color(0xFF34C759))),
-                ]),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-          // ── Acciones rápidas ──
-          WebCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const WebSectionLabel('Acciones Rápidas'),
-                const SizedBox(height: 4),
-                _quickActionRow(context, icon: CupertinoIcons.person_fill, label: 'Ver Perfil',
-                  onTap: () => Navigator.of(context).push(CupertinoPageRoute(builder: (_) => ProfileScreen(user: user)))),
-                _quickActionRow(context, icon: CupertinoIcons.calendar, label: 'Agendar Entrevista',
-                  onTap: () => Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const SchedulingScreen(isCompany: true)))),
-                _quickActionRow(context, icon: CupertinoIcons.star_fill, label: 'Guardar contacto',
-                  onTap: () => MployaToast.saved(context, 'Contacto guardado')),
-                _quickActionRow(context, icon: CupertinoIcons.doc_on_doc_fill, label: 'Compartir CV',
-                  onTap: () => MployaToast.info(context, 'Compartir CV estará disponible muy pronto')),
-              ],
+          const SizedBox(width: 14),
+          Expanded(
+            child: CandTarjeta(
+              padding: EdgeInsets.zero,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(MpTokens.radiusLG),
+                child: elegido == null
+                    ? const CandChatSinElegir()
+                    : _chat(elegido),
+              ),
             ),
           ),
         ],
@@ -829,26 +623,96 @@ class _MessagingScreenState extends State<MessagingScreen> {
     );
   }
 
-  Widget _quickActionRow(BuildContext context, {required IconData icon, required String label, required VoidCallback onTap}) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        child: Row(
-          children: [
-            Container(
-              width: 32, height: 32,
-              decoration: BoxDecoration(color: MployaTheme.brandAccent.withValues(alpha: 0.10), borderRadius: BorderRadius.circular(9)),
-              child: Icon(icon, size: 15, color: MployaTheme.brandAccent),
+  Widget _desktop() {
+    final elegido = _elegido;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 24, 24, 24),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(
+            width: 322,
+            child: CandTarjeta(
+              padding: EdgeInsets.zero,
+              child: _panelLista(),
             ),
-            const SizedBox(width: 10),
-            Expanded(child: Text(label, style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: context.textPrimary))),
-            Icon(CupertinoIcons.chevron_right, size: 14, color: context.textTertiary),
-          ],
-        ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: CandTarjeta(
+              padding: EdgeInsets.zero,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(MpTokens.radiusLG),
+                child: elegido == null
+                    ? const CandChatSinElegir()
+                    : _chat(elegido),
+              ),
+            ),
+          ),
+          const SizedBox(width: 14),
+          if (elegido != null)
+            CandPanelContexto(
+              nombre: elegido.name,
+              titulo: elegido.headline,
+              avatarUrl: elegido.avatarUrl,
+              acciones: _accionesDe(elegido),
+            ),
+        ],
       ),
     );
+  }
+
+  /// Columna de la bandeja dentro de los paneles de tablet y desktop.
+  Widget _panelLista() {
+    if (_cargando) {
+      return const CandCargandoLista(
+        cantidad: 4,
+        padding: EdgeInsets.all(14),
+      );
+    }
+
+    final visibles = _conversacionesVisibles;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.fromLTRB(16, 16, 16, 12),
+          child: CandTitulo('Mensajes', tamano: 19),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+          child: CandBuscador(
+            placeholder: 'Buscar conversaciones',
+            onChanged: (v) => setState(() => _searchQuery = v),
+          ),
+        ),
+        CandFilaChips(padding: 16, alto: 34, children: _chipsFiltro()),
+        const SizedBox(height: 6),
+        Expanded(
+          child: visibles.isEmpty
+              ? _vacio()
+              : ListView(
+                  padding: EdgeInsets.zero,
+                  children: [
+                    for (final u in visibles)
+                      CandFilaConversacion(
+                        conversacion: _conversacionDe(u),
+                        seleccionada: _elegido?.id == u.id,
+                        compacta: true,
+                        onTap: () => _abrirConversacion(u),
+                      ),
+                  ],
+                ),
+        ),
+      ],
+    );
+  }
+
+  String _subtitulo() {
+    final sinLeer = _contactos.fold<int>(0, (t, u) => t + _sinLeerDe(u));
+    if (sinLeer > 0) return '$sinLeer sin leer';
+    final n = _contactos.length;
+    return n == 0 ? 'Sin conversaciones' : '$n ${n == 1 ? 'contacto' : 'contactos'}';
   }
 
   /// Bandeja sin conversaciones.
@@ -856,390 +720,34 @@ class _MessagingScreenState extends State<MessagingScreen> {
   /// Antes esto NO era un estado vacío: dibujaba seis "nuevos matches" y seis
   /// conversaciones inventadas —con textos, horas y contadores de no leídos—
   /// indistinguibles de las reales. Un candidato nuevo creía tener mensajes
-  /// esperándolo. Ahora dice la verdad: no hay conversaciones todavía.
-  Widget _buildEmptyInbox(BuildContext context, {required void Function(NexUser) onTapUser, NexUser? selectedUser}) {
-    return SliverToBoxAdapter(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 72, horizontal: 40),
-        child: Column(
-          children: [
-            Icon(
-              CupertinoIcons.chat_bubble_2,
-              size: 52,
-              color: const Color(0xFFAEAEB2).withValues(alpha: 0.6),
-            ),
-            const SizedBox(height: 18),
-            Text(
-              'Todavía no tenés mensajes',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 17,
-                fontWeight: FontWeight.w700,
-                color: context.textPrimary,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Cuando conectes con alguien, la conversación aparece acá.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 14,
-                height: 1.4,
-                color: context.textTertiary,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildNuevosMatches(List<NexUser> users, BuildContext context) {
-    // Mostramos las conexiones más recientes como "Nuevos Matches"
-    final matches = users.take(users.length.clamp(0, 6)).toList();
-    
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
-          child: Row(
-            children: [
-              Text(
-                'Nuevos Matches',
-                style: TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w800,
-                  color: context.textPrimary,
-                  letterSpacing: -0.4,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: const BoxDecoration(
-                  color: Color(0xFFFF3B30),
-                  borderRadius: BorderRadius.all(Radius.circular(6)),
-                ),
-                child: Text('${matches.length}', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
-              )
-            ],
-          ),
-        ),
-        SizedBox(
-          height: 106,
-          child: ListView.separated(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            scrollDirection: Axis.horizontal,
-            physics: const BouncingScrollPhysics(),
-            itemCount: matches.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 16),
-            itemBuilder: (context, index) {
-              final user = matches[index];
-              return GestureDetector(
-                onTap: () => Navigator.of(context).push(
-                  CupertinoPageRoute(
-                    builder: (_) => ChatDetailScreen(otherUser: user),
-                  ),
-                ),
-                child: _MatchAvatarHero(user: user, isNew: index < 2),
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildInboxSkeleton() {
-    return Column(
-      children: [
-        // Matches skeleton
-        SizedBox(
-          height: 100,
-          child: ListView.separated(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            scrollDirection: Axis.horizontal,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: 5,
-            separatorBuilder: (_, __) => const SizedBox(width: 16),
-            itemBuilder: (_, __) => const Column(
-              children: [
-                _SkeletonPulse(width: 64, height: 64, radius: 32),
-                SizedBox(height: 8),
-                _SkeletonPulse(width: 48, height: 10, radius: 5),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 24),
-        // Conversation list skeleton
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Container(
-            decoration: BoxDecoration(
-              color: context.cardColor,
-              borderRadius: BorderRadius.circular(30),
-            ),
-            child: Column(
-              children: List.generate(4, (i) => const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                child: Row(
-                  children: [
-                    _SkeletonPulse(width: 56, height: 56, radius: 28),
-                    SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _SkeletonPulse(width: 120, height: 14, radius: 7),
-                          SizedBox(height: 8),
-                          _SkeletonPulse(width: 200, height: 12, radius: 6),
-                        ],
-                      ),
-                    ),
-                    _SkeletonPulse(width: 40, height: 12, radius: 6),
-                  ],
-                ),
-              )),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _SkeletonPulse extends StatefulWidget {
-  final double width, height, radius;
-  const _SkeletonPulse({required this.width, required this.height, required this.radius});
-  @override
-  State<_SkeletonPulse> createState() => _SkeletonPulseState();
-}
-
-class _SkeletonPulseState extends State<_SkeletonPulse> with SingleTickerProviderStateMixin {
-  late final AnimationController _ctrl;
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1200))..repeat(reverse: true);
-  }
-  @override
-  void dispose() { _ctrl.dispose(); super.dispose(); }
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _ctrl,
-      builder: (_, __) => Container(
-        width: widget.width,
-        height: widget.height,
-        decoration: BoxDecoration(
-          color: context.isDark
-              ? Color.lerp(const Color(0xFF2A2C36), const Color(0xFF1C1E26), _ctrl.value)
-              : Color.lerp(const Color(0xFFE8E8ED), const Color(0xFFF5F5F5), _ctrl.value),
-          borderRadius: BorderRadius.circular(widget.radius),
-        ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Match Avatar Hero (Stories style)
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _MatchAvatarHero extends StatelessWidget {
-  final NexUser user;
-  final bool isNew;
-
-  const _MatchAvatarHero({required this.user, required this.isNew});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          padding: const EdgeInsets.all(3),
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: isNew
-                ? const LinearGradient(
-                    colors: [Color(0xFF185FA5), Color(0xFF0C447C)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  )
-                : null,
-            border: isNew ? null : Border.all(color: context.dividerColor, width: 2),
-            boxShadow: isNew
-                ? [
-                    BoxShadow(
-                      color: const Color(0xFF185FA5).withValues(alpha: 0.3),
-                      blurRadius: 12,
-                      offset: const Offset(0, 4),
-                    )
-                  ]
-                : [],
-          ),
-          child: Container(
-            padding: const EdgeInsets.all(2),
-            decoration: BoxDecoration(
-              color: context.isDark ? NexTheme.darkBg : const Color(0xFFF9F9FA),
-              shape: BoxShape.circle,
-            ),
-            child: NexAvatar(user: user, size: 64, showBadge: false, heroTag: 'avatar_${user.id}'),
-          ),
-        ),
-        const SizedBox(height: 6),
-        SizedBox(
-          width: 72,
-          child: Text(
-            user.name.split(' ').first,
-            textAlign: TextAlign.center,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: isNew ? FontWeight.w700 : FontWeight.w500,
-              color: isNew ? context.textPrimary : context.textSecondary,
-              fontFamily: '.SF Pro Text',
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Conversation Tile ("No-Line" Rule Applied)
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _ConversationTile extends StatelessWidget {
-  final NexUser user;
-  final bool isLast;
-  final String previewText;
-  final String timeText;
-  final bool hasUnread;
-  final bool isSelected;
-  final VoidCallback onTap;
-
-  const _ConversationTile({
-    required this.user,
-    required this.isLast,
-    required this.previewText,
-    required this.timeText,
-    required this.hasUnread,
-    this.isSelected = false,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-
-    return Material(
-      color: isSelected ? MployaTheme.brandAccent.withValues(alpha: 0.08) : Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        highlightColor: const Color(0x0A000000),
-        child: Container(
-          decoration: BoxDecoration(
-            border: Border(left: BorderSide(color: isSelected ? MployaTheme.brandAccent : Colors.transparent, width: 3)),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 14),
-          child: Row(
-            children: [
-              user.id.startsWith('demo_')
-                  ? Container(
-                      width: 56,
-                      height: 56,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: LinearGradient(colors: [Colors.grey.shade200, Colors.grey.shade300]),
-                      ),
-                      child: Center(child: Text(user.avatarUrl ?? '👤', style: const TextStyle(fontSize: 28))),
-                    )
-                  : NexAvatar(user: user, size: 56, showBadge: true, heroTag: 'avatar_${user.id}'),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Expanded(
-                          child: Text(
-                            user.name,
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: hasUnread ? FontWeight.w800 : FontWeight.w600,
-                              color: context.textPrimary,
-                              fontFamily: '.SF Pro Text',
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        Text(
-                          timeText.isNotEmpty ? timeText : 'Nuevo',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: hasUnread ? FontWeight.w600 : FontWeight.w500,
-                            color: hasUnread ? MployaTheme.brandAccent : context.textTertiary,
-                          ),
-                        ),
-                      ],
-                    ),
-                    if (user.isPremium || user.isVerified) ...[
-                      const SizedBox(height: 2),
-                      const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(CupertinoIcons.star_fill, size: 11, color: MployaTheme.brandAccent),
-                          SizedBox(width: 4),
-                          Text(
-                            'Premium Match',
-                            style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: MployaTheme.brandAccent),
-                          ),
-                        ],
-                      ),
-                    ],
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            previewText,
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: hasUnread ? context.textPrimary : context.textSecondary,
-                              fontWeight: hasUnread ? FontWeight.w600 : FontWeight.w400,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        if (hasUnread) ...[
-                          const SizedBox(width: 8),
-                          Container(
-                            width: 10,
-                            height: 10,
-                            decoration: const BoxDecoration(
-                              color: MployaTheme.brandAccent,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                        ]
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+  /// esperándolo. Ahora dice la verdad.
+  Widget _vacio() {
+    if (_searchQuery.trim().isNotEmpty) {
+      return CandVacio(
+        icono: CupertinoIcons.search,
+        titulo: 'Sin resultados',
+        detalle: 'Nadie de tu red coincide con "$_searchQuery".',
+      );
+    }
+    if (_convFilter == 'noleidos') {
+      return const CandVacio(
+        icono: CupertinoIcons.checkmark_circle,
+        titulo: 'No tenés mensajes sin leer',
+        detalle: 'Estás al día con toda tu bandeja.',
+      );
+    }
+    if (_convFilter == 'empresas') {
+      return const CandVacio(
+        icono: CupertinoIcons.building_2_fill,
+        titulo: 'Todavía no hablaste con empresas',
+        detalle: 'Cuando una empresa te escriba, la vas a ver acá.',
+      );
+    }
+    return const CandVacio(
+      icono: CupertinoIcons.chat_bubble_2,
+      titulo: 'Todavía no tenés mensajes',
+      detalle:
+          'Cuando conectes con alguien vas a poder escribirle desde acá.',
     );
   }
 }
@@ -1248,10 +756,29 @@ class _ConversationTile extends StatelessWidget {
 // Chat Detail Screen — Premium Chat UI
 // ─────────────────────────────────────────────────────────────────────────────
 
+/// Mensajes ya resueltos para el render aislado del chat. Mismo patrón que
+/// `MessagingPreviewData`: si llega, la conversación NO abre streams ni canales
+/// de realtime contra Supabase.
+@immutable
+class ChatDetailPreviewData {
+  const ChatDetailPreviewData({required this.miId, this.mensajes = const []});
+
+  final String miId;
+  final List<Map<String, dynamic>> mensajes;
+}
+
 class ChatDetailScreen extends StatefulWidget {
   final NexUser otherUser;
 
-  const ChatDetailScreen({super.key, required this.otherUser});
+  /// Sólo lo usan los tests y el generador de capturas. En producción es
+  /// `null` y el chat funciona exactamente igual que antes.
+  final ChatDetailPreviewData? previewData;
+
+  const ChatDetailScreen({
+    super.key,
+    required this.otherUser,
+    this.previewData,
+  });
 
   @override
   State<ChatDetailScreen> createState() => ChatDetailScreenState();
@@ -1266,7 +793,10 @@ class ChatDetailScreenState extends State<ChatDetailScreen> {
   DateTime? _lastTypingEvent;
   String _myDisplayName = 'Usuario';
 
-  final _messagesStream = Supabase.instance.client
+  // `late`: en render aislado Supabase no está inicializado y un inicializador
+  // de campo se evalúa al construir el State. Con `late` sólo se resuelve si
+  // alguien lo pide, y en preview nadie lo pide.
+  late final _messagesStream = Supabase.instance.client
       .from('messages')
       .stream(primaryKey: ['id'])
       .order('created_at', ascending: false)
@@ -1276,6 +806,8 @@ class ChatDetailScreenState extends State<ChatDetailScreen> {
   List<Map<String, dynamic>> _demoMessagesList = [];
 
   Stream<List<Map<String, dynamic>>> get messagesStream {
+    final preview = widget.previewData;
+    if (preview != null) return Stream.value(preview.mensajes);
     if (widget.otherUser.id.startsWith('demo_')) {
       return _demoStreamController.stream;
     }
@@ -1283,6 +815,7 @@ class ChatDetailScreenState extends State<ChatDetailScreen> {
   }
 
   String? get _currentUserId =>
+      widget.previewData?.miId ??
       Supabase.instance.client.auth.currentUser?.id;
 
   String get _otherId => widget.otherUser.id;
@@ -1290,6 +823,8 @@ class ChatDetailScreenState extends State<ChatDetailScreen> {
   @override
   void initState() {
     super.initState();
+    // Render aislado: ni canal de typing ni consulta del propio nombre.
+    if (widget.previewData != null) return;
     if (widget.otherUser.id.startsWith('demo_')) {
       final initialMsgs = _MessagingScreenState._demoMessagesMap[widget.otherUser.id] ?? [];
       _demoMessagesList = initialMsgs.map((m) => {
@@ -1505,9 +1040,9 @@ class ChatDetailScreenState extends State<ChatDetailScreen> {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 16, color: MployaTheme.brandAccent),
+            Icon(icon, size: 16, color: MpTokens.primary),
             const SizedBox(width: 4),
-            Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: MployaTheme.brandAccent)),
+            Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: MpTokens.primary)),
           ],
         ),
       ),
@@ -1704,7 +1239,9 @@ class ChatDetailScreenState extends State<ChatDetailScreen> {
 
   @override
   void dispose() {
-    if (widget.otherUser.id.startsWith('demo_')) {
+    if (widget.previewData != null) {
+      // En render aislado no se creó ni el controlador demo ni el canal.
+    } else if (widget.otherUser.id.startsWith('demo_')) {
       _demoStreamController.close();
     } else {
       _controller.removeListener(_onTextChanged);
@@ -1719,7 +1256,7 @@ class ChatDetailScreenState extends State<ChatDetailScreen> {
   Widget build(BuildContext context) {
     return CupertinoPageScaffold(
       // Fondo con contraste para que resalten las burbujas
-      backgroundColor: context.isDark ? NexTheme.darkBg : const Color(0xFFF2F2F7),
+      backgroundColor: context.isDark ? NexTheme.darkBg : MpTokens.lightBg,
       navigationBar: CupertinoNavigationBar(
         transitionBetweenRoutes: false,
         backgroundColor: context.isDark ? const Color(0xEE000000) : const Color(0xEEFFFFFF),
@@ -1739,43 +1276,54 @@ class ChatDetailScreenState extends State<ChatDetailScreen> {
                   )
                 : NexAvatar(user: widget.otherUser, size: 32),
             const SizedBox(width: 10),
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  widget.otherUser.name,
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: context.textPrimary,
-                    fontFamily: '.SF Pro Text',
+            // `Flexible` + elipsis: en el panel de tablet la barra queda con
+            // ~158 px para el centro y el nombre completo desbordaba 184 px.
+            Flexible(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    widget.otherUser.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: context.textPrimary,
+                      fontFamily: '.SF Pro Text',
+                    ),
                   ),
-                ),
-                Row(
-                  children: [
-                    Container(
-                      width: 6,
-                      height: 6,
-                      decoration: const BoxDecoration(
-                        color: Color(0xFF34C759),
-                        shape: BoxShape.circle,
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 6,
+                        height: 6,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFF34C759),
+                          shape: BoxShape.circle,
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      widget.otherUser.headline.isNotEmpty
-                          ? widget.otherUser.headline
-                          : 'Conexión activa',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: context.textSecondary,
-                        fontWeight: FontWeight.w500,
+                      const SizedBox(width: 4),
+                      Flexible(
+                        child: Text(
+                          widget.otherUser.headline.isNotEmpty
+                              ? widget.otherUser.headline
+                              : 'Conexión activa',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: context.textSecondary,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-              ],
+                    ],
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -1814,7 +1362,8 @@ class ChatDetailScreenState extends State<ChatDetailScreen> {
                   final messages = _filterMessages(snap.data!);
 
                   // MARCAR MENSAJES RECIBIDOS COMO LEÍDOS
-                  if (!widget.otherUser.id.startsWith('demo_')) {
+                  if (widget.previewData == null &&
+                      !widget.otherUser.id.startsWith('demo_')) {
                     final unreadMsgs = messages.where((m) => m['receiver_id'] == _currentUserId && m['is_read'] != true).toList();
                     if (unreadMsgs.isNotEmpty) {
                       Future.microtask(() {
@@ -1972,14 +1521,15 @@ class ChatDetailScreenState extends State<ChatDetailScreen> {
                           width: 40,
                           height: 40,
                           decoration: BoxDecoration(
+                            // Identidad violeta aprobada de la Tanda 1.
                             gradient: const LinearGradient(
-                              colors: [Color(0xFF185FA5), Color(0xFF0C447C)],
+                              colors: [MpTokens.primary, MpTokens.primaryDeep],
                               begin: Alignment.topLeft,
                               end: Alignment.bottomRight,
                             ),
                             shape: BoxShape.circle,
                             boxShadow: [
-                              BoxShadow(color: const Color(0xFF185FA5).withValues(alpha: 0.3), blurRadius: 12, offset: const Offset(0, 4))
+                              BoxShadow(color: MpTokens.primary.withValues(alpha: 0.3), blurRadius: 12, offset: const Offset(0, 4))
                             ],
                           ),
                           child: Center(
@@ -2053,9 +1603,9 @@ class _EmptyChat extends StatelessWidget {
               padding: const EdgeInsets.all(4),
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                gradient: const LinearGradient(colors: [Color(0xFF185FA5), Color(0xFF0C447C)]),
+                gradient: const LinearGradient(colors: [MpTokens.primary, MpTokens.primaryDeep]),
                 boxShadow: [
-                  BoxShadow(color: const Color(0xFF185FA5).withValues(alpha: 0.3), blurRadius: 24, offset: const Offset(0, 8))
+                  BoxShadow(color: MpTokens.primary.withValues(alpha: 0.3), blurRadius: 24, offset: const Offset(0, 8))
                 ],
               ),
               child: Container(
@@ -2237,7 +1787,7 @@ class _MessageBubble extends StatelessWidget {
                     color: isMe ? null : context.cardColor,
                     gradient: isMe
                         ? const LinearGradient(
-                            colors: [Color(0xFF185FA5), Color(0xFF0C447C)],
+                            colors: [MpTokens.primary, MpTokens.primaryDeep],
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
                           )
@@ -2249,7 +1799,7 @@ class _MessageBubble extends StatelessWidget {
                       bottomRight: Radius.circular(isMe ? 6 : 22),
                     ),
                     boxShadow: isMe
-                        ? [BoxShadow(color: const Color(0xFF185FA5).withValues(alpha: 0.2), blurRadius: 12, offset: const Offset(0, 4))]
+                        ? [BoxShadow(color: MpTokens.primary.withValues(alpha: 0.2), blurRadius: 12, offset: const Offset(0, 4))]
                         : const [BoxShadow(color: Color(0x08000000), blurRadius: 12, offset: Offset(0, 4))],
                   ),
                   child: Column(
@@ -2390,7 +1940,7 @@ class _MessageBubble extends StatelessWidget {
                           Icon(
                             isRead ? CupertinoIcons.checkmark_alt_circle_fill : CupertinoIcons.checkmark_alt_circle,
                             size: 14,
-                            color: isRead ? MployaTheme.brandAccent : const Color(0xFFAEAEB2),
+                            color: isRead ? MpTokens.primary : const Color(0xFFAEAEB2),
                           ),
                         ],
                       ],

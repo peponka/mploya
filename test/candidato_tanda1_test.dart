@@ -154,9 +154,27 @@ void main() {
     });
 
     test('sus accesos rápidos navegan de verdad', () {
+      // Antes esto vigilaba los botones de «Primeros pasos», que incluían
+      // «Mirá vacantes». Esa tarjeta desapareció con la composición aprobada de
+      // la Tanda 1: Vacantes es hoy uno de los cinco destinos de la barra, así
+      // que duplicarlo dentro de Red era ruido. Lo que sí tiene que seguir
+      // existiendo son los accesos propios de la pantalla, y todos por `push`.
       final fuente = fuenteDe('lib/screens/network_screen.dart');
-      expect(fuente.contains('ExploreScreen()'), isTrue);
-      expect(fuente.contains('JobsScreen()'), isTrue);
+      expect(
+        fuente.contains('ExploreScreen()'),
+        isTrue,
+        reason: 'Descubrir gente e invitar contactos abren Explorar.',
+      );
+      expect(
+        fuente.contains('ProfileScreen(user:'),
+        isTrue,
+        reason: 'Cada tarjeta de la red abre el perfil de esa persona.',
+      );
+      expect(
+        fuente.contains('ChatDetailScreen(otherUser:'),
+        isTrue,
+        reason: 'El acceso a mensajes desde una conexión debe conservarse.',
+      );
     });
   });
 

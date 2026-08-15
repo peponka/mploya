@@ -16,14 +16,20 @@ import '../services/share_service.dart';
 import '../services/storage_service.dart';
 import '../services/video_preload_manager.dart';
 import '../theme/app_theme.dart';
+import '../theme/mploya_tokens.dart';
 import '../utils/user_columns.dart';
+import '../widgets/candidato/cand_perfil.dart';
+import '../widgets/candidato/cand_ui.dart';
 import '../widgets/mploya_shell.dart';
 import '../widgets/profile_video_widgets.dart';
 import 'camera_screen.dart';
 import 'candidate_profile_form_screen.dart';
 import 'chat_inmail_screen.dart';
 import 'company_profile_form_screen.dart';
+import 'mis_postulaciones_screen.dart';
+import 'ofertas_recibidas_screen.dart';
 import 'onboarding_pitch_screen.dart';
+import 'preferencias_laborales_screen.dart';
 import 'settings_screen.dart';
 import 'tools_hub_entry_screen.dart';
 import 'saved_jobs_screen.dart';
@@ -31,10 +37,32 @@ import 'splash_screen.dart';
 import 'stealth_profile_form_screen.dart';
 import '../services/portfolio_service.dart';
 
+/// Perfil propio ya resuelto para render tests y capturas. Mismo patrón que
+/// `JobsPreviewData` y `NetworkPreviewData`: si llega, la pantalla NO consulta
+/// Supabase. El widget que se monta sigue siendo `ProfileScreen` productivo.
+@immutable
+class ProfilePreviewData {
+  const ProfilePreviewData({
+    required this.usuario,
+    this.portfolio = const [],
+    this.viewCount = 0,
+  });
+
+  /// Fila de `users` con la forma que devuelve la base.
+  final Map<String, dynamic> usuario;
+
+  final List<PortfolioVideo> portfolio;
+  final int viewCount;
+}
+
 class ProfileScreen extends StatefulWidget {
   final NexUser? user;
 
-  const ProfileScreen({super.key, this.user});
+  /// Sólo lo usan los tests y el generador de capturas. En producción es `null`
+  /// y el comportamiento es exactamente el de antes.
+  final ProfilePreviewData? previewData;
+
+  const ProfileScreen({super.key, this.user, this.previewData});
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
@@ -53,6 +81,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void initState() {
     super.initState();
+    // Render aislado: los datos ya vienen resueltos y no se toca la red.
+    if (widget.previewData != null) return;
     if (widget.user == null) {
       _reloadOwnProfile();
     } else {
@@ -98,6 +128,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<_ProfileBundle> _bundleFutureFor(NexUser profile, bool isOwnProfile) {
+    final preview = widget.previewData;
+    if (preview != null) {
+      return Future.value(
+        _ProfileBundle(
+          portfolio: preview.portfolio,
+          viewCount: preview.viewCount,
+        ),
+      );
+    }
     final key = '${profile.id}_${isOwnProfile ? 'own' : 'public'}';
     return _bundleFutures.putIfAbsent(key, () => _loadBundle(profile, isOwnProfile));
   }
@@ -297,6 +336,36 @@ class _ProfileScreenState extends State<ProfileScreen> {
               },
               child: const Text('Editar perfil'),
             ),
+          if (isOwnProfile)
+            CupertinoActionSheetAction(
+              onPressed: () {
+                Navigator.pop(sheetContext);
+                Navigator.of(context).push(
+                  CupertinoPageRoute(builder: (_) => const MisPostulacionesScreen()),
+                );
+              },
+              child: const Text('Mis Postulaciones'),
+            ),
+          if (isOwnProfile)
+            CupertinoActionSheetAction(
+              onPressed: () {
+                Navigator.pop(sheetContext);
+                Navigator.of(context).push(
+                  CupertinoPageRoute(builder: (_) => const PreferenciasLaboralesScreen()),
+                );
+              },
+              child: const Text('Preferencias laborales'),
+            ),
+          if (isOwnProfile)
+            CupertinoActionSheetAction(
+              onPressed: () {
+                Navigator.pop(sheetContext);
+                Navigator.of(context).push(
+                  CupertinoPageRoute(builder: (_) => const OfertasRecibidasScreen()),
+                );
+              },
+              child: const Text('Ofertas recibidas'),
+            ),
           // Mis Herramientas y Guardados no tenían NINGUNA entrada: el hub de
           // herramientas vivía en una ranura del IndexedStack que la barra de
           // candidato no publicaba, así que ni él ni las pantallas que cuelgan
@@ -333,6 +402,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final preview = widget.previewData;
+    if (preview != null) {
+      return _buildProfileLoader(
+        context,
+        NexUser.fromJson(preview.usuario),
+        true,
+      );
+    }
+
     if (widget.user != null) {
       return _buildProfileLoader(context, widget.user!, false);
     }
@@ -455,6 +533,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
           onOpenVideoPitch: () => _openVideoPitchFlow(context, profile),
           onOpenPitchCamera: () => _openPitchCamera(context, profile),
           onPickAvatar: () => _pickAndUploadAvatar(profile),
+          onOpenTools: () => Navigator.of(context).push(
+            CupertinoPageRoute(builder: (_) => const ToolsHubEntryScreen()),
+          ),
+          onOpenSaved: () => Navigator.of(context).push(
+            CupertinoPageRoute(builder: (_) => const SavedJobsScreen()),
+          ),
           onShare: () => ShareService.instance.shareProfile(
             name: profile.name,
             headline: profile.headline,
@@ -531,6 +615,8 @@ class _ProfileShell extends StatelessWidget {
   final VoidCallback onOpenPortfolio;
   final VoidCallback onOpenTimeline;
   final VoidCallback onOpenReferences;
+  final VoidCallback onOpenTools;
+  final VoidCallback onOpenSaved;
 
   const _ProfileShell({
     required this.isOwnProfile,
@@ -555,10 +641,39 @@ class _ProfileShell extends StatelessWidget {
     required this.onOpenPortfolio,
     required this.onOpenTimeline,
     required this.onOpenReferences,
+    required this.onOpenTools,
+    required this.onOpenSaved,
   });
+
+  /// Candidato (incluida su variante confidencial). Empresa y Headhunter
+  /// conservan intacto el cuerpo anterior: esta tanda es sólo de Candidato.
+  static const _tiposCandidato = {'candidato', 'confidencial', 'stealth'};
 
   @override
   Widget build(BuildContext context) {
+    // Perfil PROPIO de candidato → composición aprobada de la Tanda 1.
+    if (isOwnProfile &&
+        _tiposCandidato.contains(profile.accountType.toLowerCase())) {
+      return CupertinoPageScaffold(
+        backgroundColor: MpTokens.lightBg,
+        child: _CandidatoOwnProfileBody(
+          profile: profile,
+          facts: facts,
+          onOpenEdit: onOpenEdit,
+          onOpenSettings: onOpenSettings,
+          onOpenVideoPitch: onOpenVideoPitch,
+          onOpenPitchCamera: onOpenPitchCamera,
+          onPickAvatar: onPickAvatar,
+          onShare: onShare,
+          onOpenPortfolio: onOpenPortfolio,
+          onOpenTimeline: onOpenTimeline,
+          onOpenReferences: onOpenReferences,
+          onOpenTools: onOpenTools,
+          onOpenSaved: onOpenSaved,
+        ),
+      );
+    }
+
     return CupertinoPageScaffold(
       backgroundColor: NexTheme.shellBg,
       child: SafeArea(
@@ -687,6 +802,339 @@ class _ProfileShell extends StatelessWidget {
       ),
     );
   }
+}
+
+/// ─────────────────────────────────────────────────────────────────────────────
+/// PERFIL PROPIO DE CANDIDATO — composición aprobada de la Tanda 1.
+///
+/// Referencia: `design-reference/Candidato_Tanda1_Final/*/05_perfil.png`.
+/// Las piezas viven en `lib/widgets/candidato/cand_perfil.dart` y no saben nada
+/// de Supabase: acá se les pasa lo que el perfil real ya trajo.
+///
+/// Todo lo que se pinta es dato real del usuario. Si algo falta, la pieza lo
+/// dice o no se dibuja; nada se rellena con datos de ejemplo.
+/// ─────────────────────────────────────────────────────────────────────────────
+class _CandidatoOwnProfileBody extends StatelessWidget {
+  final NexUser profile;
+  final _ProfileFacts facts;
+  final VoidCallback onOpenEdit;
+  final VoidCallback onOpenSettings;
+  final VoidCallback onOpenVideoPitch;
+  final VoidCallback onOpenPitchCamera;
+  final VoidCallback onPickAvatar;
+  final VoidCallback onShare;
+  final VoidCallback onOpenPortfolio;
+  final VoidCallback onOpenTimeline;
+  final VoidCallback onOpenReferences;
+  final VoidCallback onOpenTools;
+  final VoidCallback onOpenSaved;
+
+  const _CandidatoOwnProfileBody({
+    required this.profile,
+    required this.facts,
+    required this.onOpenEdit,
+    required this.onOpenSettings,
+    required this.onOpenVideoPitch,
+    required this.onOpenPitchCamera,
+    required this.onPickAvatar,
+    required this.onShare,
+    required this.onOpenPortfolio,
+    required this.onOpenTimeline,
+    required this.onOpenReferences,
+    required this.onOpenTools,
+    required this.onOpenSaved,
+  });
+
+  bool get _esConfidencial {
+    final t = profile.accountType.toLowerCase();
+    return t == 'confidencial' || t == 'stealth';
+  }
+
+  /// Sólo números que existen de verdad: vistas medidas, conexiones guardadas y
+  /// el puntaje de completitud, que se calcula sobre el propio perfil.
+  List<CandMetrica> get _metricas => [
+        CandMetrica('${facts.viewCount}', 'Vistas'),
+        CandMetrica('${profile.connections}', 'Conexiones'),
+        CandMetrica('${facts.profileStrengthScore}%', 'Perfil'),
+      ];
+
+  List<String> get _skills {
+    final chips = <String>{
+      ...profile.skills.map((s) => s.trim()),
+      ...profile.tags.map((t) => t.trim()),
+    }..removeWhere((s) => s.isEmpty);
+    return chips.take(8).toList();
+  }
+
+  List<CandExperienciaItem> get _experiencia => profile.experience
+      .map(
+        (e) => CandExperienciaItem(
+          rol: e.role,
+          empresa: e.company,
+          periodo: e.duration,
+          logoUrl: e.companyLogoUrl,
+        ),
+      )
+      .toList();
+
+  List<CandAcceso> get _accesos => [
+        CandAcceso(
+          icono: CupertinoIcons.wrench_fill,
+          titulo: 'Mis Herramientas',
+          detalle: 'CV, referidos, impulsar perfil',
+          onTap: onOpenTools,
+        ),
+        CandAcceso(
+          icono: CupertinoIcons.bookmark_fill,
+          titulo: 'Guardados',
+          detalle: 'Vacantes que guardaste',
+          onTap: onOpenSaved,
+        ),
+        CandAcceso(
+          icono: CupertinoIcons.collections,
+          titulo: 'Portfolio',
+          detalle: facts.portfolio.isEmpty
+              ? 'Todavía sin piezas'
+              : '${facts.portfolio.length} '
+                  '${facts.portfolio.length == 1 ? 'pieza' : 'piezas'}',
+          onTap: onOpenPortfolio,
+        ),
+        CandAcceso(
+          icono: CupertinoIcons.time,
+          titulo: 'Trayectoria',
+          detalle: profile.experience.isEmpty
+              ? 'Todavía sin experiencia cargada'
+              : '${profile.experience.length} '
+                  '${profile.experience.length == 1 ? 'experiencia' : 'experiencias'}',
+          onTap: onOpenTimeline,
+        ),
+        CandAcceso(
+          icono: CupertinoIcons.star_fill,
+          titulo: 'Referencias',
+          detalle: profile.ratingCount > 0
+              ? '${profile.ratingCount} '
+                  '${profile.ratingCount == 1 ? 'valoración' : 'valoraciones'}'
+              : 'Todavía sin valoraciones',
+          onTap: onOpenReferences,
+        ),
+        if (profile.isVerified)
+          const CandAcceso(
+            icono: CupertinoIcons.checkmark_shield_fill,
+            titulo: 'Verificación',
+            detalle: 'Perfil verificado',
+            verde: true,
+          ),
+      ];
+
+  String get _resumenOculto {
+    final partes = [
+      profile.headline.trim(),
+      (profile.location ?? '').trim(),
+    ].where((p) => p.isNotEmpty);
+    return partes.join(' · ');
+  }
+
+  // ── Piezas compartidas por los tres formatos ──
+
+  Widget get _portada => CandPerfilPortada(
+        onCompartir: onShare,
+        onConfiguracion: onOpenSettings,
+      );
+
+  Widget _identidad({bool ancho = false}) => CandPerfilIdentidad(
+        nombre: profile.name,
+        headline: profile.headline,
+        ubicacion: (profile.location ?? '').trim(),
+        avatarUrl: profile.avatarUrl,
+        verificado: profile.isVerified,
+        abiertaOfertas: profile.isOpenToWork,
+        ancho: ancho,
+        onAvatarTap: onPickAvatar,
+      );
+
+  Widget get _videoPitch => CandPerfilVideoPitch(
+        tieneVideo: (profile.videoUrl ?? '').isNotEmpty,
+        onVer: onOpenVideoPitch,
+        onGrabar: onOpenPitchCamera,
+      );
+
+  Widget get _sobre => CandPerfilSobre(
+        texto: facts.aboutVacio ? '' : facts.aboutText,
+        etiquetas: _skills,
+        onEditar: onOpenEdit,
+      );
+
+  Widget get _experienciaCard => CandPerfilExperiencia(
+        items: _experiencia,
+        onVerTodo: onOpenTimeline,
+      );
+
+  Widget get _confidencial => CandPerfilConfidencial(
+        activo: _esConfidencial,
+        resumenOculto: _resumenOculto,
+        onTap: onOpenSettings,
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    return switch (candFormatoDe(context)) {
+      CandFormato.desktop => _desktop(),
+      CandFormato.tablet => _tablet(),
+      CandFormato.mobile => _mobile(),
+    };
+  }
+
+  Widget _mobile() {
+    return ListView(
+      padding: EdgeInsets.zero,
+      children: [
+        _portada,
+        _identidad(),
+        const SizedBox(height: 14),
+        _bloque(CandPerfilMetricas(metricas: _metricas)),
+        const SizedBox(height: 14),
+        _bloque(
+          CandPerfilAcciones(
+            onEditar: onOpenEdit,
+            onConfiguracion: onOpenSettings,
+          ),
+        ),
+        const SizedBox(height: 14),
+        _bloque(_videoPitch),
+        const SizedBox(height: 14),
+        _bloque(CandPerfilAccesos(accesos: _accesos)),
+        const SizedBox(height: 14),
+        _bloque(_sobre),
+        const SizedBox(height: 14),
+        _bloque(_experienciaCard),
+        const SizedBox(height: 14),
+        _bloque(_confidencial),
+        const SizedBox(height: 16),
+      ],
+    );
+  }
+
+  Widget _tablet() {
+    return ListView(
+      padding: EdgeInsets.zero,
+      children: [
+        _portada,
+        _identidad(),
+        const SizedBox(height: 16),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                flex: 3,
+                child: Column(
+                  children: [
+                    CandPerfilMetricas(metricas: _metricas),
+                    const SizedBox(height: 14),
+                    _videoPitch,
+                    const SizedBox(height: 14),
+                    _sobre,
+                    const SizedBox(height: 14),
+                    _experienciaCard,
+                  ],
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                flex: 2,
+                child: Column(
+                  children: [
+                    CandPerfilAcciones(
+                      vertical: true,
+                      onEditar: onOpenEdit,
+                      onConfiguracion: onOpenSettings,
+                    ),
+                    const SizedBox(height: 14),
+                    CandPerfilAccesos(accesos: _accesos),
+                    const SizedBox(height: 14),
+                    _confidencial,
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 18),
+      ],
+    );
+  }
+
+  Widget _desktop() {
+    return ListView(
+      padding: EdgeInsets.zero,
+      children: [
+        Center(
+          // Ancho máximo: en 1440 el contenido no se estira de borde a borde,
+          // se centra en una columna legible.
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1060),
+            child: Column(
+              children: [
+                CandPerfilPortada(
+                  alto: 150,
+                  onCompartir: onShare,
+                  onConfiguracion: onOpenSettings,
+                ),
+                _identidad(ancho: true),
+                const SizedBox(height: 18),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 28),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        flex: 3,
+                        child: Column(
+                          children: [
+                            CandPerfilMetricas(metricas: _metricas),
+                            const SizedBox(height: 14),
+                            _videoPitch,
+                            const SizedBox(height: 14),
+                            _sobre,
+                            const SizedBox(height: 14),
+                            _experienciaCard,
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 18),
+                      Expanded(
+                        flex: 2,
+                        child: Column(
+                          children: [
+                            CandPerfilAcciones(
+                              vertical: true,
+                              onEditar: onOpenEdit,
+                              onConfiguracion: onOpenSettings,
+                            ),
+                            const SizedBox(height: 14),
+                            CandPerfilAccesos(accesos: _accesos),
+                            const SizedBox(height: 14),
+                            _confidencial,
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _bloque(Widget child) => Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        child: child,
+      );
 }
 
 class _OwnProfileBody extends StatelessWidget {
@@ -5067,6 +5515,12 @@ class _ProfileBundle {
 
 class _ProfileFacts {
   final String aboutText;
+
+  /// `aboutText` trae un texto de relleno cuando la persona no escribió nada.
+  /// Esta bandera permite distinguirlo para no presentar ese relleno como si
+  /// fuera la descripción real del perfil.
+  final bool aboutVacio;
+
   final String locationLabel;
   final String modalityLabel;
   final String salaryLabel;
@@ -5090,6 +5544,7 @@ class _ProfileFacts {
 
   const _ProfileFacts({
     required this.aboutText,
+    required this.aboutVacio,
     required this.locationLabel,
     required this.modalityLabel,
     required this.salaryLabel,
@@ -5176,6 +5631,7 @@ class _ProfileFacts {
       aboutText: narrativeLines.isEmpty
           ? 'Este perfil todavía no tiene una descripción larga, pero ya conserva sus datos reales de video, experiencia y skills.'
           : narrativeLines.join(' '),
+      aboutVacio: narrativeLines.isEmpty,
       locationLabel: profile.location?.trim().isNotEmpty == true
           ? profile.location!.trim()
           : 'Ubicación por definir',

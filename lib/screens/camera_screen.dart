@@ -1,12 +1,16 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:ui';
 import 'package:camera/camera.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter/cupertino.dart';
 // Material widgets (SliverAppBar, Colors, Icons) have no Cupertino equivalent
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:video_player/video_player.dart';
 import '../theme/app_theme.dart';
+import '../theme/mploya_tokens.dart';
 import '../services/auth_service.dart';
 import '../services/storage_service.dart';
 import '../services/ia_coach_service.dart';
@@ -289,10 +293,10 @@ class _CameraScreenState extends State<CameraScreen> with SingleTickerProviderSt
                     Container(
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
-                        color: MployaTheme.brandAccent.withValues(alpha: 0.15),
+                        color: MpTokens.primary.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(14),
                       ),
-                      child: const Icon(CupertinoIcons.checkmark_circle_fill, color: MployaTheme.brandAccent, size: 24),
+                      child: const Icon(CupertinoIcons.checkmark_circle_fill, color: MpTokens.primary, size: 24),
                     ),
                     const SizedBox(width: 16),
                     Column(
@@ -310,16 +314,26 @@ class _CameraScreenState extends State<CameraScreen> with SingleTickerProviderSt
                     ),
                   ],
                 ),
-                const SizedBox(height: 28),
+                const SizedBox(height: 20),
+
+                // ── Preview real del video recién grabado — CANDIDATO TANDA 3.
+                // Antes el sheet aparecía sin mostrar el video; ahora el
+                // candidato lo ve (play/pausa/scrub/duración) antes de elegir
+                // qué hacer, como en `revisa tu video candidato.png`. Si el
+                // archivo no se puede reproducir (por ejemplo, en una
+                // plataforma sin soporte), el preview se omite solo y el
+                // resto del flujo sigue exactamente igual que antes.
+                if (file != null) ...[
+                  _PitchPreviewPlayer(file: file),
+                  const SizedBox(height: 20),
+                ],
 
                 // ── IA Coach Button (primary) ──
                 _SheetActionButton(
                   icon: CupertinoIcons.wand_stars,
                   label: 'Analizar con IA',
                   subtitle: 'Obtené feedback para mejorar tu pitch',
-                  gradient: const LinearGradient(
-                    colors: [NexTheme.brandAccent, NexTheme.premiumEnd],
-                  ),
+                  gradient: MpTokens.primaryGradient,
                   onTap: () {
                     Navigator.pop(ctx);
                     if (file != null) {
@@ -1422,6 +1436,182 @@ class _RoleRow extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 // Sheet Action Button — Used in post-recording bottom sheet
 // ─────────────────────────────────────────────────────────────────────────────
+
+/// Preview real del video recién grabado, antes de elegir qué hacer con él
+/// — CANDIDATO TANDA 3 (`revisa tu video candidato.png`). Usa `video_player`,
+/// ya dependencia del proyecto — no crea un segundo sistema de video. Si no
+/// logra inicializar (plataforma sin soporte, archivo no legible) se omite en
+/// silencio: el resto del sheet sigue funcionando exactamente igual que antes
+/// de este cambio, nunca bloquea el flujo de publicar/analizar/descartar.
+class _PitchPreviewPlayer extends StatefulWidget {
+  const _PitchPreviewPlayer({required this.file});
+  final XFile file;
+
+  @override
+  State<_PitchPreviewPlayer> createState() => _PitchPreviewPlayerState();
+}
+
+class _PitchPreviewPlayerState extends State<_PitchPreviewPlayer> {
+  VideoPlayerController? _controller;
+  bool _failed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _iniciar();
+  }
+
+  Future<void> _iniciar() async {
+    try {
+      final controller = kIsWeb
+          ? VideoPlayerController.networkUrl(Uri.parse(widget.file.path))
+          : VideoPlayerController.file(File(widget.file.path));
+      await controller.initialize();
+      if (!mounted) {
+        controller.dispose();
+        return;
+      }
+      setState(() => _controller = controller);
+    } catch (e) {
+      debugPrint('Preview de pitch: no se pudo inicializar ($e)');
+      if (mounted) setState(() => _failed = true);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  void _togglePlay() {
+    final c = _controller;
+    if (c == null) return;
+    setState(() {
+      if (c.value.isPlaying) {
+        c.pause();
+      } else {
+        if (c.value.position >= c.value.duration) {
+          c.seekTo(Duration.zero);
+        }
+        c.play();
+      }
+    });
+  }
+
+  String _formatearDuracion(Duration d) {
+    final m = d.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final s = d.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return '$m:$s';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = _controller;
+    if (_failed || controller == null) {
+      return const SizedBox.shrink();
+    }
+
+    final aspect = controller.value.aspectRatio;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(18),
+      child: AspectRatio(
+        aspectRatio: aspect == 0 ? 9 / 16 : aspect,
+        child: Stack(
+          alignment: Alignment.center,
+          fit: StackFit.expand,
+          children: [
+            VideoPlayer(controller),
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: _togglePlay,
+              child: AnimatedBuilder(
+                animation: controller,
+                builder: (context, _) {
+                  final playing = controller.value.isPlaying;
+                  return AnimatedOpacity(
+                    opacity: playing ? 0 : 1,
+                    duration: const Duration(milliseconds: 200),
+                    child: Container(
+                      color: Colors.black.withValues(alpha: 0.18),
+                      child: Center(
+                        child: Container(
+                          width: 56,
+                          height: 56,
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.45),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            playing ? CupertinoIcons.pause_fill : CupertinoIcons.play_fill,
+                            color: Colors.white,
+                            size: 26,
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: AnimatedBuilder(
+                animation: controller,
+                builder: (context, _) {
+                  final value = controller.value;
+                  return Container(
+                    padding: const EdgeInsets.fromLTRB(10, 20, 10, 8),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [Colors.transparent, Colors.black.withValues(alpha: 0.55)],
+                      ),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SizedBox(
+                          height: 20,
+                          child: VideoProgressIndicator(
+                            controller,
+                            allowScrubbing: true,
+                            padding: EdgeInsets.zero,
+                            colors: const VideoProgressColors(
+                              playedColor: MpTokens.primary,
+                              bufferedColor: Colors.white24,
+                              backgroundColor: Colors.white12,
+                            ),
+                          ),
+                        ),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              _formatearDuracion(value.position),
+                              style: const TextStyle(color: Colors.white, fontSize: 11),
+                            ),
+                            Text(
+                              _formatearDuracion(value.duration),
+                              style: const TextStyle(color: Colors.white70, fontSize: 11),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 class _SheetActionButton extends StatelessWidget {
   final IconData icon;
