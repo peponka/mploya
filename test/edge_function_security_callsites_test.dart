@@ -37,12 +37,11 @@ void main() {
     expect(productionDart, isNot(contains('"create-payment-intent"')));
   });
 
-  test('delete user remains an audited unresolved callsite', () {
-    final cleanup = auth.indexOf('await _cleanupUserData(uid);');
-    final invoke = auth.indexOf("'delete-user'");
-    expect(cleanup, greaterThanOrEqualTo(0));
-    expect(invoke, greaterThan(cleanup));
-    expect(auth, contains("body: {'user_id': uid}"));
+  test('delete user remains closed until a safe function exists', () {
+    expect(auth, isNot(contains('_cleanupUserData')));
+    expect(auth, isNot(contains("'delete-user'")));
+    expect(auth, isNot(contains("body: {'user_id': uid}")));
+    expect(auth, contains('AppStrings.deleteServiceUnavailable'));
     expect(Directory('supabase/functions/delete-user').existsSync(), isFalse);
   });
 }

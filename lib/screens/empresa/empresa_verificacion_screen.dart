@@ -96,6 +96,10 @@ class _EmpresaVerificacionScreenState extends State<EmpresaVerificacionScreen> {
               'La verificación automática necesita el dominio propio de la '
               'empresa.',
         ),
+      ResultadoAutoVerificacion.noDisponible => (
+          'Verificación pendiente',
+          'La solicitud de verificación estará disponible próximamente.',
+        ),
       ResultadoAutoVerificacion.error => (
           'No pudimos verificarlo',
           'Probá de nuevo en un momento.',

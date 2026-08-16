@@ -147,54 +147,9 @@ class EmployerRatingService {
     if (overallStars < 1 || overallStars > 5) return 'Puntuación inválida';
     if (_uid == companyId) return 'No podés calificarte a vos mismo';
 
-    // Auto-fill subcategories with overall if not provided
-    if (communicationStars <= 0) communicationStars = overallStars;
-    if (transparencyStars <= 0) transparencyStars = overallStars;
-    if (respectStars <= 0) respectStars = overallStars;
-
-    try {
-      // Verificar que no haya review previo
-      final existing = await _supabase
-          .from('employer_reviews')
-          .select('id')
-          .eq('candidate_id', _uid!)
-          .eq('company_id', companyId)
-          .maybeSingle();
-
-      if (existing != null) {
-        // Actualizar review existente
-        await _supabase.from('employer_reviews').update({
-          'overall_stars': overallStars,
-          'communication_stars': communicationStars,
-          'transparency_stars': transparencyStars,
-          'respect_stars': respectStars,
-          'comment': comment,
-          'process_type': processType,
-          'updated_at': DateTime.now().toUtc().toIso8601String(),
-        }).eq('id', existing['id']);
-      } else {
-        // Crear review nuevo
-        await _supabase.from('employer_reviews').insert({
-          'candidate_id': _uid,
-          'company_id': companyId,
-          'overall_stars': overallStars,
-          'communication_stars': communicationStars,
-          'transparency_stars': transparencyStars,
-          'respect_stars': respectStars,
-          'comment': comment,
-          'process_type': processType,
-        });
-      }
-
-      // Recalcular promedios de la empresa
-      await _recalculateCompanyRating(companyId);
-      _invalidateSummaryCache(companyId);
-
-      return null; // éxito
-    } catch (e) {
-      debugPrint('❌ EmployerRatingService.submitReview: $e');
-      return 'Error al enviar la calificación: $e';
-    }
+    // Futuro: una RPC validará participación real, guardará la reseña y
+    // recalculará los agregados en una sola transacción.
+    return 'Las calificaciones estarán disponibles próximamente.';
   }
 
   // ── Obtener resumen de ratings de una empresa ──
@@ -286,55 +241,8 @@ class EmployerRatingService {
   // ── Eliminar mi review ──
   Future<bool> deleteMyReview(String companyId) async {
     if (_uid == null) return false;
-
-    try {
-      await _supabase
-          .from('employer_reviews')
-          .delete()
-          .eq('candidate_id', _uid!)
-          .eq('company_id', companyId);
-
-      await _recalculateCompanyRating(companyId);
-      _invalidateSummaryCache(companyId);
-      return true;
-    } catch (e) {
-      debugPrint('❌ EmployerRatingService.deleteMyReview: $e');
-      return false;
-    }
-  }
-
-  // ── Recalcular rating promedio en users (para el algoritmo) ──
-  Future<void> _recalculateCompanyRating(String companyId) async {
-    try {
-      final res = await _supabase
-          .from('employer_reviews')
-          .select('overall_stars')
-          .eq('company_id', companyId);
-
-      final reviews = List<Map<String, dynamic>>.from(res);
-
-      if (reviews.isEmpty) {
-        await _supabase.from('users').update({
-          'employer_rating_stars': 0,
-          'employer_rating_count': 0,
-        }).eq('id', companyId);
-        return;
-      }
-
-      double sum = 0;
-      for (final r in reviews) {
-        sum += (r['overall_stars'] as num?)?.toDouble() ?? 0;
-      }
-
-      final avg = double.parse((sum / reviews.length).toStringAsFixed(1));
-
-      await _supabase.from('users').update({
-        'employer_rating_stars': avg,
-        'employer_rating_count': reviews.length,
-      }).eq('id', companyId);
-    } catch (e) {
-      debugPrint('⚠️ _recalculateCompanyRating: $e');
-    }
+    // Deletion must use the same future RPC so aggregates cannot drift.
+    return false;
   }
 
   // ── Cache helpers ──
@@ -345,8 +253,4 @@ class EmployerRatingService {
         _summaryCache.containsKey(companyId);
   }
 
-  void _invalidateSummaryCache(String companyId) {
-    _summaryCache.remove(companyId);
-    _summaryCacheTime.remove(companyId);
-  }
 }

@@ -3,7 +3,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../l10n/app_strings.dart';
 import 'feed_service.dart';
-import 'video_preload_manager.dart';
 import 'my_profile_service.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -295,93 +294,12 @@ class AuthService {
 
   // ── Eliminar cuenta ─────────────────────────────────────────────────────
 
-  /// Elimina la cuenta del usuario actual y todos sus datos asociados.
-  /// 
-  /// Flujo:
-  ///  1. Eliminar datos de tablas públicas (connections, messages, etc.)
-  ///  2. Llamar Edge Function `delete-user` que usa service_role para
-  ///     borrar al usuario de auth.users (GDPR "right to be forgotten").
-  ///  3. Limpiar recursos locales + cerrar sesión.
-  ///
-  /// ⚠️ NO hay fallback soft-delete. Si la Edge Function falla,
-  /// retornamos error para que el usuario contacte soporte.
-  /// Esto es requisito de Apple Guideline 5.1.1 y GDPR Art. 17.
-  ///
-  /// Retorna null si OK, String de error si falla.
+  /// Cierre temporal no destructivo hasta tener una baja server-side.
+  /// La futura función derivará el actor del JWT y manejará retención,
+  /// cancelación y limpieza auditada sin aceptar IDs desde Flutter.
   Future<String?> deleteAccount() async {
-    final uid = _client.auth.currentUser?.id;
-    if (uid == null) return AppStrings.noSession;
-
-    try {
-      // Paso 1: Limpiar datos del usuario en tablas públicas
-      await _cleanupUserData(uid);
-
-      // Paso 2: Edge Function con service_role para eliminar de auth.users
-      // (El SDK del cliente NO puede auto-eliminarse por seguridad)
-      final response = await _client.functions.invoke(
-        'delete-user',
-        body: {'user_id': uid},
-      );
-
-      if (response.status != 200) {
-        // NO hacer soft-delete — violaría GDPR
-        final errorMsg = response.data?['error']?.toString() ?? 'Error desconocido';
-        debugPrint('🔴 delete-user Edge Function failed: $errorMsg');
-        return AppStrings.deleteAccountFailed;
-      }
-
-      // Paso 3: Limpiar recursos locales
-      try {
-        // Importar dinámicamente para no acoplar
-        final videoMgr = VideoPreloadManager.instance;
-        videoMgr.disposeAll(); // Aquí SÍ corresponde disposeAll()
-      } catch (e) {
-        debugPrint('⚠️ deleteAccount cleanup VideoPreloadManager: $e');
-      }
-
-      // Paso 4: Cerrar sesión
-      await _client.auth.signOut();
-      return null;
-    } on FunctionException catch (e) {
-      // La Edge Function no está deployada o hay error de red
-      debugPrint('🔴 deleteAccount FunctionException: ${e.details}');
-      return AppStrings.deleteServiceUnavailable;
-    } catch (e) {
-      debugPrint('🔴 deleteAccount error: $e');
-      return _classifyNetworkError(e, context: 'deleteAccount');
-    }
-  }
-
-  /// Limpia todos los datos del usuario en tablas públicas.
-  Future<void> _cleanupUserData(String uid) async {
-    // Orden importa por FK constraints
-    final tables = [
-      {'table': 'moderation_log', 'column': 'user_id'},
-      {'table': 'content_reports', 'column': 'reporter_id'},
-      {'table': 'pitch_reactions', 'column': 'user_id'},
-      {'table': 'pitch_reactions', 'column': 'target_user_id'},
-      {'table': 'pitch_comments', 'column': 'author_id'},
-      {'table': 'saved_profiles', 'column': 'user_id'},
-      {'table': 'saved_profiles', 'column': 'saved_user_id'},
-      {'table': 'nexus_signals', 'column': 'sender_id'},
-      {'table': 'nexus_signals', 'column': 'receiver_id'},
-      {'table': 'profile_views', 'column': 'viewer_id'},
-      {'table': 'profile_views', 'column': 'viewed_id'},
-      {'table': 'connections', 'column': 'requester_id'},
-      {'table': 'connections', 'column': 'addressee_id'},
-      {'table': 'messages', 'column': 'sender_id'},
-      {'table': 'messages', 'column': 'receiver_id'},
-      {'table': 'notifications', 'column': 'user_id'},
-      {'table': 'jobs', 'column': 'company_id'},
-    ];
-
-    for (final t in tables) {
-      try {
-        await _client.from(t['table']!).delete().eq(t['column']!, uid);
-      } catch (e) {
-        debugPrint('⚠️ Cleanup ${t['table']}.${t['column']}: $e');
-      }
-    }
+    if (_client.auth.currentUser == null) return AppStrings.noSession;
+    return AppStrings.deleteServiceUnavailable;
   }
 
   // ─────────────────────────────────────────────────────────────────────────

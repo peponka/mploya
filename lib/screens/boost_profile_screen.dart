@@ -18,7 +18,6 @@ class BoostProfileScreen extends ConsumerStatefulWidget {
 
 class _BoostProfileScreenState extends ConsumerState<BoostProfileScreen> {
   int _selectedOption = 0;
-  bool _isLoading = false;
 
   // ── Resultados del boost activo (prueba de impacto) ──
   int? _daysLeft;     // días que faltan; null = sin boost activo
@@ -74,97 +73,23 @@ class _BoostProfileScreenState extends ConsumerState<BoostProfileScreen> {
     }
   }
 
-  // ══════════════════════════════════════════════════════════════════════════
-  // 🚀 MODO FUNDADOR — Boost gratis para todos hasta tener masa crítica.
-  //
-  // true  → botón "Activar Boost GRATIS"; activa sin cobrar (estrategia de
-  //         lanzamiento: que lo usen, vean que funciona, y recién después cobrar).
-  // false → botón "Pagar $X".
-  //
-  // ⚠️ PARA COBRAR DE VERDAD NO ALCANZA CON PONER ESTO EN FALSE. Hoy la rama de
-  //    pago (abajo, en _processPayment) es un BYPASS que igual activa gratis
-  //    ("solo para TestFlight"). Antes de cobrar hay que, en ese orden:
-  //    1) Configurar los productos/precios en RevenueCat (1sem/2sem/1mes, y la
-  //       variante empresa más cara). El IAP de Apple/Google es SOLO MÓVIL: en
-  //       web NO se puede cobrar con Apple Pay/Play — para web haría falta Stripe.
-  //    2) Reemplazar el bypass por la compra real (RevenueCatService.purchase…)
-  //       y recién escribir boost_ends_at si el pago fue exitoso.
-  //    3) Subir fuerte el precio de empresa (un buen candidato vale miles).
-  //    Hasta tener eso, dejá _founderMode = true.
-  // ══════════════════════════════════════════════════════════════════════════
-  static const _founderMode = true;
-  // ignore: unused_field
-  static const _founderBoostDays = 30; // Duración del boost gratis
-
-  void _processPayment() async {
-    setState(() => _isLoading = true);
-
-    final uid = Supabase.instance.client.auth.currentUser?.id;
-    int durationDays = 7;
-    if (_selectedOption == 1) durationDays = 14;
-    if (_selectedOption == 2) durationDays = 30;
-
-    if (_founderMode && uid != null) {
-      // Modo Fundador: activar boost gratis directamente en la DB
-      final boostEnd = DateTime.now().add(Duration(days: durationDays));
-      try {
-        await Supabase.instance.client.from('users').update({
-          'boost_ends_at': boostEnd.toUtc().toIso8601String(),
-        }).eq('id', uid);
-      } catch (e) {
-        debugPrint('Error activando boost fundador: $e');
-      }
-    } else {
-      // ⚠️⚠️ BYPASS DE PAGO — NO COBRA. Activa el boost gratis igual (TestFlight).
-      // ANTES DE LANZAR PAGO: reemplazar este bloque por la compra real de
-      // RevenueCat (móvil) o Stripe (web) y escribir boost_ends_at SOLO si el
-      // pago fue exitoso. Ver el comentario de _founderMode arriba.
-      try {
-        final boostEnd = DateTime.now().add(Duration(days: durationDays));
-        if (uid != null) {
-          await Supabase.instance.client.from('users').update({
-            'boost_ends_at': boostEnd.toUtc().toIso8601String(),
-          }).eq('id', uid);
-        }
-      } catch (e) {
-        debugPrint('Error activando boost fallback: $e');
-      }
-      await Future.delayed(const Duration(seconds: 1));
-    }
-
-    // Guardar inicio del boost para medir su impacto (vistas generadas). Si la
-    // columna no existe todavía (falta correr boost_setup.sql) se ignora sin
-    // romper la activación.
-    if (uid != null) {
-      try {
-        await Supabase.instance.client.from('users').update({
-          'boost_started_at': DateTime.now().toUtc().toIso8601String(),
-        }).eq('id', uid);
-      } catch (_) {}
-    }
-
-    setState(() => _isLoading = false);
-
-    if (mounted) {
-      showCupertinoDialog(
-        context: context,
-        builder: (c) => CupertinoAlertDialog(
-          title: const Text('¡Boost Activado!'),
-          content: Text(
-            '🎁 Boost activado con éxito por $durationDays días. Tu perfil ahora es top tier en el feed correspondiente.',
-          ),
-          actions: [
-            CupertinoDialogAction(
-              child: const Text('Increíble'),
-              onPressed: () {
-                Navigator.pop(c);
-                Navigator.pop(context);
-              },
-            )
-          ],
+  void _processPayment() {
+    showCupertinoDialog<void>(
+      context: context,
+      builder: (dialogContext) => CupertinoAlertDialog(
+        title: const Text('Próximamente'),
+        content: const Text(
+          'Los Boosts estarán disponibles cuando podamos validar la compra y '
+          'la activación de forma segura.',
         ),
-      );
-    }
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Entendido'),
+          ),
+        ],
+      ),
+    );
   }
 
   /// Tarjeta que muestra el impacto del boost activo: vistas generadas + días
@@ -436,7 +361,7 @@ class _BoostProfileScreenState extends ConsumerState<BoostProfileScreen> {
               
               CupertinoButton(
                 padding: EdgeInsets.zero,
-                onPressed: _isLoading ? null : _processPayment,
+                onPressed: _processPayment,
                 child: Container(
                   height: 56,
                   decoration: BoxDecoration(
@@ -447,18 +372,14 @@ class _BoostProfileScreenState extends ConsumerState<BoostProfileScreen> {
                     ],
                   ),
                   child: Center(
-                    child: _isLoading 
-                      ? const CupertinoActivityIndicator(color: Colors.white)
-                      : Text(
-                          _founderMode
-                              ? '🎁 Activar Boost GRATIS'
-                              : 'Pagar ${options[_selectedOption]['price']}',
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white,
-                          ),
-                        ),
+                    child: const Text(
+                      'Próximamente',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                      ),
+                    ),
                   ),
                 ),
               ),

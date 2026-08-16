@@ -135,7 +135,7 @@ Future<VerificacionData> loadVerificacion() async {
 }
 
 /// Resultado de intentar la verificación automática por email.
-enum ResultadoAutoVerificacion { verificada, dominioPublico, error }
+enum ResultadoAutoVerificacion { verificada, dominioPublico, noDisponible, error }
 
 /// Dispara `autoVerifyEmail()` del servicio existente.
 ///
@@ -147,7 +147,7 @@ Future<ResultadoAutoVerificacion> verificarEmailCorporativo() async {
     final ok = await CompanyVerificationService.instance.autoVerifyEmail();
     return ok
         ? ResultadoAutoVerificacion.verificada
-        : ResultadoAutoVerificacion.dominioPublico;
+        : ResultadoAutoVerificacion.noDisponible;
   } catch (e) {
     debugPrint('verificacion · autoVerifyEmail: $e');
     return ResultadoAutoVerificacion.error;

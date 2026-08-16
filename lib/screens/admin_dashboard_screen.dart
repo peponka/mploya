@@ -38,8 +38,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       return;
     }
     try {
-      final row = await _sb.from('users').select('is_admin').eq('id', uid).maybeSingle();
-      final isAdmin = row?['is_admin'] == true;
+      // 033 replaces users.is_admin with an active admin_memberships lookup.
+      final isAdmin = await _sb.rpc('is_admin') == true;
       setState(() {
         _checkingAccess = false;
         _isAdmin = isAdmin;
@@ -915,24 +915,12 @@ class _UsersTabState extends State<_UsersTab> {
     }
   }
 
-  Future<void> _toggleVerified(Map<String, dynamic> u) async {
-    final newVal = !(u['is_verified'] == true);
-    try {
-      await _sb.from('users').update({'is_verified': newVal}).eq('id', u['id']);
-      setState(() => u['is_verified'] = newVal);
-    } catch (e) {
-      _snack('No se pudo actualizar: $e');
-    }
+  void _toggleVerified(Map<String, dynamic> u) {
+    _snack('La verificación administrativa estará disponible próximamente.');
   }
 
-  Future<void> _deleteUser(Map<String, dynamic> u) async {
-    try {
-      await _sb.from('users').delete().eq('id', u['id']);
-      setState(() => _rows.remove(u));
-      _snack('Usuario eliminado');
-    } catch (e) {
-      _snack('No se pudo eliminar: $e');
-    }
+  void _deleteUser(Map<String, dynamic> u) {
+    _snack('La eliminación administrativa estará disponible próximamente.');
   }
 
   void _confirmDelete(Map<String, dynamic> u) {
@@ -1203,13 +1191,11 @@ class _BoostsTabState extends State<_BoostsTab> {
     }
   }
 
-  Future<void> _revokeBoost(Map<String, dynamic> u) async {
-    try {
-      await _sb.from('users').update({'boost_ends_at': null}).eq('id', u['id']);
-      setState(() => _rows.remove(u));
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('No se pudo revocar: $e')));
-    }
+  void _revokeBoost(Map<String, dynamic> u) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('La revocación de Boost estará disponible próximamente.')),
+    );
   }
 
   String _fmtDate(dynamic val) {

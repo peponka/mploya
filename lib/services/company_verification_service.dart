@@ -94,56 +94,8 @@ class CompanyVerificationService {
     }
   }
 
-  /// Verifica automáticamente si el email es corporativo.
-  ///
-  /// Un email corporativo es aquel que NO usa dominios públicos
-  /// como gmail, hotmail, yahoo, etc.
+  /// Cerrado hasta tener validación administrativa server-side.
   Future<bool> autoVerifyEmail() async {
-    final uid = _supabase.auth.currentUser?.id;
-    final email = _supabase.auth.currentUser?.email;
-    if (uid == null || email == null) return false;
-
-    final publicDomains = [
-      'gmail.com', 'hotmail.com', 'outlook.com', 'yahoo.com',
-      'live.com', 'icloud.com', 'protonmail.com', 'aol.com',
-      'mail.com', 'zoho.com', 'yandex.com', 'gmx.com',
-    ];
-
-    final domain = email.split('@').last.toLowerCase();
-    final isCorporate = !publicDomains.contains(domain);
-
-    if (isCorporate) {
-      try {
-        // Check if already verified
-        final existing = await _supabase
-            .from('company_verifications')
-            .select('id')
-            .eq('company_id', uid)
-            .eq('level', 'basic')
-            .maybeSingle();
-
-        if (existing != null) return true;
-
-        await _supabase.from('company_verifications').insert({
-          'company_id': uid,
-          'company_name': email.split('@').last.split('.').first,
-          'level': 'basic',
-          'status': 'approved',
-          'review_note': 'Auto-verificado: email corporativo ($domain)',
-        });
-
-        // Update user verified flag
-        await _supabase.from('users').update({
-          'is_verified': true,
-        }).eq('id', uid);
-
-        return true;
-      } catch (e) {
-        debugPrint('Auto-verify error: $e');
-        return false;
-      }
-    }
-
     return false;
   }
 
@@ -156,65 +108,14 @@ class CompanyVerificationService {
     final uid = _supabase.auth.currentUser?.id;
     if (uid == null) return 'No autenticado';
 
-    try {
-      await _supabase.from('company_verifications').insert({
-        'company_id': uid,
-        'company_name': companyName,
-        'level': 'verified',
-        'status': 'pending',
-        'document_urls': documentUrls,
-        'notes': notes,
-      });
-
-      return null; // éxito
-    } catch (e) {
-      return 'Error al enviar solicitud: $e';
-    }
+    // El esquema/RLS no está versionado. La futura RPC deberá derivar
+    // company_id de auth.uid() y forzar status = pending.
+    return 'Las solicitudes de verificación estarán disponibles próximamente.';
   }
 
-  /// Verifica automáticamente si la empresa tiene +5 contrataciones exitosas.
+  /// El nivel trusted deberá calcularse server-side.
   Future<void> checkTrustedStatus(String companyId) async {
-    try {
-      // Count successful hires (connections from jobs)
-      final jobs = await _supabase
-          .from('jobs')
-          .select('id')
-          .eq('company_id', companyId);
-
-      final jobIds = List<Map<String, dynamic>>.from(jobs)
-          .map((j) => j['id'].toString())
-          .toList();
-
-      if (jobIds.isEmpty) return;
-
-      final applications = await _supabase
-          .from('job_applications')
-          .select('id')
-          .inFilter('job_id', jobIds)
-          .eq('status', 'hired');
-
-      if ((applications as List).length >= 5) {
-        // Auto-upgrade to trusted
-        final existing = await _supabase
-            .from('company_verifications')
-            .select('id')
-            .eq('company_id', companyId)
-            .eq('level', 'trusted')
-            .maybeSingle();
-
-        if (existing == null) {
-          await _supabase.from('company_verifications').insert({
-            'company_id': companyId,
-            'company_name': '',
-            'level': 'trusted',
-            'status': 'approved',
-            'review_note': 'Auto-verificado: +5 contrataciones exitosas',
-          });
-        }
-      }
-    } catch (e) {
-      debugPrint('Check trusted status error: $e');
-    }
+    return;
   }
 
   /// Retorna info de verificación para mostrar en el perfil/badge.

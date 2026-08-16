@@ -2,7 +2,6 @@ import 'dart:ui';
 import 'package:flutter/cupertino.dart';
 // Material widgets (SliverAppBar, Colors, Icons) have no Cupertino equivalent
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import '../services/revenuecat_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../theme/app_theme.dart';
@@ -183,13 +182,7 @@ class _PremiumPaywallScreenState extends State<PremiumPaywallScreen> {
                       ),
                       const Spacer(),
                       GestureDetector(
-                        onTap: () async {
-                          setState(() => _isLoading = true);
-                          final success = await RevenueCatService.instance.restorePurchases();
-                          if (!context.mounted) return;
-                          setState(() => _isLoading = false);
-                          if (success) Navigator.pop(context, true);
-                        },
+                        onTap: _processPurchase,
                         child: Text(
                           'Restaurar compras',
                           style: TextStyle(color: Colors.white.withValues(alpha: 0.35), fontSize: 13, fontWeight: FontWeight.w500),
@@ -355,46 +348,6 @@ class _PremiumPaywallScreenState extends State<PremiumPaywallScreen> {
             ),
           ),
 
-          // ── Bypass Button (Develop Only) ──
-          if (!kReleaseMode)
-            Positioned(
-              top: MediaQuery.of(context).padding.top + 10,
-              right: 16,
-              child: GestureDetector(
-                onTap: () async {
-                  setState(() => _isLoading = true);
-                  final uid = Supabase.instance.client.auth.currentUser?.id;
-                  if (uid != null) {
-                    try {
-                      await Supabase.instance.client
-                          .from('users')
-                          .update({'is_premium': true})
-                          .eq('id', uid);
-                      await RevenueCatService.instance.forceRefreshFromSupabase();
-                      // ignore: use_build_context_synchronously
-                      if (mounted) Navigator.pop(context, true);
-                    } catch (e) {
-                      if (mounted) setState(() => _isLoading = false);
-                    }
-                  }
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: Colors.orange.withValues(alpha: 0.9),
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: const [BoxShadow(color: Colors.black45, blurRadius: 10)],
-                  ),
-                  child: const Row(
-                    children: [
-                      Icon(CupertinoIcons.ant, color: Colors.white, size: 16),
-                      SizedBox(width: 6),
-                      Text('DEBUG BYPASS', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold, decoration: TextDecoration.none)),
-                    ],
-                  ),
-                ),
-              ),
-            ),
         ],
       ),
     );

@@ -650,43 +650,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _executeDeleteAccount() async {
-    // Mostrar loading
-    showCupertinoDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => const CupertinoAlertDialog(
-        content: Padding(
-          padding: EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              CupertinoActivityIndicator(radius: 14),
-              SizedBox(height: 16),
-              Text('Eliminando cuenta...', style: TextStyle(fontSize: 15)),
-            ],
-          ),
-        ),
-      ),
-    );
-
-    // Limpiar tokens
-    await PushNotificationService.instance.clearToken();
-    await RevenueCatService.instance.logout();
-
-    // Eliminar cuenta
     final error = await AuthService.instance.deleteAccount();
-
     if (!mounted) return;
-    Navigator.pop(context); // Cerrar loading
-
-    if (error != null) {
-      _showAlert('Error al eliminar cuenta: $error');
-    } else {
-      Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
-        CupertinoPageRoute(builder: (_) => const SplashScreen()),
-        (_) => false,
-      );
-    }
+    _showAlert(error ?? 'La solicitud de eliminación estará disponible próximamente.');
   }
 
   // ═══════════════════════════════════════════════════════════════════════════

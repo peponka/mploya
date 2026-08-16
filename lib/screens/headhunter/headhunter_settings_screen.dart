@@ -242,15 +242,9 @@ class _HeadhunterSettingsScreenState extends State<HeadhunterSettingsScreen> {
               Navigator.pop(dialogContext);
               final error = await AuthService.instance.deleteAccount();
               if (!mounted) return;
-              if (error != null) {
-                setState(
-                  () => _message = 'No se pudo eliminar la cuenta: $error',
-                );
-                return;
-              }
-              Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
-                CupertinoPageRoute(builder: (_) => const SplashScreen()),
-                (_) => false,
+              setState(
+                () => _message = error ??
+                    'La solicitud de eliminación estará disponible próximamente.',
               );
             },
             child: const Text('Eliminar'),
