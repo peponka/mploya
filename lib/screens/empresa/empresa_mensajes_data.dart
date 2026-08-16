@@ -1,7 +1,14 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../utils/headhunter_candidate_privacy.dart';
 import '../../utils/user_columns.dart';
+
+/// Regla de presentación para ocultar identidad en la bandeja de Empresa.
+bool empresaMensajeEsConfidencial(String? accountType) {
+  final type = accountType?.trim().toLowerCase() ?? '';
+  return isConfidentialAccountType(type) || type.startsWith('confidenc');
+}
 
 /// Una conversación: el otro participante + el último mensaje.
 @immutable
@@ -148,9 +155,9 @@ Future<MensajesData> loadEmpresaConversaciones() async {
           avatar: (perfil?['avatar_url']?.toString().isNotEmpty ?? false)
               ? perfil!['avatar_url'].toString()
               : null,
-          confidencial: (perfil?['account_type']?.toString() ?? '')
-              .toLowerCase()
-              .startsWith('confidenc'),
+          confidencial: empresaMensajeEsConfidencial(
+            perfil?['account_type']?.toString(),
+          ),
           ultimoMensaje: fila['text']?.toString() ?? '',
           fecha: DateTime.tryParse(fila['created_at']?.toString() ?? ''),
           sinLeer: sinLeer[otro] ?? 0,
