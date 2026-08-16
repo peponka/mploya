@@ -6,6 +6,7 @@ import '../theme/app_theme.dart';
 import '../widgets/web_centered.dart';
 import '../widgets/spring_interaction.dart';
 import '../screens/onboarding_pitch_screen.dart';
+import '../services/my_profile_service.dart';
 
 class StealthProfileFormScreen extends StatefulWidget {
   const StealthProfileFormScreen({super.key});
@@ -64,15 +65,16 @@ class _StealthProfileFormScreenState extends State<StealthProfileFormScreen> {
         if (idiomas.isNotEmpty) aboutParts.add('🌐 Idiomas: $idiomas');
         if (logros.isNotEmpty) aboutParts.add('\n🏆 Logros destacados:\n$logros');
 
-        await Supabase.instance.client.from('users').update({
-          'account_type': 'confidencial',
-          'name': seudonimo.isEmpty ? 'Talento Oculto' : seudonimo,
-          'company': empresa,
-          'headline': titular.isEmpty ? 'Directivo Stealth' : titular,
-          'tags': tagsList.isNotEmpty ? tagsList : null,
-          'about': aboutParts.join('\n'),
-          'onboarding_step': 2,
-        }).eq('id', user.id);
+        await updateMyConfidentialProfile(
+          name: seudonimo.isEmpty ? 'Talento Oculto' : seudonimo,
+          company: empresa,
+          updateCompany: true,
+          headline: titular.isEmpty ? 'Directivo Stealth' : titular,
+          tags: tagsList.isNotEmpty ? tagsList : null,
+          updateTags: true,
+          about: aboutParts.join('\n'),
+          completeOnboarding: true,
+        );
 
         if (!mounted) return;
         Navigator.of(context).pushReplacement(

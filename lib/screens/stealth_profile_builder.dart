@@ -3,6 +3,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../theme/app_theme.dart';
+import '../services/my_profile_service.dart';
 
 class StealthProfileBuilder extends StatefulWidget {
   const StealthProfileBuilder({super.key});
@@ -31,7 +32,7 @@ class _StealthProfileBuilderState extends State<StealthProfileBuilder> {
     final uid = _supabase.auth.currentUser?.id;
     if (uid == null) return;
     
-    final res = await _supabase.from('users').select('headline, about').eq('id', uid).maybeSingle();
+    final res = await loadMyProfile();
     if (res != null && mounted) {
       _headlineCtrl.text = (res['headline'] ?? '').toString();
       
@@ -70,10 +71,10 @@ class _StealthProfileBuilderState extends State<StealthProfileBuilder> {
     try {
       final blindCv = '${_sectorCtrl.text} || ${_budgetCtrl.text} || ${_achievementsCtrl.text}';
       
-      await _supabase.from('users').update({
-        'headline': _headlineCtrl.text,
-        'about': blindCv,
-      }).eq('id', uid);
+      await updateMyConfidentialProfile(
+        headline: _headlineCtrl.text,
+        about: blindCv,
+      );
 
       if (mounted) {
         showCupertinoDialog(

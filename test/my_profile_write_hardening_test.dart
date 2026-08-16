@@ -34,6 +34,8 @@ void main() {
       'update_my_headhunter_profile',
       'set_my_candidate_privacy',
       'set_my_profile_avatar',
+      'update_my_candidate_preferences',
+      'set_my_profile_video',
     ];
 
     test('all functions use only auth.uid and authenticated execution', () {

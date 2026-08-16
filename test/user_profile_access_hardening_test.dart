@@ -146,7 +146,7 @@ void main() {
     test('explicitly fixes search paths without removing current SELECT', () {
       expect(
         RegExp(r'SET search_path = public, pg_temp').allMatches(safeAccess),
-        hasLength(7),
+        hasLength(9),
       );
       expect(
         RegExp(

@@ -9,6 +9,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../services/auth_service.dart';
 import '../services/storage_service.dart';
+import '../services/my_profile_service.dart';
 import 'camera_screen.dart';
 import 'micro_pitch_web_stub.dart'
     if (dart.library.html) 'micro_pitch_web_recorder.dart';
@@ -37,11 +38,7 @@ class _OnboardingPitchScreenState extends State<OnboardingPitchScreen> {
       final user = Supabase.instance.client.auth.currentUser;
       if (user != null) {
         try {
-          final userData = await Supabase.instance.client
-              .from('users')
-              .select('headline, about, tags, location, company, name')
-              .eq('id', user.id)
-              .maybeSingle();
+          final userData = await loadMyProfile();
 
           if (userData != null) {
             final title = userData['headline']?.toString().isEmpty ?? true
@@ -212,10 +209,7 @@ class _OnboardingPitchScreenState extends State<OnboardingPitchScreen> {
       }
 
       if (user != null) {
-        final profileError = await AuthService.instance.updatePitchUrl(
-          user.id,
-          videoUrl,
-        );
+        final profileError = await AuthService.instance.updatePitchUrl(videoUrl);
         if (!mounted) return;
         if (profileError != null) {
           setState(() => _isUploading = false);
@@ -223,7 +217,7 @@ class _OnboardingPitchScreenState extends State<OnboardingPitchScreen> {
             'El video se subio, pero no se pudo guardar en tu perfil: $profileError',
             onRetry: () async {
               setState(() => _isUploading = true);
-              await AuthService.instance.updatePitchUrl(user.id, videoUrl);
+              await AuthService.instance.updatePitchUrl(videoUrl);
               if (mounted) setState(() => _isUploading = false);
               if (mounted) _showPitchSuccessDialog();
             },

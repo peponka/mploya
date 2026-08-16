@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:video_player/video_player.dart';
 
 import '../../widgets/ds/mploya_ds.dart';
+import '../../services/my_profile_service.dart';
 import '../camera_screen.dart';
 
 @immutable
@@ -71,11 +72,7 @@ class _HeadhunterVideoPitchScreenState
     final uid = client.auth.currentUser?.id;
     try {
       if (uid == null) throw StateError('Sin sesión');
-      final row = await client
-          .from('users')
-          .select('video_url')
-          .eq('id', uid)
-          .maybeSingle();
+      final row = await loadMyProfile(client: client);
       final url = row?['video_url']?.toString().trim() ?? '';
       if (!mounted) return;
       setState(() {
@@ -110,7 +107,11 @@ class _HeadhunterVideoPitchScreenState
       final client = Supabase.instance.client;
       final uid = client.auth.currentUser?.id;
       if (uid == null) throw StateError('Sin sesión');
-      await client.from('users').update({'video_url': null}).eq('id', uid);
+      await setMyProfileVideo(
+        videoUrl: null,
+        completeOnboarding: false,
+        client: client,
+      );
       await _load();
     } catch (error) {
       debugPrint('Headhunter video pitch remove: $error');

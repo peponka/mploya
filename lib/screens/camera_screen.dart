@@ -15,8 +15,8 @@ import '../services/auth_service.dart';
 import '../services/storage_service.dart';
 import '../services/ia_coach_service.dart';
 import '../services/claude_ai_service.dart';
+import '../services/my_profile_service.dart';
 import 'ia_coach_result_screen.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 class CameraScreen extends StatefulWidget {
   const CameraScreen({super.key});
@@ -220,12 +220,13 @@ class _CameraScreenState extends State<CameraScreen> with SingleTickerProviderSt
     if (!mounted) return;
 
     if (url != null) {
-      final error = await AuthService.instance.updatePitchUrl(userId, url);
+      final error = await AuthService.instance.updatePitchUrl(url);
       if (error == null) {
         bool isStealth = false;
         try {
-          final userData = await Supabase.instance.client.from('users').select('account_type').eq('id', userId).single();
-          isStealth = userData['account_type'] == 'confidencial';
+          final userData = await loadMyProfile();
+          final type = userData?['account_type']?.toString().toLowerCase() ?? '';
+          isStealth = type == 'stealth' || type.startsWith('confidenc');
         } catch(_) {}
 
         if (!mounted) return;
@@ -443,7 +444,7 @@ class _CameraScreenState extends State<CameraScreen> with SingleTickerProviderSt
             },
             onPublish: () {
               // The video is already uploaded, just update the user profile
-              _finalizePitchUpload(userId, url);
+              _finalizePitchUpload(url);
             },
           ),
         ),
@@ -544,17 +545,18 @@ class _CameraScreenState extends State<CameraScreen> with SingleTickerProviderSt
   }
 
   /// Finalizes the pitch upload (updates user profile with the URL)
-  Future<void> _finalizePitchUpload(String userId, String url) async {
+  Future<void> _finalizePitchUpload(String url) async {
     setState(() => _isUploading = true);
 
-    final error = await AuthService.instance.updatePitchUrl(userId, url);
+    final error = await AuthService.instance.updatePitchUrl(url);
     if (!mounted) return;
 
     if (error == null) {
       bool isStealth = false;
       try {
-        final userData = await Supabase.instance.client.from('users').select('account_type').eq('id', userId).single();
-        isStealth = userData['account_type'] == 'confidencial';
+        final userData = await loadMyProfile();
+        final type = userData?['account_type']?.toString().toLowerCase() ?? '';
+        isStealth = type == 'stealth' || type.startsWith('confidenc');
       } catch(_) {}
 
       if (!mounted) return;

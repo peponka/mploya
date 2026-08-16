@@ -67,7 +67,7 @@ void main() {
       );
       expect(nav, contains("child: const Text('Mis herramientas')"));
       expect(nav, contains("child: const Text('Mi perfil')"));
-      expect(nav, contains("case 'headhunter':\n      return 9;"));
+      expect(nav, contains(RegExp(r"case 'headhunter':\s+return 9;")));
       expect(profile, contains("type == 'headhunter'"));
       expect(profile, contains('HeadhunterEditProfileScreen'));
       expect(profile, contains('HeadhunterSettingsScreen'));

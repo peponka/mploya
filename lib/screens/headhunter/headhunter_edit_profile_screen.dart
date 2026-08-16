@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../services/my_profile_service.dart';
 
 class HeadhunterEditableProfile {
   const HeadhunterEditableProfile({
@@ -104,13 +105,7 @@ class _HeadhunterEditProfileScreenState
       final client = Supabase.instance.client;
       final uid = client.auth.currentUser?.id;
       if (uid == null) throw StateError('Sin sesión');
-      final row = await client
-          .from('users')
-          .select(
-            'name,headline,about,location,company,tags,avatar_url,account_type',
-          )
-          .eq('id', uid)
-          .maybeSingle();
+      final row = await loadMyProfile(client: client);
       if (row == null || row['account_type']?.toString() != 'headhunter') {
         throw StateError('Perfil Headhunter no disponible');
       }
@@ -167,7 +162,21 @@ class _HeadhunterEditProfileScreenState
         final client = Supabase.instance.client;
         final uid = client.auth.currentUser?.id;
         if (uid == null) throw StateError('Sin sesión');
-        await client.from('users').update(_values).eq('id', uid);
+        await updateMyHeadhunterProfile(
+          name: _values['name']?.toString() ?? '',
+          headline: _values['headline']?.toString() ?? '',
+          city: '',
+          tags: [
+            for (final tag in _values['tags'] as List? ?? const [])
+              tag.toString(),
+          ],
+          about: _values['about']?.toString(),
+          location: _values['location']?.toString(),
+          company: _values['company']?.toString(),
+          updateDetails: true,
+          completeOnboarding: false,
+          client: client,
+        );
       }
       if (!mounted) return;
       setState(() {

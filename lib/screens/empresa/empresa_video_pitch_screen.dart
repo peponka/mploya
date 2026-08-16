@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:video_player/video_player.dart';
 
 import '../../widgets/ds/mploya_ds.dart';
+import '../../services/my_profile_service.dart';
 import '../camera_screen.dart';
 
 /// Estado del video institucional de la empresa (`users.video_url`).
@@ -22,11 +23,7 @@ Future<VideoPitchEmpresa> loadVideoPitch() async {
   if (uid == null) return const VideoPitchEmpresa(error: true);
 
   try {
-    final fila = await client
-        .from('users')
-        .select('video_url')
-        .eq('id', uid)
-        .maybeSingle();
+    final fila = await loadMyProfile(client: client);
     final url = fila?['video_url']?.toString() ?? '';
     return VideoPitchEmpresa(videoUrl: url.isEmpty ? null : url);
   } catch (e) {
@@ -43,7 +40,11 @@ Future<bool> quitarVideoPitch() async {
   if (uid == null) return false;
 
   try {
-    await client.from('users').update({'video_url': null}).eq('id', uid);
+    await setMyProfileVideo(
+      videoUrl: null,
+      completeOnboarding: false,
+      client: client,
+    );
     return true;
   } catch (e) {
     debugPrint('video pitch · quitar: $e');

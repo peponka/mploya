@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../services/my_profile_service.dart';
 
 import '../widgets/candidato/cand_ui.dart';
 import '../widgets/ds/mploya_ds.dart';
@@ -110,11 +111,7 @@ class _PreferenciasLaboralesScreenState extends State<PreferenciasLaboralesScree
         if (mounted) setState(() => _cargando = false);
         return;
       }
-      final row = await _supabase
-          .from('users')
-          .select('about, city, salary_expectation, latitude, longitude')
-          .eq('id', uid)
-          .maybeSingle();
+      final row = await loadMyProfile();
       if (!mounted) return;
       if (row != null) {
         _aplicarDatos(
@@ -225,15 +222,15 @@ class _PreferenciasLaboralesScreenState extends State<PreferenciasLaboralesScree
     try {
       final ciudad = _ciudadController.text.trim();
       final pais = _paisController.text.trim();
-      await _supabase.from('users').update({
-        'about': _reconstruirAbout(),
-        'city': pais.isNotEmpty ? '$ciudad, $pais' : ciudad,
-        'salary_expectation': _salarioController.text.trim().isNotEmpty
+      await updateMyCandidatePreferences(
+        about: _reconstruirAbout(),
+        city: pais.isNotEmpty ? '$ciudad, $pais' : ciudad,
+        salaryExpectation: _salarioController.text.trim().isNotEmpty
             ? _salarioController.text.trim()
             : null,
-        if (_lat != null) 'latitude': _lat,
-        if (_lng != null) 'longitude': _lng,
-      }).eq('id', uid);
+        latitude: _lat,
+        longitude: _lng,
+      );
 
       if (!mounted) return;
       Navigator.of(context).maybePop();

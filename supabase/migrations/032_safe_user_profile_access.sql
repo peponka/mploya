@@ -311,7 +311,9 @@ CREATE OR REPLACE FUNCTION public.update_my_candidate_profile(
   p_salary_expectation TEXT,
   p_latitude DOUBLE PRECISION,
   p_longitude DOUBLE PRECISION,
-  p_complete_onboarding BOOLEAN
+  p_complete_onboarding BOOLEAN,
+  p_company TEXT,
+  p_update_company BOOLEAN
 )
 RETURNS VOID
 LANGUAGE plpgsql
@@ -326,7 +328,7 @@ BEGIN
     RAISE EXCEPTION 'update_my_candidate_profile: sesion no disponible'
       USING ERRCODE = '28000';
   END IF;
-  IF p_complete_onboarding IS NULL THEN
+  IF p_complete_onboarding IS NULL OR p_update_company IS NULL THEN
     RAISE EXCEPTION 'update_my_candidate_profile: progreso invalido'
       USING ERRCODE = '22023';
   END IF;
@@ -348,7 +350,7 @@ BEGIN
   END IF;
   IF btrim(COALESCE(p_name, '')) = ''
     OR btrim(COALESCE(p_headline, '')) = ''
-    OR btrim(COALESCE(p_city, '')) = ''
+    OR (v_role = 'candidato' AND btrim(COALESCE(p_city, '')) = '')
   THEN
     RAISE EXCEPTION 'update_my_candidate_profile: campos requeridos incompletos'
       USING ERRCODE = '22023';
@@ -372,7 +374,8 @@ BEGIN
   SET
     name = btrim(p_name),
     headline = btrim(p_headline),
-    city = btrim(p_city),
+    city = CASE WHEN btrim(COALESCE(p_city, '')) = '' THEN u.city ELSE btrim(p_city) END,
+    company = CASE WHEN p_update_company THEN p_company ELSE u.company END,
     about = p_about,
     tags = p_tags,
     skills = p_skills,
@@ -394,7 +397,11 @@ CREATE OR REPLACE FUNCTION public.update_my_company_profile(
   p_company TEXT,
   p_headline TEXT,
   p_about TEXT,
-  p_tags TEXT[]
+  p_tags TEXT[],
+  p_location TEXT,
+  p_is_hiring BOOLEAN,
+  p_update_location BOOLEAN,
+  p_complete_onboarding BOOLEAN
 )
 RETURNS VOID
 LANGUAGE plpgsql
@@ -408,6 +415,13 @@ BEGIN
   IF v_actor IS NULL THEN
     RAISE EXCEPTION 'update_my_company_profile: sesion no disponible'
       USING ERRCODE = '28000';
+  END IF;
+  IF p_is_hiring IS NULL
+    OR p_update_location IS NULL
+    OR p_complete_onboarding IS NULL
+  THEN
+    RAISE EXCEPTION 'update_my_company_profile: configuracion invalida'
+      USING ERRCODE = '22023';
   END IF;
 
   SELECT lower(btrim(COALESCE(u.account_type::TEXT, '')))
@@ -432,8 +446,12 @@ BEGIN
     headline = p_headline,
     about = p_about,
     tags = p_tags,
-    is_hiring = TRUE,
-    onboarding_step = GREATEST(COALESCE(u.onboarding_step, 0), 2)
+    location = CASE WHEN p_update_location THEN p_location ELSE u.location END,
+    is_hiring = p_is_hiring,
+    onboarding_step = CASE
+      WHEN p_complete_onboarding THEN GREATEST(COALESCE(u.onboarding_step, 0), 2)
+      ELSE u.onboarding_step
+    END
   WHERE u.id = v_actor;
 END;
 $$;
@@ -443,7 +461,12 @@ CREATE OR REPLACE FUNCTION public.update_my_headhunter_profile(
   p_name TEXT,
   p_headline TEXT,
   p_city TEXT,
-  p_tags TEXT[]
+  p_tags TEXT[],
+  p_about TEXT,
+  p_location TEXT,
+  p_company TEXT,
+  p_update_details BOOLEAN,
+  p_complete_onboarding BOOLEAN
 )
 RETURNS VOID
 LANGUAGE plpgsql
@@ -457,6 +480,10 @@ BEGIN
   IF v_actor IS NULL THEN
     RAISE EXCEPTION 'update_my_headhunter_profile: sesion no disponible'
       USING ERRCODE = '28000';
+  END IF;
+  IF p_update_details IS NULL OR p_complete_onboarding IS NULL THEN
+    RAISE EXCEPTION 'update_my_headhunter_profile: configuracion invalida'
+      USING ERRCODE = '22023';
   END IF;
 
   SELECT lower(btrim(COALESCE(u.account_type::TEXT, '')))
@@ -482,8 +509,144 @@ BEGIN
     headline = btrim(p_headline),
     city = CASE WHEN btrim(COALESCE(p_city, '')) = '' THEN u.city ELSE btrim(p_city) END,
     tags = p_tags,
+    about = CASE WHEN p_update_details THEN p_about ELSE u.about END,
+    location = CASE WHEN p_update_details THEN p_location ELSE u.location END,
+    company = CASE WHEN p_update_details THEN p_company ELSE u.company END,
     is_hiring = TRUE,
-    onboarding_step = GREATEST(COALESCE(u.onboarding_step, 0), 2)
+    onboarding_step = CASE
+      WHEN p_complete_onboarding THEN GREATEST(COALESCE(u.onboarding_step, 0), 2)
+      ELSE u.onboarding_step
+    END
+  WHERE u.id = v_actor;
+END;
+$$;
+
+
+CREATE OR REPLACE FUNCTION public.update_my_candidate_preferences(
+  p_about TEXT,
+  p_city TEXT,
+  p_salary_expectation TEXT,
+  p_latitude DOUBLE PRECISION,
+  p_longitude DOUBLE PRECISION
+)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_actor UUID := auth.uid();
+  v_role TEXT;
+BEGIN
+  IF v_actor IS NULL THEN
+    RAISE EXCEPTION 'update_my_candidate_preferences: sesion no disponible'
+      USING ERRCODE = '28000';
+  END IF;
+
+  SELECT lower(btrim(COALESCE(u.account_type::TEXT, '')))
+  INTO v_role
+  FROM public.users u
+  WHERE u.id = v_actor
+  FOR UPDATE;
+
+  IF NOT FOUND OR NOT (
+    v_role = 'candidato'
+    OR v_role = 'stealth'
+    OR v_role LIKE 'confidenc%'
+    OR v_role LIKE 'confidential%'
+  ) THEN
+    RAISE EXCEPTION 'update_my_candidate_preferences: rol no permitido'
+      USING ERRCODE = '42501';
+  END IF;
+  IF length(COALESCE(p_about, '')) > 20000
+    OR length(COALESCE(p_city, '')) > 200
+    OR length(COALESCE(p_salary_expectation, '')) > 120
+    OR (p_latitude IS NULL) <> (p_longitude IS NULL)
+    OR (p_latitude IS NOT NULL AND (p_latitude < -90 OR p_latitude > 90))
+    OR (p_longitude IS NOT NULL AND (p_longitude < -180 OR p_longitude > 180))
+  THEN
+    RAISE EXCEPTION 'update_my_candidate_preferences: valores invalidos'
+      USING ERRCODE = '22023';
+  END IF;
+
+  UPDATE public.users u
+  SET
+    about = p_about,
+    city = p_city,
+    salary_expectation = p_salary_expectation,
+    latitude = CASE WHEN p_latitude IS NULL THEN u.latitude ELSE p_latitude END,
+    longitude = CASE WHEN p_longitude IS NULL THEN u.longitude ELSE p_longitude END
+  WHERE u.id = v_actor;
+END;
+$$;
+
+
+CREATE OR REPLACE FUNCTION public.set_my_profile_video(
+  p_video_url TEXT,
+  p_tags TEXT[],
+  p_complete_onboarding BOOLEAN
+)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_actor UUID := auth.uid();
+  v_role TEXT;
+  v_expected_pattern TEXT;
+BEGIN
+  IF v_actor IS NULL THEN
+    RAISE EXCEPTION 'set_my_profile_video: sesion no disponible'
+      USING ERRCODE = '28000';
+  END IF;
+  IF p_complete_onboarding IS NULL THEN
+    RAISE EXCEPTION 'set_my_profile_video: progreso invalido'
+      USING ERRCODE = '22023';
+  END IF;
+
+  SELECT lower(btrim(COALESCE(u.account_type::TEXT, '')))
+  INTO v_role
+  FROM public.users u
+  WHERE u.id = v_actor
+  FOR UPDATE;
+
+  IF NOT FOUND OR NOT (
+    v_role IN ('candidato', 'empresa', 'headhunter', 'stealth')
+    OR v_role LIKE 'confidenc%'
+    OR v_role LIKE 'confidential%'
+  ) THEN
+    RAISE EXCEPTION 'set_my_profile_video: rol no permitido'
+      USING ERRCODE = '42501';
+  END IF;
+
+  v_expected_pattern := '/storage/v1/object/public/videos/pitches/'
+    || v_actor::TEXT || '_[0-9]+\.(mp4|webm)(\?.*)?$';
+  IF p_video_url IS NOT NULL AND (
+    length(p_video_url) > 2048
+    OR btrim(p_video_url) = ''
+    OR p_video_url !~ '^https://'
+    OR p_video_url !~ v_expected_pattern
+  ) THEN
+    RAISE EXCEPTION 'set_my_profile_video: origen de storage no permitido'
+      USING ERRCODE = '22023';
+  END IF;
+  IF p_tags IS NOT NULL AND (
+    cardinality(p_tags) > 100
+    OR EXISTS (SELECT 1 FROM unnest(p_tags) tag WHERE length(tag) > 80)
+  ) THEN
+    RAISE EXCEPTION 'set_my_profile_video: tags invalidos'
+      USING ERRCODE = '22023';
+  END IF;
+
+  UPDATE public.users u
+  SET
+    video_url = p_video_url,
+    tags = CASE WHEN p_tags IS NULL THEN u.tags ELSE p_tags END,
+    onboarding_step = CASE
+      WHEN p_complete_onboarding THEN GREATEST(COALESCE(u.onboarding_step, 0), 3)
+      ELSE u.onboarding_step
+    END
   WHERE u.id = v_actor;
 END;
 $$;
@@ -597,11 +760,20 @@ REVOKE ALL ON FUNCTION public.set_my_initial_role(TEXT, BOOLEAN)
   FROM PUBLIC, anon, authenticated, service_role;
 REVOKE ALL ON FUNCTION public.update_my_candidate_profile(
   TEXT, TEXT, TEXT, TEXT, TEXT[], JSONB, JSONB, JSONB, TEXT,
-  DOUBLE PRECISION, DOUBLE PRECISION, BOOLEAN
+  DOUBLE PRECISION, DOUBLE PRECISION, BOOLEAN, TEXT, BOOLEAN
 ) FROM PUBLIC, anon, authenticated, service_role;
-REVOKE ALL ON FUNCTION public.update_my_company_profile(TEXT, TEXT, TEXT, TEXT[])
+REVOKE ALL ON FUNCTION public.update_my_company_profile(
+  TEXT, TEXT, TEXT, TEXT[], TEXT, BOOLEAN, BOOLEAN, BOOLEAN
+)
   FROM PUBLIC, anon, authenticated, service_role;
-REVOKE ALL ON FUNCTION public.update_my_headhunter_profile(TEXT, TEXT, TEXT, TEXT[])
+REVOKE ALL ON FUNCTION public.update_my_headhunter_profile(
+  TEXT, TEXT, TEXT, TEXT[], TEXT, TEXT, TEXT, BOOLEAN, BOOLEAN
+)
+  FROM PUBLIC, anon, authenticated, service_role;
+REVOKE ALL ON FUNCTION public.update_my_candidate_preferences(
+  TEXT, TEXT, TEXT, DOUBLE PRECISION, DOUBLE PRECISION
+) FROM PUBLIC, anon, authenticated, service_role;
+REVOKE ALL ON FUNCTION public.set_my_profile_video(TEXT, TEXT[], BOOLEAN)
   FROM PUBLIC, anon, authenticated, service_role;
 REVOKE ALL ON FUNCTION public.set_my_candidate_privacy(BOOLEAN)
   FROM PUBLIC, anon, authenticated, service_role;
@@ -611,10 +783,18 @@ REVOKE ALL ON FUNCTION public.set_my_profile_avatar(TEXT)
 GRANT EXECUTE ON FUNCTION public.set_my_initial_role(TEXT, BOOLEAN) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.update_my_candidate_profile(
   TEXT, TEXT, TEXT, TEXT, TEXT[], JSONB, JSONB, JSONB, TEXT,
-  DOUBLE PRECISION, DOUBLE PRECISION, BOOLEAN
+  DOUBLE PRECISION, DOUBLE PRECISION, BOOLEAN, TEXT, BOOLEAN
 ) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.update_my_company_profile(TEXT, TEXT, TEXT, TEXT[]) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.update_my_headhunter_profile(TEXT, TEXT, TEXT, TEXT[]) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.update_my_company_profile(
+  TEXT, TEXT, TEXT, TEXT[], TEXT, BOOLEAN, BOOLEAN, BOOLEAN
+) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.update_my_headhunter_profile(
+  TEXT, TEXT, TEXT, TEXT[], TEXT, TEXT, TEXT, BOOLEAN, BOOLEAN
+) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.update_my_candidate_preferences(
+  TEXT, TEXT, TEXT, DOUBLE PRECISION, DOUBLE PRECISION
+) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.set_my_profile_video(TEXT, TEXT[], BOOLEAN) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.set_my_candidate_privacy(BOOLEAN) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.set_my_profile_avatar(TEXT) TO authenticated;
 
@@ -622,12 +802,21 @@ COMMENT ON FUNCTION public.set_my_initial_role(TEXT, BOOLEAN) IS
   'Crea o completa el perfil de auth.uid() con una familia inicial; no permite cambiar una seleccion consolidada.';
 COMMENT ON FUNCTION public.update_my_candidate_profile(
   TEXT, TEXT, TEXT, TEXT, TEXT[], JSONB, JSONB, JSONB, TEXT,
-  DOUBLE PRECISION, DOUBLE PRECISION, BOOLEAN
+  DOUBLE PRECISION, DOUBLE PRECISION, BOOLEAN, TEXT, BOOLEAN
 ) IS 'Actualiza exclusivamente campos editables del perfil propio de Candidato.';
-COMMENT ON FUNCTION public.update_my_company_profile(TEXT, TEXT, TEXT, TEXT[]) IS
+COMMENT ON FUNCTION public.update_my_company_profile(
+  TEXT, TEXT, TEXT, TEXT[], TEXT, BOOLEAN, BOOLEAN, BOOLEAN
+) IS
   'Actualiza exclusivamente campos editables del perfil propio de Empresa.';
-COMMENT ON FUNCTION public.update_my_headhunter_profile(TEXT, TEXT, TEXT, TEXT[]) IS
+COMMENT ON FUNCTION public.update_my_headhunter_profile(
+  TEXT, TEXT, TEXT, TEXT[], TEXT, TEXT, TEXT, BOOLEAN, BOOLEAN
+) IS
   'Actualiza exclusivamente campos editables del perfil propio de Headhunter.';
+COMMENT ON FUNCTION public.update_my_candidate_preferences(
+  TEXT, TEXT, TEXT, DOUBLE PRECISION, DOUBLE PRECISION
+) IS 'Actualiza preferencias laborales privadas del Candidato autenticado.';
+COMMENT ON FUNCTION public.set_my_profile_video(TEXT, TEXT[], BOOLEAN) IS
+  'Asocia o desvincula el pitch propio validando la ruta Storage de auth.uid().';
 COMMENT ON FUNCTION public.set_my_candidate_privacy(BOOLEAN) IS
   'Alterna de forma explicita candidato/confidencial sin permitir cambios de familia.';
 COMMENT ON FUNCTION public.set_my_profile_avatar(TEXT) IS

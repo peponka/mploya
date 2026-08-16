@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../models/models.dart';
+import '../../services/my_profile_service.dart';
 import '../../widgets/ds/mploya_ds.dart';
 
 /// Guarda los campos editables de la empresa.
@@ -23,15 +24,17 @@ Future<bool> guardarPerfilEmpresa({
   String? nn(String v) => v.trim().isEmpty ? null : v.trim();
 
   try {
-    await client.from('users').update({
-      'name': nombre.trim(),
-      'company': nombre.trim(),
-      'headline': nn(titular),
-      'about': nn(descripcion),
-      'location': nn(ubicacion),
-      'tags': tags.isEmpty ? null : tags,
-      'is_hiring': contratando,
-    }).eq('id', uid);
+    await updateMyCompanyProfile(
+      company: nombre.trim(),
+      headline: nn(titular),
+      about: nn(descripcion),
+      tags: tags.isEmpty ? null : tags,
+      location: nn(ubicacion),
+      isHiring: contratando,
+      updateLocation: true,
+      completeOnboarding: false,
+      client: client,
+    );
     return true;
   } catch (e) {
     debugPrint('editar perfil empresa · update: $e');

@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../l10n/app_strings.dart';
 import 'feed_service.dart';
 import 'video_preload_manager.dart';
+import 'my_profile_service.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // AuthService — Singleton centralizado para toda la lógica de autenticación.
@@ -14,7 +15,7 @@ import 'video_preload_manager.dart';
 //  • signInWithGoogle()                — OAuth Google
 //  • signInWithApple()                 — OAuth Apple
 //  • upsertUserProfile(user)           — Fallback para crear fila en public.users
-//  • updatePitchUrl(userId, url)       — Guarda URL del Video-Pitch
+//  • updatePitchUrl(url)               — Guarda URL del Video-Pitch propio
 //  • signOut()                         — Cierra sesión activa
 //
 // Todos los métodos devuelven null en éxito, String en español si fallan.
@@ -209,17 +210,14 @@ class AuthService {
   /// patrón elimina ese fallo silencioso definitivamente.
   /// Guarda la URL del Video-Pitch y marca onboarding_step = 3.
   /// Usa UPDATE (no UPSERT) porque la fila siempre existe en este punto del flujo.
-  Future<String?> updatePitchUrl(String userId, String videoUrl, [List<String>? tags]) async {
+  Future<String?> updatePitchUrl(String videoUrl, [List<String>? tags]) async {
     try {
-      final res = await _client.from('users').update({
-        'video_url': videoUrl,
-        'onboarding_step': 3,
-        if (tags != null && tags.isNotEmpty) 'tags': tags,
-      }).eq('id', userId).select();
-      
-      if (res.isEmpty) {
-        return 'No se pudo vincular el video al perfil (Fila no encontrada). Intenta iniciar sesión de nuevo.';
-      }
+      await setMyProfileVideo(
+        videoUrl: videoUrl,
+        tags: tags != null && tags.isNotEmpty ? tags : null,
+        completeOnboarding: true,
+        client: _client,
+      );
       return null;
     } catch (e) {
       debugPrint('🔴 updatePitchUrl error: $e');
