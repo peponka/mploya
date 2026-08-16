@@ -5,6 +5,7 @@ import '../../widgets/ds/mploya_ds.dart';
 import '../chat_inmail_screen.dart';
 import 'empresa_candidato_perfil_screen.dart';
 import 'empresa_comparar_screen.dart';
+import 'empresa_match_ia_screen.dart';
 import 'empresa_shortlist_data.dart';
 import 'empresa_vacantes_data.dart';
 
@@ -81,7 +82,7 @@ class _EmpresaShortlistScreenState extends State<EmpresaShortlistScreen> {
   }
 
   List<MpFilterOption> get _filtros => [
-        MpFilterOption('Todos', count: _data.total),
+    MpFilterOption('Todos', count: _data.total),
         MpFilterOption(
           'Alta',
           count: _data.enBanda(BandaAjuste.alta),
@@ -94,8 +95,8 @@ class _EmpresaShortlistScreenState extends State<EmpresaShortlistScreen> {
           'Baja',
           count: _data.enBanda(BandaAjuste.baja),
         ),
-        MpFilterOption('Postulados', count: _data.postulados),
-      ];
+    MpFilterOption('Postulados', count: _data.postulados),
+  ];
 
   List<CandidatoShortlist> get _visibles => switch (_filtro) {
         1 => _data.candidatos
@@ -137,13 +138,13 @@ class _EmpresaShortlistScreenState extends State<EmpresaShortlistScreen> {
   }
 
   NexUser _usuario(CandidatoShortlist c) => NexUser.fromJson({
-        'id': c.id,
-        'name': c.nombre,
-        'headline': c.headline ?? '',
-        'avatar_url': c.avatarUrl,
-        'account_type': c.accountType,
-        'tags': c.tags,
-      });
+    'id': c.id,
+    'name': c.nombre,
+    'headline': c.headline ?? '',
+    'avatar_url': c.avatarUrl,
+    'account_type': c.accountType,
+    'tags': c.tags,
+  });
 
   // ── Build ───────────────────────────────────────────────────────────────────
 
@@ -238,8 +239,8 @@ class _EmpresaShortlistScreenState extends State<EmpresaShortlistScreen> {
         message: _data.matchError
             ? 'Revisá tu conexión y volvé a intentar.'
             : 'El match necesita que la vacante tenga descripción y '
-                'habilidades cargadas, y que haya perfiles con esas '
-                'habilidades. Cuando los haya, aparecen acá ordenados.',
+                  'habilidades cargadas, y que haya perfiles con esas '
+                  'habilidades. Cuando los haya, aparecen acá ordenados.',
         actionLabel: 'Reintentar',
         onAction: _load,
       ),
@@ -398,10 +399,10 @@ class _EmpresaShortlistScreenState extends State<EmpresaShortlistScreen> {
   }
 
   Color _colorBanda(BandaAjuste banda) => switch (banda) {
-        BandaAjuste.alta => MpTokens.success,
-        BandaAjuste.media => MpTokens.premium,
-        BandaAjuste.baja => MpTokens.danger,
-      };
+    BandaAjuste.alta => MpTokens.success,
+    BandaAjuste.media => MpTokens.premium,
+    BandaAjuste.baja => MpTokens.danger,
+  };
 
   Widget _tarjeta(CandidatoShortlist c, int puesto) {
     final s = context.mp;
@@ -536,6 +537,21 @@ class _EmpresaShortlistScreenState extends State<EmpresaShortlistScreen> {
               const SizedBox(width: MpTokens.space8),
               _casilla(c, seleccionado),
             ],
+          ),
+          const SizedBox(height: MpTokens.space8),
+          MpButton(
+            label: 'Ver Match IA',
+            icon: CupertinoIcons.sparkles,
+            size: MpButtonSize.small,
+            expand: true,
+            onPressed: () => Navigator.of(context).push(
+              CupertinoPageRoute(
+                builder: (_) => EmpresaMatchIaScreen(
+                  jobId: widget.vacante.id,
+                  candidatoId: c.id,
+                ),
+              ),
+            ),
           ),
         ],
       ),

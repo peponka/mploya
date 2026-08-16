@@ -79,7 +79,11 @@ Widget _host(Size size, {bool conDatos = true}) {
   );
 }
 
-Future<void> _pump(WidgetTester tester, Size size, {bool conDatos = true}) async {
+Future<void> _pump(
+  WidgetTester tester,
+  Size size, {
+  bool conDatos = true,
+}) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
@@ -124,13 +128,24 @@ void main() {
     });
   }
 
+  for (final size in [const Size(768, 1024), const Size(1440, 900)]) {
+    testWidgets('sin overflow en ${size.width.toInt()}px', (tester) async {
+      await _pump(tester, size);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   testWidgets('sin datos reales no se inventan contadores', (tester) async {
     await _pump(tester, const Size(393, 1150), conDatos: false);
     // Los contadores del mockup no deben aparecer nunca como dato inventado.
     // Se buscan los valores exactos del PNG, no palabras sueltas: "candidatos"
     // aparece legítimamente en descripciones estáticas.
-    for (final falso in ['12 en proceso', '5 agendadas', '24 candidatos',
-        '156 esta semana']) {
+    for (final falso in [
+      '12 en proceso',
+      '5 agendadas',
+      '24 candidatos',
+      '156 esta semana',
+    ]) {
       expect(find.text(falso), findsNothing, reason: falso);
     }
   });
@@ -142,8 +157,14 @@ void main() {
     expect(find.text('Evaluaciones'), findsNothing);
     expect(find.text('Preguntas sugeridas'), findsNothing);
     // Las que sí existen están.
-    for (final t in ['Match IA', 'Publicar vacante', 'Mis vacantes',
-        'Base de talento', 'Cuenta y seguridad']) {
+    for (final t in [
+      'Match IA',
+      'Publicar vacante',
+      'Mis vacantes',
+      'Base de talento',
+      'Contrataciones',
+      'Cuenta y seguridad',
+    ]) {
       expect(find.text(t), findsOneWidget, reason: t);
     }
   });

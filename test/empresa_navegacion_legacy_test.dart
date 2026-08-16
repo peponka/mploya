@@ -26,8 +26,8 @@ void main() {
       for (final d in dirs)
         if (d.existsSync())
           ...d.listSync().whereType<File>().where(
-                (f) => f.path.endsWith('.dart'),
-              ),
+            (f) => f.path.endsWith('.dart'),
+          ),
     ];
   }
 
@@ -45,7 +45,8 @@ void main() {
     'AtsKanbanScreen': 'EmpresaPipelineScreen',
     'AtsDashboardScreen': 'EmpresaPipelineScreen / EmpresaRendimientoScreen',
     'NuevaVacanteScreen': 'EmpresaPublicarVacanteScreen',
-    'CompanyProfileFormScreen': 'EmpresaEditarPerfilScreen / EmpresaPerfilScreen',
+    'CompanyProfileFormScreen':
+        'EmpresaEditarPerfilScreen / EmpresaPerfilScreen',
     'AnalyticsDashboardScreen': 'EmpresaRendimientoScreen',
     'SavedProfilesScreen': 'EmpresaGuardadosScreen',
     'MessagingScreen': 'EmpresaMensajesScreen',
@@ -100,7 +101,9 @@ void main() {
     // La ranura de Perfil y el menú "+" son los dos puntos que llevaban al
     // sistema viejo.
     expect(
-      fuente.contains("_accountType == 'empresa' ? const EmpresaPerfilScreen()"),
+      RegExp(
+        r"_accountType\s*==\s*'empresa'\s*\?\s*const EmpresaPerfilScreen\(\)",
+      ).hasMatch(fuente),
       isTrue,
       reason: 'La ranura de Perfil de Empresa debe abrir EmpresaPerfilScreen.',
     );
@@ -125,8 +128,12 @@ void main() {
       final fuente = sinComentarios(archivo.readAsStringSync());
       final nombre = archivo.path.split(RegExp(r'[/\\]')).last;
 
-      for (final marca in ['demo-completed', 'demoId', 'AtsKanbanScreen',
-          'AtsDashboardScreen']) {
+      for (final marca in [
+        'demo-completed',
+        'demoId',
+        'AtsKanbanScreen',
+        'AtsDashboardScreen',
+      ]) {
         if (fuente.contains(marca)) sospechosos.add('$nombre → $marca');
       }
     }
@@ -155,5 +162,37 @@ void main() {
       isNotEmpty,
       reason: 'Si ya nadie la usa, revisar si conviene retirar el import.',
     );
+  });
+
+  test('Match IA recibe el contexto real desde la Shortlist', () {
+    final fuente = File(
+      '$raiz/lib/screens/empresa/empresa_shortlist_screen.dart',
+    ).readAsStringSync();
+
+    expect(fuente, contains("import 'empresa_match_ia_screen.dart';"));
+    expect(fuente, contains("label: 'Ver Match IA'"));
+    expect(fuente, contains('EmpresaMatchIaScreen('));
+    expect(fuente, contains('jobId: widget.vacante.id'));
+    expect(fuente, contains('candidatoId: c.id'));
+
+    final destino = File(
+      '$raiz/lib/screens/empresa/empresa_match_ia_screen.dart',
+    ).readAsStringSync();
+    expect(destino, contains('Navigator.of(context).maybePop()'));
+  });
+
+  test('Contrataciones se abre desde Herramientas sin datos simulados', () {
+    final fuente = File(
+      '$raiz/lib/screens/empresa/empresa_herramientas_screen.dart',
+    ).readAsStringSync();
+
+    expect(fuente, contains("titulo: 'Contrataciones'"));
+    expect(fuente, contains('const EmpresaContratacionesScreen()'));
+    expect(fuente, isNot(contains('previewData:')));
+
+    final destino = File(
+      '$raiz/lib/screens/empresa/empresa_contrataciones_screen.dart',
+    ).readAsStringSync();
+    expect(destino, contains('Navigator.of(context).maybePop()'));
   });
 }

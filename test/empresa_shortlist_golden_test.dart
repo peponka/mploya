@@ -47,11 +47,24 @@ CandidatoShortlist _c(
 
 final _conDatos = ShortlistData(
   candidatos: [
-    _c('1', 'María López', 'Product Manager',
-        match: 0.87, sem: 0.90, skl: 0.80, postulado: true),
+    _c(
+      '1',
+      'María López',
+      'Product Manager',
+      match: 0.87,
+      sem: 0.90,
+      skl: 0.80,
+      postulado: true,
+    ),
     _c('2', 'Juan Martín', 'Product Owner', match: 0.62, sem: 0.65, skl: 0.55),
-    _c('3', 'Carla Méndez', 'Producto Senior',
-        match: 0.41, sem: 0.44, skl: 0.33),
+    _c(
+      '3',
+      'Carla Méndez',
+      'Producto Senior',
+      match: 0.41,
+      sem: 0.44,
+      skl: 0.33,
+    ),
     _c('4', 'Diego Ramírez', 'PM / Tech Lead', postulado: true),
   ],
 );
@@ -114,32 +127,75 @@ void main() {
     final nombre = '${size.width.toInt()}x${size.height.toInt()}';
 
     testWidgets('sin overflow en $nombre', (tester) async {
-      await pumpMp(tester, size, _pantalla(_conDatos),
-          style: MpSurfaceStyle.dark);
+      await pumpMp(
+        tester,
+        size,
+        _pantalla(_conDatos),
+        style: MpSurfaceStyle.dark,
+      );
       expect(tester.takeException(), isNull);
     });
 
     testWidgets('vacía sin overflow en $nombre', (tester) async {
-      await pumpMp(tester, size, _pantalla(ShortlistData.empty),
-          style: MpSurfaceStyle.dark);
+      await pumpMp(
+        tester,
+        size,
+        _pantalla(ShortlistData.empty),
+        style: MpSurfaceStyle.dark,
+      );
       expect(tester.takeException(), isNull);
     });
   }
 
-  testWidgets('el candidato sin score no muestra porcentaje inventado',
-      (tester) async {
+  for (final size in [const Size(768, 1024), const Size(1440, 900)]) {
+    testWidgets('sin overflow en ${size.width.toInt()}px', (tester) async {
+      await pumpMp(
+        tester,
+        size,
+        _pantalla(_conDatos),
+        style: MpSurfaceStyle.dark,
+      );
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets('el candidato sin score no muestra porcentaje inventado', (
+    tester,
+  ) async {
     // Alto generoso: así se construyen las cuatro tarjetas de una sola vez y no
     // hace falta scrollear para comprobar la última.
-    await pumpMp(tester, const Size(393, 2200), _pantalla(_conDatos),
-        style: MpSurfaceStyle.dark);
+    await pumpMp(
+      tester,
+      const Size(393, 2200),
+      _pantalla(_conDatos),
+      style: MpSurfaceStyle.dark,
+    );
     expect(find.text('87%'), findsWidgets);
     expect(find.text('Sin match\ncalculado'), findsOneWidget);
   });
 
-  testWidgets('no se copian las métricas del mockup que no existen',
-      (tester) async {
-    await pumpMp(tester, const Size(393, 852), _pantalla(_conDatos),
-        style: MpSurfaceStyle.dark);
+  testWidgets('cada candidato publica acceso contextual a Match IA', (
+    tester,
+  ) async {
+    await pumpMp(
+      tester,
+      const Size(393, 2400),
+      _pantalla(_conDatos),
+      style: MpSurfaceStyle.dark,
+    );
+    expect(find.text('Ver Match IA'), findsNWidgets(_conDatos.total));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('no se copian las métricas del mockup que no existen', (
+    tester,
+  ) async {
+    await pumpMp(
+      tester,
+      const Size(393, 852),
+      _pantalla(_conDatos),
+      style: MpSurfaceStyle.dark,
+    );
     for (final falsa in [
       'Puntaje promedio del shortlist',
       'Tiempo promedio en etapa',
@@ -150,15 +206,19 @@ void main() {
   });
 
   testWidgets('comparar exige al menos dos seleccionados', (tester) async {
-    await pumpMp(tester, const Size(393, 2200), _pantalla(_conDatos),
-        style: MpSurfaceStyle.dark);
+    await pumpMp(
+      tester,
+      const Size(393, 2200),
+      _pantalla(_conDatos),
+      style: MpSurfaceStyle.dark,
+    );
 
     CupertinoButton boton() => tester.widget<CupertinoButton>(
-          find.ancestor(
-            of: find.text('Comparar'),
-            matching: find.byType(CupertinoButton),
-          ),
-        );
+      find.ancestor(
+        of: find.text('Comparar'),
+        matching: find.byType(CupertinoButton),
+      ),
+    );
 
     expect(boton().onPressed, isNull);
 

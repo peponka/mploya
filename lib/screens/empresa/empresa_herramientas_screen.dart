@@ -6,6 +6,7 @@ import 'empresa_actividad_screen.dart';
 import 'empresa_busqueda_screen.dart';
 import 'empresa_configuracion_screen.dart';
 import 'empresa_confidenciales_screen.dart';
+import 'empresa_contrataciones_screen.dart';
 import 'empresa_creditos_screen.dart';
 import 'empresa_entrevistas_screen.dart';
 import 'empresa_ofertas_screen.dart';
@@ -469,17 +470,14 @@ class EmpresaHerramientasScreen extends StatelessWidget {
           subtitulo: 'Candidatos con oferta, por vacante.',
           destino: const EmpresaOfertasScreen(),
         ),
-        // CONTRATACIONES — acceso retirado el 12/8/2026.
-        //
-        // La pantalla existe y no se borró, pero HOY NO PUEDE FUNCIONAR: sus
-        // dos fuentes están muertas. `job_applications.status` no admite
-        // 'hired' (su CHECK sólo permite pending/viewed/accepted/rejected) y
-        // `connections.ats_status` no lo escribe ninguna ruta productiva.
-        //
-        // Se retira el acceso para que una empresa no entre a una pantalla que
-        // dice mostrar sus contrataciones cuando el sistema no puede
-        // registrarlas. Vuelve cuando exista una forma real de marcar a alguien
-        // como contratado.
+        _fila(
+          context,
+          icon: CupertinoIcons.check_mark_circled_solid,
+          color: MpTokens.catGreen,
+          titulo: 'Contrataciones',
+          subtitulo: 'Personas registradas como contratadas en tu proceso.',
+          destino: const EmpresaContratacionesScreen(),
+        ),
         _fila(
           context,
           icon: CupertinoIcons.chart_bar_square,

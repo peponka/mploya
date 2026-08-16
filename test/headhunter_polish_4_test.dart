@@ -205,6 +205,12 @@ void main() {
         );
       }
     });
+
+    testWidgets('herramientas monta en tablet y desktop', (tester) async {
+      for (final size in const [Size(768, 1024), Size(1440, 900)]) {
+        await _pump(tester, const HeadhunterToolsScreen(), size: size);
+      }
+    });
   });
 
   group('capturas productivas lote 4', () {

@@ -249,6 +249,28 @@ void main() {
       _expectNoRealIdentity();
     });
 
+    testWidgets('perfil propio Headhunter monta en tablet y desktop', (
+      tester,
+    ) async {
+      final propio = ProfilePreviewData(
+        usuario: {
+          ..._candidate(
+            id: 'headhunter-1',
+            accountType: 'headhunter',
+            name: 'Ana Headhunter',
+          ),
+          'avatar_url': null,
+          'banner_url': null,
+          'video_url': null,
+        },
+        isOwnProfile: true,
+        viewerAccountType: 'headhunter',
+      );
+      for (final size in const [Size(768, 1024), Size(1440, 900)]) {
+        await _pump(tester, ProfileScreen(previewData: propio), size: size);
+      }
+    });
+
     testWidgets('guardados protege listado y perfil abierto', (tester) async {
       await _pump(
         tester,

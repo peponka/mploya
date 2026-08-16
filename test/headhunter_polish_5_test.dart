@@ -61,10 +61,20 @@ void main() {
         'lib/screens/headhunter/headhunter_tools_screen.dart',
       ).readAsStringSync();
       expect(nav, contains('HeadhunterPublishJobScreen'));
+      expect(
+        nav,
+        contains('return const {0, 1, 2, 3, 5, 6, 7, 8, 9}.contains(index);'),
+      );
+      expect(nav, contains("child: const Text('Mis herramientas')"));
+      expect(nav, contains("child: const Text('Mi perfil')"));
+      expect(nav, contains("case 'headhunter':\n      return 9;"));
       expect(profile, contains("type == 'headhunter'"));
       expect(profile, contains('HeadhunterEditProfileScreen'));
       expect(profile, contains('HeadhunterSettingsScreen'));
       expect(tools, contains('HeadhunterPublishJobScreen'));
+      // Perfil propio se monta sin `user`; los perfiles observados siguen
+      // pasando un usuario y `viewerAccountType: 'headhunter'`.
+      expect(nav, contains('static const _profile = ProfileScreen();'));
       final publish = File(
         'lib/screens/headhunter/headhunter_publish_job_screen.dart',
       ).readAsStringSync();

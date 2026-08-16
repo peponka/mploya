@@ -155,6 +155,19 @@ void main() {
     }
   });
 
+  group('sin overflow en tablet y desktop', () {
+    for (final size in const [Size(768, 1024), Size(1440, 900)]) {
+      testWidgets('${size.width.toInt()}x${size.height.toInt()}', (tester) async {
+        await pumpMp(
+          tester,
+          size,
+          _pantalla(_completo(), clave: 'wide-${size.width}'),
+        );
+        expect(tester.takeException(), isNull);
+      });
+    }
+  });
+
   group('la pantalla no dibuja lo que no tiene', () {
     testWidgets('sin match no aparece ningún porcentaje', (tester) async {
       await pumpMp(

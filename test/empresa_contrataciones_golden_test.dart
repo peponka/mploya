@@ -64,6 +64,17 @@ void main() {
     });
   }
 
+  for (final size in const [Size(768, 1024), Size(1440, 900)]) {
+    testWidgets('sin overflow en ${size.width.toInt()}px', (tester) async {
+      await pumpMp(
+        tester,
+        size,
+        _pantalla(_conDatos, clave: 'wide-${size.width}'),
+      );
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   testWidgets('sin vacante registrada NO se inventa una', (tester) async {
     await pumpMp(tester, const Size(393, 1800), _pantalla(_conDatos));
     expect(find.text('Vacante no registrada'), findsOneWidget);

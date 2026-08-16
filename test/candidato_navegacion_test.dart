@@ -119,7 +119,11 @@ void main() {
     expect(asigna, greaterThan(-1));
     expect(notifica, greaterThan(-1));
     expect(guarda, lessThan(asigna), reason: 'La guarda va antes de asignar.');
-    expect(guarda, lessThan(notifica), reason: 'La guarda va antes de notificar.');
+    expect(
+      guarda,
+      lessThan(notifica),
+      reason: 'La guarda va antes de notificar.',
+    );
   });
 
   test('el build consume _navItemsForAccount(_accountType)', () {
@@ -153,43 +157,44 @@ void main() {
 
   test('los índices de Candidato son exactamente {0, 1, 2, 5, 9}', () {
     final bloque = bloqueCandidato();
-    final indices = RegExp(r'index:\s*(\d+)')
-        .allMatches(bloque)
-        .map((m) => int.parse(m.group(1)!))
-        .toList();
+    final indices = RegExp(
+      r'index:\s*(\d+)',
+    ).allMatches(bloque).map((m) => int.parse(m.group(1)!)).toList();
 
     expect(indices, [0, 1, 2, 5, 9]);
   });
 
   test('las etiquetas de Candidato son las canónicas y en orden', () {
     final bloque = bloqueCandidato();
-    final labels = RegExp(r"label:\s*'([^']+)'")
-        .allMatches(bloque)
-        .map((m) => m.group(1)!)
-        .toList();
+    final labels = RegExp(
+      r"label:\s*'([^']+)'",
+    ).allMatches(bloque).map((m) => m.group(1)!).toList();
 
     expect(labels, ['Inicio', 'Vacantes', 'Red', 'Mensajes', 'Perfil']);
   });
 
-  test('las ranuras 3, 4, 6, 7 y 8 no son destinos permitidos para Candidato', () {
-    // `_isIndexAllowedForAccount` — la rama `default` es la de Candidato.
-    expect(
-      fuente.contains('return const {0, 1, 2, 5, 9}.contains(index);'),
-      isTrue,
-      reason:
-          'Candidato debe permitir exactamente {0,1,2,5,9}. Si la barra y los '
-          'índices permitidos se desincronizan, vuelven a aparecer pantallas '
-          'inalcanzables.',
-    );
-  });
+  test(
+    'las ranuras 3, 4, 6, 7 y 8 no son destinos permitidos para Candidato',
+    () {
+      // `_isIndexAllowedForAccount` — la rama `default` es la de Candidato.
+      expect(
+        fuente.contains('return const {0, 1, 2, 5, 9}.contains(index);'),
+        isTrue,
+        reason:
+            'Candidato debe permitir exactamente {0,1,2,5,9}. Si la barra y los '
+            'índices permitidos se desincronizan, vuelven a aparecer pantallas '
+            'inalcanzables.',
+      );
+    },
+  );
 
   test('las ranuras 4, 7 y 8 quedan neutralizadas para Candidato', () {
     // Un `IndexedStack` construye todos sus hijos: dejar una pantalla real en
     // una ranura inalcanzable la monta igual y dispara sus consultas.
     expect(
-      fuente.contains(
-        "_accountType == 'empresa' ? const EmpresaPerfilScreen() : const SizedBox.shrink()",
-      ),
+      RegExp(
+        r"_accountType\s*==\s*'empresa'\s*\?\s*const EmpresaPerfilScreen\(\)\s*:\s*const SizedBox\.shrink\(\)",
+      ).hasMatch(fuente),
       isTrue,
       reason: 'La ranura 4 debe quedar vacía salvo para Empresa.',
     );
@@ -214,7 +219,9 @@ void main() {
     }
 
     // Cuatro ranuras neutralizadas para Candidato: 4, 6, 7 y 8.
-    final vacias = RegExp(r'const SizedBox\.shrink\(\)').allMatches(fuente).length;
+    final vacias = RegExp(
+      r'const SizedBox\.shrink\(\)',
+    ).allMatches(fuente).length;
     expect(
       vacias,
       4,
@@ -254,19 +261,20 @@ void main() {
       fuente.indexOf('if (isCompany)'),
       fuente.indexOf('if (isHeadhunter)'),
     );
-    final indices = RegExp(r'index:\s*(\d+)')
-        .allMatches(bloqueEmpresa)
-        .map((m) => int.parse(m.group(1)!))
-        .toList();
+    final indices = RegExp(
+      r'index:\s*(\d+)',
+    ).allMatches(bloqueEmpresa).map((m) => int.parse(m.group(1)!)).toList();
 
     expect(indices, [7, 0, 6, 5, 8, 4, 6, 1, 2, 3]);
   });
 
-  test('Headhunter conserva sus índices actuales', () {
+  test('Headhunter suma accesos sin alterar los cuatro destinos Mobile', () {
     expect(
-      fuente.contains('return const {0, 1, 2, 3, 5, 6, 7, 8}.contains(index);'),
+      fuente.contains(
+        'return const {0, 1, 2, 3, 5, 6, 7, 8, 9}.contains(index);',
+      ),
       isTrue,
-      reason: 'Headhunter debe seguir permitiendo {0,1,2,3,5,6,7,8}.',
+      reason: 'Headhunter debe permitir Herramientas (8) y Perfil propio (9).',
     );
 
     final inicio = fuente.indexOf('if (isHeadhunter)');
@@ -274,11 +282,15 @@ void main() {
       inicio,
       fuente.lastIndexOf('return const ['),
     );
-    final indices = RegExp(r'index:\s*(\d+)')
-        .allMatches(bloqueHeadhunter)
-        .map((m) => int.parse(m.group(1)!))
-        .toList();
+    final indices = RegExp(
+      r'index:\s*(\d+)',
+    ).allMatches(bloqueHeadhunter).map((m) => int.parse(m.group(1)!)).toList();
 
-    expect(indices, [7, 1, 6, 2]);
+    expect(indices, [7, 1, 6, 2, 8, 9]);
+
+    // La barra Mobile consume sólo los primeros cuatro. Herramientas y Perfil
+    // se publican mediante la acción rápida, sin cambiar el render aprobado.
+    expect(fuente.contains('items.take(2).toList()'), isTrue);
+    expect(fuente.contains('items.skip(2).take(2).toList()'), isTrue);
   });
 }

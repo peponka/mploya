@@ -86,7 +86,7 @@ class _MainNavigationState extends State<MainNavigation> {
       EmpresaDashboardScreen(unreadNotifications: _unreadNotifications);
 
   /// Las ranuras son COMPARTIDAS por los tres roles y su numeración es un
-  /// contrato: Empresa usa 0-8 y Headhunter {0,1,2,3,5,6,7,8}. Por eso el array
+  /// contrato: Empresa usa 0-8 y Headhunter {0,1,2,3,5,6,7,8,9}. Por eso el array
   /// no se reordena ni cambia de longitud — sólo cambia qué monta cada rol.
   ///
   /// Las ranuras que un rol no expone en su barra se neutralizan con
@@ -177,7 +177,7 @@ class _MainNavigationState extends State<MainNavigation> {
       case 'empresa':
         return const {0, 1, 2, 3, 4, 5, 6, 7, 8}.contains(index);
       case 'headhunter':
-        return const {0, 1, 2, 3, 5, 6, 7, 8}.contains(index);
+        return const {0, 1, 2, 3, 5, 6, 7, 8, 9}.contains(index);
       default:
         // Candidato: exactamente los cinco destinos que publica su barra.
         // Antes declaraba {0,1,2,3,5,6,8,9} —ocho— mientras la barra sólo
@@ -430,7 +430,7 @@ class _MainNavigationState extends State<MainNavigation> {
         builder: (sheetContext) => CupertinoActionSheet(
           title: const Text('Acción rápida'),
           message: const Text(
-            'Podés publicar una vacante real o abrir tus mensajes.',
+            'Accedé a tus búsquedas, herramientas y perfil profesional.',
           ),
           actions: [
             CupertinoActionSheetAction(
@@ -450,6 +450,20 @@ class _MainNavigationState extends State<MainNavigation> {
                 _onTabTap(5);
               },
               child: const Text('Abrir mensajes'),
+            ),
+            CupertinoActionSheetAction(
+              onPressed: () {
+                Navigator.pop(sheetContext);
+                _onTabTap(8);
+              },
+              child: const Text('Mis herramientas'),
+            ),
+            CupertinoActionSheetAction(
+              onPressed: () {
+                Navigator.pop(sheetContext);
+                _onTabTap(9);
+              },
+              child: const Text('Mi perfil'),
             ),
           ],
           cancelButton: CupertinoActionSheetAction(
@@ -701,6 +715,20 @@ List<_NavItemData> _navItemsForAccount(String accountType) {
         icon: CupertinoIcons.person_3_fill,
         inactiveIcon: CupertinoIcons.person_3,
       ),
+      _NavItemData(
+        index: 8,
+        label: 'Herramientas',
+        shortLabel: 'Tools',
+        icon: CupertinoIcons.square_grid_2x2_fill,
+        inactiveIcon: CupertinoIcons.square_grid_2x2,
+      ),
+      _NavItemData(
+        index: 9,
+        label: 'Mi perfil',
+        shortLabel: 'Perfil',
+        icon: CupertinoIcons.person_crop_circle_fill,
+        inactiveIcon: CupertinoIcons.person_crop_circle,
+      ),
     ];
   }
 
@@ -766,7 +794,7 @@ String _profileShortcutLabelForAccount(String accountType) {
     case 'empresa':
       return 'Perfil';
     case 'headhunter':
-      return 'Dashboard';
+      return 'Perfil';
     default:
       return 'Perfil';
   }
@@ -777,7 +805,7 @@ int _profileShortcutIndexForAccount(String accountType) {
     case 'empresa':
       return 4;
     case 'headhunter':
-      return 7;
+      return 9;
     default:
       return 9;
   }
