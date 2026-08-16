@@ -18,7 +18,10 @@ void main() {
       'orders the additive profile layer before enforcement and matching',
       () {
         expect(safeAccess, contains('032 - Capa aditiva segura'));
-        expect(privilegedColumns, contains('033 - Proteccion inmediata'));
+        expect(
+          privilegedColumns,
+          contains('033 - Protect privileged public.users columns'),
+        );
         expect(candidatePrivacy, contains('034 - Hardening'));
         expect(
           File(
@@ -152,7 +155,7 @@ void main() {
         RegExp(
           r'SET search_path = public, pg_temp',
         ).allMatches(privilegedColumns),
-        hasLength(1),
+        hasLength(greaterThanOrEqualTo(6)),
       );
       expect(
         RegExp(r'REVOKE\s+SELECT', caseSensitive: false).hasMatch(safeAccess),
@@ -171,8 +174,8 @@ void main() {
       expect(
         privilegedColumns,
         contains(
-          'REVOKE TRUNCATE, TRIGGER ON public.users '
-          'FROM PUBLIC, anon, authenticated;',
+          'REVOKE TRUNCATE, TRIGGER, DELETE ON public.users\n'
+          '  FROM PUBLIC, anon, authenticated;',
         ),
       );
     });
@@ -200,15 +203,17 @@ void main() {
         contains('NEW.is_admin IS DISTINCT FROM OLD.is_admin'),
       );
       expect(
-        privilegedColumns.indexOf('NEW.is_admin IS DISTINCT FROM OLD.is_admin'),
-        lessThan(privilegedColumns.indexOf('v_admin := public.is_admin()')),
+        privilegedColumns,
+        isNot(contains('v_admin := public.is_admin()')),
       );
     });
 
     test('normal own-profile fields remain outside the trigger deny list', () {
       final protectedChecks = privilegedColumns.substring(
         privilegedColumns.indexOf("IF TG_OP = 'INSERT'"),
-        privilegedColumns.indexOf('-- Nombre, headline'),
+        privilegedColumns.indexOf(
+          '-- Existing own-row RLS continues to govern ordinary profile fields.',
+        ),
       );
       for (final column in [
         'name',
