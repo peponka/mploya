@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../services/my_profile_service.dart';
 import '../theme/app_theme.dart';
 import 'onboarding_pitch_screen.dart';
 import '../widgets/unsaved_changes_guard.dart';
@@ -61,15 +62,12 @@ class _HeadhunterProfileFormScreenState extends State<HeadhunterProfileFormScree
             .where((t) => t.isNotEmpty)
             .toList();
 
-        await Supabase.instance.client.from('users').update({
-          'account_type': 'headhunter',
-          'name': nombre,
-          'headline': especialidad,
-          if (ciudad.isNotEmpty) 'city': ciudad,
-          'tags': cleanTags.isNotEmpty ? cleanTags : null,
-          'onboarding_step': 2,
-          'is_hiring': true,
-        }).eq('id', uid);
+        await updateMyHeadhunterProfile(
+          name: nombre,
+          headline: especialidad,
+          city: ciudad,
+          tags: cleanTags.isNotEmpty ? cleanTags : null,
+        );
 
         if (!mounted) return;
         // El headhunter graba un pitch breve presentándose (lado reclutador).

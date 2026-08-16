@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 // Material widgets (SliverAppBar, Colors, Icons) have no Cupertino equivalent
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../services/my_profile_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/web_centered.dart';
 import '../widgets/spring_interaction.dart';
@@ -90,21 +91,12 @@ class _CompanyProfileFormScreenState extends State<CompanyProfileFormScreen> {
         if (cultura.isNotEmpty) aboutParts.add('\n🎯 Cultura: $cultura');
         if (beneficios.isNotEmpty) aboutParts.add('\n🎁 Beneficios: $beneficios');
 
-        // Preservar 'headhunter' si ese fue el rol elegido (ve candidatos Y empresas).
-        // Cualquier otro caso de este formulario es 'empresa'.
-        final existingRow = await Supabase.instance.client
-            .from('users').select('account_type').eq('id', user.id).maybeSingle();
-        final acctType = existingRow?['account_type'] == 'headhunter' ? 'headhunter' : 'empresa';
-        await Supabase.instance.client.from('users').update({
-          'account_type': acctType,
-          'company': nombre,
-          'onboarding_step': 2,
-          'name': nombre,
-          'headline': busca.isNotEmpty ? busca : 'Reclutador Corporativo',
-          'about': aboutParts.join('\n'),
-          'tags': cleanTags.isNotEmpty ? cleanTags : null,
-          'is_hiring': true,
-        }).eq('id', user.id);
+        await updateMyCompanyProfile(
+          company: nombre,
+          headline: busca.isNotEmpty ? busca : 'Reclutador Corporativo',
+          about: aboutParts.join('\n'),
+          tags: cleanTags.isNotEmpty ? cleanTags : null,
+        );
       }
       if (!mounted) return;
       

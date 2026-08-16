@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../theme/app_theme.dart';
 import '../services/auth_service.dart';
+import '../services/my_profile_service.dart';
 import '../navigation/main_navigation.dart';
 import '../services/deep_link_service.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -169,12 +170,8 @@ class _SplashScreenState extends State<SplashScreen>
         try {
           final user = Supabase.instance.client.auth.currentUser;
           if (user != null) {
-            // Test query para verificar que el token funciona
-            await Supabase.instance.client
-                .from('users')
-                .select('id')
-                .eq('id', user.id)
-                .maybeSingle();
+            // La RPC valida la sesion y nunca acepta un id externo.
+            await loadMyProfile();
           }
           // Si llegamos aquí, la sesión es válida
           if (mounted && !_hasNavigated) {
@@ -253,11 +250,7 @@ class _SplashScreenState extends State<SplashScreen>
     }
 
     try {
-      final data = await Supabase.instance.client
-          .from('users')
-          .select('onboarding_step, account_type')
-          .eq('id', user.id)
-          .maybeSingle();
+      final data = await loadMyProfile();
 
       // onboarding_step es la única fuente de verdad del flujo de registro.
       // 0 = nuevo sin rol · 1 = rol elegido · 2 = perfil completo · 3 = video subido
@@ -273,10 +266,10 @@ class _SplashScreenState extends State<SplashScreen>
           await prefs.remove('pending_oauth_account_type');
           await prefs.setString('mploya_account_type', pendingRole);
           try {
-            await Supabase.instance.client
-                .from('users')
-                .update({'account_type': pendingRole, 'onboarding_step': 1})
-                .eq('id', user.id);
+            await setMyInitialRole(
+              role: pendingRole,
+              completeSelection: true,
+            );
           } catch (e) {
             debugPrint('Error applying pending OAuth role: $e');
           }
@@ -1022,21 +1015,10 @@ class _AuthBottomSheetState extends State<_AuthBottomSheet> {
         if (uid != null) {
           final prefs = await SharedPreferences.getInstance();
           await prefs.setString('mploya_account_type', widget.accountType);
-          final updated = await Supabase.instance.client
-              .from('users')
-              .update({'account_type': widget.accountType})
-              .eq('id', uid)
-              .select('id')
-              .maybeSingle();
-          if (updated == null) {
-            await Supabase.instance.client.from('users').insert({
-              'id': uid,
-              'account_type': widget.accountType,
-              'name': email.split('@').first,
-              'email': email,
-              'onboarding_step': 0,
-            });
-          }
+          await setMyInitialRole(
+            role: widget.accountType,
+            completeSelection: false,
+          );
         }
       }
     }

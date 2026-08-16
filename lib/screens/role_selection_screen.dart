@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../screens/company_profile_form_screen.dart';
 import '../screens/headhunter_profile_form_screen.dart';
+import '../services/my_profile_service.dart';
 import '../screens/splash_screen.dart';
 import '../screens/stealth_profile_form_screen.dart';
 import '../widgets/web_centered.dart';
@@ -25,31 +26,9 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
   String _selectedRole = 'candidato';
 
   Future<void> _persistSelectedRole({
-    required String userId,
-    required String email,
-    required String fallbackName,
     required String role,
   }) async {
-    final payload = {
-      'account_type': role,
-      'onboarding_step': 1,
-      'name': fallbackName,
-      'email': email,
-    };
-
-    final updated = await Supabase.instance.client
-        .from('users')
-        .update(payload)
-        .eq('id', userId)
-        .select('id')
-        .maybeSingle();
-
-    if (updated != null) return;
-
-    await Supabase.instance.client.from('users').insert({
-      'id': userId,
-      ...payload,
-    });
+    await setMyInitialRole(role: role, completeSelection: true);
   }
 
   Future<void> _selectRole(String role) async {
@@ -60,16 +39,7 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
     try {
       final user = Supabase.instance.client.auth.currentUser;
       if (user != null) {
-        final email = user.email ?? '';
-        final fallbackName = email.contains('@')
-            ? email.split('@')[0]
-            : 'Usuario';
-        await _persistSelectedRole(
-          userId: user.id,
-          email: email,
-          fallbackName: fallbackName,
-          role: role,
-        );
+        await _persistSelectedRole(role: role);
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('mploya_account_type', role);
         if (!mounted) return;

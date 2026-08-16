@@ -1,8 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
-import '../utils/user_columns.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/models.dart';
+import '../services/my_profile_service.dart';
 
 /// Provider que expone la sesión activa de Supabase en tiempo real.
 final authSessionProvider = StreamProvider<Session?>((ref) async* {
@@ -13,32 +15,60 @@ final authSessionProvider = StreamProvider<Session?>((ref) async* {
   }
 });
 
-/// Provider que vigila la tabla 'users' para obtener los datos del perfil local
-/// (como 'account_type' (empresa/candidato), 'name', 'avatarUrl', etc)
-/// en tiempo real, globalmente en toda la app.
-///
-/// ⚠️ IMPORTANTE: Para que las actualizaciones en tiempo real funcionen,
-/// la tabla `users` debe tener Realtime habilitado en el Supabase Dashboard:
-///   Database → Replication → supabase_realtime → Habilitar tabla `users`
-/// Si no está habilitado, el stream solo dará el valor inicial (funciona como query).
-final currentUserProvider = StreamProvider<NexUser?>((ref) {
+/// Perfil propio global. La fila se lee siempre por `get_my_profile()`.
+/// Realtime solo invalida esa lectura cuando cambia la fila del mismo usuario;
+/// el payload de `public.users` no se usa como fuente de datos.
+final currentUserProvider = StreamProvider<NexUser?>((ref) async* {
   final session = ref.watch(authSessionProvider).value;
   if (session == null) {
-    return Stream.value(null);
+    yield null;
+    return;
   }
-  return Supabase.instance.client
-      .from('users')
-      .stream(primaryKey: ['id'])
-      .eq('id', session.user.id)
-      .map((rows) {
-        if (rows.isEmpty) return null;
-        return NexUser.fromJson(rows.first);
-      })
-      .handleError((e) {
-        // Si Realtime no está habilitado, el stream puede fallar silenciosamente.
-        // Esto evita que la app crashee y logea el error para debugging.
-        debugPrint('⚠️ currentUserProvider stream error: $e');
-      });
+
+  final client = Supabase.instance.client;
+  final refreshes = StreamController<void>();
+  final channel = client
+      .channel('my-profile-${session.user.id}')
+      .onPostgresChanges(
+        event: PostgresChangeEvent.all,
+        schema: 'public',
+        table: 'users',
+        filter: PostgresChangeFilter(
+          type: PostgresChangeFilterType.eq,
+          column: 'id',
+          value: session.user.id,
+        ),
+        callback: (_) {
+          if (!refreshes.isClosed) refreshes.add(null);
+        },
+      )
+      .subscribe();
+
+  ref.onDispose(() {
+    unawaited(client.removeChannel(channel));
+    unawaited(refreshes.close());
+  });
+
+  Future<NexUser?> readProfile() async {
+    final row = await loadMyProfile(client: client)
+        .timeout(const Duration(seconds: 8));
+    return row == null ? null : NexUser.fromJson(row);
+  }
+
+  try {
+    yield await readProfile();
+  } catch (e) {
+    debugPrint('currentUserProvider get_my_profile error: $e');
+    yield null;
+  }
+
+  await for (final _ in refreshes.stream) {
+    try {
+      yield await readProfile();
+    } catch (e) {
+      debugPrint('currentUserProvider refresh error: $e');
+    }
+  }
 });
 
 /// Provider para forzar un refresh manual del perfil del usuario actual.
@@ -49,12 +79,7 @@ final manualUserRefreshProvider = FutureProvider<NexUser?>((ref) async {
       Supabase.instance.client.auth.currentSession;
   if (session == null) return null;
   try {
-    final row = await Supabase.instance.client
-        .from('users')
-        .select(kUserColumns)
-        .eq('id', session.user.id)
-        .maybeSingle()
-        .timeout(const Duration(seconds: 8));
+    final row = await loadMyProfile().timeout(const Duration(seconds: 8));
     if (row == null) return null;
     return NexUser.fromJson(row);
   } catch (e) {

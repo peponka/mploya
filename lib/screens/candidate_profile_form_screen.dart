@@ -3,6 +3,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:mploya/models/models.dart';
 import 'package:mploya/services/storage_service.dart';
+import 'package:mploya/services/my_profile_service.dart';
 import 'package:mploya/widgets/candidato/cand_ui.dart';
 import 'package:mploya/widgets/ds/mploya_ds.dart';
 import 'package:mploya/widgets/onboarding/assistant_fields.dart';
@@ -108,13 +109,7 @@ class _CandidateProfileFormScreenState
     try {
       final uid = Supabase.instance.client.auth.currentUser?.id;
       if (uid == null) return;
-      final row = await Supabase.instance.client
-          .from('users')
-          .select(
-            'name, headline, tags, city, about, experience, education, skills, salary_expectation, avatar_url',
-          )
-          .eq('id', uid)
-          .maybeSingle();
+      final row = await loadMyProfile();
       if (row != null && mounted) {
         _avatarUrl = row['avatar_url']?.toString();
         _nombreController.text = row['name']?.toString() ?? '';
@@ -206,7 +201,7 @@ class _CandidateProfileFormScreenState
       return;
     }
 
-    await Supabase.instance.client.from('users').update({'avatar_url': url}).eq('id', uid);
+    await setMyProfileAvatar(url);
     if (!mounted) return;
     setState(() {
       _avatarUrl = url;
@@ -218,7 +213,7 @@ class _CandidateProfileFormScreenState
     final uid = Supabase.instance.client.auth.currentUser?.id;
     if (uid == null) return;
     setState(() => _avatarBusy = true);
-    await Supabase.instance.client.from('users').update({'avatar_url': null}).eq('id', uid);
+    await setMyProfileAvatar(null);
     if (!mounted) return;
     setState(() {
       _avatarUrl = null;
@@ -435,46 +430,42 @@ class _CandidateProfileFormScreenState
       final about = _buildAbout();
       final experience = _buildExperience();
       final education = _buildEducation();
-      await Supabase.instance.client
-          .from('users')
-          .update({
-            'account_type': 'candidato',
-            'name': nombre,
-            'headline': headline,
-            'city': '$ciudad, $pais',
-            'about': about.isNotEmpty ? about : null,
-            'tags': mergedSkills.isNotEmpty ? mergedSkills : null,
-            'skills': mergedSkills.isNotEmpty ? mergedSkills : null,
-            'experience': experience
-                .map(
-                  (e) => {
-                    'role': e.role,
-                    'company': e.company,
-                    'duration': e.duration,
-                    'location': e.location,
-                    'description': e.description,
-                    'is_current': e.isCurrent,
-                  },
-                )
-                .toList(),
-            'education': education
-                .map(
-                  (e) => {
-                    'school': e.school,
-                    'degree': e.degree,
-                    'field': e.field,
-                    'years': e.years,
-                  },
-                )
-                .toList(),
-            'salary_expectation': _salaryController.text.trim().isNotEmpty
-                ? _salaryController.text.trim()
-                : null,
-            if (!widget.isEditing) 'onboarding_step': 2,
-            if (coords != null) 'latitude': coords[0],
-            if (coords != null) 'longitude': coords[1],
-          })
-          .eq('id', uid);
+      await updateMyCandidateProfile(
+        name: nombre,
+        headline: headline,
+        city: '$ciudad, $pais',
+        about: about.isNotEmpty ? about : null,
+        tags: mergedSkills.isNotEmpty ? mergedSkills : null,
+        skills: mergedSkills.isNotEmpty ? mergedSkills : null,
+        experience: experience
+            .map(
+              (e) => <String, Object?>{
+                'role': e.role,
+                'company': e.company,
+                'duration': e.duration,
+                'location': e.location,
+                'description': e.description,
+                'is_current': e.isCurrent,
+              },
+            )
+            .toList(),
+        education: education
+            .map(
+              (e) => <String, Object?>{
+                'school': e.school,
+                'degree': e.degree,
+                'field': e.field,
+                'years': e.years,
+              },
+            )
+            .toList(),
+        salaryExpectation: _salaryController.text.trim().isNotEmpty
+            ? _salaryController.text.trim()
+            : null,
+        latitude: coords?[0],
+        longitude: coords?[1],
+        completeOnboarding: !widget.isEditing,
+      );
 
       if (!mounted) return;
       if (widget.isEditing) {
