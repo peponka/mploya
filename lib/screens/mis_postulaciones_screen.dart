@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../services/safe_profile_query_service.dart';
 import '../widgets/candidato/cand_ui.dart';
 import '../widgets/ds/mploya_ds.dart';
 
@@ -166,13 +167,13 @@ class _MisPostulacionesScreenState extends State<MisPostulacionesScreen> {
           .from('job_applications')
           .select(
             'id, status, created_at, '
-            'jobs(title, location, is_remote, users!jobs_company_id_fkey(name, avatar_url))',
+            'jobs(title, location, is_remote, company_id)',
           )
           .eq('candidate_id', uid)
           .order('created_at', ascending: false);
-
-      final lista = (rows as List)
-          .map((raw) => _filaAPostulacion(raw as Map<String, dynamic>))
+      final hydrated = await hydrateNestedJobCompanies(rows, client: _supabase);
+      final lista = hydrated
+          .map(_filaAPostulacion)
           .toList();
 
       if (!mounted) return;

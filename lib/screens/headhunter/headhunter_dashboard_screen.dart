@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart' show Colors;
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../services/my_profile_service.dart';
 
 class HeadhunterDashboardData {
   const HeadhunterDashboardData({
@@ -61,11 +62,7 @@ class _HeadhunterDashboardScreenState extends State<HeadhunterDashboardScreen> {
     }
 
     try {
-      final me = await db
-          .from('users')
-          .select('name')
-          .eq('id', uid)
-          .maybeSingle();
+      final me = await loadMyProfile(client: db);
       final jobs = List<Map<String, dynamic>>.from(
         await db
             .from('jobs')

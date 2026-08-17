@@ -7,6 +7,7 @@ import '../theme/app_theme.dart';
 import '../models/models.dart';
 import '../widgets/nex_avatar.dart';
 import '../services/nexus_service.dart';
+import '../services/my_profile_service.dart';
 import '../widgets/nexus_match_overlay.dart';
 import '../utils/time_utils.dart';
 
@@ -33,11 +34,7 @@ class _NexusInboxTabState extends State<NexusInboxTab> {
   Future<NexUser?> _fetchCurrentUser() async {
     if (_uid == null) return null;
     try {
-      final res = await Supabase.instance.client
-          .from('users')
-          .select(kUserColumns)
-          .eq('id', _uid!)
-          .maybeSingle();
+      final res = await loadMyProfile();
       if (res != null) return NexUser.fromJson(res);
     } catch (e) {
       debugPrint('⚠️ NexusInbox._fetchCurrentUser: $e');
@@ -52,7 +49,7 @@ class _NexusInboxTabState extends State<NexusInboxTab> {
     // Buscar datos del sender para el overlay
     try {
       final senderData = await Supabase.instance.client
-          .from('users')
+          .from('accessible_user_profiles')
           .select(kUserColumns)
           .eq('id', signal['sender_id'])
           .maybeSingle();
@@ -210,7 +207,7 @@ class _NexusSignalCardState extends State<_NexusSignalCard> {
   Future<void> _fetchSender() async {
     try {
       final res = await Supabase.instance.client
-          .from('users')
+          .from('accessible_user_profiles')
           .select(kUserColumns)
           .eq('id', widget.signal['sender_id'])
           .maybeSingle();

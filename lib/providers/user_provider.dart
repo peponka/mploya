@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -16,8 +14,7 @@ final authSessionProvider = StreamProvider<Session?>((ref) async* {
 });
 
 /// Perfil propio global. La fila se lee siempre por `get_my_profile()`.
-/// Realtime solo invalida esa lectura cuando cambia la fila del mismo usuario;
-/// el payload de `public.users` no se usa como fuente de datos.
+/// Se refresca por la misma RPC privada; nunca se suscribe a `public.users`.
 final currentUserProvider = StreamProvider<NexUser?>((ref) async* {
   final session = ref.watch(authSessionProvider).value;
   if (session == null) {
@@ -26,48 +23,20 @@ final currentUserProvider = StreamProvider<NexUser?>((ref) async* {
   }
 
   final client = Supabase.instance.client;
-  final refreshes = StreamController<void>();
-  final channel = client
-      .channel('my-profile-${session.user.id}')
-      .onPostgresChanges(
-        event: PostgresChangeEvent.all,
-        schema: 'public',
-        table: 'users',
-        filter: PostgresChangeFilter(
-          type: PostgresChangeFilterType.eq,
-          column: 'id',
-          value: session.user.id,
-        ),
-        callback: (_) {
-          if (!refreshes.isClosed) refreshes.add(null);
-        },
-      )
-      .subscribe();
-
-  ref.onDispose(() {
-    unawaited(client.removeChannel(channel));
-    unawaited(refreshes.close());
-  });
-
   Future<NexUser?> readProfile() async {
     final row = await loadMyProfile(client: client)
         .timeout(const Duration(seconds: 8));
     return row == null ? null : NexUser.fromJson(row);
   }
 
-  try {
-    yield await readProfile();
-  } catch (e) {
-    debugPrint('currentUserProvider get_my_profile error: $e');
-    yield null;
-  }
-
-  await for (final _ in refreshes.stream) {
+  while (true) {
     try {
       yield await readProfile();
     } catch (e) {
-      debugPrint('currentUserProvider refresh error: $e');
+      debugPrint('currentUserProvider get_my_profile error: $e');
+      yield null;
     }
+    await Future<void>.delayed(const Duration(seconds: 30));
   }
 });
 

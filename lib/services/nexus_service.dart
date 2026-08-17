@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'my_profile_service.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // NexusService — Motor del sistema de conexión bidireccional
@@ -48,11 +49,7 @@ class NexusService {
 
       // ── Notificación al receptor ──
       try {
-        final senderData = await _client
-            .from('users')
-            .select('name')
-            .eq('id', _uid!)
-            .maybeSingle();
+        final senderData = await loadMyProfile(client: _client);
         final senderName = senderData?['name'] ?? 'Alguien';
         await _client.rpc('create_system_notification', params: {
           'p_user_id': receiverId,
@@ -89,11 +86,7 @@ class NexusService {
 
       // ── Notificación al receptor ──
       try {
-        final senderData = await _client
-            .from('users')
-            .select('name')
-            .eq('id', _uid!)
-            .maybeSingle();
+        final senderData = await loadMyProfile(client: _client);
         final senderName = senderData?['name'] ?? 'Alguien';
         await _client.rpc('create_system_notification', params: {
           'p_user_id': receiverId,
@@ -132,7 +125,7 @@ class NexusService {
       if (signal != null) {
         try {
           final receiverData = await _client
-              .from('users')
+              .from('accessible_user_profiles')
               .select('name')
               .eq('id', signal['receiver_id'])
               .maybeSingle();

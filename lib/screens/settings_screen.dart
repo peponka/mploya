@@ -10,6 +10,7 @@ import '../services/auth_service.dart';
 import '../services/blind_hiring_service.dart';
 import '../services/push_notification_service.dart';
 import '../services/revenuecat_service.dart';
+import '../services/my_profile_service.dart';
 import '../services/block_user_service.dart';
 import '../services/connectivity_service.dart';
 import 'premium_paywall_screen.dart';
@@ -78,7 +79,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     try {
       final uid = Supabase.instance.client.auth.currentUser?.id;
       if (uid != null) {
-        final row = await Supabase.instance.client.from('users').select('account_type, blind_hiring_mode, push_enabled, email_notifications_enabled, job_alerts_enabled').eq('id', uid).maybeSingle();
+        final row = await loadMyProfile();
         if (row != null && mounted) {
           setState(() {
             _accountType = row['account_type']?.toString() ?? 'candidato';
@@ -112,7 +113,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (key == _kJobAlerts) updates['job_alerts_enabled'] = value;
       if (updates.isNotEmpty) {
         try {
-          await Supabase.instance.client.from('users').update(updates).eq('id', uid);
+          for (final entry in updates.entries) {
+            await updateMySetting(entry.key, entry.value == true);
+          }
         } catch (e) {
           debugPrint('⚠️ Error syncing notification pref to DB: $e');
         }

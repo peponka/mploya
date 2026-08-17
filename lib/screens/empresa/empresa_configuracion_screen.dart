@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../services/my_profile_service.dart';
 import '../../widgets/ds/mploya_ds.dart';
 
 /// Preferencias de cuenta de la Empresa, tal como están en `public.users`.
@@ -40,11 +41,7 @@ Future<ConfiguracionEmpresa> loadConfiguracion() async {
   if (uid == null) return const ConfiguracionEmpresa(error: true);
 
   try {
-    final fila = await client
-        .from('users')
-        .select(_columnas.values.join(', '))
-        .eq('id', uid)
-        .maybeSingle();
+    final fila = await loadMyProfile(client: client);
 
     if (fila == null) return const ConfiguracionEmpresa(error: true);
 
@@ -70,7 +67,7 @@ Future<bool> guardarPreferencia(String columna, bool valor) async {
   if (uid == null) return false;
 
   try {
-    await client.from('users').update({columna: valor}).eq('id', uid);
+    await updateMySetting(columna, valor, client: client);
     return true;
   } catch (e) {
     debugPrint('configuracion · update $columna: $e');

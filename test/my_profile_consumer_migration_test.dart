@@ -102,17 +102,21 @@ void main() {
       expect(headhunter, contains('updateMyHeadhunterProfile('));
     });
 
-    test('does not migrate unrelated foreign-profile consumers', () {
+    test('foreign-profile consumers use only the safe projection', () {
       for (final path in [
         'lib/services/feed_service.dart',
         'lib/screens/network_screen.dart',
-        'lib/screens/messaging_screen.dart',
         'lib/screens/empresa/empresa_busqueda_data.dart',
         'lib/screens/headhunter/headhunter_talent_pool_screen.dart',
       ]) {
-        expect(source(path), isNot(contains("rpc('get_my_profile'")));
-        expect(source(path), isNot(contains('loadMyProfile')));
+        final consumer = source(path);
+        expect(consumer, contains('accessible_user_profiles'), reason: path);
+        expect(consumer, isNot(contains(".from('users')")), reason: path);
       }
+      final messaging = source('lib/screens/messaging_screen.dart');
+      expect(messaging, contains('accessible_user_profiles'));
+      expect(messaging, contains('loadMyProfile'));
+      expect(messaging, isNot(contains(".from('users')")));
     });
   });
 }

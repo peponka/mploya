@@ -363,7 +363,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
     if (widget.previewData == null && actorIds.isNotEmpty) {
       try {
         final users = await Supabase.instance.client
-            .from('users')
+            .from('accessible_user_profiles')
             .select('id, account_type')
             .inFilter('id', actorIds.toList());
         for (final user in users) {
@@ -1607,7 +1607,7 @@ class _CompanyAlertsWebState extends State<_CompanyAlertsWeb> {
           .toList();
       if (otherIds.isEmpty) return [];
       final users = await _supabase
-          .from('users')
+          .from('accessible_user_profiles')
           .select(kUserColumns)
           .inFilter('id', otherIds);
       return users
@@ -1799,7 +1799,7 @@ class _CompanyAlertsWebState extends State<_CompanyAlertsWeb> {
     final id = candidateId?.toString() ?? '';
     if (id.isEmpty) return;
     final data = await _supabase
-        .from('users')
+        .from('accessible_user_profiles')
         .select(kUserColumns)
         .eq('id', id)
         .maybeSingle();

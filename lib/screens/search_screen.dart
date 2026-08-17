@@ -3,6 +3,7 @@ import '../utils/user_columns.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../theme/app_theme.dart';
 import '../models/models.dart';
+import '../services/safe_profile_query_service.dart';
 import '../widgets/nex_avatar.dart';
 import '../widgets/job_card.dart';
 import 'profile_screen.dart';
@@ -238,7 +239,7 @@ class _SearchScreenState extends State<SearchScreen> {
           ),
         ),
         FutureBuilder<List<Map<String, dynamic>>>(
-          future: Supabase.instance.client.from('users').select(kUserColumns).limit(4),
+          future: Supabase.instance.client.from('accessible_user_profiles').select(kUserColumns).limit(4),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const Padding(padding: EdgeInsets.all(20), child: Center(child: CupertinoActivityIndicator()));
@@ -275,7 +276,7 @@ class _SearchScreenState extends State<SearchScreen> {
 
       if (searchUsers) {
         // Buscar por nombre/headline con texto libre
-        var queryBuilder = client.from('users').select(kUserColumns).or('name.ilike.%$query%,headline.ilike.%$query%');
+        var queryBuilder = client.from('accessible_user_profiles').select(kUserColumns).or('name.ilike.%$query%,headline.ilike.%$query%');
         
         // Si el filtro es Empresas, forzamos que traiga empresas
         if (_selectedFilter == 3) {
@@ -293,7 +294,7 @@ class _SearchScreenState extends State<SearchScreen> {
         
         for (final q in {query, qLower, qUpper, qCapital}) {
           final rows = await client
-              .from('users')
+              .from('accessible_user_profiles')
               .select(kUserColumns)
               .contains('tags', [q]);
           tagRows.addAll(rows);
@@ -314,7 +315,7 @@ class _SearchScreenState extends State<SearchScreen> {
       if (searchJobs) {
         var jobQuery = client
             .from('jobs')
-            .select('*, users!jobs_company_id_fkey(name, avatar_url)')
+            .select()
             .eq('is_active', true);
 
         if (query.isNotEmpty) {
@@ -329,7 +330,8 @@ class _SearchScreenState extends State<SearchScreen> {
           jobQuery = jobQuery.eq('seniority', _filterSeniority!);
         }
 
-        final List jobRows = await jobQuery.order('created_at', ascending: false).limit(30);
+        final List rawJobRows = await jobQuery.order('created_at', ascending: false).limit(30);
+        final jobRows = await hydrateJobCompanies(rawJobRows, client: client);
 
         final jobs = jobRows.map((r) {
           final companyData = r['users'] as Map<String, dynamic>?;

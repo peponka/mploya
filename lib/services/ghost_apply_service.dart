@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'my_profile_service.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GhostApplyService — Aplicar de forma anónima a vacantes
@@ -82,11 +83,8 @@ class GhostApplyService {
 
     try {
       // 1. Obtener datos del candidato
-      final userData = await _supabase
-          .from('users')
-          .select('headline, about, tags, skills, account_type')
-          .eq('id', uid)
-          .single();
+      final userData = await loadMyProfile(client: _supabase);
+      if (userData == null) throw StateError('Perfil propio no disponible');
 
       final isConfidential = userData['account_type'] == 'confidencial' ||
           userData['account_type'] == 'stealth';
@@ -202,11 +200,7 @@ class GhostApplyService {
 
     try {
       // Verificar si es Premium
-      final user = await _supabase
-          .from('users')
-          .select('is_premium')
-          .eq('id', uid)
-          .maybeSingle();
+      final user = await loadMyProfile(client: _supabase);
 
       if (user == null || user['is_premium'] != true) {
         return 'Necesitás una cuenta Premium para desbloquear candidatos Ghost.';

@@ -1,5 +1,6 @@
 import 'dart:ui';
 import '../utils/user_columns.dart';
+import '../services/my_profile_service.dart';
 import 'dart:async';
 import 'package:flutter/cupertino.dart';
 // Material widgets (SliverAppBar, Colors, Icons) have no Cupertino equivalent
@@ -155,7 +156,7 @@ class _MessagingScreenState extends State<MessagingScreen> {
           .limit(200);
 
       final usersFut = Supabase.instance.client
-          .from('users')
+          .from('accessible_user_profiles')
           .select(kUserColumns)
           .order('created_at', ascending: false)
           .limit(100);
@@ -168,11 +169,7 @@ class _MessagingScreenState extends State<MessagingScreen> {
 
       final viewerFut = _currentUserId == null
           ? Future<Map<String, dynamic>?>.value(null)
-          : Supabase.instance.client
-              .from('users')
-              .select('account_type')
-              .eq('id', _currentUserId!)
-              .maybeSingle();
+          : loadMyProfile();
 
       final results = await Future.wait<dynamic>([
         connFut,
@@ -257,11 +254,20 @@ class _MessagingScreenState extends State<MessagingScreen> {
     return _usersStream;
   }
 
-  late final _usersStream = Supabase.instance.client
-      .from('users')
-      .stream(primaryKey: ['id'])
-      .order('created_at', ascending: false)
-      .limit(100);
+  late final Stream<List<Map<String, dynamic>>> _usersStream =
+      _pollAccessibleUsers();
+
+  Stream<List<Map<String, dynamic>>> _pollAccessibleUsers() async* {
+    while (true) {
+      final rows = await Supabase.instance.client
+          .from('accessible_user_profiles')
+          .select(kUserColumns)
+          .order('created_at', ascending: false)
+          .limit(100);
+      yield List<Map<String, dynamic>>.from(rows);
+      await Future<void>.delayed(const Duration(seconds: 30));
+    }
+  }
 
   // Solo mis conexiones (ambos lados del vínculo)
   late final _connectionsStream = Supabase.instance.client
@@ -901,11 +907,7 @@ class ChatDetailScreenState extends State<ChatDetailScreen> {
   Future<void> _loadMyName() async {
     if (_currentUserId == null) return;
     try {
-      final row = await Supabase.instance.client
-          .from('users')
-          .select('name')
-          .eq('id', _currentUserId!)
-          .maybeSingle();
+      final row = await loadMyProfile();
       if (row != null && mounted) {
         setState(() => _myDisplayName = row['name']?.toString() ?? 'Usuario');
       }
@@ -1150,11 +1152,7 @@ class ChatDetailScreenState extends State<ChatDetailScreen> {
     // ── 1. Obtener nombre real del usuario actual ──
     String myName = 'Mploya User';
     try {
-      final row = await Supabase.instance.client
-          .from('users')
-          .select('name')
-          .eq('id', _currentUserId!)
-          .maybeSingle();
+      final row = await loadMyProfile();
       if (row != null) {
         myName = row['name']?.toString() ?? myName;
       }

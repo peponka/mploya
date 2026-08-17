@@ -2,7 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/models.dart';
-import '../utils/user_columns.dart';
+import '../services/my_profile_service.dart';
 import 'headhunter/headhunter_tools_screen.dart';
 import 'mis_herramientas_screen.dart';
 
@@ -34,7 +34,7 @@ class _ToolsHubEntryScreenState extends State<ToolsHubEntryScreen> {
     final uid = client.auth.currentUser?.id;
     if (uid == null) return null;
     final results = await Future.wait<Object?>([
-      client.from('users').select(kUserColumns).eq('id', uid).maybeSingle(),
+      loadMyProfile(client: client),
       client.rpc('is_admin'),
     ]);
     final profile = results.first;

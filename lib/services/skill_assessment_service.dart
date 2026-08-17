@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'my_profile_service.dart';
 import 'claude_ai_service.dart';
 
 /// Service para Skill Assessment Badges.
@@ -48,11 +49,7 @@ class SkillAssessmentService {
     if (_uid == null) return _fallbackByRole('candidato');
 
     try {
-      final row = await _supabase
-          .from('users')
-          .select('skills, tags, account_type, headline')
-          .eq('id', _uid!)
-          .maybeSingle();
+      final row = await loadMyProfile(client: _supabase);
 
       if (row == null) return _fallbackByRole('candidato');
 

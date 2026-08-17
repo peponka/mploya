@@ -129,7 +129,7 @@ Future<MensajesData> loadEmpresaConversaciones() async {
     try {
       final usuarios = List<Map<String, dynamic>>.from(
         await client
-            .from('users')
+            .from('accessible_user_profiles')
             .select(kUserColumns)
             .inFilter('id', ultimos.keys.toList()),
       );

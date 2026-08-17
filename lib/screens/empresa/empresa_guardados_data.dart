@@ -116,7 +116,7 @@ Future<GuardadosData> loadGuardados() async {
   List<dynamic> perfiles;
   try {
     perfiles = await client
-        .from('users')
+        .from('accessible_user_profiles')
         .select(kUserColumns)
         .inFilter('id', fechaPorId.keys.toList()) as List<dynamic>;
   } catch (e) {

@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/models.dart';
+import '../services/safe_profile_query_service.dart';
 import '../widgets/candidato/cand_ui.dart';
 import '../widgets/ds/mploya_ds.dart';
 import 'chat_inmail_screen.dart';
@@ -115,15 +116,15 @@ class _OfertasRecibidasScreenState extends State<OfertasRecibidasScreen> {
           .from('job_applications')
           .select(
             'id, created_at, '
-            'jobs(title, location, is_remote, salary_range, '
-            'users!jobs_company_id_fkey(id, name, avatar_url, headline))',
+            'jobs(title, location, is_remote, salary_range, company_id)',
           )
           .eq('candidate_id', uid)
           .eq('status', 'accepted')
           .order('created_at', ascending: false);
 
-      final lista = (rows as List)
-          .map((raw) => _filaAOferta(raw as Map<String, dynamic>))
+      final hydrated = await hydrateNestedJobCompanies(rows, client: _supabase);
+      final lista = hydrated
+          .map(_filaAOferta)
           .toList();
 
       if (!mounted) return;

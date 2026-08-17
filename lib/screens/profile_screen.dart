@@ -14,10 +14,10 @@ import '../models/models.dart';
 import '../services/profile_view_service.dart';
 import '../services/share_service.dart';
 import '../services/storage_service.dart';
+import '../services/my_profile_service.dart';
 import '../services/video_preload_manager.dart';
 import '../theme/app_theme.dart';
 import '../theme/mploya_tokens.dart';
-import '../utils/user_columns.dart';
 import '../widgets/candidato/cand_perfil.dart';
 import '../widgets/candidato/cand_ui.dart';
 import '../widgets/mploya_shell.dart';
@@ -114,11 +114,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<String?> _loadViewerAccountType() async {
     final uid = Supabase.instance.client.auth.currentUser?.id;
     if (uid == null) return null;
-    final row = await Supabase.instance.client
-        .from('users')
-        .select('account_type')
-        .eq('id', uid)
-        .maybeSingle();
+    final row = await loadMyProfile();
     return row?['account_type']?.toString();
   }
 
@@ -126,11 +122,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final uid = Supabase.instance.client.auth.currentUser?.id;
     if (uid == null) return;
     setState(() {
-      _ownFuture = Supabase.instance.client
-          .from('users')
-          .select(kUserColumns)
-          .eq('id', uid)
-          .maybeSingle();
+      _ownFuture = loadMyProfile();
       _bundleFutures.remove(uid);
     });
   }
@@ -287,10 +279,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       return;
     }
 
-    await Supabase.instance.client
-        .from('users')
-        .update({'avatar_url': url})
-        .eq('id', uid);
+    await setMyProfileAvatar(url);
     _reloadOwnProfile();
   }
 

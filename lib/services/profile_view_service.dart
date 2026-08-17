@@ -54,7 +54,7 @@ class ProfileViewService {
       if (viewerIds.isEmpty) return [];
 
       final users = await _client
-          .from('users')
+          .from('accessible_user_profiles')
           .select('id, name, headline, avatar_url, account_type')
           .inFilter('id', viewerIds);
 

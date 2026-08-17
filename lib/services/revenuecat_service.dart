@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'my_profile_service.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RevenueCatService — Gestión de suscripciones Premium
@@ -80,11 +81,7 @@ class RevenueCatService {
     if (uid == null) return;
 
     try {
-      final res = await Supabase.instance.client
-          .from('users')
-          .select('is_premium')
-          .eq('id', uid)
-          .maybeSingle();
+      final res = await loadMyProfile();
       _isPremium = res?['is_premium'] == true;
     } catch (e) {
       debugPrint('Error checking Supabase premium: $e');

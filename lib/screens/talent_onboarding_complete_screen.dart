@@ -1,9 +1,9 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart' show CircularProgressIndicator, Divider;
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../services/my_profile_service.dart';
 
 import '../models/models.dart';
-import '../utils/user_columns.dart';
 import '../widgets/ds/mploya_ds.dart';
 import 'onboarding_tour_screen.dart';
 
@@ -58,11 +58,7 @@ class _TalentOnboardingCompleteScreenState
         if (mounted) setState(() => _cargando = false);
         return;
       }
-      final row = await Supabase.instance.client
-          .from('users')
-          .select(kUserColumns)
-          .eq('id', uid)
-          .maybeSingle();
+      final row = await loadMyProfile();
       if (!mounted) return;
       setState(() {
         _perfil = row != null ? NexUser.fromJson(row) : null;

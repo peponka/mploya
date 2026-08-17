@@ -20,7 +20,7 @@ const ANON_KEY =
 
 const COLUMNS = [
   'id', 'name', 'headline', 'about', 'avatar_url', 'banner_url', 'video_url',
-  'skills', 'soft_skills', 'tags', 'company', 'location', 'city', 'account_type',
+  'skills', 'soft_skills', 'tags', 'company', 'city', 'account_type',
   'is_verified', 'is_premium', 'open_to_work', 'is_hiring', 'experience',
   'education', 'rating_stars', 'rating_count', 'connections', 'profile_views',
 ].join(',');
@@ -130,7 +130,7 @@ export default async function handler(req, res) {
   let u;
   try {
     const r = await fetch(
-      `${SUPABASE_URL}/rest/v1/users?id=eq.${encodeURIComponent(id)}&select=${COLUMNS}&limit=1`,
+      `${SUPABASE_URL}/rest/v1/safe_user_profiles?id=eq.${encodeURIComponent(id)}&select=${COLUMNS}&limit=1`,
       { headers: { apikey: ANON_KEY, Authorization: `Bearer ${ANON_KEY}` } },
     );
     if (!r.ok) return notFound(res);

@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import '../utils/user_columns.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'my_profile_service.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HashtagService — Motor de hashtags interactivos
@@ -54,7 +55,7 @@ class HashtagService {
     try {
       // Fetch all users' tags
       final rows = await _db
-          .from('users')
+          .from('accessible_user_profiles')
           .select('tags')
           .not('tags', 'is', null)
           .limit(500);
@@ -106,7 +107,7 @@ class HashtagService {
 
       // Fallback: query directa
       final rows = await _db
-          .from('users')
+          .from('accessible_user_profiles')
           .select('id')
           .contains('tags', [tag])
           .limit(100);
@@ -132,7 +133,7 @@ class HashtagService {
         '${tag[0].toUpperCase()}${tag.substring(1).toLowerCase()}'
       }) {
         final rows = await _db
-            .from('users')
+            .from('accessible_user_profiles')
             .select(kUserColumns)
             .contains('tags', [variant])
             .limit(30);
@@ -160,11 +161,7 @@ class HashtagService {
 
     try {
       // Get current user's tags
-      final userData = await _db
-          .from('users')
-          .select('tags, skills')
-          .eq('id', _uid!)
-          .maybeSingle();
+      final userData = await loadMyProfile(client: _db);
 
       if (userData == null) return [];
 
@@ -190,7 +187,7 @@ class HashtagService {
   Future<List<String>> getRelatedHashtags(String tag) async {
     try {
       final rows = await _db
-          .from('users')
+          .from('accessible_user_profiles')
           .select('tags')
           .contains('tags', [tag])
           .limit(50);

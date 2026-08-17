@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'my_profile_service.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TranscriptionService — Motor de subtítulos IA para Video Pitches
@@ -70,9 +71,14 @@ class TranscriptionService {
 
       if (segments.isNotEmpty) {
         // Guardar en la base de datos
-        await _supabase.from('users').update({
-          'ai_transcript_json': segments,
-        }).eq('id', userId);
+        if (_supabase.auth.currentUser?.id != userId) {
+          throw StateError('No se puede guardar una transcripción ajena');
+        }
+        await setMyProfileAnalysis(
+          'ai_transcript_json',
+          segments,
+          client: _supabase,
+        );
 
         debugPrint('✅ Transcripción guardada: ${segments.length} segmentos');
       }
@@ -123,11 +129,13 @@ class TranscriptionService {
   /// Obtiene la transcripción existente de un usuario
   Future<List<Map<String, dynamic>>> getTranscript(String userId) async {
     try {
-      final result = await _supabase
-          .from('users')
-          .select('ai_transcript_json')
-          .eq('id', userId)
-          .maybeSingle();
+      final result = _supabase.auth.currentUser?.id == userId
+          ? await loadMyProfile(client: _supabase)
+          : await _supabase
+                .from('accessible_user_profiles')
+                .select('ai_transcript_json')
+                .eq('id', userId)
+                .maybeSingle();
 
       if (result == null) return [];
 

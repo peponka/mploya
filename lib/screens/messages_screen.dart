@@ -168,7 +168,7 @@ class _ConversationTileState extends State<_ConversationTile> {
   Future<void> _fetchPartner() async {
     try {
       final res = await _supabase
-          .from('users')
+          .from('accessible_user_profiles')
           .select(kUserColumns)
           .eq('id', widget.conv.partnerId)
           .maybeSingle();

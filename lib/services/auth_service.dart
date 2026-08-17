@@ -186,14 +186,20 @@ class AuthService {
   /// actúa como fallback en caso de que el trigger no esté activo.
   Future<void> upsertUserProfile(User user) async {
     try {
-      final fallbackName = user.userMetadata?['full_name']?.toString()
-          ?? user.userMetadata?['name']?.toString()
-          ?? user.email?.split('@').first
-          ?? 'Usuario';
-      await _client.from('users').upsert(
-        {'id': user.id, 'email': user.email ?? '', 'name': fallbackName, 'onboarding_step': 0},
-        onConflict: 'id',
-        ignoreDuplicates: true, // no sobreescribe si la fila ya existe
+      final metadataRole = user.userMetadata?['account_type']?.toString();
+      final initialRole = const {
+        'candidato',
+        'empresa',
+        'headhunter',
+        'confidencial',
+        'stealth',
+      }.contains(metadataRole)
+          ? metadataRole!
+          : 'candidato';
+      await setMyInitialRole(
+        role: initialRole,
+        completeSelection: false,
+        client: _client,
       );
     } catch (e) {
       // Fallo silencioso: si RLS bloquea el upsert, el trigger ya creó la fila.

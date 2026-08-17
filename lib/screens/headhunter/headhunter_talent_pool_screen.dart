@@ -104,7 +104,7 @@ class _HeadhunterTalentPoolScreenState
       });
     } else {
       final data = await Supabase.instance.client
-          .from('users')
+          .from('accessible_user_profiles')
           .select(kUserColumns)
           .eq('id', id)
           .maybeSingle();

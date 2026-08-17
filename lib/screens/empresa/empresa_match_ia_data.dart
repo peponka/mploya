@@ -189,7 +189,7 @@ Future<MatchIaData> loadMatchIa({
 
   try {
     candidato = await client
-        .from('users')
+        .from('accessible_user_profiles')
         .select(kUserColumns)
         .eq('id', candidatoId)
         .maybeSingle();
@@ -202,7 +202,7 @@ Future<MatchIaData> loadMatchIa({
   if (empresaId != null) {
     try {
       empresa = await client
-          .from('users')
+          .from('accessible_user_profiles')
           .select(kUserColumns)
           .eq('id', empresaId)
           .maybeSingle();

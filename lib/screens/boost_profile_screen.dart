@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../theme/app_theme.dart';
 import '../services/profile_view_service.dart';
+import '../services/my_profile_service.dart';
 
 class BoostProfileScreen extends ConsumerStatefulWidget {
   /// Las empresas pagan un poco más (mayor valor: un buen candidato vale miles).
@@ -35,12 +36,7 @@ class _BoostProfileScreenState extends ConsumerState<BoostProfileScreen> {
     final uid = Supabase.instance.client.auth.currentUser?.id;
     if (uid == null) return;
     try {
-      // boost_ends_at siempre existe → días restantes.
-      final row = await Supabase.instance.client
-          .from('users')
-          .select('boost_ends_at')
-          .eq('id', uid)
-          .maybeSingle();
+      final row = await loadMyProfileEntitlements();
       final endsRaw = row?['boost_ends_at'];
       final ends = endsRaw != null ? DateTime.tryParse(endsRaw.toString()) : null;
       if (ends == null || !ends.isAfter(DateTime.now())) return;
@@ -50,12 +46,7 @@ class _BoostProfileScreenState extends ConsumerState<BoostProfileScreen> {
       // boost_started_at puede no existir aún (falta correr boost_setup.sql).
       int? views;
       try {
-        final s = await Supabase.instance.client
-            .from('users')
-            .select('boost_started_at')
-            .eq('id', uid)
-            .maybeSingle();
-        final startRaw = s?['boost_started_at'];
+        final startRaw = row?['boost_started_at'];
         final start = startRaw != null ? DateTime.tryParse(startRaw.toString()) : null;
         if (start != null) {
           views = await ProfileViewService.instance.getViewCountSince(start);

@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../theme/app_theme.dart';
 import '../services/saved_jobs_service.dart';
+import '../services/safe_profile_query_service.dart';
 import '../widgets/mploya_toast.dart';
 import '../widgets/mploya_shimmer.dart';
 import '../widgets/nex_avatar.dart';
@@ -69,7 +70,7 @@ class _SavedJobsScreenState extends ConsumerState<SavedJobsScreen> {
       } catch (e) {
         debugPrint('⚠️ SavedScreen: no se pudo leer currentUser ($e)');
       }
-      final type = currentUserData?.accountType?.toLowerCase() ?? '';
+      final type = currentUserData?.accountType.toLowerCase() ?? '';
       debugPrint('🔍 SavedScreen: accountType="$type", name="${currentUserData?.name}"');
       if (mounted) {
         setState(() {
@@ -93,14 +94,18 @@ class _SavedJobsScreenState extends ConsumerState<SavedJobsScreen> {
 
       final rows = await Supabase.instance.client
           .from('saved_profiles')
-          .select('saved_user_id, created_at, users!saved_profiles_saved_user_id_fkey(id, name, headline, avatar_url, account_type, video_url)')
+          .select('saved_user_id, created_at')
           .eq('user_id', uid)
           .order('created_at', ascending: false);
+
+      final byId = await loadAccessibleProfilesById(
+        rows.map<String>((row) => row['saved_user_id'].toString()),
+      );
 
       final profiles = <NexUser>[];
       final seenIds = <String>{};
       for (final row in rows) {
-        final userData = row['users'] as Map<String, dynamic>?;
+        final userData = byId[row['saved_user_id']?.toString()];
         if (userData != null) {
           final profile = NexUser.fromJson(userData);
           if (seenIds.contains(profile.id)) continue; // dedup
@@ -145,7 +150,7 @@ class _SavedJobsScreenState extends ConsumerState<SavedJobsScreen> {
         }
 
         final users = await Supabase.instance.client
-            .from('users')
+            .from('accessible_user_profiles')
             .select(kUserColumns)
             .inFilter('id', ids);
 
@@ -181,13 +186,14 @@ class _SavedJobsScreenState extends ConsumerState<SavedJobsScreen> {
 
       final rows = await Supabase.instance.client
           .from('saved_jobs')
-          .select('*, jobs(id, title, salary_range, modality, tags, created_at, company_id, users!jobs_company_id_fkey(name, avatar_url))')
+          .select('*, jobs(id, title, salary_range, modality, tags, created_at, company_id)')
           .eq('user_id', uid)
           .order('saved_at', ascending: false);
+      final hydrated = await hydrateNestedJobCompanies(rows);
 
       if (mounted) {
         setState(() {
-          _savedJobs = List<Map<String, dynamic>>.from(rows);
+          _savedJobs = hydrated;
           _loadingJobs = false;
         });
       }

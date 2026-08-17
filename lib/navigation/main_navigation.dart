@@ -33,6 +33,7 @@ import '../screens/onboarding_pitch_screen.dart';
 import '../screens/post_composer_screen.dart';
 import '../screens/profile_screen.dart';
 import '../screens/tools_hub_entry_screen.dart';
+import '../services/my_profile_service.dart';
 import '../services/coach_mark_service.dart';
 import '../services/connectivity_service.dart';
 import '../services/revenuecat_service.dart';
@@ -213,12 +214,8 @@ class _MainNavigationState extends State<MainNavigation> {
     } catch (_) {}
 
     try {
-      final res = await Supabase.instance.client
-          .from('users')
-          .select('account_type')
-          .eq('id', uid)
-          .single();
-      final newType = res['account_type']?.toString() ?? 'candidato';
+      final res = await loadMyProfile();
+      final newType = res?['account_type']?.toString() ?? 'candidato';
 
       try {
         final prefs = await SharedPreferences.getInstance();
@@ -319,10 +316,10 @@ class _MainNavigationState extends State<MainNavigation> {
       await prefs.setString('mploya_account_type', newType);
       final uid = Supabase.instance.client.auth.currentUser?.id;
       if (uid != null) {
-        await Supabase.instance.client
-            .from('users')
-            .update({'account_type': newType})
-            .eq('id', uid);
+        await setMyInitialRole(
+          role: newType,
+          completeSelection: true,
+        );
       }
     } catch (_) {}
   }

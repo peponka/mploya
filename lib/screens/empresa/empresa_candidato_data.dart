@@ -59,7 +59,7 @@ Future<CandidatoPerfil?> loadCandidatoPerfil(
   Map<String, dynamic>? fila;
   try {
     fila = await client
-        .from('users')
+        .from('accessible_user_profiles')
         .select(kUserColumns)
         .eq('id', candidatoId)
         .maybeSingle();

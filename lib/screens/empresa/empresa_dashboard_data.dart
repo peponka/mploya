@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../services/my_profile_service.dart';
 
 /// Una etapa del embudo de `dashboard empresa.png`.
 @immutable
@@ -124,8 +125,7 @@ Future<EmpresaDashboardData> loadEmpresaDashboard() async {
 
   var companyName = '';
   try {
-    final me =
-        await client.from('users').select('name').eq('id', uid).maybeSingle();
+    final me = await loadMyProfile(client: client);
     companyName = (me?['name'] ?? '').toString();
   } catch (_) {}
 

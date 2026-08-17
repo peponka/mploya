@@ -937,7 +937,7 @@ class _AtsDashboardScreenState extends State<AtsDashboardScreen> {
     try {
       final client = Supabase.instance.client;
       final jobs = await client.from('jobs').select('id').limit(1).timeout(const Duration(seconds: 3));
-      final users = await client.from('users').select('id').limit(1).timeout(const Duration(seconds: 3));
+      final users = await client.from('accessible_user_profiles').select('id').limit(1).timeout(const Duration(seconds: 3));
 
       if (!mounted) return;
       Navigator.pop(context); // Quitar loader

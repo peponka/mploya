@@ -2,6 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../services/my_profile_service.dart';
 import '../theme/app_theme.dart';
 import '../models/models.dart';
 import '../screens/story_viewer_screen.dart';
@@ -163,11 +164,7 @@ class _YourStoryState extends State<_YourStory> {
     final uid = Supabase.instance.client.auth.currentUser?.id;
     if (uid == null) return;
     try {
-      final row = await Supabase.instance.client
-          .from('users')
-          .select('name, avatar_url')
-          .eq('id', uid)
-          .maybeSingle();
+      final row = await loadMyProfile();
       if (mounted && row != null) {
         final name = row['name']?.toString() ?? '';
         setState(() {

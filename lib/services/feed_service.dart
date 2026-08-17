@@ -81,7 +81,7 @@ class FeedService {
       } catch (viewError) {
         // feed_ranked no existe → fallback a tabla users directamente
         debugPrint('⚠️ feed_ranked no disponible, usando tabla users: $viewError');
-        var query = _db.from('users').select(kUserColumns);
+        var query = _db.from('accessible_user_profiles').select(kUserColumns);
         if (_uid != null) query = query.neq('id', _uid!);
         
         // Filtro cruzado
@@ -164,14 +164,8 @@ class FeedService {
     int calculateAffinity(Map<String, dynamic> r) {
       int score = 0;
 
-      // Boost pago activo
-      final rawBoost = r['boost_ends_at'];
-      if (rawBoost != null) {
-        final boostDt = DateTime.tryParse(rawBoost.toString());
-        if (boostDt != null && boostDt.isAfter(DateTime.now())) {
-          score += 1000;
-        }
-      }
+      // El backend incorpora el boost sin exponer sus fechas privadas.
+      if ((r['base_score'] as num? ?? 0) >= 1000) score += 1000;
 
       // Premium
       if (r['is_premium'] == true) score += 100;

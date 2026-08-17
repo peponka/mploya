@@ -53,7 +53,7 @@ class PitchCommentService {
       // Obtener info de autores
       final authorIds = rows.map((r) => r['author_id'].toString()).toSet().toList();
       final users = await _client
-          .from('users')
+          .from('accessible_user_profiles')
           .select('id, name, headline, avatar_url')
           .inFilter('id', authorIds);
 

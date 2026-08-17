@@ -66,7 +66,7 @@ class SearchService {
       final pattern = '%$query%';
 
       final rows = await _db
-          .from('users')
+          .from('accessible_user_profiles')
           .select('id, name, headline, avatar_url, account_type, tags, is_premium')
           .or('name.ilike.$pattern,headline.ilike.$pattern')
           .order('is_premium', ascending: false)
@@ -78,7 +78,7 @@ class SearchService {
 
       // Buscar tags también
       final tagRows = await _db
-          .from('users')
+          .from('accessible_user_profiles')
           .select('id, name, headline, avatar_url, account_type, tags, is_premium')
           .contains('tags', [query])
           .limit(10)
@@ -127,7 +127,7 @@ class SearchService {
     try {
       // Obtener todos los tags y contar frecuencia
       final rows = await _db
-          .from('users')
+          .from('accessible_user_profiles')
           .select('tags')
           .not('tags', 'is', null)
           .limit(200)

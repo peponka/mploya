@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../theme/app_theme.dart';
 import '../services/pitch_challenge_service.dart';
+import '../services/my_profile_service.dart';
 import 'camera_screen.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -66,11 +67,7 @@ class _PitchChallengeScreenState extends State<PitchChallengeScreen> {
       final uid = Supabase.instance.client.auth.currentUser?.id;
       if (uid == null) return;
 
-      final userData = await Supabase.instance.client
-          .from('users')
-          .select('video_url')
-          .eq('id', uid)
-          .maybeSingle();
+      final userData = await loadMyProfile();
 
       final videoUrl = userData?['video_url']?.toString();
       if (videoUrl != null && videoUrl.isNotEmpty) {

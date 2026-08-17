@@ -3,6 +3,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../theme/app_theme.dart';
+import '../services/safe_profile_query_service.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // AnalyticsDashboardScreen — Stats y métricas para empresas
@@ -60,10 +61,7 @@ class _AnalyticsDashboardScreenState extends State<AnalyticsDashboardScreen> {
             .or('requester_id.eq.$uid,addressee_id.eq.$uid')
             .eq('status', 'accepted'),
         // 3. Job applications received
-        _supabase
-            .from('job_applications')
-            .select('id, job_id, created_at, users:candidate_id(name, avatar_url)')
-            .inFilter('job_id', await _getMyJobIds(uid)),
+        _loadApplications(uid),
         // 4. My active jobs
         _supabase
             .from('jobs')
@@ -144,6 +142,23 @@ class _AnalyticsDashboardScreenState extends State<AnalyticsDashboardScreen> {
       debugPrint('Analytics error: $e');
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  Future<List<Map<String, dynamic>>> _loadApplications(String uid) async {
+    final rows = List<Map<String, dynamic>>.from(
+      await _supabase
+          .from('job_applications')
+          .select('id, job_id, candidate_id, created_at')
+          .inFilter('job_id', await _getMyJobIds(uid)) as List,
+    );
+    final profiles = await loadAccessibleProfilesById(
+      rows.map((row) => row['candidate_id']?.toString() ?? ''),
+      client: _supabase,
+    );
+    for (final row in rows) {
+      row['users'] = profiles[row['candidate_id']?.toString()];
+    }
+    return rows;
   }
 
   Future<List<String>> _getMyJobIds(String uid) async {

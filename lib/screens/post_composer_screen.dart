@@ -4,6 +4,7 @@ import 'camera_screen.dart';
 import '../theme/app_theme.dart';
 import '../models/models.dart';
 import '../widgets/nex_avatar.dart';
+import '../services/my_profile_service.dart';
 
 class PostComposerScreen extends StatefulWidget {
   const PostComposerScreen({super.key});
@@ -17,11 +18,15 @@ class _PostComposerScreenState extends State<PostComposerScreen> {
   String _audience = 'Público General';
   int _charCount = 0;
   bool _isPublishing = false;
+  late final Stream<List<Map<String, dynamic>>> _profileStream;
   static const int _maxChars = 3000;
 
   @override
   void initState() {
     super.initState();
+    _profileStream = Stream.fromFuture(loadMyProfile()).map(
+      (profile) => profile == null ? const [] : [profile],
+    );
     _controller.addListener(() {
       setState(() => _charCount = _controller.text.length);
     });
@@ -159,9 +164,11 @@ class _PostComposerScreenState extends State<PostComposerScreen> {
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
             child: StreamBuilder<List<Map<String, dynamic>>>(
-              stream: Supabase.instance.client.auth.currentUser != null ? Supabase.instance.client.from('users').stream(primaryKey: ['id']).eq('id', Supabase.instance.client.auth.currentUser!.id) : null,
+              stream: _profileStream,
               builder: (context, snapshot) {
-                final user = (snapshot.hasData && snapshot.data!.isNotEmpty) ? NexUser.fromJson(snapshot.data!.first) : const NexUser(id: 'guest', name: 'Usuario', headline: '');
+                final user = (snapshot.hasData && snapshot.data!.isNotEmpty)
+                    ? NexUser.fromJson(snapshot.data!.first)
+                    : const NexUser(id: 'guest', name: 'Usuario', headline: '');
                 return Row(
                   children: [
                     NexAvatar(user: user, size: 44),

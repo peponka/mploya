@@ -21,6 +21,7 @@ import 'onboarding_pitch_screen.dart';
 import 'settings_screen.dart';
 import 'admin_dashboard_screen.dart';
 import '../widgets/web_ui.dart';
+import '../services/my_profile_service.dart';
 
 /// Pantalla privada del usuario: todas las herramientas que usa él mismo,
 /// separadas de su perfil público. Agrupadas por los mismos 4 pilares que la
@@ -403,9 +404,7 @@ class ConfidentialModeCardState extends State<ConfidentialModeCard> {
     try {
       final uid = Supabase.instance.client.auth.currentUser?.id;
       if (uid != null) {
-        await Supabase.instance.client
-            .from('users')
-            .update({'account_type': value ? 'confidencial' : 'candidato'}).eq('id', uid);
+        await setMyCandidatePrivacy(value);
       }
       if (mounted) setState(() => _isConfidential = value);
     } catch (_) {

@@ -245,36 +245,31 @@ class _OverviewTabState extends State<_OverviewTab> {
   Future<void> _load() async {
     setState(() { _loading = true; _error = null; });
     try {
-      final nowIso = DateTime.now().toUtc().toIso8601String();
       final since24h = DateTime.now().toUtc().subtract(const Duration(hours: 24)).toIso8601String();
       final since30d = DateTime.now().toUtc().subtract(const Duration(days: 30)).toIso8601String();
 
       final results = await Future.wait([
-        _count('users'),
-        _count('users', col: 'account_type', val: 'candidato'),
-        _count('users', col: 'account_type', val: 'empresa'),
-        _count('users', col: 'account_type', val: 'headhunter'),
-        _count('users', col: 'account_type', val: 'confidencial'),
         _count('jobs'),
         _count('job_applications'),
       ]);
+      final metrics = Map<String, dynamic>.from(
+        await _sb.rpc(
+          'admin_profile_metrics',
+          params: {'p_since': since30d},
+        ) as Map,
+      );
 
-      _kpis['Usuarios'] = results[0];
-      _kpis['Candidatos'] = results[1];
-      _kpis['Empresas'] = results[2];
-      _kpis['Headhunters'] = results[3];
-      _kpis['Confidenciales'] = results[4];
-      _kpis['Ofertas'] = results[5];
-      _kpis['Postulaciones'] = results[6];
-
-      try {
-        final b = await _sb.from('users').select('id').gt('boost_ends_at', nowIso).count(CountOption.exact);
-        _kpis['Boosts activos'] = b.count;
-      } catch (_) { _kpis['Boosts activos'] = 0; }
-
-      try {
-        _kpis['Vistas de perfil'] = await _count('profile_views');
-      } catch (_) { _kpis['Vistas de perfil'] = 0; }
+      _kpis['Usuarios'] = (metrics['users'] as num?)?.toInt() ?? 0;
+      _kpis['Candidatos'] = (metrics['candidates'] as num?)?.toInt() ?? 0;
+      _kpis['Empresas'] = (metrics['companies'] as num?)?.toInt() ?? 0;
+      _kpis['Headhunters'] = (metrics['headhunters'] as num?)?.toInt() ?? 0;
+      _kpis['Confidenciales'] = (metrics['confidential'] as num?)?.toInt() ?? 0;
+      _kpis['Ofertas'] = results[0];
+      _kpis['Postulaciones'] = results[1];
+      _kpis['Boosts activos'] =
+          (metrics['active_boosts'] as num?)?.toInt() ?? 0;
+      _kpis['Vistas de perfil'] =
+          (metrics['profile_views'] as num?)?.toInt() ?? 0;
 
       try {
         final v = await _sb.from('profile_views').select('id').gte('created_at', since24h).count(CountOption.exact);
@@ -298,11 +293,10 @@ class _OverviewTabState extends State<_OverviewTab> {
 
       // Crecimiento últimos 30 días
       try {
-        final rows = await _sb.from('users').select('created_at').gte('created_at', since30d);
         final Map<int, int> byDay = {};
         final now = DateTime.now();
-        for (final row in rows as List) {
-          final dt = DateTime.parse(row['created_at'] as String);
+        for (final raw in (metrics['growth'] as List? ?? const [])) {
+          final dt = DateTime.parse(raw.toString());
           final daysAgo = now.difference(dt).inDays.clamp(0, 30);
           final idx = 30 - daysAgo;
           byDay[idx] = (byDay[idx] ?? 0) + 1;
@@ -312,10 +306,8 @@ class _OverviewTabState extends State<_OverviewTab> {
 
       // Top skills
       try {
-        final rows = await _sb.from('users').select('tags').not('tags', 'is', null);
         final Map<String, int> counts = {};
-        for (final row in rows as List) {
-          final tags = row['tags'];
+        for (final tags in (metrics['tags'] as List? ?? const [])) {
           if (tags is List) {
             for (final t in tags) {
               final tag = t.toString().toLowerCase().trim();
@@ -329,10 +321,9 @@ class _OverviewTabState extends State<_OverviewTab> {
 
       // Top ciudades
       try {
-        final rows = await _sb.from('users').select('city').not('city', 'is', null);
         final Map<String, int> counts = {};
-        for (final row in rows as List) {
-          final city = row['city']?.toString().trim() ?? '';
+        for (final raw in (metrics['cities'] as List? ?? const [])) {
+          final city = raw.toString().trim();
           if (city.isEmpty) continue;
           final key = city.split(',').first.trim();
           if (key.isNotEmpty) counts[key] = (counts[key] ?? 0) + 1;
@@ -1320,7 +1311,7 @@ class _ReportsTabState extends State<_ReportsTab> {
         if (r['reporter_id'] != null) ids.add(r['reporter_id'] as String);
       }
       if (ids.isNotEmpty) {
-        final users = await _sb.from('users').select('id, name').inFilter('id', ids.toList());
+        final users = await _sb.from('accessible_user_profiles').select('id, name').inFilter('id', ids.toList());
         for (final u in (users as List)) {
           _userNames[u['id'] as String] = u['name']?.toString() ?? u['id'] as String;
         }

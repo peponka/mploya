@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'my_profile_service.dart';
+import 'safe_profile_query_service.dart';
 import '../models/models.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -27,7 +29,7 @@ class StoryService {
       if (uid == null) return [];
 
       // Obtener mi tipo de cuenta
-      final me = await _db.from('users').select('account_type').eq('id', uid).maybeSingle();
+      final me = await loadMyProfile(client: _db);
       final myType = me?['account_type']?.toString() ?? 'candidato';
 
       // Tipo opuesto
@@ -36,16 +38,15 @@ class StoryService {
       // Historias activas del tipo opuesto, con datos del usuario
       final rows = await _db
           .from('stories')
-          .select('*, users!inner(id, name, avatar_url, headline, company, account_type, video_url)')
+          .select()
           .eq('is_active', true)
           .gt('expires_at', DateTime.now().toIso8601String())
-          .eq('users.account_type', targetType)
           .order('created_at', ascending: false);
 
       // También obtener MIS propias historias activas
       final myRows = await _db
           .from('stories')
-          .select('*, users!inner(id, name, avatar_url, headline, company, account_type, video_url)')
+          .select()
           .eq('user_id', uid)
           .eq('is_active', true)
           .gt('expires_at', DateTime.now().toIso8601String())
@@ -53,10 +54,16 @@ class StoryService {
 
       // Agrupar por usuario (primero las mías)
       final Map<String, StoryUser> grouped = {};
+      final profiles = await loadAccessibleProfilesById(
+        rows.map<String>((row) => row['user_id'].toString()),
+        client: _db,
+      );
+      final ownProfile = me == null ? null : Map<String, dynamic>.from(me);
 
       // Procesar mis historias primero
       for (final row in myRows) {
-        final userData = row['users'] as Map<String, dynamic>;
+        final userData = ownProfile;
+        if (userData == null) continue;
         final userId = userData['id'].toString();
 
         if (!grouped.containsKey(userId)) {
@@ -78,7 +85,10 @@ class StoryService {
 
       // Luego historias del tipo opuesto
       for (final row in rows) {
-        final userData = row['users'] as Map<String, dynamic>;
+        final userData = profiles[row['user_id']?.toString()];
+        if (userData == null || userData['account_type']?.toString() != targetType) {
+          continue;
+        }
         final userId = userData['id'].toString();
 
         if (!grouped.containsKey(userId)) {
@@ -155,7 +165,7 @@ class StoryService {
         final story = await _db.from('stories').select('user_id').eq('id', storyId).maybeSingle();
         if (story != null) {
           final storyOwnerId = story['user_id'].toString();
-          final myData = await _db.from('users').select('name').eq('id', uid).maybeSingle();
+          final myData = await loadMyProfile(client: _db);
           final myName = myData?['name']?.toString() ?? 'Alguien';
 
           await _db.from('notifications').insert({

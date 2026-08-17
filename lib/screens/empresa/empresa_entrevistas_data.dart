@@ -171,7 +171,7 @@ Future<EntrevistasData> loadEmpresaEntrevistas() async {
     if (ids.isEmpty) return;
     try {
       final filas = await client
-          .from('users')
+          .from('accessible_user_profiles')
           .select('id, name, headline, avatar_url')
           .inFilter('id', ids.toList());
       for (final f in filas as List) {

@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/models.dart';
 import '../providers/user_provider.dart';
 import '../services/feed_service.dart';
+import '../services/my_profile_service.dart';
 import '../services/social_algorithm_service.dart';
 
 class FeedState {
@@ -59,12 +60,7 @@ class FeedNotifier extends Notifier<FeedState> {
     try {
       final uid = Supabase.instance.client.auth.currentUser?.id;
       if (uid != null) {
-        final row = await Supabase.instance.client
-            .from('users')
-            .select('account_type')
-            .eq('id', uid)
-            .maybeSingle()
-            .timeout(const Duration(seconds: 8));
+        final row = await loadMyProfile().timeout(const Duration(seconds: 8));
         final dbType = row?['account_type']?.toString();
         if (dbType != null && dbType.isNotEmpty) return dbType;
       }

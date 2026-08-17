@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/models.dart';
+import 'my_profile_service.dart';
 
 /// Service para Blind Hiring Mode.
 ///
@@ -25,11 +26,7 @@ class BlindHiringService {
   Future<bool> isBlindModeEnabled() async {
     if (_uid == null) return false;
     try {
-      final row = await _supabase
-          .from('users')
-          .select('blind_hiring_mode')
-          .eq('id', _uid!)
-          .maybeSingle();
+      final row = await loadMyProfile(client: _supabase);
       return row?['blind_hiring_mode'] == true;
     } catch (e) {
       debugPrint('BlindHiring: Error checking mode: $e');
@@ -41,10 +38,11 @@ class BlindHiringService {
   Future<void> toggleBlindMode(bool enabled) async {
     if (_uid == null) return;
     try {
-      await _supabase
-          .from('users')
-          .update({'blind_hiring_mode': enabled})
-          .eq('id', _uid!);
+      await updateMySetting(
+        'blind_hiring_mode',
+        enabled,
+        client: _supabase,
+      );
     } catch (e) {
       debugPrint('BlindHiring: Error toggling: $e');
     }

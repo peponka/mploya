@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'safe_profile_query_service.dart';
+
 // ─────────────────────────────────────────────────────────────────────────────
 // EmployerRatingService — Candidatos califican a empresas
 //
@@ -202,16 +204,21 @@ class EmployerRatingService {
   // ── Obtener reviews individuales de una empresa ──
   Future<List<EmployerReview>> getReviews(String companyId, {int limit = 20}) async {
     try {
-      final res = await _supabase
+      final res = List<Map<String, dynamic>>.from(await _supabase
           .from('employer_reviews')
-          .select('*, candidate:candidate_id(name, headline, avatar_url)')
+          .select()
           .eq('company_id', companyId)
           .order('created_at', ascending: false)
-          .limit(limit);
+          .limit(limit) as List);
+      final profiles = await loadAccessibleProfilesById(
+        res.map((review) => review['candidate_id']?.toString() ?? ''),
+        client: _supabase,
+      );
+      for (final review in res) {
+        review['candidate'] = profiles[review['candidate_id']?.toString()];
+      }
 
-      return List<Map<String, dynamic>>.from(res)
-          .map((e) => EmployerReview.fromJson(e))
-          .toList();
+      return res.map(EmployerReview.fromJson).toList();
     } catch (e) {
       debugPrint('❌ EmployerRatingService.getReviews: $e');
       return [];

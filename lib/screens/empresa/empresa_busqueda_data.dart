@@ -61,7 +61,7 @@ class BusquedaData {
 Future<List<String>> loadEtiquetasFrecuentes({int limite = 12}) async {
   try {
     final filas = await Supabase.instance.client
-        .from('users')
+        .from('accessible_user_profiles')
         .select('tags')
         .not('tags', 'is', null)
         .limit(300) as List<dynamic>;
@@ -100,7 +100,7 @@ Future<BusquedaData> buscarTalentoPorTexto(
   if (q.isEmpty && etiquetas.isEmpty) return BusquedaData.vacia;
 
   try {
-    var consulta = client.from('users').select(kUserColumns);
+    var consulta = client.from('accessible_user_profiles').select(kUserColumns);
 
     if (q.isNotEmpty) {
       final patron = '%$q%';

@@ -1,9 +1,9 @@
 import 'dart:convert';
-import '../utils/user_columns.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../services/my_profile_service.dart';
 import 'package:http/http.dart' as http;
 import '../theme/app_theme.dart';
 import '../models/models.dart';
@@ -45,7 +45,7 @@ class _ResumeBuilderScreenState extends State<ResumeBuilderScreen> with TickerPr
     final uid = Supabase.instance.client.auth.currentUser?.id;
     if (uid == null) return;
     try {
-      final row = await Supabase.instance.client.from('users').select(kUserColumns).eq('id', uid).maybeSingle();
+      final row = await loadMyProfile();
       if (row != null) {
         final profile = NexUser.fromJson(row);
         final badges = await SkillAssessmentService.instance.fetchMyBadges();

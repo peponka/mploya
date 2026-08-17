@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 // Material widgets (SliverAppBar, Colors, Icons) have no Cupertino equivalent
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../services/my_profile_service.dart';
 import '../theme/app_theme.dart';
 import '../models/models.dart';
 import 'agora_call_screen.dart';
@@ -55,7 +56,7 @@ class _ChatInmailScreenState extends State<ChatInmailScreen> {
 
     String myName = 'Usuario';
     try {
-      final row = await _supabase.from('users').select('name').eq('id', myId).maybeSingle();
+      final row = await loadMyProfile(client: _supabase);
       myName = row?['name']?.toString() ?? _supabase.auth.currentUser?.userMetadata?['full_name']?.toString() ?? 'Usuario';
     } catch (_) {}
 

@@ -14,6 +14,8 @@ import '../widgets/candidato/cand_vacantes.dart';
 import '../widgets/job_heatmap_bar.dart';
 import '../services/ghost_apply_service.dart';
 import '../services/saved_jobs_service.dart';
+import '../services/safe_profile_query_service.dart';
+import '../services/my_profile_service.dart';
 import '../widgets/coach_mark.dart';
 import '../widgets/web_ui.dart';
 import '../widgets/mploya_toast.dart';
@@ -264,10 +266,10 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
     try {
       final res = await _supabase
           .from('jobs')
-          .select('*, users!jobs_company_id_fkey(name, avatar_url)')
+          .select()
           .order('created_at', ascending: false)
           .limit(50);
-      jobs = List<Map<String, dynamic>>.from(res);
+      jobs = await hydrateJobCompanies(res, client: _supabase);
     } catch (e) {
       debugPrint('Error fetch jobs (con join): $e');
       try {
@@ -338,11 +340,7 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
     if (uid == null) return jobs;
 
     try {
-      final userData = await _supabase
-          .from('users')
-          .select('tags, skills')
-          .eq('id', uid)
-          .maybeSingle();
+      final userData = await loadMyProfile(client: _supabase);
 
       final userTags = List<String>.from(userData?['tags'] ?? []);
       final userSkills = List<String>.from(userData?['skills'] ?? []);
@@ -433,11 +431,7 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
     // cuenta. Antes eran dos viajes a `users` para leer una columna cada uno.
     Map<String, dynamic>? userData;
     try {
-      userData = await _supabase
-          .from('users')
-          .select('video_url, account_type')
-          .eq('id', uid)
-          .maybeSingle();
+      userData = await loadMyProfile(client: _supabase);
     } catch (e) {
       debugPrint('jobs · perfil del candidato: $e');
       if (!mounted) return;

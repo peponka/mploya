@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'safe_profile_query_service.dart';
+
 // ─────────────────────────────────────────────────────────────────────────────
 // PitchChallengeService — Pitch Challenge Semanal
 //
@@ -268,16 +270,21 @@ class PitchChallengeService {
   /// Obtiene las entradas del challenge actual ordenadas por likes.
   Future<List<ChallengeEntry>> getEntries(String challengeId, {int limit = 20}) async {
     try {
-      final res = await _supabase
+      final res = List<Map<String, dynamic>>.from(await _supabase
           .from('challenge_entries')
-          .select('*, users:user_id(name, avatar_url)')
+          .select()
           .eq('challenge_id', challengeId)
           .order('likes', ascending: false)
-          .limit(limit);
+          .limit(limit) as List);
+      final profiles = await loadAccessibleProfilesById(
+        res.map((entry) => entry['user_id']?.toString() ?? ''),
+        client: _supabase,
+      );
+      for (final entry in res) {
+        entry['users'] = profiles[entry['user_id']?.toString()];
+      }
 
-      return List<Map<String, dynamic>>.from(res)
-          .map((e) => ChallengeEntry.fromJson(e))
-          .toList();
+      return res.map(ChallengeEntry.fromJson).toList();
     } catch (e) {
       debugPrint('Error getting entries: $e');
       return [];

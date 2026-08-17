@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../models/models.dart';
-import '../../utils/user_columns.dart';
+import '../../services/my_profile_service.dart';
 import 'empresa_vacantes_data.dart';
 
 /// Ficha pública de la propia empresa.
@@ -61,11 +61,7 @@ Future<PerfilEmpresa?> loadPerfilEmpresa() async {
 
   Map<String, dynamic>? fila;
   try {
-    fila = await client
-        .from('users')
-        .select(kUserColumns)
-        .eq('id', uid)
-        .maybeSingle();
+    fila = await loadMyProfile(client: client);
   } catch (e) {
     debugPrint('perfil empresa · users: $e');
     return null;

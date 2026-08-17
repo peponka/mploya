@@ -3,6 +3,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'my_profile_service.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PushNotificationService — FCM + Supabase token persistence
@@ -95,10 +96,7 @@ class PushNotificationService {
     if (uid == null) return;
 
     try {
-      await Supabase.instance.client
-          .from('users')
-          .update({'fcm_token': token})
-          .eq('id', uid);
+      await setMyFcmToken(token);
     } catch (e) {
       debugPrint('Error persistiendo FCM token: $e');
     }
@@ -144,10 +142,7 @@ class PushNotificationService {
     final uid = Supabase.instance.client.auth.currentUser?.id;
     if (uid == null) return;
     try {
-      await Supabase.instance.client
-          .from('users')
-          .update({'fcm_token': null})
-          .eq('id', uid);
+      await setMyFcmToken(null);
     } catch (e) {
       debugPrint('⚠️ PushNotificationService.clearToken: $e');
     }

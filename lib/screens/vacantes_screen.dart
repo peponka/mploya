@@ -673,7 +673,7 @@ class _VacantesScreenState extends State<VacantesScreen> {
       final ids = (apps as List).map((a) => a['candidate_id'].toString()).toList();
       if (ids.isEmpty) return [];
       final statusByCandidate = {for (final a in apps) a['candidate_id'].toString(): a['status']?.toString() ?? 'pending'};
-      final users = await _supabase.from('users').select(kUserColumns).inFilter('id', ids);
+      final users = await _supabase.from('accessible_user_profiles').select(kUserColumns).inFilter('id', ids);
       return (users as List).map((u) {
         final map = Map<String, dynamic>.from(u as Map);
         map['_status'] = statusByCandidate[map['id'].toString()];

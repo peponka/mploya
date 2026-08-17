@@ -127,7 +127,7 @@ class _NetworkScreenState extends State<NetworkScreen> {
       );
     }
     return _supabase
-        .from('users')
+        .from('accessible_user_profiles')
         .select('name, avatar_url, headline')
         .eq('id', userId)
         .maybeSingle();
@@ -145,7 +145,7 @@ class _NetworkScreenState extends State<NetworkScreen> {
       );
     }
     return _supabase
-        .from('users')
+        .from('accessible_user_profiles')
         .select(kUserColumns)
         .eq('id', userId)
         .maybeSingle();
@@ -200,7 +200,7 @@ class _NetworkScreenState extends State<NetworkScreen> {
       }
 
       final users =
-          await _supabase.from('users').select(kUserColumns).inFilter('id', otherIds);
+          await _supabase.from('accessible_user_profiles').select(kUserColumns).inFilter('id', otherIds);
       if (mounted) {
         setState(() {
           _connections = users.map((r) => NexUser.fromJson(r)).toList();

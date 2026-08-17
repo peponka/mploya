@@ -7,6 +7,7 @@ import '../theme/app_theme.dart';
 import '../models/models.dart';
 import '../widgets/nex_avatar.dart';
 import '../utils/headhunter_candidate_privacy.dart';
+import '../services/my_profile_service.dart';
 import 'profile_screen.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -70,11 +71,7 @@ class _SavedProfilesScreenState extends State<SavedProfilesScreen> {
           .eq('user_id', uid)
           .order('created_at', ascending: false);
 
-      final viewerRowFuture = Supabase.instance.client
-          .from('users')
-          .select('account_type')
-          .eq('id', uid)
-          .maybeSingle();
+      final viewerRowFuture = loadMyProfile();
 
       if (savedRows.isEmpty) {
         if (mounted) setState(() => _isLoading = false);
@@ -87,7 +84,7 @@ class _SavedProfilesScreenState extends State<SavedProfilesScreen> {
 
       // Obtener datos de los usuarios guardados
       final users = await Supabase.instance.client
-          .from('users')
+          .from('accessible_user_profiles')
           .select(kUserColumns)
           .inFilter('id', savedIds);
       final viewerRow = await viewerRowFuture;

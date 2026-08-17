@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'my_profile_service.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SoftSkillMatchService — Smart Matching por Soft Skills
@@ -165,11 +166,7 @@ class SoftSkillMatchService {
     if (uid == null) return const SoftSkillProfile();
 
     try {
-      final userData = await _supabase
-          .from('users')
-          .select('tags, skills, ai_transcript')
-          .eq('id', uid)
-          .maybeSingle();
+      final userData = await loadMyProfile(client: _supabase);
 
       if (userData == null) return const SoftSkillProfile();
 
@@ -185,9 +182,11 @@ class SoftSkillMatchService {
       );
 
       // Save to DB
-      await _supabase.from('users').update({
-        'soft_skills': profile.toMap(),
-      }).eq('id', uid);
+      await setMyProfileAnalysis(
+        'soft_skills',
+        profile.toMap(),
+        client: _supabase,
+      );
 
       _cachedProfile = profile;
       _cacheTime = DateTime.now();
@@ -245,7 +244,7 @@ class SoftSkillMatchService {
   Future<SoftSkillProfile> getProfileFor(String userId) async {
     try {
       final res = await _supabase
-          .from('users')
+          .from('accessible_user_profiles')
           .select('soft_skills')
           .eq('id', userId)
           .maybeSingle();

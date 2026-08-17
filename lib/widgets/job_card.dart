@@ -33,7 +33,7 @@ class _JobCardState extends State<JobCard> {
 
       // 1. Verificar si el usuario ya tiene un Video-Pitch guardado
       final userData = await Supabase.instance.client
-          .from('users')
+          .from('accessible_user_profiles')
           .select('video_url')
           .eq('id', user.id)
           .maybeSingle();

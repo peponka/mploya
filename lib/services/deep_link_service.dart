@@ -171,7 +171,7 @@ class DeepLinkService {
 
       // Fetch del perfil desde Supabase
       final data = await Supabase.instance.client
-          .from('users')
+          .from('accessible_user_profiles')
           .select(kUserColumns)
           .eq('id', userId)
           .maybeSingle();

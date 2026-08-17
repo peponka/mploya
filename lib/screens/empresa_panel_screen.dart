@@ -8,6 +8,7 @@ import 'package:flutter/material.dart'
         LinearProgressIndicator,
         RefreshIndicator;
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../services/my_profile_service.dart';
 
 import '../services/ai_match_service.dart';
 import '../theme/app_theme.dart';
@@ -60,11 +61,7 @@ class _EmpresaPanelScreenState extends State<EmpresaPanelScreen> {
     }
 
     try {
-      final me = await _supabase
-          .from('users')
-          .select('name')
-          .eq('id', uid)
-          .maybeSingle();
+      final me = await loadMyProfile(client: _supabase);
       _companyName = (me?['name'] ?? 'NovaTech').toString();
     } catch (_) {}
 

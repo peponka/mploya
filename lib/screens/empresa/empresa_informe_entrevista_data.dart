@@ -191,7 +191,7 @@ Future<InformeEntrevistaData> loadInformeEntrevista(String interviewId) async {
 
   try {
     final fila = await client
-        .from('users')
+        .from('accessible_user_profiles')
         .select(kUserColumns)
         .eq('id', entrevista.candidateId)
         .maybeSingle();

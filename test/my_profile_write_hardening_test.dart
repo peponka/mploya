@@ -239,15 +239,15 @@ void main() {
       }
     });
 
-    test('unrelated privacy callsites remain outside this batch', () {
-      for (final path in [
-        'lib/screens/stealth_profile_form_screen.dart',
-        'lib/screens/mis_herramientas_screen.dart',
-        'lib/navigation/main_navigation.dart',
-      ]) {
-        final unrelated = source(path);
-        expect(unrelated, isNot(contains('setMyCandidatePrivacy')));
-        expect(unrelated, isNot(contains('updateMyCandidateProfile')));
+    test('privacy and role callsites use only own-profile RPCs', () {
+      final stealth = source('lib/screens/stealth_profile_form_screen.dart');
+      final tools = source('lib/screens/mis_herramientas_screen.dart');
+      final navigation = source('lib/navigation/main_navigation.dart');
+      expect(stealth, contains('updateMyConfidentialProfile'));
+      expect(tools, contains('setMyCandidatePrivacy'));
+      expect(navigation, contains('setMyInitialRole'));
+      for (final migrated in [stealth, tools, navigation]) {
+        expect(migrated, isNot(contains(".from('users')")));
       }
     });
   });

@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import '../services/revenuecat_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../services/my_profile_service.dart';
 import '../theme/app_theme.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -43,11 +44,7 @@ class _PremiumPaywallScreenState extends State<PremiumPaywallScreen> {
     if (uid != null) {
       // Detectar tipo de cuenta
       try {
-        final res = await Supabase.instance.client
-            .from('users')
-            .select('account_type')
-            .eq('id', uid)
-            .maybeSingle();
+        final res = await loadMyProfile();
         _accountType = res?['account_type']?.toString() ?? 'candidato';
       } catch (e) {
         debugPrint('⚠️ PremiumPaywall._init account_type: $e');

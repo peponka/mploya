@@ -119,10 +119,7 @@ class SocialAlgorithmService {
     if (users.length <= stride) return users;
 
     bool isBoosted(Map<String, dynamic> u) {
-      final raw = u['boost_ends_at'];
-      if (raw == null) return false;
-      final dt = DateTime.tryParse(raw.toString());
-      return dt != null && dt.isAfter(DateTime.now());
+      return (u['base_score'] as num? ?? 0) >= 1000;
     }
 
     final boosted = users.where(isBoosted).toList();
@@ -252,14 +249,7 @@ class SocialAlgorithmService {
 
   /// Boost pago activo = +100 (top del feed).
   double _boostScore(Map<String, dynamic> user) {
-    final rawBoost = user['boost_ends_at'];
-    if (rawBoost == null) return 0;
-
-    final boostDt = DateTime.tryParse(rawBoost.toString());
-    if (boostDt != null && boostDt.isAfter(DateTime.now())) {
-      return 100;
-    }
-    return 0;
+    return (user['base_score'] as num? ?? 0) >= 1000 ? 100 : 0;
   }
 
   /// Freshness Bonus: perfiles creados hace <7 días = +30, <14 días = +15.
@@ -422,7 +412,7 @@ class SocialAlgorithmService {
 
       // Fetch tags of liked profiles
       final userRows = await _supabase
-          .from('users')
+          .from('accessible_user_profiles')
           .select('tags')
           .inFilter('id', ownerIds)
           .limit(50)

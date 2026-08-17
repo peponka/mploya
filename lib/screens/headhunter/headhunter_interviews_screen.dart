@@ -98,7 +98,7 @@ class _HeadhunterInterviewsScreenState
       final users = candidateIds.isEmpty
           ? <dynamic>[]
           : await client
-                    .from('users')
+                    .from('accessible_user_profiles')
                     .select(kUserColumns)
                     .inFilter('id', candidateIds.toList())
                 as List<dynamic>;

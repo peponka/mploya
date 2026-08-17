@@ -29,6 +29,15 @@ Future<Map<String, dynamic>?> loadMyProfile({SupabaseClient? client}) async {
   return decodeMyProfileRpcResult(hasSession: true, response: response);
 }
 
+Future<Map<String, dynamic>?> loadMyProfileEntitlements({
+  SupabaseClient? client,
+}) async {
+  final db = client ?? Supabase.instance.client;
+  if (db.auth.currentUser == null) return null;
+  final response = await db.rpc('get_my_profile_entitlements');
+  return decodeMyProfileRpcResult(hasSession: true, response: response);
+}
+
 Future<void> setMyInitialRole({
   required String role,
   required bool completeSelection,
@@ -152,6 +161,38 @@ Future<void> setMyCandidatePrivacy(
   await db.rpc(
     'set_my_candidate_privacy',
     params: {'p_confidential': confidential},
+  );
+}
+
+Future<void> updateMySetting(
+  String key,
+  bool value, {
+  SupabaseClient? client,
+}) async {
+  final db = client ?? Supabase.instance.client;
+  await db.rpc(
+    'update_my_setting',
+    params: {'p_key': key, 'p_value': value},
+  );
+}
+
+Future<void> setMyFcmToken(
+  String? token, {
+  SupabaseClient? client,
+}) async {
+  final db = client ?? Supabase.instance.client;
+  await db.rpc('set_my_fcm_token', params: {'p_token': token});
+}
+
+Future<void> setMyProfileAnalysis(
+  String kind,
+  Object? value, {
+  SupabaseClient? client,
+}) async {
+  final db = client ?? Supabase.instance.client;
+  await db.rpc(
+    'set_my_profile_analysis',
+    params: {'p_kind': kind, 'p_value': value},
   );
 }
 

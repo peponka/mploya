@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import 'empresa_match_ia_data.dart' show distanciaEnKm, normalizarTag;
+import 'empresa_match_ia_data.dart' show normalizarTag;
 
 /// Filtros de búsqueda de talento.
 ///
@@ -176,10 +176,6 @@ class ResultadoBusqueda {
   static const vacio = ResultadoBusqueda();
 }
 
-const _kColumnas =
-    'id, name, headline, avatar_url, city, tags, is_verified, open_to_work, '
-    'salary_expectation, latitude, longitude, account_type, deleted_at';
-
 /// Busca talento aplicando los filtros CONTRA LA BASE.
 ///
 /// Todo lo que se puede resolver en Postgrest se resuelve ahí (ilike, overlaps,
@@ -194,60 +190,23 @@ Future<ResultadoBusqueda> buscarTalento(
   final uid = client.auth.currentUser?.id;
   if (uid == null) return const ResultadoBusqueda(error: true);
 
-  // Coordenadas propias: sólo hacen falta si se filtra por radio.
-  double? latEmpresa;
-  double? lonEmpresa;
-  if (f.radioKm != null) {
-    try {
-      final yo = await client
-          .from('users')
-          .select('latitude, longitude')
-          .eq('id', uid)
-          .maybeSingle();
-      latEmpresa = (yo?['latitude'] as num?)?.toDouble();
-      lonEmpresa = (yo?['longitude'] as num?)?.toDouble();
-    } catch (e) {
-      debugPrint('filtros · coords propias: $e');
-    }
-  }
-
   try {
-    var q = client
-        .from('users')
-        .select(_kColumnas)
-        .eq('account_type', 'candidato')
-        .isFilter('deleted_at', null);
-
-    final texto = f.texto.trim();
-    if (texto.isNotEmpty) q = q.ilike('headline', '%$texto%');
-
-    final ciudad = f.ciudad.trim();
-    if (ciudad.isNotEmpty) q = q.ilike('city', '%$ciudad%');
-
-    if (f.skills.isNotEmpty) {
-      q = q.overlaps('tags', f.skills);
-    }
-    if (f.soloDisponibles) q = q.eq('open_to_work', true);
-    if (f.soloVerificados) q = q.eq('is_verified', true);
-    if (f.soloConExpectativa) q = q.not('salary_expectation', 'is', null);
-
-    final filas = await q.limit(limite) as List<dynamic>;
+    final filas = await client.rpc('search_accessible_talent', params: {
+      'p_text': f.texto.trim(),
+      'p_skills': f.skills,
+      'p_city': f.ciudad.trim(),
+      'p_radius_km': f.radioKm,
+      'p_only_available': f.soloDisponibles,
+      'p_only_verified': f.soloVerificados,
+      'p_with_salary': f.soloConExpectativa,
+      'p_limit': limite,
+    }) as List<dynamic>;
 
     final talentos = <TalentoEncontrado>[];
     for (final raw in filas) {
       final m = raw as Map<String, dynamic>;
 
-      double? km;
-      final lat = (m['latitude'] as num?)?.toDouble();
-      final lon = (m['longitude'] as num?)?.toDouble();
-      if (latEmpresa != null && lonEmpresa != null && lat != null && lon != null) {
-        km = distanciaEnKm(latEmpresa, lonEmpresa, lat, lon);
-      }
-
-      // Radio: si se pidió y se puede calcular, se aplica de verdad.
-      if (f.radioKm != null && latEmpresa != null && lonEmpresa != null) {
-        if (km == null || km > f.radioKm!) continue;
-      }
+      final km = (m['distance_km'] as num?)?.toDouble();
 
       final nombre = m['name']?.toString().trim() ?? '';
       talentos.add(
@@ -280,7 +239,9 @@ Future<ResultadoBusqueda> buscarTalento(
     return ResultadoBusqueda(
       talentos: talentos,
       sinCoordenadasPropias:
-          f.radioKm != null && (latEmpresa == null || lonEmpresa == null),
+          f.radioKm != null &&
+          filas.isNotEmpty &&
+          (filas.first as Map)['actor_has_coordinates'] != true,
     );
   } catch (e) {
     debugPrint('filtros · buscarTalento: $e');
@@ -298,7 +259,7 @@ String? _texto(dynamic raw) {
 Future<List<String>> sugerenciasDeSkills({int limite = 12}) async {
   try {
     final filas = await Supabase.instance.client
-        .from('users')
+        .from('accessible_user_profiles')
         .select('tags')
         .eq('account_type', 'candidato')
         .limit(300) as List<dynamic>;

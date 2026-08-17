@@ -13,6 +13,7 @@ import '../providers/user_provider.dart';
 import '../services/coach_mark_service.dart';
 import '../services/feed_service.dart';
 import '../services/notification_service.dart';
+import '../services/safe_profile_query_service.dart';
 import '../services/video_preload_manager.dart';
 import '../theme/mploya_tokens.dart';
 import '../utils/headhunter_candidate_privacy.dart';
@@ -183,11 +184,12 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
     try {
       final res = await Supabase.instance.client
           .from('jobs')
-          .select('*, users!jobs_company_id_fkey(name, avatar_url)')
+          .select()
           .order('created_at', ascending: false)
           .limit(3);
       if (!mounted) return;
-      setState(() => _vacantesPanel = List<Map<String, dynamic>>.from(res));
+      final jobs = await hydrateJobCompanies(res);
+      setState(() => _vacantesPanel = jobs);
     } catch (e) {
       debugPrint('feed · vacantes del panel: $e');
     }

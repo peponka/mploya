@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../main.dart';
 import '../../services/auth_service.dart';
+import '../../services/my_profile_service.dart';
 import '../../services/push_notification_service.dart';
 import '../splash_screen.dart';
 
@@ -74,13 +75,7 @@ class _HeadhunterSettingsScreenState extends State<HeadhunterSettingsScreen> {
       final client = Supabase.instance.client;
       final uid = client.auth.currentUser?.id;
       if (uid == null) throw StateError('Sin sesión');
-      final row = await client
-          .from('users')
-          .select(
-            'account_type,push_enabled,email_notifications_enabled,blind_hiring_mode',
-          )
-          .eq('id', uid)
-          .maybeSingle();
+      final row = await loadMyProfile(client: client);
       if (row == null || row['account_type']?.toString() != 'headhunter') {
         throw StateError('La cuenta no es Headhunter');
       }
@@ -127,7 +122,7 @@ class _HeadhunterSettingsScreenState extends State<HeadhunterSettingsScreen> {
         final client = Supabase.instance.client;
         final uid = client.auth.currentUser?.id;
         if (uid == null) throw StateError('Sin sesión');
-        await client.from('users').update({column: value}).eq('id', uid);
+        await updateMySetting(column, value, client: client);
       }
       if (!mounted) return;
       setState(() {

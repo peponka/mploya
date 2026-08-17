@@ -85,7 +85,7 @@ Future<HeadhunterInterviewData> loadHeadhunterInterview(String id) async {
         .eq('id', interview['job_id'])
         .maybeSingle();
     final candidate = await client
-        .from('users')
+        .from('accessible_user_profiles')
         .select('name,headline,avatar_url,account_type')
         .eq('id', interview['candidate_id'])
         .maybeSingle();

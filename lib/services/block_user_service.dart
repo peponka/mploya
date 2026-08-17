@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'safe_profile_query_service.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // BlockUserService — Gestión de bloqueos entre usuarios
@@ -97,11 +98,18 @@ class BlockUserService {
 
       final rows = await _db
           .from('blocked_users')
-          .select('*, users!blocked_users_blocked_id_fkey(id, name, avatar_url, headline)')
+          .select()
           .eq('blocker_id', uid)
           .order('created_at', ascending: false);
-
-      return List<Map<String, dynamic>>.from(rows);
+      final result = List<Map<String, dynamic>>.from(rows);
+      final profiles = await loadAccessibleProfilesById(
+        result.map((row) => row['blocked_id']?.toString() ?? ''),
+        client: _db,
+      );
+      for (final row in result) {
+        row['users'] = profiles[row['blocked_id']?.toString()];
+      }
+      return result;
     } catch (e) {
       debugPrint('❌ BlockUserService.getBlockedUsersWithDetails: $e');
       return [];

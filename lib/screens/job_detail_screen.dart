@@ -81,7 +81,7 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
     if (companyId == null) return;
     try {
       final row = await Supabase.instance.client
-          .from('users')
+          .from('accessible_user_profiles')
           .select('video_url')
           .eq('id', companyId)
           .maybeSingle();

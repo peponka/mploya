@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'my_profile_service.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // VideoPersonalityService — IA Análisis de Personalidad del Video Pitch
@@ -110,11 +111,13 @@ class VideoPersonalityService {
     String transcriptText = transcript ?? '';
     if (transcriptText.isEmpty) {
       try {
-        final result = await _supabase
-            .from('users')
-            .select('ai_transcript_json')
-            .eq('id', userId)
-            .maybeSingle();
+        final result = _supabase.auth.currentUser?.id == userId
+            ? await loadMyProfile(client: _supabase)
+            : await _supabase
+                  .from('accessible_user_profiles')
+                  .select('ai_transcript_json')
+                  .eq('id', userId)
+                  .maybeSingle();
         final raw = result?['ai_transcript_json'];
         if (raw is List) {
           transcriptText = raw
@@ -151,11 +154,13 @@ class VideoPersonalityService {
   /// Obtener análisis guardado de un usuario
   Future<PersonalityAnalysis?> getSavedAnalysis(String userId) async {
     try {
-      final result = await _supabase
-          .from('users')
-          .select('personality_scores')
-          .eq('id', userId)
-          .maybeSingle();
+      final result = _supabase.auth.currentUser?.id == userId
+          ? await loadMyProfile(client: _supabase)
+          : await _supabase
+                .from('accessible_user_profiles')
+                .select('personality_scores')
+                .eq('id', userId)
+                .maybeSingle();
 
       final raw = result?['personality_scores'];
       if (raw == null || raw is! Map<String, dynamic>) return null;
@@ -444,9 +449,14 @@ Respondé SOLO con un JSON válido (sin markdown, sin explicación) con esta est
 
   Future<void> _saveToDb(String userId, PersonalityAnalysis analysis) async {
     try {
-      await _supabase.from('users').update({
-        'personality_scores': analysis.toJson(),
-      }).eq('id', userId);
+      if (_supabase.auth.currentUser?.id != userId) {
+        throw StateError('No se puede guardar un análisis ajeno');
+      }
+      await setMyProfileAnalysis(
+        'personality_scores',
+        analysis.toJson(),
+        client: _supabase,
+      );
       debugPrint('✅ Personality scores saved for $userId');
     } catch (e) {
       debugPrint('⚠️ Error saving personality scores: $e');
