@@ -213,6 +213,58 @@ void main() {
       expect(migration, contains('a versioned function contract is missing'));
     });
 
+    test('missing connection trigger is restored from versioned schema', () {
+      expect(
+        migration,
+        contains('IF v_connection_trigger.oid IS NULL THEN'),
+      );
+      expect(
+        migration,
+        contains(
+          "EXECUTE 'CREATE TRIGGER trg_sync_connection_count\n"
+          '      AFTER INSERT OR UPDATE OR DELETE ON public.connections\n'
+          '      FOR EACH ROW EXECUTE FUNCTION '
+          "public.fn_sync_connection_count()'",
+        ),
+      );
+    });
+
+    test('correct connection trigger is preserved without replacement', () {
+      expect(migration, contains('v_connection_trigger.tgtype <> 29'));
+      expect(migration, contains("v_connection_trigger.tgenabled <> 'O'"));
+      expect(migration, contains('v_connection_trigger.tgnargs <> 0'));
+      expect(migration, contains('v_connection_trigger.tgqual IS NOT NULL'));
+      expect(migration, isNot(contains('DROP TRIGGER trg_sync_connection_count')));
+      expect(
+        migration,
+        isNot(contains('CREATE OR REPLACE TRIGGER trg_sync_connection_count')),
+      );
+    });
+
+    test('conflicting connection trigger aborts clearly', () {
+      expect(
+        migration,
+        contains(
+          'trg_sync_connection_count conflicts with versioned definition',
+        ),
+      );
+      expect(
+        migration,
+        contains(
+          'fn_sync_connection_count differs from versioned contract',
+        ),
+      );
+      expect(
+        migration,
+        contains(
+          'to_regprocedure('
+          "'public.fn_sync_connection_count()')::oid",
+        ),
+      );
+      expect(migration, contains("p.prorettype = 'pg_catalog.trigger'::regtype"));
+      expect(migration, contains("l.lanname = 'plpgsql'"));
+    });
+
     test('cross-row writes remain denied by existing own-row RLS', () {
       expect(existingRls, contains('CREATE POLICY "users_update_own"'));
       expect(

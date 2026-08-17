@@ -24,6 +24,7 @@ BEGIN;
 DO $$
 DECLARE
   v_missing TEXT[];
+  v_connection_trigger RECORD;
 BEGIN
   SELECT array_agg(required.column_name ORDER BY required.column_name)
     INTO v_missing
@@ -86,19 +87,76 @@ BEGIN
   END IF;
 
   IF NOT EXISTS (
+    SELECT 1
+    FROM pg_proc p
+    JOIN pg_language l ON l.oid = p.prolang
+    WHERE p.oid = to_regprocedure('public.fn_sync_connection_count()')::oid
+      AND p.prorettype = 'pg_catalog.trigger'::regtype
+      AND p.prosecdef
+      AND l.lanname = 'plpgsql'
+      AND pg_get_functiondef(p.oid) LIKE '%TG_OP = ''INSERT''%'
+      AND pg_get_functiondef(p.oid) LIKE '%TG_OP = ''UPDATE''%'
+      AND pg_get_functiondef(p.oid) LIKE '%TG_OP = ''DELETE''%'
+      AND pg_get_functiondef(p.oid) LIKE '%NEW.status = ''accepted''%'
+      AND pg_get_functiondef(p.oid) LIKE '%OLD.status <> ''accepted''%'
+      AND pg_get_functiondef(p.oid) LIKE '%OLD.status = ''accepted''%'
+      AND pg_get_functiondef(p.oid) LIKE '%NEW.status <> ''accepted''%'
+      AND pg_get_functiondef(p.oid)
+        LIKE '%id IN (NEW.requester_id, NEW.addressee_id)%'
+      AND pg_get_functiondef(p.oid)
+        LIKE '%id IN (OLD.requester_id, OLD.addressee_id)%'
+      AND pg_get_functiondef(p.oid)
+        LIKE '%GREATEST(0, connections - 1)%'
+  ) THEN
+    RAISE EXCEPTION
+      '033 precondition: fn_sync_connection_count differs from versioned contract';
+  END IF;
+
+  IF NOT EXISTS (
     SELECT 1 FROM pg_trigger
     WHERE tgrelid = 'public.pitch_likes'::regclass
       AND tgname = 'trg_sync_like_count'
       AND tgfoid = to_regprocedure('public.fn_sync_like_count()')::oid
       AND NOT tgisinternal
-  ) OR NOT EXISTS (
-    SELECT 1 FROM pg_trigger
-    WHERE tgrelid = 'public.connections'::regclass
-      AND tgname = 'trg_sync_connection_count'
-      AND tgfoid = to_regprocedure('public.fn_sync_connection_count()')::oid
-      AND NOT tgisinternal
   ) THEN
-    RAISE EXCEPTION '033 precondition: a versioned aggregate trigger is missing';
+    RAISE EXCEPTION '033 precondition: versioned like aggregate trigger is missing';
+  END IF;
+
+  SELECT
+    t.oid,
+    t.tgfoid,
+    t.tgtype,
+    t.tgenabled,
+    t.tgisinternal,
+    t.tgnargs,
+    t.tgattr,
+    t.tgqual,
+    t.tgoldtable,
+    t.tgnewtable,
+    t.tgparentid
+  INTO v_connection_trigger
+  FROM pg_trigger t
+  WHERE t.tgrelid = 'public.connections'::regclass
+    AND t.tgname = 'trg_sync_connection_count';
+
+  IF v_connection_trigger.oid IS NULL THEN
+    EXECUTE 'CREATE TRIGGER trg_sync_connection_count
+      AFTER INSERT OR UPDATE OR DELETE ON public.connections
+      FOR EACH ROW EXECUTE FUNCTION public.fn_sync_connection_count()';
+  ELSIF v_connection_trigger.tgfoid
+      <> to_regprocedure('public.fn_sync_connection_count()')::oid
+    OR v_connection_trigger.tgtype <> 29
+    OR v_connection_trigger.tgenabled <> 'O'
+    OR v_connection_trigger.tgisinternal
+    OR v_connection_trigger.tgnargs <> 0
+    OR v_connection_trigger.tgattr::TEXT <> ''
+    OR v_connection_trigger.tgqual IS NOT NULL
+    OR v_connection_trigger.tgoldtable IS NOT NULL
+    OR v_connection_trigger.tgnewtable IS NOT NULL
+    OR v_connection_trigger.tgparentid <> 0
+  THEN
+    RAISE EXCEPTION
+      '033 precondition: trg_sync_connection_count conflicts with versioned definition';
   END IF;
 
   IF current_setting('mploya.privileged_audit_reviewed', true) IS DISTINCT FROM 'yes' THEN

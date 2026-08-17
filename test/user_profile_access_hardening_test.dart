@@ -22,7 +22,12 @@ void main() {
           privilegedColumns,
           contains('033 - Protect privileged public.users columns'),
         );
-        expect(candidatePrivacy, contains('034 - Hardening'));
+        expect(
+          candidatePrivacy,
+          contains(
+            '034 - Private candidate matching, opaque handles and atomic unlock ledger',
+          ),
+        );
         expect(
           File(
             'supabase/migrations/032_harden_candidate_matching_privacy.sql',
