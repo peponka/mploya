@@ -22,7 +22,7 @@ void main() {
       expect(migration, isNot(contains('SELECT u.is_admin FROM public.users')));
     });
 
-    test('admin memberships are server-managed and never backfilled', () {
+    test('admin memberships are explicit and never backfilled', () {
       expect(migration, contains('CREATE TABLE public.admin_memberships'));
       expect(
         migration,
@@ -40,10 +40,96 @@ void main() {
         ),
       );
       expect(migration, contains('FROM PUBLIC, anon, authenticated'));
+      expect(migration, contains('INSERT INTO public.admin_memberships'));
       expect(
         migration,
-        isNot(contains('INSERT INTO public.admin_memberships')),
+        contains(
+          "current_setting('mploya.approved_admin_membership_ids', true)",
+        ),
       );
+      final bootstrap = _between(
+        migration,
+        'INSERT INTO public.admin_memberships',
+        'ALTER TABLE public.admin_memberships ENABLE ROW LEVEL SECURITY',
+      );
+      expect(bootstrap, contains('jsonb_array_elements'));
+      expect(bootstrap, isNot(contains('users.is_admin')));
+      expect(bootstrap, isNot(contains('FROM public.users')));
+    });
+
+    test('admin bootstrap requires both independent session gates', () {
+      expect(
+        migration,
+        contains("current_setting('mploya.privileged_audit_reviewed', true)"),
+      );
+      expect(
+        migration,
+        contains(
+          "current_setting(\n    'mploya.approved_admin_membership_ids', true",
+        ),
+      );
+      expect(migration, contains('approved admin membership list is absent'));
+    });
+
+    test('empty and malformed approval lists fail closed', () {
+      expect(migration, contains("IF btrim(v_approved_raw) = '' THEN"));
+      expect(migration, contains('jsonb_array_length(v_approved_json) = 0'));
+      expect(migration, contains('approved admin membership list is empty'));
+      expect(migration, contains('approved admin membership list is invalid'));
+      expect(
+        migration,
+        contains('approved admin membership list must be a JSON array'),
+      );
+    });
+
+    test('invalid UUIDs and duplicate approvals fail closed', () {
+      expect(migration, contains('v_approved_item_text::UUID'));
+      expect(migration, contains('WHEN invalid_text_representation THEN'));
+      expect(migration, contains('approved admin membership UUID is invalid'));
+      expect(migration, contains('COUNT(DISTINCT approved_id)'));
+      expect(migration, contains('v_approved_count <> v_unique_count'));
+      expect(
+        migration,
+        contains('approved admin membership list contains duplicates'),
+      );
+    });
+
+    test('missing and deleted synthetic users cannot be approved', () {
+      const approvedSynthetic = '11111111-1111-4111-8111-111111111111';
+      const missingSynthetic = '22222222-2222-4222-8222-222222222222';
+      const deletedSynthetic = '33333333-3333-4333-8333-333333333333';
+      expect({approvedSynthetic, missingSynthetic, deletedSynthetic}.length, 3);
+      expect(migration, contains('LEFT JOIN public.users u'));
+      expect(migration, contains('WHERE u.id IS NULL'));
+      expect(migration, contains('approved admin user does not exist'));
+      expect(migration, contains('WHERE u.deleted_at IS NOT NULL'));
+      expect(migration, contains('approved admin user is inactive or deleted'));
+      for (final syntheticId in [
+        approvedSynthetic,
+        missingSynthetic,
+        deletedSynthetic,
+      ]) {
+        expect(migration, isNot(contains(syntheticId)));
+      }
+    });
+
+    test('one synthetic approval yields exactly one membership', () {
+      const approvedSynthetic = '11111111-1111-4111-8111-111111111111';
+      const historicalRejectedSynthetic =
+          '44444444-4444-4444-8444-444444444444';
+      final wrapperValue = '["$approvedSynthetic"]';
+      expect(wrapperValue, isNot(contains(historicalRejectedSynthetic)));
+      expect(
+        migration,
+        contains("'Explicit human approval bootstrap for migration 033'"),
+      );
+      expect(migration, contains('v_membership_count <> v_expected_count'));
+      expect(
+        migration,
+        contains('admin memberships differ from explicit approval'),
+      );
+      expect(migration, isNot(contains(approvedSynthetic)));
+      expect(migration, isNot(contains(historicalRejectedSynthetic)));
     });
 
     test('safe admin authority only evaluates auth uid active membership', () {
@@ -52,6 +138,7 @@ void main() {
       expect(helper, contains('am.active IS TRUE'));
       expect(helper, isNot(contains('p_user_id')));
       expect(helper, contains('SET search_path = public, pg_temp'));
+      expect(helper, isNot(contains('users.is_admin')));
     });
 
     test('premium verification boosts and economic values are blocked', () {
@@ -214,10 +301,7 @@ void main() {
     });
 
     test('missing connection trigger is restored from versioned schema', () {
-      expect(
-        migration,
-        contains('IF v_connection_trigger.oid IS NULL THEN'),
-      );
+      expect(migration, contains('IF v_connection_trigger.oid IS NULL THEN'));
       expect(
         migration,
         contains(
@@ -234,7 +318,10 @@ void main() {
       expect(migration, contains("v_connection_trigger.tgenabled <> 'O'"));
       expect(migration, contains('v_connection_trigger.tgnargs <> 0'));
       expect(migration, contains('v_connection_trigger.tgqual IS NOT NULL'));
-      expect(migration, isNot(contains('DROP TRIGGER trg_sync_connection_count')));
+      expect(
+        migration,
+        isNot(contains('DROP TRIGGER trg_sync_connection_count')),
+      );
       expect(
         migration,
         isNot(contains('CREATE OR REPLACE TRIGGER trg_sync_connection_count')),
@@ -250,9 +337,7 @@ void main() {
       );
       expect(
         migration,
-        contains(
-          'fn_sync_connection_count differs from versioned contract',
-        ),
+        contains('fn_sync_connection_count differs from versioned contract'),
       );
       expect(
         migration,
@@ -261,7 +346,10 @@ void main() {
           "'public.fn_sync_connection_count()')::oid",
         ),
       );
-      expect(migration, contains("p.prorettype = 'pg_catalog.trigger'::regtype"));
+      expect(
+        migration,
+        contains("p.prorettype = 'pg_catalog.trigger'::regtype"),
+      );
       expect(migration, contains("l.lanname = 'plpgsql'"));
     });
 
@@ -330,6 +418,12 @@ void main() {
         migration,
         contains("-- SELECT set_config('mploya.privileged_audit_reviewed'"),
       );
+      expect(
+        migration,
+        contains(
+          "'mploya.approved_admin_membership_ids', '[\"<approved-uuid>\"]'",
+        ),
+      );
       expect(migration, contains('DRAFT: do not apply'));
     });
   });
@@ -341,4 +435,12 @@ String _functionBody(String sql, String signature) {
   final end = sql.indexOf('\n\$\$;', start);
   expect(end, greaterThan(start), reason: 'Unterminated function $signature');
   return sql.substring(start, end);
+}
+
+String _between(String value, String startMarker, String endMarker) {
+  final start = value.indexOf(startMarker);
+  final end = value.indexOf(endMarker, start + startMarker.length);
+  expect(start, isNonNegative, reason: 'Missing marker $startMarker');
+  expect(end, greaterThan(start), reason: 'Missing marker $endMarker');
+  return value.substring(start, end);
 }

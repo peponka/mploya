@@ -12,20 +12,106 @@
 --      generate-embedding and delete-user.
 --   3. Verify the live owners/bodies of rate_user, fn_sync_like_count,
 --      fn_sync_connection_count, admin_list_users and admin_list_boosted.
---   4. Only after that review, uncomment the set_config call below.
+--   4. In a temporary wrapper outside the repository, begin a transaction and
+--      set both required session parameters before including this migration:
+--        set_config('mploya.privileged_audit_reviewed', 'yes', true)
+--        set_config('mploya.approved_admin_membership_ids',
+--                   '["<approved-uuid>"]', true)
 --
 -- ============================================================================
 
 BEGIN;
 
 -- SELECT set_config('mploya.privileged_audit_reviewed', 'yes', true);
+-- SELECT set_config(
+--   'mploya.approved_admin_membership_ids', '["<approved-uuid>"]', true
+-- );
 
 -- Fail closed if the live schema does not match the versioned contracts.
 DO $$
 DECLARE
   v_missing TEXT[];
   v_connection_trigger RECORD;
+  v_approved_raw TEXT;
+  v_approved_json JSONB;
+  v_approved_ids UUID[] := ARRAY[]::UUID[];
+  v_approved_item JSONB;
+  v_approved_item_text TEXT;
+  v_approved_count INTEGER;
+  v_unique_count INTEGER;
+  v_invalid_ids UUID[];
+  v_deleted_ids UUID[];
 BEGIN
+  IF current_setting('mploya.privileged_audit_reviewed', true) IS DISTINCT FROM 'yes' THEN
+    RAISE EXCEPTION '033 precondition: historical privileged-data audit not confirmed';
+  END IF;
+
+  v_approved_raw := current_setting(
+    'mploya.approved_admin_membership_ids', true
+  );
+  IF v_approved_raw IS NULL THEN
+    RAISE EXCEPTION '033 precondition: approved admin membership list is absent';
+  END IF;
+  IF btrim(v_approved_raw) = '' THEN
+    RAISE EXCEPTION '033 precondition: approved admin membership list is empty';
+  END IF;
+
+  BEGIN
+    v_approved_json := v_approved_raw::JSONB;
+  EXCEPTION
+    WHEN invalid_text_representation THEN
+      RAISE EXCEPTION '033 precondition: approved admin membership list is invalid';
+  END;
+
+  IF jsonb_typeof(v_approved_json) IS DISTINCT FROM 'array' THEN
+    RAISE EXCEPTION '033 precondition: approved admin membership list must be a JSON array';
+  END IF;
+  IF jsonb_array_length(v_approved_json) = 0 THEN
+    RAISE EXCEPTION '033 precondition: approved admin membership list is empty';
+  END IF;
+
+  FOR v_approved_item IN
+    SELECT value FROM jsonb_array_elements(v_approved_json)
+  LOOP
+    IF jsonb_typeof(v_approved_item) IS DISTINCT FROM 'string' THEN
+      RAISE EXCEPTION '033 precondition: approved admin membership UUID is invalid';
+    END IF;
+    v_approved_item_text := v_approved_item #>> '{}';
+    BEGIN
+      v_approved_ids := array_append(
+        v_approved_ids, v_approved_item_text::UUID
+      );
+    EXCEPTION
+      WHEN invalid_text_representation THEN
+        RAISE EXCEPTION '033 precondition: approved admin membership UUID is invalid';
+    END;
+  END LOOP;
+
+  SELECT COUNT(*), COUNT(DISTINCT approved_id)
+    INTO v_approved_count, v_unique_count
+  FROM unnest(v_approved_ids) AS approved(approved_id);
+  IF v_approved_count <> v_unique_count THEN
+    RAISE EXCEPTION '033 precondition: approved admin membership list contains duplicates';
+  END IF;
+
+  SELECT array_agg(approved.approved_id ORDER BY approved.approved_id)
+    INTO v_invalid_ids
+  FROM unnest(v_approved_ids) AS approved(approved_id)
+  LEFT JOIN public.users u ON u.id = approved.approved_id
+  WHERE u.id IS NULL;
+  IF v_invalid_ids IS NOT NULL THEN
+    RAISE EXCEPTION '033 precondition: approved admin user does not exist';
+  END IF;
+
+  SELECT array_agg(approved.approved_id ORDER BY approved.approved_id)
+    INTO v_deleted_ids
+  FROM unnest(v_approved_ids) AS approved(approved_id)
+  JOIN public.users u ON u.id = approved.approved_id
+  WHERE u.deleted_at IS NOT NULL;
+  IF v_deleted_ids IS NOT NULL THEN
+    RAISE EXCEPTION '033 precondition: approved admin user is inactive or deleted';
+  END IF;
+
   SELECT array_agg(required.column_name ORDER BY required.column_name)
     INTO v_missing
   FROM unnest(ARRAY[
@@ -159,9 +245,6 @@ BEGIN
       '033 precondition: trg_sync_connection_count conflicts with versioned definition';
   END IF;
 
-  IF current_setting('mploya.privileged_audit_reviewed', true) IS DISTINCT FROM 'yes' THEN
-    RAISE EXCEPTION '033 precondition: historical privileged-data audit not confirmed';
-  END IF;
 END;
 $$;
 
@@ -176,6 +259,54 @@ CREATE TABLE public.admin_memberships (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Bootstrap only the identities explicitly approved in the operator session.
+-- No authority is inferred from the historical users.is_admin flag.
+INSERT INTO public.admin_memberships (
+  user_id,
+  active,
+  granted_by,
+  reason
+)
+SELECT
+  (approved.value #>> '{}')::UUID,
+  TRUE,
+  NULL,
+  'Explicit human approval bootstrap for migration 033'
+FROM jsonb_array_elements(
+  current_setting('mploya.approved_admin_membership_ids', true)::JSONB
+) AS approved(value);
+
+DO $$
+DECLARE
+  v_expected_count INTEGER;
+  v_membership_count INTEGER;
+BEGIN
+  v_expected_count := jsonb_array_length(
+    current_setting('mploya.approved_admin_membership_ids', true)::JSONB
+  );
+  SELECT COUNT(*) INTO v_membership_count
+  FROM public.admin_memberships;
+
+  IF v_membership_count <> v_expected_count
+    OR EXISTS (
+      SELECT 1
+      FROM public.admin_memberships am
+      WHERE NOT EXISTS (
+        SELECT 1
+        FROM jsonb_array_elements(
+          current_setting(
+            'mploya.approved_admin_membership_ids', true
+          )::JSONB
+        ) AS approved(value)
+        WHERE (approved.value #>> '{}')::UUID = am.user_id
+      )
+    )
+  THEN
+    RAISE EXCEPTION '033 bootstrap: admin memberships differ from explicit approval';
+  END IF;
+END;
+$$;
 
 ALTER TABLE public.admin_memberships ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.admin_memberships FORCE ROW LEVEL SECURITY;
