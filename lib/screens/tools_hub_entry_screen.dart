@@ -13,8 +13,15 @@ class ToolsHubEntryScreen extends StatefulWidget {
   State<ToolsHubEntryScreen> createState() => _ToolsHubEntryScreenState();
 }
 
+class _ToolsHubUserData {
+  const _ToolsHubUserData({required this.profile, required this.isAdmin});
+
+  final Map<String, dynamic> profile;
+  final bool isAdmin;
+}
+
 class _ToolsHubEntryScreenState extends State<ToolsHubEntryScreen> {
-  late final Future<Map<String, dynamic>?> _future;
+  late final Future<_ToolsHubUserData?> _future;
 
   @override
   void initState() {
@@ -22,19 +29,25 @@ class _ToolsHubEntryScreenState extends State<ToolsHubEntryScreen> {
     _future = _loadUser();
   }
 
-  Future<Map<String, dynamic>?> _loadUser() async {
-    final uid = Supabase.instance.client.auth.currentUser?.id;
+  Future<_ToolsHubUserData?> _loadUser() async {
+    final client = Supabase.instance.client;
+    final uid = client.auth.currentUser?.id;
     if (uid == null) return null;
-    return Supabase.instance.client
-        .from('users')
-        .select('$kUserColumns, is_admin')
-        .eq('id', uid)
-        .maybeSingle();
+    final results = await Future.wait<Object?>([
+      client.from('users').select(kUserColumns).eq('id', uid).maybeSingle(),
+      client.rpc('is_admin'),
+    ]);
+    final profile = results.first;
+    if (profile is! Map) return null;
+    return _ToolsHubUserData(
+      profile: Map<String, dynamic>.from(profile),
+      isAdmin: results.last == true,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<Map<String, dynamic>?>(
+    return FutureBuilder<_ToolsHubUserData?>(
       future: _future,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -52,12 +65,11 @@ class _ToolsHubEntryScreenState extends State<ToolsHubEntryScreen> {
           );
         }
 
-        final profile = NexUser.fromJson(data);
+        final profile = NexUser.fromJson(data.profile);
         if (profile.accountType == 'headhunter') {
           return const HeadhunterToolsScreen();
         }
-        final isAdmin = data['is_admin'] == true;
-        return MisHerramientasScreen(profile: profile, isAdmin: isAdmin);
+        return MisHerramientasScreen(profile: profile, isAdmin: data.isAdmin);
       },
     );
   }

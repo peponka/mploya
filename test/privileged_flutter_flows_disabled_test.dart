@@ -45,6 +45,7 @@ void main() {
   final ratings = source('lib/services/employer_rating_service.dart');
   final auth = source('lib/services/auth_service.dart');
   final settings = source('lib/screens/settings_screen.dart');
+  final toolsHub = source('lib/screens/tools_hub_entry_screen.dart');
   final headhunterSettings = source(
     'lib/screens/headhunter/headhunter_settings_screen.dart',
   );
@@ -139,6 +140,16 @@ void main() {
     expect(admin, contains('verificación administrativa estará disponible'));
     expect(admin, contains('eliminación administrativa estará disponible'));
     expect(admin, contains('revocación de Boost estará disponible'));
+  });
+
+  test('admin authority is never read directly from users', () {
+    for (final consumer in [settings, toolsHub]) {
+      expect(consumer, contains("rpc('is_admin')"));
+      expect(
+        RegExp(r'''select\([^)]*is_admin''').hasMatch(consumer),
+        isFalse,
+      );
+    }
   });
 
   test('the six blocks keep their production screens and CTA entrypoints', () {

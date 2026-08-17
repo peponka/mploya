@@ -51,20 +51,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _checkAdmin();
   }
 
-  /// Chequeo aislado de admin (no rompe la carga si falta la columna is_admin).
+  /// Chequeo aislado de admin mediante la autoridad server-side.
   Future<void> _checkAdmin() async {
     try {
-      final uid = Supabase.instance.client.auth.currentUser?.id;
-      if (uid == null) return;
-      final row = await Supabase.instance.client
-          .from('users')
-          .select('is_admin')
-          .eq('id', uid)
-          .maybeSingle();
-      if (mounted && row?['is_admin'] == true) {
+      if (Supabase.instance.client.auth.currentUser == null) return;
+      final isAdmin = await Supabase.instance.client.rpc('is_admin') == true;
+      if (mounted && isAdmin) {
         setState(() => _isAdmin = true);
       }
-    } catch (_) {/* columna inexistente o sin permisos: no es admin */}
+    } catch (_) {/* RPC no disponible o sin permisos: no es admin */}
   }
 
   Future<void> _loadPreferences() async {
