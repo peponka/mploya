@@ -98,7 +98,10 @@ Future<VacanteDetalle?> loadVacanteDetalle(String jobId) async {
   final postulantes = <PostulanteVacante>[];
   var postulantesNoDisponibles = false;
   try {
-    final filas = await client.rpc('get_company_candidates') as List<dynamic>;
+    final filas = await client.rpc(
+      'get_company_candidates',
+      params: {'p_job_id': jobId},
+    ) as List<dynamic>;
     for (final raw in filas) {
       final p = raw as Map;
       if (p['job_id']?.toString() != jobId) continue;

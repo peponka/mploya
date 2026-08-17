@@ -39,6 +39,7 @@ class CandidatoShortlist {
   final String? avatarUrl;
   final List<String> tags;
   final String accountType;
+  final bool desbloqueado;
 
   final double? match;
   final double? semantico;
@@ -57,6 +58,7 @@ class CandidatoShortlist {
     this.avatarUrl,
     this.tags = const [],
     this.accountType = 'candidato',
+    this.desbloqueado = false,
     this.match,
     this.semantico,
     this.skills,
@@ -64,9 +66,11 @@ class CandidatoShortlist {
     this.estadoPostulacion,
   });
 
-  bool get confidencial =>
-      accountType.toLowerCase().startsWith('confidenc') ||
-      accountType.toLowerCase() == 'stealth';
+  bool get confidencial {
+    final type = accountType.toLowerCase();
+    final privateType = type.startsWith('confidenc') || type == 'stealth';
+    return privateType && !desbloqueado;
+  }
 
   /// Nombre a mostrar: un perfil confidencial no expone identidad.
   String get nombreVisible => confidencial ? 'Candidato confidencial' : nombre;
@@ -162,6 +166,10 @@ Future<ShortlistData> loadShortlist(String jobId, {int limite = 20}) async {
       final m = raw as Map;
       final id = m['id']?.toString() ?? '';
       if (id.isEmpty) continue;
+      final accountType = m['account_type']?.toString() ?? 'candidato';
+      final normalizedType = accountType.toLowerCase();
+      final confidentialType = normalizedType.startsWith('confidenc') ||
+          normalizedType == 'stealth';
 
       porId[id] = CandidatoShortlist(
         id: id,
@@ -176,7 +184,9 @@ Future<ShortlistData> loadShortlist(String jobId, {int limite = 20}) async {
           for (final t in (m['tags'] as List? ?? const []))
             t.toString().replaceAll('#', '').trim(),
         ]..removeWhere((t) => t.isEmpty),
-        accountType: m['account_type']?.toString() ?? 'candidato',
+        accountType: accountType,
+        // El RPC endurecido excluye perfiles confidenciales bloqueados.
+        desbloqueado: confidentialType,
         match: (m['similarity'] as num?)?.toDouble(),
         semantico: (m['semantic_score'] as num?)?.toDouble(),
         skills: (m['skill_score'] as num?)?.toDouble(),
@@ -190,7 +200,10 @@ Future<ShortlistData> loadShortlist(String jobId, {int limite = 20}) async {
   // Postulantes reales: entran aunque no tengan score, y marcan a los que ya
   // estaban en el ranking.
   try {
-    final filas = await client.rpc('get_company_candidates') as List<dynamic>;
+    final filas = await client.rpc(
+      'get_company_candidates',
+      params: {'p_job_id': jobId},
+    ) as List<dynamic>;
     for (final raw in filas) {
       final p = raw as Map;
       if (p['job_id']?.toString() != jobId) continue;
@@ -199,6 +212,9 @@ Future<ShortlistData> loadShortlist(String jobId, {int limite = 20}) async {
       if (id.isEmpty) continue;
 
       final previo = porId[id];
+      final accountType = previo?.accountType ??
+          p['candidate_account_type']?.toString() ??
+          'candidato';
       porId[id] = CandidatoShortlist(
         id: id,
         nombre: previo?.nombre ?? p['candidate_name']?.toString() ?? 'Candidato',
@@ -215,7 +231,8 @@ Future<ShortlistData> loadShortlist(String jobId, {int limite = 20}) async {
               for (final t in (p['candidate_tags'] as List? ?? const []))
                 t.toString().replaceAll('#', '').trim(),
             ]..removeWhere((t) => t.isEmpty)),
-        accountType: previo?.accountType ?? 'candidato',
+        accountType: accountType,
+        desbloqueado: previo?.desbloqueado ?? p['is_unlocked'] == true,
         match: previo?.match,
         semantico: previo?.semantico,
         skills: previo?.skills,

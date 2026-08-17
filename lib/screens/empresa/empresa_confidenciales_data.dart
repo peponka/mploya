@@ -3,13 +3,16 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// Un candidato confidencial del catálogo.
 ///
-/// Sale de la RPC `get_stealth_catalog()`, que devuelve el perfil con el nombre
-/// ENMASCARADO salvo que esta empresa ya lo haya desbloqueado. La máscara la
-/// aplica la base, no la UI: el cliente nunca recibe el nombre de alguien que no
-/// desbloqueó.
+/// Sale de `get_stealth_catalog()`. Un perfil bloqueado trae solamente un
+/// handle aleatorio propio de este actor; el UUID y la identidad aparecen
+/// recien despues de un desbloqueo respaldado por el ledger.
 @immutable
 class CandidatoConfidencial {
+  /// Handle opaco usado para desbloquear. Nunca es el UUID del candidato.
   final String id;
+
+  /// UUID real disponible unicamente despues del desbloqueo.
+  final String? candidateId;
   final String? headline;
   final String? about;
   final List<String> tags;
@@ -24,10 +27,11 @@ class CandidatoConfidencial {
     required this.id,
     required this.nombre,
     required this.desbloqueado,
+    String? candidateId,
     this.headline,
     this.about,
     this.tags = const [],
-  });
+  }) : candidateId = candidateId ?? (desbloqueado ? id : null);
 }
 
 /// Billetera de créditos de la empresa (`public.company_wallets`).
@@ -102,24 +106,36 @@ Future<ConfidencialesData> loadConfidenciales() async {
     final filas = await client.rpc('get_stealth_catalog') as List<dynamic>;
     for (final raw in filas) {
       final m = raw as Map;
-      final id = m['candidate_id']?.toString() ?? '';
+      final id = m['candidate_handle']?.toString() ?? '';
       if (id.isEmpty) continue;
+
+      final desbloqueado = m['is_unlocked'] == true;
+      final candidateId = desbloqueado
+          ? m['candidate_id']?.toString()
+          : null;
 
       candidatos.add(
         CandidatoConfidencial(
           id: id,
-          nombre: m['real_name']?.toString() ?? 'Confidencial',
-          desbloqueado: m['is_unlocked'] == true,
-          headline: (m['headline']?.toString().isNotEmpty ?? false)
+          candidateId: candidateId?.isNotEmpty == true ? candidateId : null,
+          nombre: desbloqueado
+              ? m['real_name']?.toString() ?? 'Confidencial'
+              : 'Confidencial',
+          desbloqueado: desbloqueado && candidateId?.isNotEmpty == true,
+          headline: desbloqueado &&
+                  (m['headline']?.toString().isNotEmpty ?? false)
               ? m['headline'].toString()
               : null,
-          about: (m['about']?.toString().isNotEmpty ?? false)
+          about: desbloqueado &&
+                  (m['about']?.toString().isNotEmpty ?? false)
               ? m['about'].toString()
               : null,
-          tags: [
-            for (final t in (m['tags'] as List? ?? const []))
-              t.toString().replaceAll('#', '').trim(),
-          ]..removeWhere((t) => t.isEmpty),
+          tags: desbloqueado
+              ? ([
+                  for (final t in (m['tags'] as List? ?? const []))
+                    t.toString().replaceAll('#', '').trim(),
+                ]..removeWhere((t) => t.isEmpty))
+              : const [],
         ),
       );
     }
@@ -152,17 +168,15 @@ enum ResultadoDesbloqueo {
 
 /// Desbloquea un perfil confidencial gastando un crédito.
 ///
-/// La RPC `unlock_stealth_profile` es transaccional: bloquea la billetera,
-/// verifica saldo, descuenta y registra en `profile_unlocks`. Acá NO se
-/// descuenta nada del lado del cliente ni se asume éxito: se lee lo que
-/// respondió la base.
+/// La RPC resuelve el handle para auth.uid(), fija el precio, debita y registra
+/// el ledger y el desbloqueo en una sola transaccion.
 Future<({ResultadoDesbloqueo resultado, int? saldo})> desbloquearCandidato(
-  String candidatoId,
+  String candidateHandle,
 ) async {
   try {
     final res = await Supabase.instance.client.rpc(
       'unlock_stealth_profile',
-      params: {'p_candidate_id': candidatoId},
+      params: {'p_candidate_handle': candidateHandle},
     );
 
     final mapa = res is Map ? res : <String, dynamic>{};
@@ -180,7 +194,7 @@ Future<({ResultadoDesbloqueo resultado, int? saldo})> desbloquearCandidato(
     if (error == 'insufficient_funds') {
       return (resultado: ResultadoDesbloqueo.sinCreditos, saldo: saldo);
     }
-    if (error == 'cannot_unlock_self' || error == 'not_authenticated') {
+    if (error == 'not_allowed' || error == 'not_authenticated') {
       return (resultado: ResultadoDesbloqueo.noPermitido, saldo: saldo);
     }
     return (resultado: ResultadoDesbloqueo.error, saldo: saldo);

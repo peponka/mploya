@@ -22,9 +22,9 @@ import 'empresa_confidenciales_data.dart';
 ///
 /// ESTO NO ES UNA MAQUETA: el circuito existe entero en la base y hasta ahora no
 /// tenía pantalla.
-///   · `get_stealth_catalog()` devuelve el catálogo con el nombre ENMASCARADO
-///     salvo que esta empresa ya lo haya desbloqueado.
-///   · `unlock_stealth_profile(p_candidate_id)` descuenta el crédito y registra
+///   · `get_stealth_catalog()` devuelve un handle opaco sin UUID ni PII hasta
+///     que este actor haya desbloqueado el perfil.
+///   · `unlock_stealth_profile(p_candidate_handle)` descuenta el crédito y registra
 ///     en `profile_unlocks`, todo en una transacción con `FOR UPDATE`.
 ///   · `company_wallets` guarda el saldo y el plan.
 ///
@@ -337,14 +337,15 @@ class _EmpresaConfidencialesScreenState
   Widget _tarjeta(CandidatoConfidencial c) {
     final s = context.mp;
     final ocupado = _desbloqueando == c.id;
+    final candidateId = c.candidateId;
 
     return MpCard(
       radius: MpTokens.radiusXL,
-      onTap: c.desbloqueado
+      onTap: c.desbloqueado && candidateId != null
           ? () => Navigator.of(context).push(
                 CupertinoPageRoute(
                   builder: (_) =>
-                      EmpresaCandidatoPerfilScreen(candidatoId: c.id),
+                      EmpresaCandidatoPerfilScreen(candidatoId: candidateId),
                 ),
               )
           : null,
@@ -407,7 +408,7 @@ class _EmpresaConfidencialesScreenState
             ),
           ],
           const SizedBox(height: MpTokens.space16),
-          if (c.desbloqueado)
+          if (c.desbloqueado && candidateId != null)
             MpButton(
               label: 'Ver perfil completo',
               icon: CupertinoIcons.person,
@@ -416,7 +417,7 @@ class _EmpresaConfidencialesScreenState
               onPressed: () => Navigator.of(context).push(
                 CupertinoPageRoute(
                   builder: (_) =>
-                      EmpresaCandidatoPerfilScreen(candidatoId: c.id),
+                      EmpresaCandidatoPerfilScreen(candidatoId: candidateId),
                 ),
               ),
             )

@@ -1578,35 +1578,8 @@ class _CompanyAlertsWebState extends State<_CompanyAlertsWeb> {
         'get_company_candidates',
         params: {'p_status': 'pending'},
       );
-      final rows = List<Map<String, dynamic>>.from(res as List);
-      final ids = rows
-          .map((row) => row['candidate_id']?.toString() ?? '')
-          .where((id) => id.isNotEmpty)
-          .toList();
-      if (ids.isEmpty) return rows;
-      final users = await _supabase
-          .from('users')
-          .select(kUserColumns)
-          .inFilter('id', ids);
-      final usersById = <String, NexUser>{
-        for (final user in users)
-          user['id'].toString(): protectCandidateForHeadhunter(
-            NexUser.fromJson(user),
-            'headhunter',
-          ),
-      };
-      return rows.map((row) {
-        final candidate = usersById[row['candidate_id']?.toString()];
-        if (candidate == null) return row;
-        return <String, dynamic>{
-          ...row,
-          'candidate_name': candidate.name,
-          'candidate_headline': candidate.headline,
-          'candidate_avatar_url': candidate.avatarUrl,
-          'candidate_tags': candidate.tags,
-          'candidate_account_type': candidate.accountType,
-        };
-      }).toList();
+      // La identidad y privacidad ya vienen de la RPC por relacion.
+      return List<Map<String, dynamic>>.from(res as List);
     } catch (e) {
       debugPrint('Error get_company_candidates (alertas): $e');
       return [];

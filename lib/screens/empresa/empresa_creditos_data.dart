@@ -1,9 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../utils/user_columns.dart';
-
-/// Un desbloqueo realmente hecho por la empresa (`public.profile_unlocks`).
+/// Un desbloqueo versionado que devuelve `get_stealth_catalog()`.
 @immutable
 class DesbloqueoRealizado {
   final String candidatoId;
@@ -123,56 +121,33 @@ Future<CreditosData> loadCreditos() async {
   var historialNoDisponible = false;
 
   try {
-    final filas = await client
-        .from('profile_unlocks')
-        .select('candidate_id, unlocked_at')
-        .eq('company_id', uid)
-        .order('unlocked_at', ascending: false) as List<dynamic>;
+    final filas = await client.rpc('get_stealth_catalog') as List<dynamic>;
+    for (final raw in filas) {
+      final perfil = raw as Map;
+      if (perfil['is_unlocked'] != true) continue;
+      final candidatoId = perfil['candidate_id']?.toString() ?? '';
+      if (candidatoId.isEmpty) continue;
 
-    final fechaPorId = <String, DateTime?>{};
-    for (final f in filas) {
-      final m = f as Map;
-      final id = m['candidate_id']?.toString();
-      if (id == null || id.isEmpty) continue;
-      fechaPorId[id] = DateTime.tryParse(m['unlocked_at']?.toString() ?? '');
-    }
-
-    // Los perfiles se traen aparte: la empresa ya los desbloqueó, así que puede
-    // verlos con nombre.
-    final perfiles = <String, Map<String, dynamic>>{};
-    if (fechaPorId.isNotEmpty) {
-      try {
-        final filasPerfiles = await client
-            .from('users')
-            .select(kUserColumns)
-            .inFilter('id', fechaPorId.keys.toList()) as List<dynamic>;
-        for (final p in filasPerfiles) {
-          final m = Map<String, dynamic>.from(p as Map);
-          perfiles[m['id'].toString()] = m;
-        }
-      } catch (e) {
-        debugPrint('creditos · users: $e');
-      }
-    }
-
-    for (final entrada in fechaPorId.entries) {
-      final perfil = perfiles[entrada.key];
       desbloqueos.add(
         DesbloqueoRealizado(
-          candidatoId: entrada.key,
-          cuando: entrada.value,
-          nombre: perfil?['name']?.toString(),
-          headline: (perfil?['headline']?.toString().isNotEmpty ?? false)
-              ? perfil!['headline'].toString()
-              : null,
-          avatarUrl: (perfil?['avatar_url']?.toString().isNotEmpty ?? false)
-              ? perfil!['avatar_url'].toString()
+          candidatoId: candidatoId,
+          cuando: DateTime.tryParse(
+            perfil['unlocked_at']?.toString() ?? '',
+          ),
+          nombre: perfil['real_name']?.toString(),
+          headline: (perfil['headline']?.toString().isNotEmpty ?? false)
+              ? perfil['headline'].toString()
               : null,
         ),
       );
     }
+    desbloqueos.sort((a, b) {
+      final left = a.cuando, right = b.cuando;
+      if (left == null || right == null) return 0;
+      return right.compareTo(left);
+    });
   } catch (e) {
-    debugPrint('creditos · profile_unlocks: $e');
+    debugPrint('creditos · get_stealth_catalog: $e');
     historialNoDisponible = true;
   }
 

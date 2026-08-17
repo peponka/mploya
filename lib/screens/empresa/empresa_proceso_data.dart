@@ -117,31 +117,6 @@ Future<ProcesoData> _loadPostulacionesPorEstado(Set<String> estados) async {
     final filas = await client.rpc('get_company_candidates') as List<dynamic>;
     final personas = <PersonaEnProceso>[];
 
-    // La RPC legacy no devuelve account_type. Se completa desde users para no
-    // exponer nombre/avatar de perfiles confidenciales; ante una falla se
-    // enmascara por defecto.
-    final ids = {
-      for (final raw in filas)
-        if ((raw as Map)['candidate_id'] != null)
-          raw['candidate_id'].toString(),
-    };
-    final confidencialPorId = <String, bool>{};
-    var privacidadDisponible = true;
-    try {
-      final perfiles = await client
-          .from('users')
-          .select('id, account_type')
-          .inFilter('id', ids.toList()) as List<dynamic>;
-      for (final raw in perfiles) {
-        final perfil = raw as Map;
-        confidencialPorId[perfil['id'].toString()] =
-            _esCuentaConfidencial(perfil['account_type']);
-      }
-    } catch (e) {
-      privacidadDisponible = false;
-      debugPrint('proceso · privacidad users: $e');
-    }
-
     for (final raw in filas) {
       final p = raw as Map;
       final estado = p['status']?.toString().toLowerCase() ?? '';
@@ -162,8 +137,10 @@ Future<ProcesoData> _loadPostulacionesPorEstado(Set<String> estados) async {
             for (final t in (p['candidate_tags'] as List? ?? const []))
               t.toString().replaceAll('#', '').trim(),
           ]..removeWhere((t) => t.isEmpty),
-          confidencial: !privacidadDisponible ||
-              (confidencialPorId[candidatoId] ?? true),
+          // Los bloqueados no salen de la RPC. Una fila confidencial solo
+          // existe con un desbloqueo versionado valido.
+          confidencial: p['is_confidential'] == true &&
+              p['is_unlocked'] != true,
           vacanteId: p['job_id']?.toString(),
           vacante: p['job_title']?.toString(),
           estado: p['status']?.toString() ?? '',
