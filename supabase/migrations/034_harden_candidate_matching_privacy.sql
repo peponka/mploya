@@ -298,7 +298,8 @@ BEGIN
       OR lower(btrim(COALESCE(u.account_type::TEXT, ''))) LIKE 'confidenc%'
       OR lower(btrim(COALESCE(u.account_type::TEXT, ''))) LIKE 'confidential%'
     )
-  ON CONFLICT (actor_id, candidate_id) DO NOTHING;
+  ON CONFLICT ON CONSTRAINT candidate_access_handles_actor_candidate_uniq
+    DO NOTHING;
 
   RETURN QUERY
   SELECT

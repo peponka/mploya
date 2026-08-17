@@ -111,6 +111,27 @@ void main() {
       expect(catalog, contains('WHERE h.actor_id = v_actor'));
     });
 
+    test('uses the named handle constraint to avoid PL/pgSQL ambiguity', () {
+      expect(
+        migration,
+        contains(
+          'CONSTRAINT candidate_access_handles_actor_candidate_uniq\n'
+          '    UNIQUE (actor_id, candidate_id)',
+        ),
+      );
+      expect(
+        migration,
+        contains(
+          'ON CONFLICT ON CONSTRAINT '
+          'candidate_access_handles_actor_candidate_uniq',
+        ),
+      );
+      expect(
+        migration,
+        isNot(contains('ON CONFLICT (actor_id, candidate_id)')),
+      );
+    });
+
     test('requires a session and an Empresa or Headhunter actor', () {
       expect(catalog, contains('v_actor UUID := auth.uid()'));
       expect(catalog, contains("USING ERRCODE = '28000'"));
