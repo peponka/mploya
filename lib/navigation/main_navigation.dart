@@ -21,6 +21,7 @@ import '../screens/empresa/empresa_talent_feed_screen.dart';
 import '../screens/empresa/empresa_vacantes_screen.dart';
 import '../screens/explore_screen.dart';
 import '../screens/home_feed_screen.dart';
+import '../screens/headhunter/headhunter_busquedas_screen.dart';
 import '../screens/headhunter/headhunter_clients_screen.dart';
 import '../screens/headhunter/headhunter_dashboard_screen.dart';
 import '../screens/headhunter/headhunter_publish_job_screen.dart';
@@ -72,6 +73,7 @@ class _MainNavigationState extends State<MainNavigation> {
   static const _companyTalentFeed = EmpresaTalentFeedScreen(embedded: true);
   static const _network = NetworkScreen();
   static const _headhunterClients = HeadhunterClientsScreen();
+  static const _headhunterBusquedas = HeadhunterBusquedasScreen();
   static const _headhunterDashboard = HeadhunterDashboardScreen();
   static const _headhunterTalentPool = HeadhunterTalentPoolScreen();
   static const _notifications = NotificationsScreen();
@@ -127,7 +129,7 @@ class _MainNavigationState extends State<MainNavigation> {
     _accountType == 'empresa'
         ? _companyVacantes
         : (_accountType == 'headhunter'
-              ? const JobsScreen()
+              ? _headhunterBusquedas
               : const SizedBox.shrink()),
     // 7 · Empresa: Dashboard · Headhunter: hub · Candidato: vacía (era una
     //     pantalla de Empresa en la ranura de un candidato).

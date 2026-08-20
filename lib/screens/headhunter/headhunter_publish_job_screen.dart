@@ -2,7 +2,37 @@ import 'package:flutter/cupertino.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../services/ai_match_service.dart';
+import '../../widgets/ds/mploya_ds.dart';
 
+/// Publicar vacante de Headhunter.
+///
+/// Migrada al sistema de diseño (18/8/2026), 7ª pantalla — mismo patrón de
+/// `headhunter_dashboard_screen.dart`.
+///
+/// NO es un wizard de varios pasos (a diferencia de lo que sugiere el
+/// nombre del mockup "publicar vacante 2/3"): es un único `ListView` con
+/// 3 tarjetas (IA / campos / preferencias), igual que
+/// `empresa_publicar_vacante_screen.dart` en estructura. Ese sibling SÍ
+/// es un wizard de 4 pasos con `MpStepper` — no se copió esa estructura
+/// acá porque cambiaría el flujo real (esto sería un cambio funcional,
+/// fuera de alcance de un rediseño visual). Patrón:
+///
+///   · Aviso de éxito/error → [MpBanner] (reemplaza el `Container` tinte
+///     a mano). `title` es genérico ("Listo"/"Revisá esto"); el texto
+///     real que verifican los tests va en `message`, sin cambios.
+///   · Campos               → [MpFieldLabel] + [MpTextField].
+///   · Jornada/Experiencia  → SIN cambio de widget: siguen siendo pills en
+///     `Wrap` a mano (tokenizadas). No hay equivalente en `ds/` para
+///     "elegí una opción entre N" fuera de listas con contador
+///     ([MpSegmentedFilter], que no encaja: esto no es un filtro).
+///   · CTA inferior          → [MpButton] (`variant: primary, expand: true,
+///     loading: _publishing`) — el parámetro `loading` ya resuelve el
+///     spinner que antes se armaba a mano.
+///
+/// El botón "Publicar" de la barra de navegación queda como
+/// `CupertinoButton` simple, sin cambios: no tenía ningún color
+/// hardcodeado que migrar, y es el patrón nativo correcto para una acción
+/// de `trailing` en una `CupertinoNavigationBar`.
 typedef HeadhunterPublishOverride =
     Future<String?> Function(Map<String, dynamic> values);
 
@@ -199,123 +229,142 @@ class _HeadhunterPublishJobScreenState
 
   @override
   Widget build(BuildContext context) {
-    return CupertinoPageScaffold(
-      backgroundColor: const Color(0xFFF6F8FB),
-      navigationBar: CupertinoNavigationBar(
-        middle: const Text('Publicar vacante'),
-        backgroundColor: CupertinoColors.white,
-        border: null,
-        trailing: CupertinoButton(
-          padding: EdgeInsets.zero,
-          onPressed: _publishing ? null : _publish,
-          child: _publishing
-              ? const CupertinoActivityIndicator(radius: 8)
-              : const Text('Publicar'),
-        ),
+    return MpSurface(
+      style: MpSurfaceStyle.light,
+      child: Builder(
+        builder: (context) {
+          final s = context.mp;
+          return CupertinoPageScaffold(
+            backgroundColor: s.bg,
+            navigationBar: CupertinoNavigationBar(
+              middle: const Text('Publicar vacante'),
+              backgroundColor: s.card,
+              border: null,
+              trailing: CupertinoButton(
+                padding: EdgeInsets.zero,
+                onPressed: _publishing ? null : _publish,
+                child: _publishing
+                    ? const CupertinoActivityIndicator(radius: 8)
+                    : const Text('Publicar'),
+              ),
+            ),
+            child: SafeArea(child: _content(context)),
+          );
+        },
       ),
-      child: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 40),
-          children: [
-            const Text(
-              'Creá una vacante',
-              style: TextStyle(
-                fontSize: 28,
-                fontWeight: FontWeight.w800,
-                color: Color(0xFF172033),
-                letterSpacing: -0.7,
-              ),
-            ),
-            const SizedBox(height: 5),
-            const Text(
-              'La vacante quedará asociada a tu cuenta Headhunter.',
-              style: TextStyle(fontSize: 14, color: Color(0xFF6B778C)),
-            ),
-            if (_message != null) ...[
-              const SizedBox(height: 16),
-              _messageCard(),
-            ],
-            const SizedBox(height: 18),
-            _card([
-              _field('Título del puesto *', _title, 'Ej. Flutter Developer'),
-              const SizedBox(height: 14),
-              CupertinoButton.filled(
-                padding: const EdgeInsets.symmetric(vertical: 11),
+    );
+  }
+
+  Widget _content(BuildContext context) {
+    final s = context.mp;
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(
+        MpTokens.screenPadding,
+        MpTokens.space20,
+        MpTokens.screenPadding,
+        MpTokens.space40,
+      ),
+      children: [
+        Text('Creá una vacante', style: MpTokens.h1.copyWith(color: s.text, fontSize: 26)),
+        const SizedBox(height: MpTokens.space4),
+        Text(
+          'La vacante quedará asociada a tu cuenta Headhunter.',
+          style: MpTokens.body.copyWith(color: s.textSecondary),
+        ),
+        if (_message != null) ...[
+          const SizedBox(height: MpTokens.space16),
+          MpBanner(
+            icon: _success ? CupertinoIcons.checkmark_circle : CupertinoIcons.exclamationmark_circle,
+            title: _success ? 'Listo' : 'Revisá esto',
+            message: _message!,
+            color: _success ? MpTokens.success : MpTokens.danger,
+          ),
+        ],
+        const SizedBox(height: MpTokens.space16),
+        MpCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const MpFieldLabel('Título del puesto *'),
+              MpTextField(controller: _title, placeholder: 'Ej. Flutter Developer'),
+              const SizedBox(height: MpTokens.space12),
+              MpButton(
+                label: 'Completar con IA',
+                icon: CupertinoIcons.sparkles,
+                variant: MpButtonVariant.primary,
+                expand: true,
+                loading: _generating,
                 onPressed: _generating ? null : _generate,
-                child: _generating
-                    ? const CupertinoActivityIndicator(
-                        radius: 8,
-                        color: CupertinoColors.white,
-                      )
-                    : const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(CupertinoIcons.sparkles, size: 16),
-                          SizedBox(width: 7),
-                          Text('Completar con IA'),
-                        ],
-                      ),
               ),
-              const SizedBox(height: 7),
-              const Text(
+              const SizedBox(height: MpTokens.space8),
+              Text(
                 'Usa la función existente y deja todo editable antes de guardar.',
-                style: TextStyle(fontSize: 12, color: Color(0xFF7C879A)),
+                style: MpTokens.micro.copyWith(color: s.textTertiary),
               ),
-            ]),
-            const SizedBox(height: 14),
-            _card([
-              _field(
-                'Descripción',
-                _description,
-                'Responsabilidades y requisitos reales del puesto',
+            ],
+          ),
+        ),
+        const SizedBox(height: MpTokens.space12),
+        MpCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const MpFieldLabel('Descripción'),
+              MpTextField(
+                controller: _description,
+                placeholder: 'Responsabilidades y requisitos reales del puesto',
                 maxLines: 5,
               ),
-              const SizedBox(height: 14),
-              _field('Rango salarial', _salary, 'Opcional'),
-              const SizedBox(height: 14),
-              _field('Horario', _schedule, 'Opcional'),
-              const SizedBox(height: 14),
-              _field('Skills', _tags, 'Separadas por coma'),
-              const SizedBox(height: 14),
-              _field('Extras', _extras, 'Opcional', maxLines: 2),
-            ]),
-            const SizedBox(height: 14),
-            _card([
+              const SizedBox(height: MpTokens.space12),
+              const MpFieldLabel('Rango salarial'),
+              MpTextField(controller: _salary, placeholder: 'Opcional'),
+              const SizedBox(height: MpTokens.space12),
+              const MpFieldLabel('Horario'),
+              MpTextField(controller: _schedule, placeholder: 'Opcional'),
+              const SizedBox(height: MpTokens.space12),
+              const MpFieldLabel('Skills'),
+              MpTextField(controller: _tags, placeholder: 'Separadas por coma'),
+              const SizedBox(height: MpTokens.space12),
+              const MpFieldLabel('Extras'),
+              MpTextField(controller: _extras, placeholder: 'Opcional', maxLines: 2),
+            ],
+          ),
+        ),
+        const SizedBox(height: MpTokens.space12),
+        MpCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
               _picker(
+                s,
                 'Jornada',
                 const ['Completa', 'Parcial', 'Por horas'],
                 _employmentType,
                 (value) => setState(() => _employmentType = value),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: MpTokens.space16),
               _picker(
+                s,
                 'Experiencia',
                 const ['Sin experiencia', 'Se valora', 'Imprescindible'],
                 _experienceLevel,
                 (value) => setState(() => _experienceLevel = value),
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: MpTokens.space16),
               Row(
                 children: [
-                  const Expanded(
+                  Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
                           'Vacante confidencial',
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xFF172033),
-                          ),
+                          style: TextStyle(color: s.text, fontSize: 15, fontWeight: FontWeight.w700),
                         ),
-                        SizedBox(height: 3),
+                        const SizedBox(height: MpTokens.space2),
                         Text(
                           'Oculta la identidad del publicador mediante is_stealth.',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Color(0xFF7C879A),
-                          ),
+                          style: MpTokens.micro.copyWith(color: s.textTertiary),
                         ),
                       ],
                     ),
@@ -326,133 +375,67 @@ class _HeadhunterPublishJobScreenState
                   ),
                 ],
               ),
-            ]),
-            const SizedBox(height: 20),
-            CupertinoButton.filled(
-              onPressed: _publishing ? null : _publish,
-              child: _publishing
-                  ? const CupertinoActivityIndicator(
-                      color: CupertinoColors.white,
-                    )
-                  : const Text('Publicar vacante'),
-            ),
-            const SizedBox(height: 10),
-            const Text(
-              'No se crean clientes, mandatos, promociones ni canales externos.',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 12, color: Color(0xFF7C879A)),
-            ),
-          ],
+            ],
+          ),
         ),
-      ),
+        const SizedBox(height: MpTokens.space20),
+        MpButton(
+          label: 'Publicar vacante',
+          variant: MpButtonVariant.primary,
+          expand: true,
+          size: MpButtonSize.large,
+          loading: _publishing,
+          onPressed: _publishing ? null : _publish,
+        ),
+        const SizedBox(height: MpTokens.space8),
+        Text(
+          'No se crean clientes, mandatos, promociones ni canales externos.',
+          textAlign: TextAlign.center,
+          style: MpTokens.micro.copyWith(color: s.textTertiary),
+        ),
+      ],
     );
   }
 
-  Widget _messageCard() => Container(
-    padding: const EdgeInsets.all(12),
-    decoration: BoxDecoration(
-      color: (_success ? const Color(0xFF24A66A) : const Color(0xFFD35B44))
-          .withValues(alpha: 0.1),
-      borderRadius: BorderRadius.circular(12),
-    ),
-    child: Text(
-      _message!,
-      style: TextStyle(
-        color: _success ? const Color(0xFF187A4D) : const Color(0xFFA63A2A),
-        fontSize: 13,
-        fontWeight: FontWeight.w600,
-      ),
-    ),
-  );
-
-  Widget _card(List<Widget> children) => Container(
-    padding: const EdgeInsets.all(16),
-    decoration: BoxDecoration(
-      color: CupertinoColors.white,
-      borderRadius: BorderRadius.circular(17),
-      border: Border.all(color: const Color(0xFFE3E8F0)),
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: children,
-    ),
-  );
-
-  Widget _field(
-    String label,
-    TextEditingController controller,
-    String placeholder, {
-    int maxLines = 1,
-  }) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Text(
-        label,
-        style: const TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.w700,
-          color: Color(0xFF445069),
-        ),
-      ),
-      const SizedBox(height: 7),
-      CupertinoTextField(
-        controller: controller,
-        placeholder: placeholder,
-        maxLines: maxLines,
-        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
-      ),
-    ],
-  );
-
   Widget _picker(
+    MpSurfaceStyle s,
     String label,
     List<String> values,
     String? selected,
     ValueChanged<String> onSelected,
-  ) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Text(
-        label,
-        style: const TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.w700,
-          color: Color(0xFF445069),
-        ),
-      ),
-      const SizedBox(height: 8),
-      Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        children: [
-          for (final value in values)
-            GestureDetector(
-              onTap: () => onSelected(value),
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 13,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  color: selected == value
-                      ? const Color(0xFF4C2CF3)
-                      : const Color(0xFFF4F5F8),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  value,
-                  style: TextStyle(
-                    color: selected == value
-                        ? CupertinoColors.white
-                        : const Color(0xFF445069),
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w600,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: TextStyle(color: s.text, fontSize: 13, fontWeight: FontWeight.w700)),
+        const SizedBox(height: MpTokens.space8),
+        Wrap(
+          spacing: MpTokens.space8,
+          runSpacing: MpTokens.space8,
+          children: [
+            for (final value in values)
+              GestureDetector(
+                onTap: () => onSelected(value),
+                behavior: HitTestBehavior.opaque,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: selected == value ? MpTokens.primary : s.fill,
+                    borderRadius: BorderRadius.circular(MpTokens.radiusPill),
+                  ),
+                  child: Text(
+                    value,
+                    style: TextStyle(
+                      color: selected == value ? const Color(0xFFFFFFFF) : s.textSecondary,
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
               ),
-            ),
-        ],
-      ),
-    ],
-  );
+          ],
+        ),
+      ],
+    );
+  }
 }

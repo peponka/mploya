@@ -4,11 +4,19 @@
 //
 // POR QUÉ ESTE MÓDULO ES COMPARTIDO Y NO UNA LLAMADA HTTP ENTRE FUNCIONES
 //
-// Lo usan dos Edge Functions:
+// Lo usan tres Edge Functions:
 //   · transcribe-interview-answer  → lo dispara el candidato al subir cada
 //                                    respuesta (con su JWT, autorizado).
 //   · generate-interview-report    → red de seguridad: transcribe lo que falte
 //                                    antes de evaluar.
+//   · analyze-video-pitch          → reutiliza `descargarVideo` y
+//                                    `transcribirConGemini` (exportadas más
+//                                    abajo) para transcribir el video pitch
+//                                    de perfil (users.video_url), que no
+//                                    tiene interview_id/question_id — por
+//                                    eso usa las dos piezas sueltas en vez de
+//                                    `transcribirRespuesta`, que sí está
+//                                    atada a `interview_answers`.
 //
 // Si el informe invocara por HTTP a la otra función tendría que autenticarse
 // con el service_role, y esa función exige un JWT de usuario real. Importar el
@@ -176,7 +184,7 @@ export function detectarMime(
 ///
 /// Esto es a propósito: cuando el bucket `videos` pase a privado (tarea
 /// aparte), esta función sigue andando sin tocar una línea.
-async function descargarVideo(
+export async function descargarVideo(
   supabase: SupabaseClient,
   videoUrl: string,
 ): Promise<{ bytes: Uint8Array; mime: string }> {
@@ -282,7 +290,7 @@ async function subirPorFilesApi(
 }
 
 /// Manda el video a Gemini y devuelve el texto crudo de la transcripción.
-async function transcribirConGemini(
+export async function transcribirConGemini(
   bytes: Uint8Array,
   mime: string,
   key: string,

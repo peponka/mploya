@@ -1,17 +1,34 @@
 import 'package:flutter/cupertino.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/my_profile_service.dart';
-import '../theme/app_theme.dart';
+import '../widgets/ds/mploya_ds.dart';
 import 'onboarding_pitch_screen.dart';
 import '../widgets/unsaved_changes_guard.dart';
 import '../widgets/web_centered.dart';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// HeadhunterProfileFormScreen — Onboarding del headhunter (reclutador
-// independiente / comisionista). A diferencia de la empresa, NO carga una marca
-// institucional: solo su identidad, especialidad y sectores que cubre.
-// ─────────────────────────────────────────────────────────────────────────────
-
+/// Onboarding del Headhunter (reclutador independiente / comisionista).
+///
+/// Migrada al sistema de diseño (18/8/2026), 9ª pantalla — mismo patrón de
+/// `headhunter_dashboard_screen.dart`. A diferencia de la empresa, NO
+/// carga una marca institucional: solo identidad, especialidad y
+/// sectores que cubre.
+///
+/// SIN sibling ya rediseñado para comparar: verifiqué
+/// `company_profile_form_screen.dart` (el onboarding de Empresa) y
+/// TAMBIÉN sigue en `MployaTheme` (el sistema viejo), no en
+/// `mploya_ds`/`MpTokens` — no hay a quién imitar acá todavía.
+///
+/// SIN mockup 1:1: `contanos sobre tu rol de headhunter.png` es un paso
+/// "2 de 3" con selector de industrias (chips múltiples), nivel de
+/// experiencia (tarjetas), países operados y checkbox de términos — nada
+/// de eso existe en el formulario real (4 campos de texto simples, un
+/// solo paso). Se migró el patrón de campo/CTA, no la composición.
+///
+/// Patrón: [MpIconTile] circular para el ícono de encabezado,
+/// [MpFieldLabel] + [MpTextField] por campo, [MpButton] (`variant:
+/// primary, expand: true, trailingArrow: true`) para el CTA. Se
+/// preservaron sin cambios: `UnsavedChangesGuard`, `webSidePad(context)`
+/// y el flujo de guardado/validación (sólo visual, no funcional).
 class HeadhunterProfileFormScreen extends StatefulWidget {
   const HeadhunterProfileFormScreen({super.key});
 
@@ -107,116 +124,97 @@ class _HeadhunterProfileFormScreenState extends State<HeadhunterProfileFormScree
     super.dispose();
   }
 
-  Widget _label(String text) => Text(
-        text,
-        style: const TextStyle(color: MployaTheme.lightText, fontWeight: FontWeight.w600, fontSize: 15),
-      );
-
-  Widget _field(TextEditingController controller, String placeholder, {int maxLines = 1}) =>
-      CupertinoTextField(
-        controller: controller,
-        placeholder: placeholder,
-        maxLines: maxLines,
-        placeholderStyle: const TextStyle(color: MployaTheme.lightTertiary),
-        style: const TextStyle(color: MployaTheme.lightText),
-        decoration: BoxDecoration(
-          color: MployaTheme.lightCard,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: MployaTheme.lightDivider),
-        ),
-        padding: const EdgeInsets.all(16),
-      );
-
   @override
   Widget build(BuildContext context) {
     return UnsavedChangesGuard(
       hasUnsavedChanges: () =>
           _nombreController.text.trim().isNotEmpty || _especialidadController.text.trim().isNotEmpty,
-      child: CupertinoPageScaffold(
-        backgroundColor: MployaTheme.lightBg,
-        navigationBar: const CupertinoNavigationBar(
-          backgroundColor: MployaTheme.lightNavBar,
-          border: null,
-          middle: Text(
-            'Perfil de Headhunter',
-            style: TextStyle(color: MployaTheme.lightText, fontWeight: FontWeight.w700),
-          ),
-        ),
-        child: SafeArea(
-          child: _isLoading
-              ? const Center(child: CupertinoActivityIndicator(radius: 16))
-              : SingleChildScrollView(
-                  physics: const BouncingScrollPhysics(),
-                  padding: EdgeInsets.symmetric(horizontal: webSidePad(context), vertical: 24),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Center(
-                        child: Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: MployaTheme.brandAccent.withValues(alpha: 0.1),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            CupertinoIcons.person_2_square_stack_fill,
-                            size: 40,
-                            color: MployaTheme.brandAccent,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      const Center(
-                        child: Text(
-                          'Reclutá talento y cobrá por cada contratación.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: MployaTheme.lightTertiary, fontSize: 14),
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-
-                      _label('Tu nombre o el de tu agencia'),
-                      const SizedBox(height: 12),
-                      _field(_nombreController, 'Ej: Laura Méndez · TalentLab'),
-                      const SizedBox(height: 24),
-
-                      _label('¿En qué te especializás?'),
-                      const SizedBox(height: 12),
-                      _field(_especialidadController, 'Ej: Headhunter IT & Tech, perfiles senior'),
-                      const SizedBox(height: 24),
-
-                      _label('Ciudad (opcional)'),
-                      const SizedBox(height: 12),
-                      _field(_ciudadController, 'Ej: Buenos Aires'),
-                      const SizedBox(height: 24),
-
-                      _label('Sectores que cubrís (separados por coma)'),
-                      const SizedBox(height: 12),
-                      _field(_sectoresController, 'Ej: #tech, #fintech, #ventas, marketing', maxLines: 2),
-                      const SizedBox(height: 48),
-
-                      SizedBox(
-                        height: 52,
-                        child: CupertinoButton(
-                          padding: EdgeInsets.zero,
-                          color: MployaTheme.brandAccent,
-                          borderRadius: BorderRadius.circular(14),
-                          onPressed: _guardarYContinuar,
-                          child: const Text(
-                            'Siguiente paso: Video presentación →',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                              color: CupertinoColors.white,
-                              fontFamily: '.SF Pro Text',
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                    ],
-                  ),
+      child: MpSurface(
+        style: MpSurfaceStyle.light,
+        child: Builder(
+          builder: (context) {
+            final s = context.mp;
+            return CupertinoPageScaffold(
+              backgroundColor: s.bg,
+              navigationBar: CupertinoNavigationBar(
+                backgroundColor: s.card,
+                border: null,
+                middle: Text(
+                  'Perfil de Headhunter',
+                  style: TextStyle(color: s.text, fontWeight: FontWeight.w700),
                 ),
+              ),
+              child: SafeArea(
+                child: _isLoading
+                    ? const Center(child: CupertinoActivityIndicator(radius: 16))
+                    : SingleChildScrollView(
+                        physics: const BouncingScrollPhysics(),
+                        padding: EdgeInsets.symmetric(
+                          horizontal: webSidePad(context),
+                          vertical: MpTokens.space24,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            const Center(
+                              child: MpIconTile(
+                                icon: CupertinoIcons.person_2_square_stack_fill,
+                                color: MpTokens.primary,
+                                size: 72,
+                                circular: true,
+                              ),
+                            ),
+                            const SizedBox(height: MpTokens.space8),
+                            Center(
+                              child: Text(
+                                'Reclutá talento y cobrá por cada contratación.',
+                                textAlign: TextAlign.center,
+                                style: MpTokens.body.copyWith(color: s.textTertiary),
+                              ),
+                            ),
+                            const SizedBox(height: MpTokens.space24),
+
+                            const MpFieldLabel('Tu nombre o el de tu agencia'),
+                            MpTextField(
+                              controller: _nombreController,
+                              placeholder: 'Ej: Laura Méndez · TalentLab',
+                            ),
+                            const SizedBox(height: MpTokens.space20),
+
+                            const MpFieldLabel('¿En qué te especializás?'),
+                            MpTextField(
+                              controller: _especialidadController,
+                              placeholder: 'Ej: Headhunter IT & Tech, perfiles senior',
+                            ),
+                            const SizedBox(height: MpTokens.space20),
+
+                            const MpFieldLabel('Ciudad (opcional)'),
+                            MpTextField(controller: _ciudadController, placeholder: 'Ej: Buenos Aires'),
+                            const SizedBox(height: MpTokens.space20),
+
+                            const MpFieldLabel('Sectores que cubrís (separados por coma)'),
+                            MpTextField(
+                              controller: _sectoresController,
+                              placeholder: 'Ej: #tech, #fintech, #ventas, marketing',
+                              maxLines: 2,
+                            ),
+                            const SizedBox(height: MpTokens.space40),
+
+                            MpButton(
+                              label: 'Siguiente paso: Video presentación',
+                              variant: MpButtonVariant.primary,
+                              size: MpButtonSize.large,
+                              expand: true,
+                              trailingArrow: true,
+                              onPressed: _guardarYContinuar,
+                            ),
+                            const SizedBox(height: MpTokens.space24),
+                          ],
+                        ),
+                      ),
+              ),
+            );
+          },
         ),
       ),
     );

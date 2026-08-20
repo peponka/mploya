@@ -105,7 +105,9 @@ void main() {
       tester,
     ) async {
       await _pump(tester, const HeadhunterToolsScreen());
-      expect(find.text('Pipeline'), findsOneWidget);
+      // La tarjeta "Pipeline" del acceso rápido se sacó el 18/8/2026: el
+      // pipeline real ahora vive en su propio push desde Dashboard/Clientes,
+      // así que mantenerla acá era un acceso duplicado.
       expect(find.text('Entrevistas'), findsOneWidget);
       expect(find.text('Talent Pool'), findsOneWidget);
       expect(find.text('Match IA'), findsNothing);

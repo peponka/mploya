@@ -4,17 +4,43 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../models/models.dart';
 import '../../utils/headhunter_candidate_privacy.dart';
 import '../../utils/user_columns.dart';
+import '../../widgets/ds/mploya_ds.dart';
 import '../profile_screen.dart';
 
-const headhunterPipelineStatuses = <String>[
-  'pending',
-  'viewed',
-  'interviewing',
-  'accepted',
-  'hired',
-  'rejected',
-];
-
+/// Pipeline de candidatos de Headhunter.
+///
+/// Migrada al sistema de diseño (18/8/2026), 2ª pantalla tras
+/// `headhunter_dashboard_screen.dart` — mismo patrón documentado ahí.
+///
+/// SIN mockup 1:1 aplicable, a diferencia de Dashboard. Hay TRES mockups
+/// con "pipeline"/"búsqueda" en el nombre
+/// (`_Headhunter_Pipeline_Busqueda.png`, `Headhunter_Detalle_Busqueda.png`,
+/// `10_Headhunter_Busquedas_Activas.png`) pero los tres describen un
+/// producto más grande del que existe hoy: un Kanban de escritorio de 7
+/// etapas por vacante individual, con match%, video-thumbnails y
+/// sub-navegación (Resumen/Candidatos/Pipeline/Actividades/Notas). La
+/// pantalla real es una lista global de candidatos (todas las vacantes
+/// juntas) filtrada por 6 estados de `job_applications.status` — no hay
+/// concepto de "una búsqueda específica" en el código. Copiar la
+/// composición del mockup habría sido inventar una pantalla distinta, así
+/// que se extrajo el PATRÓN VISUAL reutilizable en vez de la composición:
+///
+///   · Selector de estado    → [MpSegmentedFilter] (`scrollable: true`),
+///     reemplaza el `ListView` horizontal de `Container`s a mano. Mismo
+///     patrón de "Todos 18 | Abiertas 12 | ..." que muestran los 3
+///     mockups, aplicado a los 6 estados reales.
+///   · Tarjeta de candidato  → [MpRowGroup] de [MpListRow], leading
+///     [MpAvatar] (initials de fallback, nunca las de un candidato
+///     confidencial — ver abajo), trailing el mismo botón "···" que ya
+///     abría el `CupertinoActionSheet` de cambio de etapa.
+///   · Estado vacío          → mismo patrón compacto que Dashboard
+///     ([MpCard] + [MpIconTile] circular + texto), no [MpEmptyState].
+///
+/// PRIVACIDAD: un candidato confidencial nunca debe mostrar ni una inicial
+/// real. `MpAvatar(name: ...)` usa la primera letra de `name` como
+/// fallback — para confidenciales se pasa `name: null` a propósito (cae en
+/// "?"), no el nombre protegido (`headhunterProtectedCandidateName`
+/// también arrancaría con una letra real: "P" de "Perfil").
 class HeadhunterPipelineCandidate {
   const HeadhunterPipelineCandidate({
     required this.applicationId,
@@ -41,6 +67,15 @@ class HeadhunterPipelineCandidate {
         appliedAt: appliedAt,
       );
 }
+
+const headhunterPipelineStatuses = <String>[
+  'pending',
+  'viewed',
+  'interviewing',
+  'accepted',
+  'hired',
+  'rejected',
+];
 
 class HeadhunterPipelineData {
   const HeadhunterPipelineData({required this.candidates, this.error = false});
@@ -254,102 +289,74 @@ class _HeadhunterPipelineScreenState extends State<HeadhunterPipelineScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return CupertinoPageScaffold(
-      backgroundColor: const Color(0xFFF6F8FB),
-      navigationBar: const CupertinoNavigationBar(
-        middle: Text('Pipeline'),
-        backgroundColor: CupertinoColors.white,
-        border: null,
-      ),
-      child: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Padding(
-              padding: EdgeInsets.fromLTRB(20, 20, 20, 4),
-              child: Text(
-                'Pipeline de candidatos',
-                style: TextStyle(
-                  fontSize: 27,
-                  fontWeight: FontWeight.w800,
-                  color: Color(0xFF172033),
-                  letterSpacing: -0.7,
+    return MpSurface(
+      style: MpSurfaceStyle.light,
+      child: CupertinoPageScaffold(
+        backgroundColor: const Color(0x00000000),
+        navigationBar: const CupertinoNavigationBar(
+          middle: Text('Pipeline'),
+          border: null,
+        ),
+        child: SafeArea(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  MpTokens.screenPadding,
+                  MpTokens.space20,
+                  MpTokens.screenPadding,
+                  MpTokens.space4,
                 ),
+                child: _header(),
               ),
-            ),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 20),
-              child: Text(
-                'Postulaciones reales a tus vacantes, por estado',
-                style: TextStyle(fontSize: 14, color: Color(0xFF6B778C)),
+              const SizedBox(height: MpTokens.space16),
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: MpTokens.screenPadding,
+                ),
+                child: _statusSelector(),
               ),
-            ),
-            const SizedBox(height: 18),
-            SizedBox(
-              height: 76,
-              child: ListView.separated(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                scrollDirection: Axis.horizontal,
-                itemCount: headhunterPipelineStatuses.length,
-                separatorBuilder: (_, _) => const SizedBox(width: 10),
-                itemBuilder: (context, index) {
-                  final status = headhunterPipelineStatuses[index];
-                  final selected = status == _status;
-                  final count = _data.candidates
-                      .where((c) => c.status == status)
-                      .length;
-                  return GestureDetector(
-                    onTap: () => setState(() => _status = status),
-                    child: Container(
-                      width: 116,
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: selected
-                            ? const Color(0xFF4C2CF3)
-                            : CupertinoColors.white,
-                        borderRadius: BorderRadius.circular(15),
-                        border: Border.all(
-                          color: selected
-                              ? const Color(0xFF4C2CF3)
-                              : const Color(0xFFE5E9F0),
-                        ),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            _label(status),
-                            style: TextStyle(
-                              color: selected
-                                  ? CupertinoColors.white
-                                  : const Color(0xFF445069),
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          const Spacer(),
-                          Text(
-                            '$count',
-                            style: TextStyle(
-                              color: selected
-                                  ? CupertinoColors.white
-                                  : const Color(0xFF172033),
-                              fontSize: 21,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-            const SizedBox(height: 16),
-            Expanded(child: _body()),
-          ],
+              const SizedBox(height: MpTokens.space16),
+              Expanded(child: _body()),
+            ],
+          ),
         ),
       ),
+    );
+  }
+
+  Widget _header() {
+    final s = context.mp;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Pipeline de candidatos',
+          style: MpTokens.h2.copyWith(color: s.text, fontSize: 24),
+        ),
+        const SizedBox(height: MpTokens.space4),
+        Text(
+          'Postulaciones reales a tus vacantes, por estado',
+          style: MpTokens.body.copyWith(color: s.textSecondary),
+        ),
+      ],
+    );
+  }
+
+  Widget _statusSelector() {
+    return MpSegmentedFilter(
+      scrollable: true,
+      selectedIndex: headhunterPipelineStatuses.indexOf(_status),
+      onChanged: (index) =>
+          setState(() => _status = headhunterPipelineStatuses[index]),
+      options: [
+        for (final status in headhunterPipelineStatuses)
+          MpFilterOption(
+            _label(status),
+            count: _data.candidates.where((c) => c.status == status).length,
+          ),
+      ],
     );
   }
 
@@ -369,17 +376,45 @@ class _HeadhunterPipelineScreenState extends State<HeadhunterPipelineScreen> {
         'El estado cambia solo cuando existe una postulacion real.',
       );
     }
-    return ListView.separated(
-      padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
-      itemCount: _visible.length,
-      separatorBuilder: (_, _) => const SizedBox(height: 10),
-      itemBuilder: (context, index) => _candidateCard(_visible[index]),
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(
+        MpTokens.screenPadding,
+        0,
+        MpTokens.screenPadding,
+        MpTokens.space32,
+      ),
+      children: [
+        MpRowGroup(rows: [for (final row in _visible) _candidateRow(row)]),
+      ],
     );
   }
 
-  Widget _candidateCard(HeadhunterPipelineCandidate row) {
+  Widget _candidateRow(HeadhunterPipelineCandidate row) {
     final confidential = row.isConfidential;
-    return GestureDetector(
+    final s = context.mp;
+
+    return MpListRow(
+      leading: MpAvatar(
+        image: confidential || (row.candidate.avatarUrl?.isEmpty ?? true)
+            ? null
+            : NetworkImage(row.candidate.avatarUrl!),
+        // Nunca la inicial de un nombre real para un confidencial.
+        name: confidential ? null : row.candidate.name,
+        size: 48,
+      ),
+      title: confidential ? headhunterProtectedCandidateName : row.candidate.name,
+      subtitle: confidential ? 'Perfil protegido' : row.jobTitle,
+      showChevron: false,
+      trailing: CupertinoButton(
+        padding: const EdgeInsets.all(8),
+        minimumSize: const Size(36, 36),
+        onPressed: () => _chooseStatus(row),
+        child: Icon(
+          CupertinoIcons.ellipsis_vertical,
+          size: 18,
+          color: s.textSecondary,
+        ),
+      ),
       onTap: confidential
           ? null
           : () => Navigator.of(context).push(
@@ -390,111 +425,41 @@ class _HeadhunterPipelineScreenState extends State<HeadhunterPipelineScreen> {
                 ),
               ),
             ),
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: CupertinoColors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFFE5E9F0)),
-        ),
-        child: Row(
-          children: [
-            _avatar(row),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    confidential
-                        ? headhunterProtectedCandidateName
-                        : row.candidate.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Color(0xFF172033),
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    confidential ? 'Perfil protegido' : row.jobTitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      color: Color(0xFF6B778C),
-                    ),
-                  ),
-                ],
+    );
+  }
+
+  Widget _empty(IconData icon, String title, String subtitle) {
+    final s = context.mp;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(MpTokens.space32),
+        child: MpCard(
+          padding: const EdgeInsets.symmetric(
+            horizontal: MpTokens.space16,
+            vertical: MpTokens.space24,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              MpIconTile(icon: icon, color: s.textTertiary, size: 40, circular: true),
+              const SizedBox(height: MpTokens.space12),
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: MpTokens.title.copyWith(color: s.text),
               ),
-            ),
-            CupertinoButton(
-              padding: const EdgeInsets.all(8),
-              minimumSize: const Size(36, 36),
-              onPressed: () => _chooseStatus(row),
-              child: const Icon(
-                CupertinoIcons.ellipsis_vertical,
-                size: 18,
-                color: Color(0xFF69758A),
+              const SizedBox(height: MpTokens.space4),
+              Text(
+                subtitle,
+                textAlign: TextAlign.center,
+                style: MpTokens.caption.copyWith(color: s.textSecondary),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
-
-  Widget _avatar(HeadhunterPipelineCandidate row) {
-    final url = row.isConfidential ? null : row.candidate.avatarUrl;
-    if (url != null && url.isNotEmpty) {
-      return ClipOval(
-        child: Image.network(
-          url,
-          width: 48,
-          height: 48,
-          fit: BoxFit.cover,
-          errorBuilder: (_, _, _) => _avatarFallback(),
-        ),
-      );
-    }
-    return _avatarFallback();
-  }
-
-  Widget _avatarFallback() => Container(
-    width: 48,
-    height: 48,
-    decoration: const BoxDecoration(
-      color: Color(0xFFEDEAFF),
-      shape: BoxShape.circle,
-    ),
-    child: const Icon(CupertinoIcons.person_fill, color: Color(0xFF4C2CF3)),
-  );
-
-  Widget _empty(IconData icon, String title, String subtitle) => Center(
-    child: Padding(
-      padding: const EdgeInsets.all(32),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 42, color: const Color(0xFF8D98AA)),
-          const SizedBox(height: 14),
-          Text(
-            title,
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            subtitle,
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 14, color: Color(0xFF6B778C)),
-          ),
-        ],
-      ),
-    ),
-  );
 
   String _label(String status) => switch (status) {
     'pending' => 'Nuevos',

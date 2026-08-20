@@ -4,8 +4,34 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../models/models.dart';
 import '../../utils/headhunter_candidate_privacy.dart';
 import '../../utils/user_columns.dart';
+import '../../widgets/ds/mploya_ds.dart';
 import 'headhunter_interview_flow_screen.dart';
 
+/// Lista de entrevistas de Headhunter.
+///
+/// Migrada al sistema de diseño (18/8/2026), 4ª pantalla — mismo patrón de
+/// `headhunter_dashboard_screen.dart`. Primera de la "familia de
+/// entrevistas" (ésta, `headhunter_interview_flow_screen.dart`,
+/// `headhunter_interview_report_screen.dart`), migradas juntas para
+/// reusar decisiones.
+///
+/// SIN mockup 1:1 (mismo motivo que Pipeline/Talent Pool: "entrevistas
+/// nuevas.png"/"entrevistas video.png" son genéricos, no de Headhunter, y
+/// no coinciden con el modelo real de datos). Patrón:
+///
+///   · 3 métricas (Pendientes/En curso/Completadas) → [MpStatTile], igual
+///     que la grilla de Dashboard.
+///   · Tarjeta de entrevista → [MpRowGroup] de [MpListRow]: `badge` con
+///     [MpTypeChip] para el estado (reemplaza el pill manual), `subtitle`
+///     con el puesto (o "Perfil protegido"), `trailingText` con la fecha.
+///     `showChevron` queda TRUE a propósito, a diferencia de Pipeline: acá
+///     cada fila SÍ navega a un detalle (`HeadhunterInterviewFlowScreen`).
+///
+/// IMPORTANTE PARA LAS OTRAS DOS: `headhunterProtectedCandidateName`
+/// ('Talento confidencial') es el nombre, 'Perfil protegido' es el
+/// subtítulo — dos strings fijos que los tests verifican literal
+/// (`headhunter_polish_4_test.dart`/`headhunter_polish_6_test.dart`). No
+/// cambiar ninguno de los dos en las próximas pantallas.
 class HeadhunterInterviewItem {
   const HeadhunterInterviewItem({
     required this.id,
@@ -159,103 +185,98 @@ class _HeadhunterInterviewsScreenState
     final completed = _data.items
         .where((item) => item.status == 'completed')
         .length;
-    return CupertinoPageScaffold(
-      backgroundColor: const Color(0xFFF6F8FB),
-      navigationBar: const CupertinoNavigationBar(
-        middle: Text('Entrevistas'),
-        backgroundColor: CupertinoColors.white,
-        border: null,
-      ),
-      child: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Padding(
-              padding: EdgeInsets.fromLTRB(20, 20, 20, 4),
-              child: Text(
-                'Entrevistas',
-                style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.w800,
-                  color: Color(0xFF172033),
-                  letterSpacing: -0.7,
+
+    return MpSurface(
+      style: MpSurfaceStyle.light,
+      child: CupertinoPageScaffold(
+        backgroundColor: const Color(0x00000000),
+        navigationBar: const CupertinoNavigationBar(
+          middle: Text('Entrevistas'),
+          border: null,
+        ),
+        child: SafeArea(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  MpTokens.screenPadding,
+                  MpTokens.space20,
+                  MpTokens.screenPadding,
+                  MpTokens.space4,
                 ),
+                child: _header(),
               ),
-            ),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 20),
-              child: Text(
-                'Seguimiento real de entrevistas por vacante',
-                style: TextStyle(fontSize: 14, color: Color(0xFF6B778C)),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  MpTokens.screenPadding,
+                  MpTokens.space16,
+                  MpTokens.screenPadding,
+                  MpTokens.space16,
+                ),
+                child: _metricsRow(pending, inProgress, completed),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: _metric(
-                      'Pendientes',
-                      pending,
-                      const Color(0xFFFF9F0A),
-                    ),
-                  ),
-                  const SizedBox(width: 9),
-                  Expanded(
-                    child: _metric(
-                      'En curso',
-                      inProgress,
-                      const Color(0xFF4C2CF3),
-                    ),
-                  ),
-                  const SizedBox(width: 9),
-                  Expanded(
-                    child: _metric(
-                      'Completadas',
-                      completed,
-                      const Color(0xFF24A66A),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Expanded(child: _body()),
-          ],
+              Expanded(child: _body()),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _metric(String label, int value, Color color) => Container(
-    padding: const EdgeInsets.all(12),
-    decoration: BoxDecoration(
-      color: CupertinoColors.white,
-      borderRadius: BorderRadius.circular(15),
-      border: Border.all(color: const Color(0xFFE5E9F0)),
-    ),
-    child: Column(
+  Widget _header() {
+    final s = context.mp;
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(CupertinoIcons.calendar, color: color, size: 20),
-        const SizedBox(height: 12),
+        Text('Entrevistas', style: MpTokens.h2.copyWith(color: s.text, fontSize: 24)),
+        const SizedBox(height: MpTokens.space4),
         Text(
-          '$value',
-          style: const TextStyle(
-            fontSize: 23,
-            fontWeight: FontWeight.w800,
-            color: Color(0xFF172033),
-          ),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          label,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(fontSize: 11, color: Color(0xFF6B778C)),
+          'Seguimiento real de entrevistas por vacante',
+          style: MpTokens.body.copyWith(color: s.textSecondary),
         ),
       ],
-    ),
-  );
+    );
+  }
+
+  Widget _metricsRow(int pending, int inProgress, int completed) {
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            child: MpStatTile(
+              icon: CupertinoIcons.calendar,
+              color: MpTokens.premium,
+              value: '$pending',
+              label: 'Pendientes',
+              compact: true,
+            ),
+          ),
+          const SizedBox(width: MpTokens.space8),
+          Expanded(
+            child: MpStatTile(
+              icon: CupertinoIcons.calendar,
+              color: MpTokens.primary,
+              value: '$inProgress',
+              label: 'En curso',
+              compact: true,
+            ),
+          ),
+          const SizedBox(width: MpTokens.space8),
+          Expanded(
+            child: MpStatTile(
+              icon: CupertinoIcons.calendar,
+              color: MpTokens.success,
+              value: '$completed',
+              label: 'Completadas',
+              compact: true,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _body() {
     if (_loading) return const Center(child: CupertinoActivityIndicator());
@@ -273,17 +294,47 @@ class _HeadhunterInterviewsScreenState
         'Las entrevistas reales de tus vacantes apareceran aca.',
       );
     }
-    return ListView.separated(
-      padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
-      itemCount: _data.items.length,
-      separatorBuilder: (_, _) => const SizedBox(height: 10),
-      itemBuilder: (context, index) => _interviewCard(_data.items[index]),
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(
+        MpTokens.screenPadding,
+        0,
+        MpTokens.screenPadding,
+        MpTokens.space32,
+      ),
+      children: [
+        MpRowGroup(
+          rows: [for (final item in _data.items) _interviewRow(item)],
+        ),
+      ],
     );
   }
 
-  Widget _interviewCard(HeadhunterInterviewItem item) {
+  Widget _interviewRow(HeadhunterInterviewItem item) {
     final confidential = item.isConfidential;
-    return GestureDetector(
+
+    return MpListRow(
+      leading: MpIconTile(
+        icon: confidential ? CupertinoIcons.lock_fill : CupertinoIcons.person_fill,
+        color: MpTokens.primary,
+        size: 46,
+        circular: true,
+      ),
+      title: confidential ? headhunterProtectedCandidateName : item.candidate.name,
+      subtitle: confidential ? 'Perfil protegido' : item.jobTitle,
+      badge: MpTypeChip(
+        label: _statusLabel(item.status),
+        color: _statusColor(item.status),
+      ),
+      trailingText: _dateLabel(
+        item.completedAt ?? item.createdAt,
+        completed: item.completedAt != null,
+      ),
+      // MpListRow sólo apaga el chevron automáticamente cuando se usa
+      // `trailing` (widget); con `trailingText` hay que apagarlo a mano o
+      // dibuja los dos y desborda — esto causó un overflow real de 11px en
+      // 393pt (visto en headhunter_polish_4_test.dart, "entrevistas
+      // normal"). El original tampoco tenía chevron acá.
+      showChevron: false,
       onTap: item.id.isEmpty
           ? null
           : () => Navigator.of(context).push(
@@ -292,114 +343,41 @@ class _HeadhunterInterviewsScreenState
                     HeadhunterInterviewFlowScreen(interviewId: item.id),
               ),
             ),
-      child: Container(
-        padding: const EdgeInsets.all(15),
-        decoration: BoxDecoration(
-          color: CupertinoColors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFFE5E9F0)),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 46,
-              height: 46,
-              decoration: const BoxDecoration(
-                color: Color(0xFFEDEAFF),
-                shape: BoxShape.circle,
+    );
+  }
+
+  Widget _empty(IconData icon, String title, String subtitle) {
+    final s = context.mp;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(MpTokens.space32),
+        child: MpCard(
+          padding: const EdgeInsets.symmetric(
+            horizontal: MpTokens.space16,
+            vertical: MpTokens.space24,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              MpIconTile(icon: icon, color: s.textTertiary, size: 40, circular: true),
+              const SizedBox(height: MpTokens.space12),
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: MpTokens.title.copyWith(color: s.text),
               ),
-              child: Icon(
-                confidential
-                    ? CupertinoIcons.lock_fill
-                    : CupertinoIcons.person_fill,
-                color: const Color(0xFF4C2CF3),
+              const SizedBox(height: MpTokens.space4),
+              Text(
+                subtitle,
+                textAlign: TextAlign.center,
+                style: MpTokens.caption.copyWith(color: s.textSecondary),
               ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    confidential
-                        ? headhunterProtectedCandidateName
-                        : item.candidate.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF172033),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    confidential ? 'Perfil protegido' : item.jobTitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      color: Color(0xFF6B778C),
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    _dateLabel(
-                      item.completedAt ?? item.createdAt,
-                      completed: item.completedAt != null,
-                    ),
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: Color(0xFF8994A7),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-              decoration: BoxDecoration(
-                color: _statusColor(item.status).withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Text(
-                _statusLabel(item.status),
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: _statusColor(item.status),
-                ),
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
-
-  Widget _empty(IconData icon, String title, String subtitle) => Center(
-    child: Padding(
-      padding: const EdgeInsets.all(32),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 42, color: const Color(0xFF8D98AA)),
-          const SizedBox(height: 14),
-          Text(
-            title,
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            subtitle,
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 14, color: Color(0xFF6B778C)),
-          ),
-        ],
-      ),
-    ),
-  );
 
   String _statusLabel(String status) => switch (status) {
     'in_progress' => 'En curso',
@@ -408,9 +386,9 @@ class _HeadhunterInterviewsScreenState
   };
 
   Color _statusColor(String status) => switch (status) {
-    'in_progress' => const Color(0xFF4C2CF3),
-    'completed' => const Color(0xFF24A66A),
-    _ => const Color(0xFFFF8A00),
+    'in_progress' => MpTokens.primary,
+    'completed' => MpTokens.success,
+    _ => MpTokens.premium,
   };
 
   String _dateLabel(DateTime date, {required bool completed}) {

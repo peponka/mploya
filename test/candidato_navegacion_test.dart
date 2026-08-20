@@ -230,17 +230,24 @@ void main() {
   });
 
   test('Vacantes de Candidato monta JobsScreen y no se monta dos veces', () {
-    // JobsScreen debe aparecer en la ranura 1 (Candidato) y en la 6
-    // (Headhunter). Dos ocurrencias: ni una —se perdió— ni tres —se duplicó
-    // para Candidato, que dispararía dos cargas de vacantes—.
+    // JobsScreen sólo debe aparecer en la ranura 1 (Candidato). La ranura 6
+    // de Headhunter ("Búsquedas") dejó de usar el JobsScreen genérico
+    // (pensado para navegar/postularse a vacantes ajenas) y monta
+    // HeadhunterBusquedasScreen — la gestión real de las propias búsquedas,
+    // reconstruida contra 10_Headhunter_Busquedas_Activas.png (19/8/2026).
+    // Una sola ocurrencia: ni cero —se perdió—, ni dos —se duplicó para
+    // Candidato, que dispararía dos cargas de vacantes—.
     final usos = RegExp(r'const JobsScreen\(\)').allMatches(fuente).length;
 
     expect(
       usos,
-      2,
-      reason:
-          'Se esperaban 2 usos de JobsScreen (ranura 1 Candidato, ranura 6 '
-          'Headhunter) y hay $usos.',
+      1,
+      reason: 'Se esperaba 1 uso de JobsScreen (ranura 1 Candidato) y hay $usos.',
+    );
+    expect(
+      fuente.contains('_headhunterBusquedas'),
+      isTrue,
+      reason: 'La ranura 6 de Headhunter debería montar HeadhunterBusquedasScreen.',
     );
   });
 

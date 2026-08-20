@@ -2,10 +2,19 @@ import 'dart:io';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mploya/screens/headhunter/headhunter_analytics_screen.dart';
+import 'package:mploya/screens/headhunter/headhunter_busqueda_detalle_screen.dart';
+import 'package:mploya/screens/headhunter/headhunter_busquedas_screen.dart';
+import 'package:mploya/screens/headhunter/headhunter_client_form_screen.dart';
+import 'package:mploya/screens/headhunter/headhunter_shortlist_feedback_screen.dart';
+import 'package:mploya/screens/headhunter/headhunter_shortlist_screen.dart';
 import 'package:mploya/screens/headhunter/headhunter_clients_screen.dart';
 import 'package:mploya/screens/headhunter/headhunter_dashboard_screen.dart';
+import 'package:mploya/screens/headhunter/headhunter_pipeline_screen.dart';
 import 'package:mploya/screens/headhunter/headhunter_talent_pool_screen.dart';
 import 'package:mploya/widgets/ds/mploya_ds.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'mp_golden_host.dart';
 
@@ -13,13 +22,13 @@ const _jobs = [
   {
     'id': 'job-1',
     'title': 'Senior Product Designer',
-    'status': 'active',
+    'search_status': 'abierta',
     'created_at': '2026-08-14T12:00:00Z',
   },
   {
     'id': 'job-2',
     'title': 'Flutter Developer',
-    'status': 'active',
+    'search_status': 'abierta',
     'created_at': '2026-08-13T12:00:00Z',
   },
 ];
@@ -68,7 +77,20 @@ Future<void> _pump(WidgetTester tester, Widget screen) async {
 }
 
 void main() {
-  setUpAll(loadMpFonts);
+  setUpAll(() async {
+    await loadMpFonts();
+    // Cliente local de mentira: HeadhunterClientsScreen llama a
+    // Supabase.instance.client al montarse (listHeadhunterClientsWithStats)
+    // — sin cliente inicializado la llamada lanzaría. Sin sesión
+    // (auth.currentUser == null), el service corta antes de tocar la red y
+    // devuelve lista vacía, así que la pantalla cae en su estado vacío real.
+    SharedPreferences.setMockInitialValues({});
+    await Supabase.initialize(
+      url: 'http://localhost:54321',
+      publishableKey: 'test-anon-key',
+      authOptions: const FlutterAuthClientOptions(autoRefreshToken: false),
+    );
+  });
 
   group('contratos Headhunter lote 3', () {
     test('la navegación usa pantallas específicas del rol', () {
@@ -106,15 +128,18 @@ void main() {
       expect(find.textContaining('Camila Rodriguez'), findsNothing);
     });
 
-    testWidgets('clientes no inventa empresas ni alta funcional', (
+    testWidgets('clientes muestra la lista real, no el pipeline', (
       tester,
     ) async {
       await _pump(tester, const HeadhunterClientsScreen());
 
-      expect(find.text('Sin clientes conectados'), findsOneWidget);
-      expect(find.textContaining('Agregar cliente'), findsNothing);
-      expect(find.text('TechPro'), findsNothing);
-      expect(find.text('NovaSoft'), findsNothing);
+      // Contrato: este slot ya no delega en HeadhunterPipelineScreen (esa
+      // era una regresión sin commitear — la pestaña "Clientes" abría una
+      // pantalla de candidatos). Sin sesión no hay clientes que traer, así
+      // que cae en el estado vacío real, no en datos inventados.
+      expect(find.byType(HeadhunterPipelineScreen), findsNothing);
+      expect(find.text('Mis clientes'), findsOneWidget);
+      expect(find.text('Sin clientes todavía'), findsOneWidget);
     });
 
     testWidgets('talent pool excluye variantes confidenciales', (tester) async {
@@ -177,11 +202,75 @@ void main() {
       );
     });
 
-    testWidgets('clientes sin backend', (tester) async {
+    testWidgets('clientes vacío', (tester) async {
       await _pump(tester, const HeadhunterClientsScreen());
       await expectLater(
         find.byType(CupertinoApp),
         matchesGoldenFile('goldens/headhunter/09_clientes_final.png'),
+      );
+    });
+
+    testWidgets('alta de cliente paso 1', (tester) async {
+      await _pump(tester, const HeadhunterClientFormScreen());
+      await expectLater(
+        find.byType(CupertinoApp),
+        matchesGoldenFile('goldens/headhunter/09b_agregar_cliente_paso1_final.png'),
+      );
+    });
+
+    testWidgets('búsquedas activas vacío', (tester) async {
+      await _pump(tester, const HeadhunterBusquedasScreen());
+      await expectLater(
+        find.byType(CupertinoApp),
+        matchesGoldenFile('goldens/headhunter/09c_busquedas_activas_final.png'),
+      );
+    });
+
+    testWidgets('detalle de búsqueda vacío', (tester) async {
+      await _pump(
+        tester,
+        HeadhunterBusquedaDetalleScreen(job: const {
+          'id': 'job-1',
+          'title': 'Senior Product Designer',
+          'client_name': 'TechPro',
+          'search_status': 'abierta',
+        }),
+      );
+      await expectLater(
+        find.byType(CupertinoApp),
+        matchesGoldenFile('goldens/headhunter/09d_detalle_busqueda_final.png'),
+      );
+    });
+
+    testWidgets('crear shortlist vacío', (tester) async {
+      await _pump(
+        tester,
+        HeadhunterShortlistScreen.crear(jobId: 'job-1', pipelineCandidates: const []),
+      );
+      await expectLater(
+        find.byType(CupertinoApp),
+        matchesGoldenFile('goldens/headhunter/09e_crear_shortlist_final.png'),
+      );
+    });
+
+    testWidgets('feedback de shortlist vacío', (tester) async {
+      await _pump(
+        tester,
+        const HeadhunterShortlistFeedbackScreen(
+          shortlistId: '00000000-0000-0000-0000-000000000000',
+        ),
+      );
+      await expectLater(
+        find.byType(CupertinoApp),
+        matchesGoldenFile('goldens/headhunter/09f_feedback_shortlist_final.png'),
+      );
+    });
+
+    testWidgets('colocaciones y analytics vacío', (tester) async {
+      await _pump(tester, const HeadhunterAnalyticsScreen());
+      await expectLater(
+        find.byType(CupertinoApp),
+        matchesGoldenFile('goldens/headhunter/09g_colocaciones_analytics_final.png'),
       );
     });
 

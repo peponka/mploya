@@ -1,12 +1,33 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart' show Colors;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../models/models.dart';
 import '../../utils/headhunter_candidate_privacy.dart';
 import '../../utils/user_columns.dart';
+import '../../widgets/ds/mploya_ds.dart';
 import '../profile_screen.dart';
 
+/// Talent Pool de Headhunter.
+///
+/// Migrada al sistema de diseño (18/8/2026), 3ª pantalla — mismo patrón de
+/// `headhunter_dashboard_screen.dart` / `headhunter_pipeline_screen.dart`.
+///
+/// SIN mockup 1:1, mismo motivo que Pipeline: `Headhunter_Talent_Pool.png`
+/// describe una base de talento propia con categorías por skill, 5 stat
+/// tiles agregados, match IA y video-thumbnails por candidato — nada de
+/// eso existe. El dato real sale de `get_explore_pins` (candidatos
+/// públicos cerca de una ubicación fija): nombre, headline, avatar,
+/// distancia. Se migró el patrón de tarjeta, no la composición del
+/// mockup:
+///
+///   · Buscador          → `CupertinoSearchTextField` sin cambios (widget
+///     nativo, sin color hardcodeado que migrar).
+///   · Tarjeta de talento → [MpListRow], leading [MpAvatar], `trailingText`
+///     con la distancia (reemplaza el chevron+distancia manual: mostrar
+///     ambos requeriría `trailing` custom, y la distancia sola ya
+///     transmite lo mismo con menos ruido).
+///   · Estado vacío       → mismo patrón compacto de Dashboard/Pipeline
+///     ([MpCard] + [MpIconTile] circular + texto).
 class HeadhunterTalentPoolScreen extends StatefulWidget {
   const HeadhunterTalentPoolScreen({super.key, this.previewRows});
 
@@ -123,34 +144,29 @@ class _HeadhunterTalentPoolScreenState
   @override
   Widget build(BuildContext context) {
     final rows = _visibleRows;
-    return CupertinoPageScaffold(
-      backgroundColor: const Color(0xFFF6F8FB),
+    return MpSurface(
+      style: MpSurfaceStyle.light,
       child: SafeArea(
         bottom: false,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Padding(
-              padding: EdgeInsets.fromLTRB(20, 18, 20, 5),
-              child: Text(
-                'Talent Pool',
-                style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.w800,
-                  color: Color(0xFF172033),
-                  letterSpacing: -0.7,
-                ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                MpTokens.screenPadding,
+                MpTokens.space20,
+                MpTokens.screenPadding,
+                MpTokens.space4,
               ),
-            ),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 20),
-              child: Text(
-                'Talento público disponible en Mploya',
-                style: TextStyle(fontSize: 14, color: Color(0xFF6B778C)),
-              ),
+              child: _header(),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 17, 20, 14),
+              padding: const EdgeInsets.fromLTRB(
+                MpTokens.screenPadding,
+                MpTokens.space16,
+                MpTokens.screenPadding,
+                MpTokens.space12,
+              ),
               child: CupertinoSearchTextField(
                 controller: _searchController,
                 placeholder: 'Buscar por nombre o especialidad',
@@ -176,11 +192,18 @@ class _HeadhunterTalentPoolScreenState
                           ? 'Los perfiles confidenciales no aparecen en este listado.'
                           : 'Probá con otra búsqueda.',
                     )
-                  : ListView.separated(
-                      padding: const EdgeInsets.fromLTRB(20, 2, 20, 112),
-                      itemCount: rows.length,
-                      separatorBuilder: (_, _) => const SizedBox(height: 11),
-                      itemBuilder: (_, index) => _talentCard(rows[index]),
+                  : ListView(
+                      padding: const EdgeInsets.fromLTRB(
+                        MpTokens.screenPadding,
+                        0,
+                        MpTokens.screenPadding,
+                        MpTokens.space32,
+                      ),
+                      children: [
+                        MpRowGroup(
+                          rows: [for (final row in rows) _talentRow(row)],
+                        ),
+                      ],
                     ),
             ),
           ],
@@ -189,126 +212,70 @@ class _HeadhunterTalentPoolScreenState
     );
   }
 
-  Widget _empty(IconData icon, String title, String body) => Center(
-    child: Padding(
-      padding: const EdgeInsets.all(34),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 48, color: const Color(0xFF9AA7B8)),
-          const SizedBox(height: 14),
-          Text(
-            title,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w800,
-              color: Color(0xFF263247),
-            ),
-          ),
-          const SizedBox(height: 7),
-          Text(
-            body,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 13.5,
-              height: 1.4,
-              color: Color(0xFF738095),
-            ),
-          ),
-        ],
-      ),
-    ),
-  );
+  Widget _header() {
+    final s = context.mp;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Talent Pool', style: MpTokens.h2.copyWith(color: s.text, fontSize: 24)),
+        const SizedBox(height: MpTokens.space4),
+        Text(
+          'Talento público disponible en Mploya',
+          style: MpTokens.body.copyWith(color: s.textSecondary),
+        ),
+      ],
+    );
+  }
 
-  Widget _talentCard(Map<String, dynamic> row) {
+  Widget _talentRow(Map<String, dynamic> row) {
     final name = (row['pin_name'] ?? row['name'] ?? 'Talento').toString();
     final headline = (row['pin_headline'] ?? row['headline'] ?? '').toString();
     final avatar = row['avatar_url']?.toString() ?? '';
     final distance = row['distance_km'] as num?;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
+
+    return MpListRow(
+      leading: MpAvatar(
+        image: avatar.isEmpty ? null : NetworkImage(avatar),
+        name: name,
+        size: 50,
+      ),
+      title: name,
+      subtitle: headline.trim().isEmpty ? null : headline,
+      trailingText: distance == null
+          ? null
+          : '${distance.toDouble().toStringAsFixed(1)} km',
       onTap: () => _openProfile(row),
-      child: Container(
-        padding: const EdgeInsets.all(15),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(17),
-          border: Border.all(color: const Color(0xFFE4E9F0)),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 50,
-              height: 50,
-              decoration: BoxDecoration(
-                color: const Color(0xFFEAF3FC),
-                shape: BoxShape.circle,
-                image: avatar.isEmpty
-                    ? null
-                    : DecorationImage(
-                        image: NetworkImage(avatar),
-                        fit: BoxFit.cover,
-                      ),
+    );
+  }
+
+  Widget _empty(IconData icon, String title, String body) {
+    final s = context.mp;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(MpTokens.space32),
+        child: MpCard(
+          padding: const EdgeInsets.symmetric(
+            horizontal: MpTokens.space16,
+            vertical: MpTokens.space24,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              MpIconTile(icon: icon, color: s.textTertiary, size: 44, circular: true),
+              const SizedBox(height: MpTokens.space12),
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: MpTokens.title.copyWith(color: s.text),
               ),
-              alignment: Alignment.center,
-              child: avatar.isEmpty
-                  ? Text(
-                      name.trim().isEmpty ? '?' : name.trim()[0].toUpperCase(),
-                      style: const TextStyle(
-                        color: Color(0xFF185FA5),
-                        fontWeight: FontWeight.w800,
-                      ),
-                    )
-                  : null,
-            ),
-            const SizedBox(width: 13),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 15.5,
-                      fontWeight: FontWeight.w800,
-                      color: Color(0xFF263247),
-                    ),
-                  ),
-                  if (headline.trim().isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      headline,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 12.5,
-                        color: Color(0xFF6D798D),
-                      ),
-                    ),
-                  ],
-                  if (distance != null) ...[
-                    const SizedBox(height: 6),
-                    Text(
-                      '${distance.toDouble().toStringAsFixed(1)} km',
-                      style: const TextStyle(
-                        fontSize: 11.5,
-                        color: Color(0xFF185FA5),
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
-                ],
+              const SizedBox(height: MpTokens.space4),
+              Text(
+                body,
+                textAlign: TextAlign.center,
+                style: MpTokens.caption.copyWith(color: s.textSecondary),
               ),
-            ),
-            const Icon(
-              CupertinoIcons.chevron_forward,
-              size: 17,
-              color: Color(0xFF9AA7B8),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

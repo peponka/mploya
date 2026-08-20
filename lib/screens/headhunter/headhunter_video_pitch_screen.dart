@@ -6,7 +6,33 @@ import '../../widgets/ds/mploya_ds.dart';
 import '../../services/my_profile_service.dart';
 import '../camera_screen.dart';
 
-@immutable
+/// Video pitch de Headhunter.
+///
+/// Migrada al sistema de diseño (18/8/2026), 8ª pantalla — mismo patrón de
+/// `headhunter_dashboard_screen.dart`. Ya tenía `MpSurface(style: light)`
+/// desde antes de este trabajo (era la única con algo de adopción), pero
+/// nada más: 0 widgets de `ds/`, todo el resto hardcodeado.
+///
+/// Además de los tokens, esta migración corrige el mismo bug de threading
+/// de contexto documentado en `headhunter_interview_report_screen.dart`
+/// (`context.mp` con el `context` implícito del State nunca encuentra el
+/// `MpSurface` local) — acá era invisible por ser `.light`, pero se
+/// corrigió igual para no repetir el patrón incorrecto en código nuevo.
+///
+/// Patrón:
+///   · Tarjeta de video → mismo `Container` con `MpTokens.heroGradient` +
+///     `MpTokens.glow` que la tarjeta de candidato de Interview Flow (no
+///     es `MpHeroBand`, esto no es una banda de métricas).
+///   · Botones sobre la tarjeta oscura → [MpButton] variant `neutral`
+///     (píldora blanca, texto oscuro — contraste correcto sobre el
+///     degradado violeta, más allá de que la pantalla en sí sea clara) y
+///     `ghost` con `color` blanco para la acción secundaria.
+///   · Tarjeta de consejos → [MpCard], checklist a mano (no hay widget de
+///     ds/ para "lista con check" fuera de [MpCard] simple).
+///
+/// STRINGS FIJOS verificados por `headhunter_polish_6_test.dart`: 'Tu
+/// video está publicado', 'Ver video', 'Todavía no cargaste un video',
+/// 'Grabar video', 'No pudimos leer tu video'.
 class HeadhunterVideoPitchData {
   const HeadhunterVideoPitchData({this.videoUrl, this.error = false});
 
@@ -125,35 +151,42 @@ class _HeadhunterVideoPitchScreenState
   Widget build(BuildContext context) {
     return MpSurface(
       style: MpSurfaceStyle.light,
-      child: CupertinoPageScaffold(
-        backgroundColor: const Color(0xFFF8F7FC),
-        navigationBar: CupertinoNavigationBar(
-          middle: const Text('Video pitch personal'),
-          previousPageTitle: 'Perfil',
-          backgroundColor: CupertinoColors.white,
-          border: null,
-          trailing: _data.hasVideo && !_loading
-              ? CupertinoButton(
-                  padding: EdgeInsets.zero,
-                  onPressed: _remove,
-                  child: _removing
-                      ? const CupertinoActivityIndicator()
-                      : const Icon(CupertinoIcons.trash, size: 20),
-                )
-              : null,
-        ),
-        child: SafeArea(
-          child: _loading
-              ? const Center(child: CupertinoActivityIndicator(radius: 15))
-              : _body(),
-        ),
+      child: Builder(
+        builder: (context) {
+          final s = context.mp;
+          return CupertinoPageScaffold(
+            backgroundColor: s.bg,
+            navigationBar: CupertinoNavigationBar(
+              middle: const Text('Video pitch personal'),
+              previousPageTitle: 'Perfil',
+              backgroundColor: s.card,
+              border: null,
+              trailing: _data.hasVideo && !_loading
+                  ? CupertinoButton(
+                      padding: EdgeInsets.zero,
+                      onPressed: _remove,
+                      child: _removing
+                          ? const CupertinoActivityIndicator()
+                          : const Icon(CupertinoIcons.trash, size: 20),
+                    )
+                  : null,
+            ),
+            child: SafeArea(
+              child: _loading
+                  ? const Center(child: CupertinoActivityIndicator(radius: 15))
+                  : _body(context),
+            ),
+          );
+        },
       ),
     );
   }
 
-  Widget _body() {
+  Widget _body(BuildContext context) {
+    final s = context.mp;
     if (_data.error) {
       return _state(
+        context,
         CupertinoIcons.exclamationmark_triangle,
         'No pudimos leer tu video',
         'Revisá tu conexión y volvé a intentar.',
@@ -162,43 +195,31 @@ class _HeadhunterVideoPitchScreenState
       );
     }
     return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 22, 20, 32),
+      padding: const EdgeInsets.fromLTRB(
+        MpTokens.screenPadding,
+        MpTokens.space20,
+        MpTokens.screenPadding,
+        MpTokens.space32,
+      ),
       children: [
-        const Text(
+        Text(
           'Tu carta de presentación',
-          style: TextStyle(
-            fontSize: 30,
-            fontWeight: FontWeight.w800,
-            color: Color(0xFF15163D),
-            letterSpacing: -0.8,
-          ),
+          style: MpTokens.h1.copyWith(color: s.text, fontSize: 28),
         ),
-        const SizedBox(height: 8),
-        const Text(
+        const SizedBox(height: MpTokens.space8),
+        Text(
           'Contá quién sos, qué talento buscás y qué valor aportás a tus clientes.',
-          style: TextStyle(
-            fontSize: 15,
-            height: 1.45,
-            color: Color(0xFF69708F),
-          ),
+          style: MpTokens.body.copyWith(color: s.textSecondary, height: 1.45),
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: MpTokens.space20),
         _videoCard(),
         if (_message != null) ...[
-          const SizedBox(height: 12),
-          Text(
-            _message!,
-            style: const TextStyle(color: CupertinoColors.systemRed),
-          ),
+          const SizedBox(height: MpTokens.space12),
+          Text(_message!, style: const TextStyle(color: MpTokens.danger)),
         ],
-        const SizedBox(height: 18),
-        Container(
-          padding: const EdgeInsets.all(18),
-          decoration: BoxDecoration(
-            color: CupertinoColors.white,
-            borderRadius: BorderRadius.circular(22),
-            border: Border.all(color: const Color(0xFFE4E0F2)),
-          ),
+        const SizedBox(height: MpTokens.space16),
+        MpCard(
+          radius: MpTokens.radiusXXL,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -207,24 +228,27 @@ class _HeadhunterVideoPitchScreenState
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
-                  color: Color(0xFF4C2CF3),
+                  color: MpTokens.primary,
                 ),
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: MpTokens.space12),
               for (final tip in _tips)
                 Padding(
-                  padding: const EdgeInsets.only(bottom: 11),
+                  padding: const EdgeInsets.only(bottom: MpTokens.space12),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Icon(
                         CupertinoIcons.checkmark_circle_fill,
                         size: 17,
-                        color: Color(0xFF6C4DFF),
+                        color: MpTokens.primaryLight,
                       ),
-                      const SizedBox(width: 9),
+                      const SizedBox(width: MpTokens.space8),
                       Expanded(
-                        child: Text(tip, style: const TextStyle(height: 1.35)),
+                        child: Text(
+                          tip,
+                          style: TextStyle(color: s.text, height: 1.35),
+                        ),
                       ),
                     ],
                   ),
@@ -239,35 +263,30 @@ class _HeadhunterVideoPitchScreenState
   Widget _videoCard() {
     final hasVideo = _data.hasVideo;
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(MpTokens.space20),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF17112E), Color(0xFF34256E)],
-        ),
-        borderRadius: BorderRadius.circular(24),
+        gradient: MpTokens.heroGradient,
+        borderRadius: BorderRadius.circular(MpTokens.radiusXXL),
+        boxShadow: MpTokens.glow(MpTokens.primary),
       ),
       child: Column(
         children: [
           Icon(
-            hasVideo
-                ? CupertinoIcons.play_circle_fill
-                : CupertinoIcons.videocam,
+            hasVideo ? CupertinoIcons.play_circle_fill : CupertinoIcons.videocam,
             size: 58,
-            color: CupertinoColors.white,
+            color: const Color(0xFFFFFFFF),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: MpTokens.space12),
           Text(
-            hasVideo
-                ? 'Tu video está publicado'
-                : 'Todavía no cargaste un video',
+            hasVideo ? 'Tu video está publicado' : 'Todavía no cargaste un video',
             textAlign: TextAlign.center,
             style: const TextStyle(
-              color: CupertinoColors.white,
+              color: Color(0xFFFFFFFF),
               fontSize: 18,
               fontWeight: FontWeight.w700,
             ),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: MpTokens.space8),
           Text(
             hasVideo
                 ? 'Se muestra en tu perfil profesional.'
@@ -275,26 +294,25 @@ class _HeadhunterVideoPitchScreenState
             textAlign: TextAlign.center,
             style: const TextStyle(color: Color(0xFFCDC6E8), height: 1.35),
           ),
-          const SizedBox(height: 16),
-          CupertinoButton.filled(
+          const SizedBox(height: MpTokens.space16),
+          MpButton(
+            label: hasVideo ? 'Ver video' : 'Grabar video',
+            variant: MpButtonVariant.neutral,
             onPressed: hasVideo
                 ? () => Navigator.of(context).push(
                     CupertinoPageRoute(
-                      builder: (_) =>
-                          _VideoPlayerPage(videoUrl: _data.videoUrl!),
+                      builder: (_) => _VideoPlayerPage(videoUrl: _data.videoUrl!),
                     ),
                   )
                 : _record,
-            child: Text(hasVideo ? 'Ver video' : 'Grabar video'),
           ),
           if (hasVideo) ...[
-            const SizedBox(height: 4),
-            CupertinoButton(
+            const SizedBox(height: MpTokens.space4),
+            MpButton(
+              label: 'Grabar uno nuevo',
+              variant: MpButtonVariant.ghost,
+              color: const Color(0xFFFFFFFF),
               onPressed: _record,
-              child: const Text(
-                'Grabar uno nuevo',
-                style: TextStyle(color: CupertinoColors.white),
-              ),
             ),
           ],
         ],
@@ -303,27 +321,29 @@ class _HeadhunterVideoPitchScreenState
   }
 
   Widget _state(
+    BuildContext context,
     IconData icon,
     String title,
     String message, {
     String? action,
     VoidCallback? onAction,
   }) {
+    final s = context.mp;
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(32),
+        padding: const EdgeInsets.all(MpTokens.space32),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 48, color: const Color(0xFF6C4DFF)),
-            const SizedBox(height: 14),
+            Icon(icon, size: 48, color: MpTokens.primaryLight),
+            const SizedBox(height: MpTokens.space16),
             Text(
               title,
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+              style: TextStyle(color: s.text, fontSize: 20, fontWeight: FontWeight.w700),
             ),
-            const SizedBox(height: 7),
-            Text(message, textAlign: TextAlign.center),
+            const SizedBox(height: MpTokens.space8),
+            Text(message, textAlign: TextAlign.center, style: TextStyle(color: s.textSecondary)),
             if (action != null)
               CupertinoButton(onPressed: onAction, child: Text(action)),
           ],

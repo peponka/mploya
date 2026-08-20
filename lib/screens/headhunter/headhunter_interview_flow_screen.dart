@@ -1,8 +1,38 @@
 import 'package:flutter/cupertino.dart';
 
+import '../../widgets/ds/mploya_ds.dart';
 import 'headhunter_interview_data.dart';
 import 'headhunter_interview_report_screen.dart';
 
+/// Detalle de entrevista de Headhunter.
+///
+/// Migrada al sistema de diseño (18/8/2026), 5ª pantalla — 2ª de la familia
+/// de entrevistas (después de `headhunter_interviews_screen.dart`).
+///
+/// SIN mockup 1:1 (mismo motivo que el resto de Headhunter). Patrón:
+///
+///   · Tarjeta de candidato → `Container` con `MpTokens.heroGradient` +
+///     `MpTokens.glow` (la misma receta que usa [MpHeroBand] por dentro,
+///     pero acá el contenido es un perfil, no métricas, así que no encaja
+///     en ese widget). Leading [MpAvatar] — confidencial pasa `name: null`
+///     a propósito (fallback "?", nunca una inicial real), igual que
+///     Pipeline/Talent Pool.
+///   · Tarjeta de estado / contador → [MpCard] a mano (el layout —
+///     ícono+label a la izquierda arriba, valor grande abajo— no es
+///     exactamente [MpStatTile], que lleva el ícono en un [MpIconTile]
+///     separado del valor; acá se mantuvo el layout original dentro de un
+///     [MpCard] tokenizado).
+///   · Contadores (Preguntas/Respuestas) → [MpStatTile], igual que
+///     Dashboard/Entrevistas.
+///   · CTA → [MpButton] (`variant: primary, expand: true`) en vez de
+///     `CupertinoButton.filled` (que hereda el azul de `CupertinoTheme`,
+///     no el violeta del sistema).
+///
+/// STRINGS FIJOS QUE LOS TESTS VERIFICAN LITERAL (no tocar en la 3ª
+/// pantalla de la familia): 'Completada', 'Preguntas', 'Respuestas',
+/// 'Ver informe de entrevista', 'Identidad protegida', 'ubicación' (dentro
+/// de la tarjeta de privacidad), 'Entrevista no disponible', 'No pudimos
+/// cargar la entrevista'.
 class HeadhunterInterviewFlowScreen extends StatefulWidget {
   const HeadhunterInterviewFlowScreen({
     super.key,
@@ -50,24 +80,27 @@ class _HeadhunterInterviewFlowScreenState
 
   @override
   Widget build(BuildContext context) {
-    return CupertinoPageScaffold(
-      backgroundColor: const Color(0xFFF6F8FB),
-      navigationBar: const CupertinoNavigationBar(
-        middle: Text('Detalle de entrevista'),
-        previousPageTitle: 'Entrevistas',
-        backgroundColor: CupertinoColors.white,
-        border: null,
-      ),
-      child: SafeArea(
-        child: _loading
-            ? const Center(child: CupertinoActivityIndicator(radius: 15))
-            : _body(),
+    return MpSurface(
+      style: MpSurfaceStyle.light,
+      child: CupertinoPageScaffold(
+        backgroundColor: const Color(0x00000000),
+        navigationBar: const CupertinoNavigationBar(
+          middle: Text('Detalle de entrevista'),
+          previousPageTitle: 'Entrevistas',
+          border: null,
+        ),
+        child: SafeArea(
+          child: _loading
+              ? const Center(child: CupertinoActivityIndicator(radius: 15))
+              : _body(),
+        ),
       ),
     );
   }
 
   Widget _body() {
     final data = _data!;
+    final s = context.mp;
     if (data.error) {
       return _state(
         CupertinoIcons.exclamationmark_triangle,
@@ -85,34 +118,41 @@ class _HeadhunterInterviewFlowScreenState
       );
     }
     return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 22, 20, 32),
+      padding: const EdgeInsets.fromLTRB(
+        MpTokens.screenPadding,
+        MpTokens.space20,
+        MpTokens.screenPadding,
+        MpTokens.space32,
+      ),
       children: [
         _candidateCard(data),
-        const SizedBox(height: 16),
+        const SizedBox(height: MpTokens.space16),
         _statusCard(data),
-        const SizedBox(height: 16),
+        const SizedBox(height: MpTokens.space16),
         _counts(data),
         if (data.isConfidential) ...[
-          const SizedBox(height: 16),
+          const SizedBox(height: MpTokens.space16),
           _privacyCard(),
         ],
         if (data.hasReport) ...[
-          const SizedBox(height: 22),
-          CupertinoButton.filled(
+          const SizedBox(height: MpTokens.space20),
+          MpButton(
+            label: 'Ver informe de entrevista',
+            variant: MpButtonVariant.primary,
+            expand: true,
             onPressed: () => Navigator.of(context).push(
               CupertinoPageRoute(
                 builder: (_) =>
                     HeadhunterInterviewReportScreen(interviewId: data.id),
               ),
             ),
-            child: const Text('Ver informe de entrevista'),
           ),
         ] else ...[
-          const SizedBox(height: 22),
-          const Text(
+          const SizedBox(height: MpTokens.space20),
+          Text(
             'El informe aparecerá cuando exista un registro real para esta entrevista.',
             textAlign: TextAlign.center,
-            style: TextStyle(color: Color(0xFF6B778C), height: 1.4),
+            style: MpTokens.caption.copyWith(color: s.textSecondary, height: 1.4),
           ),
         ],
       ],
@@ -121,38 +161,23 @@ class _HeadhunterInterviewFlowScreenState
 
   Widget _candidateCard(HeadhunterInterviewData data) {
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(MpTokens.space16),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF17112E), Color(0xFF34256E)],
-        ),
-        borderRadius: BorderRadius.circular(22),
+        gradient: MpTokens.heroGradient,
+        borderRadius: BorderRadius.circular(MpTokens.radiusXL),
+        boxShadow: MpTokens.glow(MpTokens.primary),
       ),
       child: Row(
         children: [
-          Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(
-              color: const Color(0xFF5C43CC),
-              shape: BoxShape.circle,
-              image: !data.isConfidential && data.avatarUrl?.isNotEmpty == true
-                  ? DecorationImage(
-                      image: NetworkImage(data.avatarUrl!),
-                      fit: BoxFit.cover,
-                    )
-                  : null,
-            ),
-            child: data.isConfidential || data.avatarUrl?.isEmpty != false
-                ? Icon(
-                    data.isConfidential
-                        ? CupertinoIcons.lock_fill
-                        : CupertinoIcons.person_fill,
-                    color: CupertinoColors.white,
-                  )
+          MpAvatar(
+            image: !data.isConfidential && data.avatarUrl?.isNotEmpty == true
+                ? NetworkImage(data.avatarUrl!)
                 : null,
+            // Nunca la inicial de un nombre real para un confidencial.
+            name: data.isConfidential ? null : data.candidateName,
+            size: 56,
           ),
-          const SizedBox(width: 13),
+          const SizedBox(width: MpTokens.space12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -160,12 +185,12 @@ class _HeadhunterInterviewFlowScreenState
                 Text(
                   data.candidateName,
                   style: const TextStyle(
-                    color: CupertinoColors.white,
+                    color: Color(0xFFFFFFFF),
                     fontSize: 19,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: MpTokens.space4),
                 Text(
                   data.isConfidential
                       ? 'Identidad protegida'
@@ -177,10 +202,7 @@ class _HeadhunterInterviewFlowScreenState
                 const SizedBox(height: 5),
                 Text(
                   data.jobTitle,
-                  style: const TextStyle(
-                    color: Color(0xFFAFA3D4),
-                    fontSize: 13,
-                  ),
+                  style: const TextStyle(color: Color(0xFFAFA3D4), fontSize: 13),
                 ),
               ],
             ),
@@ -191,43 +213,37 @@ class _HeadhunterInterviewFlowScreenState
   }
 
   Widget _statusCard(HeadhunterInterviewData data) {
+    final s = context.mp;
     final label = switch (data.status) {
       'completed' => 'Completada',
       'in_progress' => 'En curso',
       _ => 'Pendiente',
     };
     final color = switch (data.status) {
-      'completed' => const Color(0xFF199A5B),
-      'in_progress' => const Color(0xFF4C2CF3),
-      _ => const Color(0xFFE18A20),
+      'completed' => MpTokens.success,
+      'in_progress' => MpTokens.primary,
+      _ => MpTokens.premium,
     };
-    return _card(
-      Column(
+    return MpCard(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Estado',
-            style: TextStyle(fontSize: 13, color: Color(0xFF6B778C)),
-          ),
-          const SizedBox(height: 8),
+          Text('Estado', style: MpTokens.caption.copyWith(color: s.textSecondary)),
+          const SizedBox(height: MpTokens.space8),
           Row(
             children: [
               Icon(CupertinoIcons.checkmark_seal_fill, color: color, size: 20),
-              const SizedBox(width: 8),
+              const SizedBox(width: MpTokens.space8),
               Text(
                 label,
-                style: TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w700,
-                  color: color,
-                ),
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: color),
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: MpTokens.space12),
           Text(
             'Creada ${_date(data.createdAt)}${data.completedAt == null ? '' : ' · Finalizada ${_date(data.completedAt!)}'}',
-            style: const TextStyle(fontSize: 13, color: Color(0xFF6B778C)),
+            style: MpTokens.caption.copyWith(color: s.textSecondary),
           ),
         ],
       ),
@@ -235,69 +251,52 @@ class _HeadhunterInterviewFlowScreenState
   }
 
   Widget _counts(HeadhunterInterviewData data) {
-    return Row(
-      children: [
-        Expanded(
-          child: _metric(
-            'Preguntas',
-            data.questionCount,
-            CupertinoIcons.question_circle,
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            child: MpStatTile(
+              icon: CupertinoIcons.question_circle,
+              color: MpTokens.primary,
+              value: '${data.questionCount}',
+              label: 'Preguntas',
+              compact: true,
+            ),
           ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _metric(
-            'Respuestas',
-            data.answerCount,
-            CupertinoIcons.videocam,
+          const SizedBox(width: MpTokens.space12),
+          Expanded(
+            child: MpStatTile(
+              icon: CupertinoIcons.videocam,
+              color: MpTokens.primary,
+              value: '${data.answerCount}',
+              label: 'Respuestas',
+              compact: true,
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
-  Widget _metric(String label, int value, IconData icon) => _card(
-    Column(
-      children: [
-        Icon(icon, color: const Color(0xFF4C2CF3)),
-        const SizedBox(height: 8),
-        Text(
-          '$value',
-          style: const TextStyle(fontSize: 25, fontWeight: FontWeight.w800),
-        ),
-        Text(
-          label,
-          style: const TextStyle(fontSize: 12, color: Color(0xFF6B778C)),
-        ),
-      ],
-    ),
-  );
-
-  Widget _privacyCard() => _card(
-    const Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(CupertinoIcons.shield_fill, color: Color(0xFF4C2CF3)),
-        SizedBox(width: 11),
-        Expanded(
-          child: Text(
-            'La identidad, imagen, ubicación, contacto y video de este talento están protegidos.',
-            style: TextStyle(height: 1.4, color: Color(0xFF3F4960)),
+  Widget _privacyCard() {
+    final s = context.mp;
+    return MpCard(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(CupertinoIcons.shield_fill, color: MpTokens.primary),
+          const SizedBox(width: MpTokens.space12),
+          Expanded(
+            child: Text(
+              'La identidad, imagen, ubicación, contacto y video de este talento están protegidos.',
+              style: MpTokens.body.copyWith(color: s.text, height: 1.4),
+            ),
           ),
-        ),
-      ],
-    ),
-  );
-
-  Widget _card(Widget child) => Container(
-    padding: const EdgeInsets.all(17),
-    decoration: BoxDecoration(
-      color: CupertinoColors.white,
-      borderRadius: BorderRadius.circular(18),
-      border: Border.all(color: const Color(0xFFE5E9F0)),
-    ),
-    child: child,
-  );
+        ],
+      ),
+    );
+  }
 
   Widget _state(
     IconData icon,
@@ -305,27 +304,34 @@ class _HeadhunterInterviewFlowScreenState
     String message, {
     String? action,
     VoidCallback? onAction,
-  }) => Center(
-    child: Padding(
-      padding: const EdgeInsets.all(32),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 46, color: const Color(0xFF6B778C)),
-          const SizedBox(height: 14),
-          Text(
-            title,
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 7),
-          Text(message, textAlign: TextAlign.center),
-          if (action != null)
-            CupertinoButton(onPressed: onAction, child: Text(action)),
-        ],
+  }) {
+    final s = context.mp;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(MpTokens.space32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 46, color: s.textSecondary),
+            const SizedBox(height: MpTokens.space16),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: MpTokens.h2.copyWith(color: s.text, fontSize: 20),
+            ),
+            const SizedBox(height: MpTokens.space8),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: MpTokens.body.copyWith(color: s.textSecondary),
+            ),
+            if (action != null)
+              CupertinoButton(onPressed: onAction, child: Text(action)),
+          ],
+        ),
       ),
-    ),
-  );
+    );
+  }
 
   String _date(DateTime value) =>
       '${value.day.toString().padLeft(2, '0')}/${value.month.toString().padLeft(2, '0')}/${value.year}';
