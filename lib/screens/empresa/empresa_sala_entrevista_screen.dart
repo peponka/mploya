@@ -183,66 +183,68 @@ class _EmpresaSalaEntrevistaScreenState
   Widget build(BuildContext context) {
     return MpSurface(
       style: MpSurfaceStyle.dark,
-      child: CupertinoPageScaffold(
-        backgroundColor: MpTokens.darkBg,
-        child: SafeArea(
-          bottom: false,
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  MpTokens.screenPadding,
-                  MpTokens.space8,
-                  MpTokens.screenPadding,
-                  0,
+      child: Builder(
+        builder: (context) => CupertinoPageScaffold(
+          backgroundColor: MpTokens.darkBg,
+          child: SafeArea(
+            bottom: false,
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    MpTokens.screenPadding,
+                    MpTokens.space8,
+                    MpTokens.screenPadding,
+                    0,
+                  ),
+                  child: MpHeader(
+                    title: 'Sala de entrevista',
+                    onBack: () => Navigator.of(context).maybePop(),
+                  ),
                 ),
-                child: MpHeader(
-                  title: 'Sala de entrevista',
-                  onBack: () => Navigator.of(context).maybePop(),
-                ),
-              ),
-              Expanded(
-                child: CustomScrollView(
-                  slivers: [
-                    SliverPadding(
-                      padding: const EdgeInsets.fromLTRB(
-                        MpTokens.screenPadding,
-                        MpTokens.space16,
-                        MpTokens.screenPadding,
-                        MpTokens.space24,
+                Expanded(
+                  child: CustomScrollView(
+                    slivers: [
+                      SliverPadding(
+                        padding: const EdgeInsets.fromLTRB(
+                          MpTokens.screenPadding,
+                          MpTokens.space16,
+                          MpTokens.screenPadding,
+                          MpTokens.space24,
+                        ),
+                        sliver: SliverList(
+                          delegate: SliverChildListDelegate(_cuerpo(context)),
+                        ),
                       ),
-                      sliver: SliverList(
-                        delegate: SliverChildListDelegate(_cuerpo()),
-                      ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-              _barraAcciones(),
-            ],
+                _barraAcciones(context),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  List<Widget> _cuerpo() {
+  List<Widget> _cuerpo(BuildContext context) {
     return [
-      _fichaCandidato(),
+      _fichaCandidato(context),
       const SizedBox(height: MpTokens.space16),
-      _cuandoYEstado(),
+      _cuandoYEstado(context),
       if (_aviso != null) ...[
         const SizedBox(height: MpTokens.space16),
         _bannerAviso(),
       ],
       const SizedBox(height: MpTokens.space16),
-      _sala(),
+      _sala(context),
       const SizedBox(height: MpTokens.space24),
-      _antesDeEmpezar(),
+      _antesDeEmpezar(context),
     ];
   }
 
-  Widget _fichaCandidato() {
+  Widget _fichaCandidato(BuildContext context) {
     final s = context.mp;
 
     return MpCard(
@@ -300,7 +302,7 @@ class _EmpresaSalaEntrevistaScreenState
     );
   }
 
-  Widget _cuandoYEstado() {
+  Widget _cuandoYEstado(BuildContext context) {
     final s = context.mp;
     final minutos = _minutosPara;
 
@@ -375,7 +377,7 @@ class _EmpresaSalaEntrevistaScreenState
     );
   }
 
-  Widget _sala() {
+  Widget _sala(BuildContext context) {
     final s = context.mp;
 
     if (!_esAgenda) {
@@ -492,7 +494,7 @@ class _EmpresaSalaEntrevistaScreenState
 
   /// Lo único que se puede afirmar antes de una entrevista: qué hay disponible
   /// del candidato. Nada de puntajes ni predicciones.
-  Widget _antesDeEmpezar() {
+  Widget _antesDeEmpezar(BuildContext context) {
     final s = context.mp;
 
     return MpCard(
@@ -552,7 +554,7 @@ class _EmpresaSalaEntrevistaScreenState
     );
   }
 
-  Widget _barraAcciones() {
+  Widget _barraAcciones(BuildContext context) {
     final s = context.mp;
     final puedeEntrar = _esAgenda && !_e.cancelada;
 

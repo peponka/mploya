@@ -143,50 +143,52 @@ class EmpresaCompararScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return MpSurface(
       style: MpSurfaceStyle.dark,
-      child: CupertinoPageScaffold(
-        backgroundColor: MpTokens.darkBg,
-        child: SafeArea(
-          bottom: false,
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  MpTokens.screenPadding,
-                  MpTokens.space8,
-                  MpTokens.screenPadding,
-                  0,
+      child: Builder(
+        builder: (context) => CupertinoPageScaffold(
+          backgroundColor: MpTokens.darkBg,
+          child: SafeArea(
+            bottom: false,
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    MpTokens.screenPadding,
+                    MpTokens.space8,
+                    MpTokens.screenPadding,
+                    0,
+                  ),
+                  child: MpHeader(
+                    title: 'Comparar Candidatos',
+                    subtitle: [
+                      vacante.titulo,
+                      if (vacante.modalidad != null) vacante.modalidad!,
+                    ].join('  ·  '),
+                    onBack: () => Navigator.of(context).maybePop(),
+                  ),
                 ),
-                child: MpHeader(
-                  title: 'Comparar Candidatos',
-                  subtitle: [
-                    vacante.titulo,
-                    if (vacante.modalidad != null) vacante.modalidad!,
-                  ].join('  ·  '),
-                  onBack: () => Navigator.of(context).maybePop(),
+                Expanded(
+                  child: candidatos.length < 2
+                      ? _vacio()
+                      : CustomScrollView(
+                          slivers: [
+                            SliverPadding(
+                              padding: const EdgeInsets.fromLTRB(
+                                MpTokens.screenPadding,
+                                MpTokens.space12,
+                                MpTokens.screenPadding,
+                                MpTokens.space24,
+                              ),
+                              sliver: SliverList(
+                                delegate:
+                                    SliverChildListDelegate(_cuerpo(context)),
+                              ),
+                            ),
+                          ],
+                        ),
                 ),
-              ),
-              Expanded(
-                child: candidatos.length < 2
-                    ? _vacio()
-                    : CustomScrollView(
-                        slivers: [
-                          SliverPadding(
-                            padding: const EdgeInsets.fromLTRB(
-                              MpTokens.screenPadding,
-                              MpTokens.space12,
-                              MpTokens.screenPadding,
-                              MpTokens.space24,
-                            ),
-                            sliver: SliverList(
-                              delegate:
-                                  SliverChildListDelegate(_cuerpo(context)),
-                            ),
-                          ),
-                        ],
-                      ),
-              ),
-              if (candidatos.length >= 2) _barraAcciones(context),
-            ],
+                if (candidatos.length >= 2) _barraAcciones(context),
+              ],
+            ),
           ),
         ),
       ),

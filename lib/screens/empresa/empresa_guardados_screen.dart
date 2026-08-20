@@ -156,52 +156,54 @@ class _EmpresaGuardadosScreenState extends State<EmpresaGuardadosScreen> {
   Widget build(BuildContext context) {
     return MpSurface(
       style: MpSurfaceStyle.dark,
-      child: CupertinoPageScaffold(
-        backgroundColor: MpTokens.darkBg,
-        child: SafeArea(
-          bottom: false,
-          child: _loading
-              ? const Center(child: CupertinoActivityIndicator(radius: 15))
-              : CustomScrollView(
-                  slivers: [
-                    CupertinoSliverRefreshControl(onRefresh: _load),
-                    SliverPadding(
-                      padding: const EdgeInsets.fromLTRB(
-                        MpTokens.screenPadding,
-                        MpTokens.space8,
-                        MpTokens.screenPadding,
-                        MpTokens.space32,
+      child: Builder(
+        builder: (context) => CupertinoPageScaffold(
+          backgroundColor: MpTokens.darkBg,
+          child: SafeArea(
+            bottom: false,
+            child: _loading
+                ? const Center(child: CupertinoActivityIndicator(radius: 15))
+                : CustomScrollView(
+                    slivers: [
+                      CupertinoSliverRefreshControl(onRefresh: _load),
+                      SliverPadding(
+                        padding: const EdgeInsets.fromLTRB(
+                          MpTokens.screenPadding,
+                          MpTokens.space8,
+                          MpTokens.screenPadding,
+                          MpTokens.space32,
+                        ),
+                        sliver: SliverList(
+                          delegate: SliverChildListDelegate(_cuerpo(context)),
+                        ),
                       ),
-                      sliver: SliverList(
-                        delegate: SliverChildListDelegate(_cuerpo()),
-                      ),
-                    ),
-                  ],
-                ),
+                    ],
+                  ),
+          ),
         ),
       ),
     );
   }
 
-  List<Widget> _cuerpo() {
-    if (_data.total == 0) return [_encabezado(), _vacio()];
+  List<Widget> _cuerpo(BuildContext context) {
+    if (_data.total == 0) return [_encabezado(context), _vacio()];
 
     return [
-      _encabezado(),
+      _encabezado(context),
       const SizedBox(height: MpTokens.space20),
-      _metricas(),
+      _metricas(context),
       const SizedBox(height: MpTokens.space16),
       _buscadorWidget(),
       if (_data.agrupacionesPorTag.isNotEmpty) ...[
         const SizedBox(height: MpTokens.space16),
-        _agrupaciones(),
+        _agrupaciones(context),
       ],
       const SizedBox(height: MpTokens.space20),
-      ..._listado(),
+      ..._listado(context),
     ];
   }
 
-  Widget _encabezado() {
+  Widget _encabezado(BuildContext context) {
     final s = context.mp;
 
     return Row(
@@ -270,7 +272,7 @@ class _EmpresaGuardadosScreenState extends State<EmpresaGuardadosScreen> {
 
   // ── Métricas ───────────────────────────────────────────────────────────────
 
-  Widget _metricas() {
+  Widget _metricas(BuildContext context) {
     final s = context.mp;
 
     final items = <({String valor, String etiqueta})>[
@@ -338,7 +340,7 @@ class _EmpresaGuardadosScreenState extends State<EmpresaGuardadosScreen> {
 
   // ── Agrupaciones por etiqueta ──────────────────────────────────────────────
 
-  Widget _agrupaciones() {
+  Widget _agrupaciones(BuildContext context) {
     final s = context.mp;
     final grupos = _data.agrupacionesPorTag.take(8).toList();
 
@@ -419,7 +421,7 @@ class _EmpresaGuardadosScreenState extends State<EmpresaGuardadosScreen> {
 
   // ── Listado ────────────────────────────────────────────────────────────────
 
-  List<Widget> _listado() {
+  List<Widget> _listado(BuildContext context) {
     final s = context.mp;
     final visibles = _visibles;
 
@@ -445,13 +447,13 @@ class _EmpresaGuardadosScreenState extends State<EmpresaGuardadosScreen> {
       ),
       const SizedBox(height: MpTokens.space12),
       for (final c in visibles) ...[
-        _tarjeta(c),
+        _tarjeta(context, c),
         const SizedBox(height: MpTokens.space8),
       ],
     ];
   }
 
-  Widget _tarjeta(CandidatoGuardado c) {
+  Widget _tarjeta(BuildContext context, CandidatoGuardado c) {
     final s = context.mp;
 
     return MpCard(

@@ -113,86 +113,88 @@ class _EmpresaInformeEntrevistaScreenState
   Widget build(BuildContext context) {
     return MpSurface(
       style: MpSurfaceStyle.dark,
-      child: CupertinoPageScaffold(
-        backgroundColor: MpTokens.darkBg,
-        child: SafeArea(
-          bottom: false,
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  MpTokens.screenPadding,
-                  MpTokens.space8,
-                  MpTokens.screenPadding,
-                  0,
-                ),
-                child: MpHeader(
-                  title: 'Resumen IA',
-                  subtitle: 'Generado por Mploya IA',
-                  onBack: () => Navigator.of(context).maybePop(),
-                  actions: [
-                    MpIconButton(
-                      icon: CupertinoIcons.refresh,
-                      onPressed: _load,
-                    ),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: _loading
-                    ? const Center(child: CupertinoActivityIndicator(radius: 15))
-                    : CustomScrollView(
-                        slivers: [
-                          CupertinoSliverRefreshControl(onRefresh: _load),
-                          SliverPadding(
-                            padding: const EdgeInsets.fromLTRB(
-                              MpTokens.screenPadding,
-                              MpTokens.space16,
-                              MpTokens.screenPadding,
-                              MpTokens.space32,
-                            ),
-                            sliver: SliverList(
-                              delegate: SliverChildListDelegate(_cuerpo()),
-                            ),
-                          ),
-                        ],
+      child: Builder(
+        builder: (context) => CupertinoPageScaffold(
+          backgroundColor: MpTokens.darkBg,
+          child: SafeArea(
+            bottom: false,
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    MpTokens.screenPadding,
+                    MpTokens.space8,
+                    MpTokens.screenPadding,
+                    0,
+                  ),
+                  child: MpHeader(
+                    title: 'Resumen IA',
+                    subtitle: 'Generado por Mploya IA',
+                    onBack: () => Navigator.of(context).maybePop(),
+                    actions: [
+                      MpIconButton(
+                        icon: CupertinoIcons.refresh,
+                        onPressed: _load,
                       ),
-              ),
-            ],
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: _loading
+                      ? const Center(child: CupertinoActivityIndicator(radius: 15))
+                      : CustomScrollView(
+                          slivers: [
+                            CupertinoSliverRefreshControl(onRefresh: _load),
+                            SliverPadding(
+                              padding: const EdgeInsets.fromLTRB(
+                                MpTokens.screenPadding,
+                                MpTokens.space16,
+                                MpTokens.screenPadding,
+                                MpTokens.space32,
+                              ),
+                              sliver: SliverList(
+                                delegate: SliverChildListDelegate(_cuerpo(context)),
+                              ),
+                            ),
+                          ],
+                        ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  List<Widget> _cuerpo() {
+  List<Widget> _cuerpo(BuildContext context) {
     final informe = _data.informe;
     if (informe == null) return [_sinInforme()];
 
     return [
-      _fichaCandidato(informe),
+      _fichaCandidato(context, informe),
       const SizedBox(height: MpTokens.space16),
       if (informe.competencias.isNotEmpty) ...[
-        _evaluacion(informe),
+        _evaluacion(context, informe),
         const SizedBox(height: MpTokens.space20),
       ],
       if (informe.tieneVeredicto) ...[
-        _veredicto(informe),
+        _veredicto(context, informe),
         const SizedBox(height: MpTokens.space20),
       ],
       if (informe.tieneResumen) ...[
-        _resumen(informe),
+        _resumen(context, informe),
         const SizedBox(height: MpTokens.space20),
       ],
       if (informe.habilidades.isNotEmpty) ...[
-        _habilidades(informe),
+        _habilidades(context, informe),
         const SizedBox(height: MpTokens.space20),
       ],
       if (informe.respuestas.isNotEmpty) ...[
-        _respuestas(informe),
+        _respuestas(context, informe),
         const SizedBox(height: MpTokens.space20),
       ],
-      _comoSeGenero(),
+      _comoSeGenero(context),
     ];
   }
 
@@ -233,7 +235,7 @@ class _EmpresaInformeEntrevistaScreenState
 
   // ── Ficha ──────────────────────────────────────────────────────────────────
 
-  Widget _fichaCandidato(InformeEntrevista i) {
+  Widget _fichaCandidato(BuildContext context, InformeEntrevista i) {
     final s = context.mp;
     final puntaje = i.puntaje;
 
@@ -331,7 +333,7 @@ class _EmpresaInformeEntrevistaScreenState
 
   // ── Evaluación general ─────────────────────────────────────────────────────
 
-  Widget _evaluacion(InformeEntrevista i) {
+  Widget _evaluacion(BuildContext context, InformeEntrevista i) {
     final s = context.mp;
     final promedio = i.promedioCompetencias;
 
@@ -364,7 +366,7 @@ class _EmpresaInformeEntrevistaScreenState
                   Container(height: 1, color: s.border),
                   const SizedBox(height: MpTokens.space16),
                 ],
-                _competencia(i.competencias[n]),
+                _competencia(context, i.competencias[n]),
               ],
             ],
           ),
@@ -373,7 +375,7 @@ class _EmpresaInformeEntrevistaScreenState
     );
   }
 
-  Widget _competencia(CompetenciaEvaluada c) {
+  Widget _competencia(BuildContext context, CompetenciaEvaluada c) {
     final s = context.mp;
     final p = c.puntaje;
 
@@ -430,7 +432,7 @@ class _EmpresaInformeEntrevistaScreenState
 
   /// El "por qué" del puntaje, tal como lo escribió la IA (`rationale`). No se
   /// reescribe ni se resume: se muestra literal.
-  Widget _veredicto(InformeEntrevista i) {
+  Widget _veredicto(BuildContext context, InformeEntrevista i) {
     final s = context.mp;
 
     return MpAiCard(
@@ -445,7 +447,7 @@ class _EmpresaInformeEntrevistaScreenState
 
   // ── Resumen ────────────────────────────────────────────────────────────────
 
-  Widget _resumen(InformeEntrevista i) {
+  Widget _resumen(BuildContext context, InformeEntrevista i) {
     final s = context.mp;
     final texto = i.informe.summary!.trim();
     final largo = texto.length > 260;
@@ -491,7 +493,7 @@ class _EmpresaInformeEntrevistaScreenState
 
   // ── Habilidades ────────────────────────────────────────────────────────────
 
-  Widget _habilidades(InformeEntrevista i) {
+  Widget _habilidades(BuildContext context, InformeEntrevista i) {
     final s = context.mp;
 
     return Column(
@@ -523,7 +525,7 @@ class _EmpresaInformeEntrevistaScreenState
   /// El mockup muestra "Momentos destacados" con marcas de tiempo. No hay clips
   /// recortados: lo que existe es el video y la transcripción de CADA respuesta,
   /// y eso es lo que se lista.
-  Widget _respuestas(InformeEntrevista i) {
+  Widget _respuestas(BuildContext context, InformeEntrevista i) {
     final s = context.mp;
 
     return Column(
@@ -582,7 +584,7 @@ class _EmpresaInformeEntrevistaScreenState
     );
   }
 
-  Widget _comoSeGenero() {
+  Widget _comoSeGenero(BuildContext context) {
     final s = context.mp;
 
     return MpBanner(

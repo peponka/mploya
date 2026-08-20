@@ -152,66 +152,68 @@ class _EmpresaShortlistScreenState extends State<EmpresaShortlistScreen> {
   Widget build(BuildContext context) {
     return MpSurface(
       style: MpSurfaceStyle.dark,
-      child: CupertinoPageScaffold(
-        backgroundColor: MpTokens.darkBg,
-        child: SafeArea(
-          bottom: false,
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  MpTokens.screenPadding,
-                  MpTokens.space8,
-                  MpTokens.screenPadding,
-                  0,
-                ),
-                child: MpHeader(
-                  title: 'Shortlist Inteligente',
-                  subtitle: 'Mejores candidatos para esta vacante',
-                  onBack: () => Navigator.of(context).maybePop(),
-                  actions: [
-                    MpIconButton(
-                      icon: CupertinoIcons.refresh,
-                      onPressed: _load,
-                    ),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: _loading
-                    ? const Center(child: CupertinoActivityIndicator(radius: 15))
-                    : CustomScrollView(
-                        slivers: [
-                          CupertinoSliverRefreshControl(onRefresh: _load),
-                          SliverPadding(
-                            padding: const EdgeInsets.fromLTRB(
-                              MpTokens.screenPadding,
-                              MpTokens.space12,
-                              MpTokens.screenPadding,
-                              MpTokens.space24,
-                            ),
-                            sliver: SliverList(
-                              delegate: SliverChildListDelegate(_cuerpo()),
-                            ),
-                          ),
-                        ],
+      child: Builder(
+        builder: (context) => CupertinoPageScaffold(
+          backgroundColor: MpTokens.darkBg,
+          child: SafeArea(
+            bottom: false,
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    MpTokens.screenPadding,
+                    MpTokens.space8,
+                    MpTokens.screenPadding,
+                    0,
+                  ),
+                  child: MpHeader(
+                    title: 'Shortlist Inteligente',
+                    subtitle: 'Mejores candidatos para esta vacante',
+                    onBack: () => Navigator.of(context).maybePop(),
+                    actions: [
+                      MpIconButton(
+                        icon: CupertinoIcons.refresh,
+                        onPressed: _load,
                       ),
-              ),
-              if (!_loading && _data.total > 0) _barraAcciones(),
-            ],
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: _loading
+                      ? const Center(child: CupertinoActivityIndicator(radius: 15))
+                      : CustomScrollView(
+                          slivers: [
+                            CupertinoSliverRefreshControl(onRefresh: _load),
+                            SliverPadding(
+                              padding: const EdgeInsets.fromLTRB(
+                                MpTokens.screenPadding,
+                                MpTokens.space12,
+                                MpTokens.screenPadding,
+                                MpTokens.space24,
+                              ),
+                              sliver: SliverList(
+                                delegate: SliverChildListDelegate(_cuerpo(context)),
+                              ),
+                            ),
+                          ],
+                        ),
+                ),
+                if (!_loading && _data.total > 0) _barraAcciones(context),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  List<Widget> _cuerpo() {
+  List<Widget> _cuerpo(BuildContext context) {
     if (_data.total == 0) return [_vacio()];
 
     return [
-      _bandaVacante(),
+      _bandaVacante(context),
       const SizedBox(height: MpTokens.space12),
-      _metricas(),
+      _metricas(context),
       const SizedBox(height: MpTokens.space16),
       MpSegmentedFilter(
         options: _filtros,
@@ -220,9 +222,9 @@ class _EmpresaShortlistScreenState extends State<EmpresaShortlistScreen> {
         scrollable: true,
       ),
       const SizedBox(height: MpTokens.space16),
-      ..._listado(),
+      ..._listado(context),
       const SizedBox(height: MpTokens.space20),
-      _comoSeCalcula(),
+      _comoSeCalcula(context),
     ];
   }
 
@@ -249,7 +251,7 @@ class _EmpresaShortlistScreenState extends State<EmpresaShortlistScreen> {
 
   // ── Vacante ────────────────────────────────────────────────────────────────
 
-  Widget _bandaVacante() {
+  Widget _bandaVacante(BuildContext context) {
     final s = context.mp;
     final v = widget.vacante;
 
@@ -307,7 +309,7 @@ class _EmpresaShortlistScreenState extends State<EmpresaShortlistScreen> {
 
   // ── Métricas ───────────────────────────────────────────────────────────────
 
-  Widget _metricas() {
+  Widget _metricas(BuildContext context) {
     final s = context.mp;
     final promedio = _data.ajustePromedio;
     final mejor = _data.mejorAjuste;
@@ -374,7 +376,7 @@ class _EmpresaShortlistScreenState extends State<EmpresaShortlistScreen> {
 
   // ── Listado ────────────────────────────────────────────────────────────────
 
-  List<Widget> _listado() {
+  List<Widget> _listado(BuildContext context) {
     final visibles = _visibles;
 
     if (visibles.isEmpty) {
@@ -392,7 +394,7 @@ class _EmpresaShortlistScreenState extends State<EmpresaShortlistScreen> {
 
     return [
       for (var i = 0; i < visibles.length; i++) ...[
-        _tarjeta(visibles[i], i + 1),
+        _tarjeta(context, visibles[i], i + 1),
         const SizedBox(height: MpTokens.space12),
       ],
     ];
@@ -404,7 +406,7 @@ class _EmpresaShortlistScreenState extends State<EmpresaShortlistScreen> {
     BandaAjuste.baja => MpTokens.danger,
   };
 
-  Widget _tarjeta(CandidatoShortlist c, int puesto) {
+  Widget _tarjeta(BuildContext context, CandidatoShortlist c, int puesto) {
     final s = context.mp;
     final seleccionado = _seleccionados.contains(c.id);
     final banda = c.banda;
@@ -425,7 +427,7 @@ class _EmpresaShortlistScreenState extends State<EmpresaShortlistScreen> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _puesto(puesto),
+              _puesto(context, puesto),
               const SizedBox(width: MpTokens.space8),
               MpAvatar(
                 name: c.nombreVisible,
@@ -479,7 +481,7 @@ class _EmpresaShortlistScreenState extends State<EmpresaShortlistScreen> {
                 ),
               ),
               const SizedBox(width: MpTokens.space8),
-              _anillo(c),
+              _anillo(context, c),
             ],
           ),
           if (c.tags.isNotEmpty) ...[
@@ -494,7 +496,7 @@ class _EmpresaShortlistScreenState extends State<EmpresaShortlistScreen> {
           ],
           if (c.match != null) ...[
             const SizedBox(height: MpTokens.space12),
-            _desglose(c),
+            _desglose(context, c),
           ],
           const SizedBox(height: MpTokens.space12),
           Row(
@@ -535,7 +537,7 @@ class _EmpresaShortlistScreenState extends State<EmpresaShortlistScreen> {
                 ),
               ),
               const SizedBox(width: MpTokens.space8),
-              _casilla(c, seleccionado),
+              _casilla(context, c, seleccionado),
             ],
           ),
           const SizedBox(height: MpTokens.space8),
@@ -558,7 +560,7 @@ class _EmpresaShortlistScreenState extends State<EmpresaShortlistScreen> {
     );
   }
 
-  Widget _puesto(int puesto) {
+  Widget _puesto(BuildContext context, int puesto) {
     final s = context.mp;
 
     return Container(
@@ -580,7 +582,7 @@ class _EmpresaShortlistScreenState extends State<EmpresaShortlistScreen> {
     );
   }
 
-  Widget _anillo(CandidatoShortlist c) {
+  Widget _anillo(BuildContext context, CandidatoShortlist c) {
     final s = context.mp;
     final pct = c.matchPct;
 
@@ -631,7 +633,7 @@ class _EmpresaShortlistScreenState extends State<EmpresaShortlistScreen> {
   }
 
   /// Desglose real del score: el RPC devuelve las dos señales por separado.
-  Widget _desglose(CandidatoShortlist c) {
+  Widget _desglose(BuildContext context, CandidatoShortlist c) {
     final s = context.mp;
 
     Widget barra(String etiqueta, double valor, Color color) {
@@ -675,7 +677,7 @@ class _EmpresaShortlistScreenState extends State<EmpresaShortlistScreen> {
     );
   }
 
-  Widget _casilla(CandidatoShortlist c, bool seleccionado) {
+  Widget _casilla(BuildContext context, CandidatoShortlist c, bool seleccionado) {
     final s = context.mp;
     final bloqueado =
         !seleccionado && _seleccionados.length >= _maxComparar;
@@ -709,7 +711,7 @@ class _EmpresaShortlistScreenState extends State<EmpresaShortlistScreen> {
   /// El mockup cierra con "Insights de IA" y un resumen redactado. Redactar ese
   /// texto acá sería inventar una conclusión de IA que nadie generó, así que en
   /// su lugar se explica —con datos verificables— cómo se calculó el número.
-  Widget _comoSeCalcula() {
+  Widget _comoSeCalcula(BuildContext context) {
     final s = context.mp;
     final promedio = _data.ajustePromedio;
 
@@ -781,7 +783,7 @@ class _EmpresaShortlistScreenState extends State<EmpresaShortlistScreen> {
 
   // ── Barra de acciones ──────────────────────────────────────────────────────
 
-  Widget _barraAcciones() {
+  Widget _barraAcciones(BuildContext context) {
     final s = context.mp;
     final n = _seleccionados.length;
 

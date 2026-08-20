@@ -163,54 +163,56 @@ class _EmpresaVideoPitchScreenState extends State<EmpresaVideoPitchScreen> {
   Widget build(BuildContext context) {
     return MpSurface(
       style: MpSurfaceStyle.dark,
-      child: CupertinoPageScaffold(
-        backgroundColor: MpTokens.darkBg,
-        child: SafeArea(
-          bottom: false,
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  MpTokens.screenPadding,
-                  MpTokens.space8,
-                  MpTokens.screenPadding,
-                  0,
+      child: Builder(
+        builder: (context) => CupertinoPageScaffold(
+          backgroundColor: MpTokens.darkBg,
+          child: SafeArea(
+            bottom: false,
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    MpTokens.screenPadding,
+                    MpTokens.space8,
+                    MpTokens.screenPadding,
+                    0,
+                  ),
+                  child: MpHeader(
+                    title: 'Video de tu empresa',
+                    subtitle: 'Contales en 60 segundos quiénes son.',
+                    onBack: () => Navigator.of(context).maybePop(),
+                  ),
                 ),
-                child: MpHeader(
-                  title: 'Video de tu empresa',
-                  subtitle: 'Contales en 60 segundos quiénes son.',
-                  onBack: () => Navigator.of(context).maybePop(),
+                Expanded(
+                  child: _loading
+                      ? const Center(child: CupertinoActivityIndicator(radius: 15))
+                      : CustomScrollView(
+                          slivers: [
+                            CupertinoSliverRefreshControl(onRefresh: _load),
+                            SliverPadding(
+                              padding: const EdgeInsets.fromLTRB(
+                                MpTokens.screenPadding,
+                                MpTokens.space16,
+                                MpTokens.screenPadding,
+                                MpTokens.space24,
+                              ),
+                              sliver: SliverList(
+                                delegate: SliverChildListDelegate(_cuerpo(context)),
+                              ),
+                            ),
+                          ],
+                        ),
                 ),
-              ),
-              Expanded(
-                child: _loading
-                    ? const Center(child: CupertinoActivityIndicator(radius: 15))
-                    : CustomScrollView(
-                        slivers: [
-                          CupertinoSliverRefreshControl(onRefresh: _load),
-                          SliverPadding(
-                            padding: const EdgeInsets.fromLTRB(
-                              MpTokens.screenPadding,
-                              MpTokens.space16,
-                              MpTokens.screenPadding,
-                              MpTokens.space24,
-                            ),
-                            sliver: SliverList(
-                              delegate: SliverChildListDelegate(_cuerpo()),
-                            ),
-                          ),
-                        ],
-                      ),
-              ),
-              if (!_loading) _barraAcciones(),
-            ],
+                if (!_loading) _barraAcciones(context),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  List<Widget> _cuerpo() {
+  List<Widget> _cuerpo(BuildContext context) {
     if (_data.error) {
       return [
         Padding(
@@ -231,7 +233,7 @@ class _EmpresaVideoPitchScreenState extends State<EmpresaVideoPitchScreen> {
         _CompanyVideoPitchPoster(videoUrl: _data.videoUrl!),
         const SizedBox(height: MpTokens.space16),
       ],
-      _estado(),
+      _estado(context),
       if (_aviso != null) ...[
         const SizedBox(height: MpTokens.space16),
         MpBanner(
@@ -243,13 +245,13 @@ class _EmpresaVideoPitchScreenState extends State<EmpresaVideoPitchScreen> {
         ),
       ],
       const SizedBox(height: MpTokens.space20),
-      _guiaCard(),
+      _guiaCard(context),
       const SizedBox(height: MpTokens.space16),
-      _visibilidad(),
+      _visibilidad(context),
     ];
   }
 
-  Widget _estado() {
+  Widget _estado(BuildContext context) {
     final s = context.mp;
     final tiene = _data.tieneVideo;
 
@@ -310,7 +312,7 @@ class _EmpresaVideoPitchScreenState extends State<EmpresaVideoPitchScreen> {
     );
   }
 
-  Widget _guiaCard() {
+  Widget _guiaCard(BuildContext context) {
     final s = context.mp;
 
     return MpCard(
@@ -362,7 +364,7 @@ class _EmpresaVideoPitchScreenState extends State<EmpresaVideoPitchScreen> {
     );
   }
 
-  Widget _visibilidad() {
+  Widget _visibilidad(BuildContext context) {
     final s = context.mp;
 
     return Row(
@@ -381,7 +383,7 @@ class _EmpresaVideoPitchScreenState extends State<EmpresaVideoPitchScreen> {
     );
   }
 
-  Widget _barraAcciones() {
+  Widget _barraAcciones(BuildContext context) {
     final s = context.mp;
 
     return Container(
