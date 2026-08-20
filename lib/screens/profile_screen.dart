@@ -9,6 +9,7 @@ import 'package:flutter/material.dart'
         RefreshIndicator;
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../models/models.dart';
 import '../services/profile_view_service.dart';
@@ -2475,27 +2476,6 @@ class _CandidateReferencesScreen extends StatelessWidget {
       ),
     ];
 
-    final competencies = [
-      _ReferenceCompetency(
-        'Calidad de trabajo',
-        profile.ratingStars > 0 ? profile.ratingStars : 4.5,
-      ),
-      _ReferenceCompetency(
-        'Comunicación',
-        profile.skills.length > 4 ? 4.6 : 4.2,
-      ),
-      _ReferenceCompetency(
-        'Trabajo en equipo',
-        profile.connections > 8 ? 4.7 : 4.1,
-      ),
-      _ReferenceCompetency('Iniciativa', profile.isPremium ? 4.8 : 4.3),
-      _ReferenceCompetency('Adaptabilidad', profile.isOpenToWork ? 4.7 : 4.0),
-      _ReferenceCompetency(
-        'Responsabilidad',
-        profile.profileViews > 0 ? 4.6 : 4.2,
-      ),
-    ];
-
     return CupertinoPageScaffold(
       backgroundColor: NexTheme.shellBg,
       child: SafeArea(
@@ -2567,31 +2547,10 @@ class _CandidateReferencesScreen extends StatelessWidget {
                   .toList(),
             ),
             const SizedBox(height: 18),
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final stacked = constraints.maxWidth < 1080;
-                final summary = _ReferenceSummaryPanel(
-                  competencies: competencies,
-                );
-                final side = _ReferenceSidebar(
-                  profile: profile,
-                  facts: facts,
-                  isOwnProfile: isOwnProfile,
-                );
-                if (stacked) {
-                  return Column(
-                    children: [summary, const SizedBox(height: 16), side],
-                  );
-                }
-                return Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(flex: 7, child: summary),
-                    const SizedBox(width: 16),
-                    Expanded(flex: 4, child: side),
-                  ],
-                );
-              },
+            _ReferenceSidebar(
+              profile: profile,
+              facts: facts,
+              isOwnProfile: isOwnProfile,
             ),
             const SizedBox(height: 18),
             MployaShellCard(
@@ -4885,7 +4844,10 @@ class _LightSummaryHero extends StatelessWidget {
                 const SizedBox(height: 14),
                 CupertinoButton(
                   padding: EdgeInsets.zero,
-                  onPressed: () {},
+                  onPressed: () => launchUrl(
+                    Uri.parse(ShareService.instance.profileUrl(profile.id)),
+                    mode: LaunchMode.externalApplication,
+                  ),
                   child: Text(ctaLabel),
                 ),
               ],
@@ -5063,47 +5025,6 @@ class _TimelineSidebar extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _ReferenceSummaryPanel extends StatelessWidget {
-  final List<_ReferenceCompetency> competencies;
-
-  const _ReferenceSummaryPanel({required this.competencies});
-
-  @override
-  Widget build(BuildContext context) {
-    return MployaShellCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Evaluación por competencias',
-            style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.w800,
-              color: context.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 16),
-          Container(
-            padding: const EdgeInsets.all(18),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF7F8FD),
-              borderRadius: BorderRadius.circular(24),
-            ),
-            child: Column(
-              children: competencies.map((item) {
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 14),
-                  child: _ReferenceCompetencyRow(item: item),
-                );
-              }).toList(),
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
@@ -5481,57 +5402,6 @@ class _TimelineRailItem extends StatelessWidget {
                   ),
                 ],
               ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _ReferenceCompetencyRow extends StatelessWidget {
-  final _ReferenceCompetency item;
-
-  const _ReferenceCompetencyRow({required this.item});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            item.label,
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
-              color: context.textPrimary,
-            ),
-          ),
-        ),
-        SizedBox(
-          width: 180,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(999),
-            child: LinearProgressIndicator(
-              value: item.score / 5,
-              minHeight: 8,
-              backgroundColor: const Color(0xFFE5E7F7),
-              valueColor: const AlwaysStoppedAnimation<Color>(
-                NexTheme.brandAccent,
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(width: 12),
-        SizedBox(
-          width: 36,
-          child: Text(
-            item.score.toStringAsFixed(1),
-            textAlign: TextAlign.right,
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w800,
-              color: context.textPrimary,
             ),
           ),
         ),
@@ -6421,11 +6291,4 @@ class _ReferenceMetric {
     required this.value,
     required this.helper,
   });
-}
-
-class _ReferenceCompetency {
-  final String label;
-  final double score;
-
-  const _ReferenceCompetency(this.label, this.score);
 }
