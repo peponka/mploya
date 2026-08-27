@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'dart:ui';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -40,7 +41,13 @@ class MployaErrorHandler {
         showSuccess(context, successMessage);
       }
       return result;
-    } catch (e) {
+    } catch (e, stackTrace) {
+      FirebaseCrashlytics.instance.recordError(
+        e,
+        stackTrace,
+        reason: 'MployaErrorHandler.wrapAsync',
+        fatal: false,
+      );
       if (context.mounted) {
         final friendly = errorMessage ?? handleSupabase(e);
         showError(context, friendly);
