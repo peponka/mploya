@@ -1,0 +1,25 @@
+# Normalize line endings to LF for everything git considers text, so this
+# repo behaves the same on Windows/OneDrive as anywhere else. See
+# docs/auditoria_seguridad_2026-08-27.md for context on why this was added.
+* text=auto eol=lf
+
+# Windows-only scripts keep CRLF (batch files require it)
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binary assets: never touch, never diff as text
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.ttf binary
+*.otf binary
+*.woff binary
+*.woff2 binary
+*.mp4 binary
+*.mov binary
+*.pdf binary
+*.jks binary
+*.keystore binary
