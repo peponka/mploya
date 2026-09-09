@@ -963,8 +963,18 @@ class _CompanyPublicVacancies extends StatelessWidget {
       return List<Map<String, dynamic>>.from(
         rows.where((row) => row['is_active'] != false),
       );
-    } catch (_) {
-      return const [];
+    } catch (e, stackTrace) {
+      // Antes esto devolvia [] en silencio: una empresa con vacantes reales
+      // podia verse como "no publico nada" sin dejar rastro del error real
+      // (RLS, columna, lo que sea). Ahora se loguea a Crashlytics y se
+      // relanza para que la UI distinga "vacio de verdad" de "no se pudo
+      // cargar".
+      FirebaseCrashlytics.instance.recordError(
+        e,
+        stackTrace,
+        reason: 'CompanyPublicVacancies._load company=$companyId',
+      );
+      rethrow;
     }
   }
 
@@ -976,6 +986,16 @@ class _CompanyPublicVacancies extends StatelessWidget {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const MployaShellCard(
             child: Center(child: CupertinoActivityIndicator()),
+          );
+        }
+        if (snapshot.hasError) {
+          return _InfoSectionCard(
+            title: 'Vacantes activas',
+            icon: CupertinoIcons.briefcase_fill,
+            child: Text(
+              'No pudimos cargar las vacantes de esta empresa. Probá de nuevo en un rato.',
+              style: TextStyle(fontSize: 15, color: context.textSecondary),
+            ),
           );
         }
         final jobs = snapshot.data ?? const <Map<String, dynamic>>[];

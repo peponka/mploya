@@ -868,14 +868,20 @@ class _EmpresaPipelineScreenState extends State<EmpresaPipelineScreen> {
               style: MpTokens.title.copyWith(color: s.text),
             ),
             const SizedBox(height: MpTokens.space16),
+            // Antes: 6 circulos de un color distinto cada uno. Son 6 vistas
+            // del mismo embudo, no 6 categorias, asi que ahora es una sola
+            // fila de numeros con un divisor fino entre columnas.
             IntrinsicHeight(
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  for (var i = 0; i < EtapaPipeline.values.length; i++) ...[
-                    if (i > 0) const SizedBox(width: MpTokens.space8),
-                    Expanded(child: _metrica(EtapaPipeline.values[i])),
-                  ],
+                  for (var i = 0; i < EtapaPipeline.values.length; i++)
+                    Expanded(
+                      child: _metrica(
+                        EtapaPipeline.values[i],
+                        isLast: i == EtapaPipeline.values.length - 1,
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -885,52 +891,44 @@ class _EmpresaPipelineScreenState extends State<EmpresaPipelineScreen> {
     );
   }
 
-  Widget _metrica(EtapaPipeline etapa) {
+  Widget _metrica(EtapaPipeline etapa, {required bool isLast}) {
     final s = context.mp;
     final cantidad = _data.de(etapa).length;
-    final pct = _data.total == 0
-        ? '0%'
-        : '${(cantidad / _data.total * 100).round()}%';
 
     return GestureDetector(
       onTap: () => _irAEtapa(etapa),
       behavior: HitTestBehavior.opaque,
-      child: Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        MpIconTile(
-          icon: etapa.icono,
-          color: etapa.color,
-          size: 32,
-          circular: true,
-        ),
-        const SizedBox(height: MpTokens.space8),
-        FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Text(
-            '$cantidad',
-            style: MpTokens.stat.copyWith(color: s.text, fontSize: 20),
-          ),
-        ),
-        const SizedBox(height: 1),
-        FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Text(
-            etapa.etiqueta,
-            style: MpTokens.micro.copyWith(color: s.textSecondary, fontSize: 10.5),
-          ),
-        ),
-        FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Text(
-            pct,
-            style: MpTokens.micro.copyWith(
-              color: s.textTertiary,
-              fontSize: 10,
+      child: Container(
+        padding: const EdgeInsets.only(right: MpTokens.space8),
+        decoration: isLast
+            ? null
+            : BoxDecoration(
+                border: Border(right: BorderSide(color: s.border, width: 1)),
+              ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                '$cantidad',
+                style: MpTokens.stat.copyWith(color: s.text, fontSize: 20),
+              ),
             ),
-          ),
+            const SizedBox(height: 2),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                etapa.etiqueta,
+                style: MpTokens.micro.copyWith(
+                  color: s.textTertiary,
+                  fontSize: 10.5,
+                ),
+              ),
+            ),
+          ],
         ),
-      ],
       ),
     );
   }

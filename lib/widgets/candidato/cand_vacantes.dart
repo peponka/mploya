@@ -241,9 +241,7 @@ class CandBannerCerca extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [MpTokens.primary, MpTokens.primaryLight],
-            ),
+            color: MpTokens.primary,
             borderRadius: BorderRadius.circular(MpTokens.radiusLG),
           ),
           child: Row(

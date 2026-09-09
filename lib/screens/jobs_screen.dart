@@ -11,7 +11,6 @@ import '../providers/user_provider.dart';
 import 'camera_screen.dart';
 import '../widgets/candidato/cand_ui.dart';
 import '../widgets/candidato/cand_vacantes.dart';
-import '../widgets/job_heatmap_bar.dart';
 import '../services/ghost_apply_service.dart';
 import '../services/saved_jobs_service.dart';
 import '../services/safe_profile_query_service.dart';
@@ -61,19 +60,19 @@ class _FeedTopAction extends StatelessWidget {
       constraints: const BoxConstraints(minWidth: 43),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
       decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.26),
+        color: const Color(0xFFF6F4EE),
         borderRadius: BorderRadius.circular(13),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
+        border: Border.all(color: const Color(0xFFE2DFD5)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, color: Colors.white, size: 18),
+          Icon(icon, color: const Color(0xFF22211F), size: 18),
           const SizedBox(height: 2),
           Text(
             label,
             style: const TextStyle(
-              color: Colors.white,
+              color: Color(0xFF22211F),
               fontSize: 9.5,
               fontWeight: FontWeight.w700,
             ),
@@ -113,36 +112,17 @@ class _VacanteFeedReel extends StatelessWidget {
   Widget build(BuildContext context) {
     final v = vacante;
     final accent = v.match != null && v.match! >= 85
-        ? const Color(0xFF4BE38B)
-        : const Color(0xFF8B6BFF);
+        ? const Color(0xFF3B6D11)
+        : context.brandAccent;
     final tags = <String>[
       if (v.modalidad.isNotEmpty) v.modalidad,
       ...v.etiquetas,
     ].take(4).toList();
 
     return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF342175), Color(0xFF17102E), Color(0xFF080B18)],
-        ),
-      ),
+      decoration: const BoxDecoration(color: Color(0xFFFAF8F5)),
       child: Stack(
         children: [
-          Positioned(
-            right: -75,
-            top: 130,
-            child: _GlowOrb(color: accent.withValues(alpha: 0.30), size: 260),
-          ),
-          Positioned(
-            left: -100,
-            bottom: 90,
-            child: _GlowOrb(
-              color: const Color(0xFFFF6B2C).withValues(alpha: 0.18),
-              size: 260,
-            ),
-          ),
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(22, 180, 22, 104),
@@ -204,7 +184,7 @@ class _VacanteFeedReel extends StatelessWidget {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
-                                color: Colors.white,
+                                color: Color(0xFF22211F),
                                 fontSize: 17,
                                 fontWeight: FontWeight.w800,
                               ),
@@ -213,7 +193,7 @@ class _VacanteFeedReel extends StatelessWidget {
                             const Text(
                               'Vacante publicada en Mploya',
                               style: TextStyle(
-                                color: Color(0xFFB9F4D1),
+                                color: Color(0xFF6C6C70),
                                 fontSize: 12.5,
                                 fontWeight: FontWeight.w600,
                               ),
@@ -241,7 +221,7 @@ class _VacanteFeedReel extends StatelessWidget {
                     maxLines: 3,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      color: Colors.white,
+                      color: Color(0xFF22211F),
                       fontSize: 31,
                       height: 1.08,
                       letterSpacing: -1.0,
@@ -258,7 +238,7 @@ class _VacanteFeedReel extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      color: Color(0xFFE2DDFC),
+                      color: Color(0xFF6C6C70),
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
                     ),
@@ -270,7 +250,7 @@ class _VacanteFeedReel extends StatelessWidget {
                       maxLines: 3,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        color: Color(0xFFF0EEFB),
+                        color: Color(0xFF6C6C70),
                         fontSize: 15,
                         height: 1.35,
                       ),
@@ -289,16 +269,16 @@ class _VacanteFeedReel extends StatelessWidget {
                                 vertical: 7,
                               ),
                               decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: 0.12),
+                                color: const Color(0xFFF6F4EE),
                                 borderRadius: BorderRadius.circular(99),
                                 border: Border.all(
-                                  color: Colors.white.withValues(alpha: 0.14),
+                                  color: const Color(0xFFE2DFD5),
                                 ),
                               ),
                               child: Text(
                                 tag,
                                 style: const TextStyle(
-                                  color: Colors.white,
+                                  color: Color(0xFF6C6C70),
                                   fontSize: 12,
                                   fontWeight: FontWeight.w700,
                                 ),
@@ -332,21 +312,17 @@ class _VacanteFeedReel extends StatelessWidget {
                             height: 52,
                             alignment: Alignment.center,
                             decoration: BoxDecoration(
-                              gradient: postulada
-                                  ? null
-                                  : const LinearGradient(
-                                      colors: [
-                                        Color(0xFF9A72FF),
-                                        Color(0xFF5E39F4),
-                                      ],
-                                    ),
-                              color: postulada ? const Color(0xFF384052) : null,
+                              color: postulada
+                                  ? CupertinoColors.systemGrey4
+                                  : context.brandAccent,
                               borderRadius: BorderRadius.circular(16),
                             ),
                             child: Text(
                               postulada ? 'Postulación enviada' : 'Postularme',
-                              style: const TextStyle(
-                                color: Colors.white,
+                              style: TextStyle(
+                                color: postulada
+                                    ? CupertinoColors.systemGrey
+                                    : Colors.white,
                                 fontSize: 14,
                                 fontWeight: FontWeight.w800,
                               ),
@@ -361,7 +337,7 @@ class _VacanteFeedReel extends StatelessWidget {
                     child: Text(
                       '${indice + 1} de $total · deslizá para continuar',
                       style: const TextStyle(
-                        color: Color(0xFFB8B1D5),
+                        color: Color(0xFF9797A5),
                         fontSize: 11.5,
                         fontWeight: FontWeight.w600,
                       ),
@@ -377,18 +353,6 @@ class _VacanteFeedReel extends StatelessWidget {
   }
 }
 
-class _GlowOrb extends StatelessWidget {
-  const _GlowOrb({required this.color, required this.size});
-  final Color color;
-  final double size;
-  @override
-  Widget build(BuildContext context) => Container(
-    width: size,
-    height: size,
-    decoration: BoxDecoration(shape: BoxShape.circle, color: color),
-  );
-}
-
 class _MatchBadge extends StatelessWidget {
   const _MatchBadge({required this.valor, required this.color});
   final int valor;
@@ -400,16 +364,16 @@ class _MatchBadge extends StatelessWidget {
     alignment: Alignment.center,
     decoration: BoxDecoration(
       shape: BoxShape.circle,
-      border: Border.all(color: color, width: 4),
-      color: Colors.black.withValues(alpha: 0.22),
+      border: Border.all(color: color, width: 3),
+      color: color.withValues(alpha: 0.08),
     ),
     child: Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         Text(
           '$valor%',
-          style: const TextStyle(
-            color: Colors.white,
+          style: TextStyle(
+            color: color,
             fontSize: 17,
             fontWeight: FontWeight.w900,
           ),
@@ -417,7 +381,7 @@ class _MatchBadge extends StatelessWidget {
         const Text(
           'MATCH',
           style: TextStyle(
-            color: Color(0xFFD9D3F7),
+            color: Color(0xFF6C6C70),
             fontSize: 8,
             fontWeight: FontWeight.w800,
           ),
@@ -443,19 +407,19 @@ class _ReelAction extends StatelessWidget {
       height: 52,
       padding: const EdgeInsets.symmetric(horizontal: 10),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.12),
+        color: const Color(0xFFF6F4EE),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
+        border: Border.all(color: const Color(0xFFE2DFD5)),
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, color: Colors.white, size: 18),
+          Icon(icon, color: const Color(0xFF22211F), size: 18),
           const SizedBox(height: 2),
           Text(
             label,
             style: const TextStyle(
-              color: Colors.white,
+              color: Color(0xFF22211F),
               fontSize: 9,
               fontWeight: FontWeight.w700,
             ),
@@ -1484,7 +1448,7 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
                             Text(
                               'Vacantes para vos',
                               style: TextStyle(
-                                color: Colors.white,
+                                color: Color(0xFF22211F),
                                 fontSize: 23,
                                 fontWeight: FontWeight.w800,
                                 letterSpacing: -0.5,
@@ -1493,7 +1457,7 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
                             Text(
                               'Deslizá para descubrir oportunidades',
                               style: TextStyle(
-                                color: Color(0xFFD8D2FF),
+                                color: Color(0xFF6C6C70),
                                 fontSize: 12.5,
                                 fontWeight: FontWeight.w600,
                               ),
@@ -2908,103 +2872,24 @@ class _JobListCardState extends State<_JobListCard> {
           ),
           const SizedBox(height: 14),
 
-          // Badges: match IA, stealth, salario — misma altura, mismo idioma visual
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              if (widget.matchScore != null && widget.matchScore! > 0)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: kMployaPurple.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(
-                        CupertinoIcons.sparkles,
-                        size: 12,
-                        color: kMployaPurple,
-                      ),
-                      const SizedBox(width: 5),
-                      Text(
-                        '${widget.matchScore}% match',
-                        style: const TextStyle(
-                          color: kMployaPurple,
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ],
-                  ),
+          // Nivel y salario en una sola linea de texto plano. Antes eran tres
+          // pills de colores distintos (violeta, dorado, accent); el match %
+          // ya se ve en el anillo del header, asi que no se repite aca.
+          if (isStealth || (salary != null && salary.isNotEmpty))
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Text(
+                [
+                  if (isStealth) 'C-Level',
+                  if (salary != null && salary.isNotEmpty) salary,
+                ].join('  \u00b7  '),
+                style: TextStyle(
+                  color: context.textSecondary,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
                 ),
-              if (isStealth)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFDAA520).withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        CupertinoIcons.lock_fill,
-                        size: 11,
-                        color: Color(0xFFDAA520),
-                      ),
-                      SizedBox(width: 5),
-                      Text(
-                        'C-Level',
-                        style: TextStyle(
-                          color: Color(0xFFDAA520),
-                          fontSize: 12,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              if (salary != null && salary.isNotEmpty)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: context.brandAccent.withValues(alpha: 0.10),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        CupertinoIcons.money_dollar_circle,
-                        size: 13,
-                        color: context.brandAccent,
-                      ),
-                      const SizedBox(width: 5),
-                      Text(
-                        salary,
-                        style: TextStyle(
-                          color: context.brandAccent,
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-            ],
-          ),
+              ),
+            ),
 
           // Tags
           if (tags.isNotEmpty) ...[
@@ -3040,10 +2925,6 @@ class _JobListCardState extends State<_JobListCard> {
             ),
           ],
 
-          if (createdAt.isNotEmpty && DateTime.tryParse(createdAt) != null) ...[
-            const SizedBox(height: 18),
-            JobHeatmapBar(createdAt: DateTime.parse(createdAt).toLocal()),
-          ],
           const SizedBox(height: 18),
 
           // ── Location row ──
@@ -3082,29 +2963,9 @@ class _JobListCardState extends State<_JobListCard> {
                 padding: const EdgeInsets.symmetric(vertical: 13),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(999),
-                  gradient: isApplied
-                      ? null
-                      : const LinearGradient(
-                          colors: [
-                            Color(0xFF185FA5),
-                            Color(0xFF0C447C),
-                            Color(0xFFD4740A),
-                          ],
-                          begin: Alignment.centerLeft,
-                          end: Alignment.centerRight,
-                        ),
-                  color: isApplied ? CupertinoColors.systemGrey4 : null,
-                  boxShadow: isApplied
-                      ? null
-                      : [
-                          BoxShadow(
-                            color: const Color(
-                              0xFF185FA5,
-                            ).withValues(alpha: 0.3),
-                            blurRadius: 12,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
+                  color: isApplied
+                      ? CupertinoColors.systemGrey4
+                      : context.brandAccent,
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -3120,7 +2981,7 @@ class _JobListCardState extends State<_JobListCard> {
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      isApplied ? 'Aplicación enviada' : '▶ Aplicar con Video',
+                      isApplied ? 'Aplicación enviada' : 'Aplicar con Video',
                       style: TextStyle(
                         fontWeight: FontWeight.w700,
                         fontSize: 15,

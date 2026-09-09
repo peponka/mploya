@@ -1326,31 +1326,41 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
     final chips = <Widget>[];
 
     if (widget.matchScore != null && widget.matchScore! > 0) {
-      chips.add(_chip('${widget.matchScore}% match', const Color(0xFF6C3FC8)));
+      chips.add(
+        _chip(context, '${widget.matchScore}% match', accent: true),
+      );
     }
     if (_distanceKm != null) {
       final d = _distanceKm! < 1
           ? '${(_distanceKm! * 1000).round()} m'
           : '${_distanceKm!.toStringAsFixed(1)} km';
-      chips.add(_chip('A $d', const Color(0xFF185FA5)));
+      chips.add(_chip(context, 'A $d'));
     }
     if (modality != null && modality.isNotEmpty) {
-      chips.add(_chip(modality, const Color(0xFF3B6D11)));
+      chips.add(_chip(context, modality));
     }
     for (final t in tags.take(4)) {
-      chips.add(_chip(t.startsWith('#') ? t : '#$t', const Color(0xFF6B7280)));
+      chips.add(_chip(context, t.startsWith('#') ? t : '#$t'));
     }
 
     return Wrap(spacing: 6, runSpacing: 6, children: chips);
   }
 
-  Widget _chip(String label, Color color) {
+  Widget _chip(BuildContext context, String label, {bool accent = false}) {
+    final color = accent ? context.brandAccent : const Color(0xFF6C6C70);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
+        color: accent
+            ? context.brandAccent.withValues(alpha: 0.08)
+            : const Color(0xFFF6F4EE),
         borderRadius: BorderRadius.circular(100),
-        border: Border.all(color: color.withValues(alpha: 0.15), width: 0.5),
+        border: Border.all(
+          color: accent
+              ? context.brandAccent.withValues(alpha: 0.18)
+              : const Color(0xFFE2DFD5),
+          width: 0.5,
+        ),
       ),
       child: Text(
         label,
@@ -1545,17 +1555,8 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
         decoration: BoxDecoration(
           color: _applied
               ? CupertinoColors.systemGrey4
-              : const Color(0xFF4B24F5),
+              : context.brandAccent,
           borderRadius: BorderRadius.circular(15),
-          boxShadow: _applied
-              ? null
-              : [
-                  BoxShadow(
-                    color: const Color(0xFF4B24F5).withValues(alpha: 0.28),
-                    blurRadius: 14,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,

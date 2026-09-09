@@ -355,68 +355,81 @@ class _TopBar extends StatelessWidget {
     required this.onMore,
   });
 
+  Widget _iconButton({
+    required BuildContext context,
+    required IconData icon,
+    required VoidCallback? onPressed,
+    required String semanticLabel,
+  }) {
+    return CupertinoButton(
+      padding: EdgeInsets.zero,
+      onPressed: onPressed,
+      child: Semantics(
+        label: semanticLabel,
+        button: true,
+        child: Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: context.shellBorder),
+          ),
+          child: Icon(icon, color: const Color(0xFF111827), size: 20),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
-        CupertinoButton(
-          padding: EdgeInsets.zero,
+        _iconButton(
+          context: context,
+          icon: CupertinoIcons.back,
           onPressed: () => Navigator.of(context).maybePop(),
-          child: Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: context.shellBorder),
-            ),
-            child: const Icon(CupertinoIcons.back, color: Color(0xFF111827)),
-          ),
+          semanticLabel: 'Volver',
         ),
-        const SizedBox(width: 14),
+        const SizedBox(width: 12),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  fontSize: 30,
+                  fontSize: 21,
                   fontWeight: FontWeight.w800,
                   color: context.textPrimary,
-                  letterSpacing: -0.8,
+                  letterSpacing: -0.4,
                 ),
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 3),
               Text(
                 subtitle,
-                style: TextStyle(fontSize: 15, color: context.textSecondary),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 12.5, color: context.textSecondary),
               ),
             ],
           ),
         ),
-        MployaSecondaryButton(
-          label: shareLabel,
+        const SizedBox(width: 8),
+        _iconButton(
+          context: context,
           icon: CupertinoIcons.share,
           onPressed: onShare,
+          semanticLabel: shareLabel,
         ),
-        const SizedBox(width: 10),
-        CupertinoButton(
-          padding: EdgeInsets.zero,
+        const SizedBox(width: 8),
+        _iconButton(
+          context: context,
+          icon: CupertinoIcons.ellipsis,
           onPressed: onMore,
-          child: Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: context.shellBorder),
-            ),
-            child: const Icon(
-              CupertinoIcons.ellipsis,
-              color: Color(0xFF111827),
-            ),
-          ),
+          semanticLabel: 'Más opciones',
         ),
       ],
     );
@@ -638,18 +651,7 @@ class _PublicHero extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(32),
-        gradient: const LinearGradient(
-          colors: [Color(0xFF1A2234), Color(0xFF101726), Color(0xFF111827)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF0F172A).withValues(alpha: 0.16),
-            blurRadius: 34,
-            offset: const Offset(0, 18),
-          ),
-        ],
+        color: const Color(0xFF141A28),
       ),
       child: Padding(
         padding: EdgeInsets.all(isMobile ? 18 : 24),
@@ -813,34 +815,35 @@ class _PublicHero extends StatelessWidget {
               ),
               const SizedBox(height: 16),
             ],
-            Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: [
-                MployaPrimaryButton(
-                  label: 'Contactar',
-                  icon: CupertinoIcons.paperplane_fill,
-                  onPressed: onContact,
-                ),
-                MployaSecondaryButton(
-                  label: _connectionLabel(connectionStatus),
-                  icon: CupertinoIcons.calendar,
-                  onPressed: isLoadingConnection ? null : onInvite,
-                ),
-                MployaSecondaryButton(
-                  label: isSavedProfile ? 'Guardado' : 'Guardar',
-                  icon: isSavedProfile
-                      ? CupertinoIcons.bookmark_fill
-                      : CupertinoIcons.bookmark,
-                  onPressed: isSavingProfile ? null : onToggleSaved,
-                ),
-                MployaSecondaryButton(
-                  label: 'Más',
-                  icon: CupertinoIcons.ellipsis,
-                  onPressed: onShowMore,
-                ),
-              ],
-            ),
+            if (!isMobile)
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  MployaPrimaryButton(
+                    label: 'Contactar',
+                    icon: CupertinoIcons.paperplane_fill,
+                    onPressed: onContact,
+                  ),
+                  MployaSecondaryButton(
+                    label: _connectionLabel(connectionStatus),
+                    icon: CupertinoIcons.calendar,
+                    onPressed: isLoadingConnection ? null : onInvite,
+                  ),
+                  MployaSecondaryButton(
+                    label: isSavedProfile ? 'Guardado' : 'Guardar',
+                    icon: isSavedProfile
+                        ? CupertinoIcons.bookmark_fill
+                        : CupertinoIcons.bookmark,
+                    onPressed: isSavingProfile ? null : onToggleSaved,
+                  ),
+                  MployaSecondaryButton(
+                    label: 'Más',
+                    icon: CupertinoIcons.ellipsis,
+                    onPressed: onShowMore,
+                  ),
+                ],
+              ),
           ],
         ),
       ),
