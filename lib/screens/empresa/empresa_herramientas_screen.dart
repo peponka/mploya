@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 
 import '../../widgets/ds/mploya_ds.dart';
+import '../premium_paywall_screen.dart';
 import '../settings_screen.dart';
 import 'empresa_actividad_screen.dart';
 import 'empresa_busqueda_screen.dart';
@@ -40,6 +41,15 @@ import 'empresa_vacantes_screen.dart';
 /// ║ CONGELADA el 12/8/2026 — diseño Y comportamiento aprobados.           ║
 /// ║ No modificar salvo bug funcional o responsive concreto y demostrable. ║
 /// ╚═══════════════════════════════════════════════════════════════════════╝
+///
+/// ADENDA 29/8/2026: el botón "Upgrade" del banner premium llevaba a
+/// `SettingsScreen` (configuración general: tema, notificaciones, cerrar
+/// sesión) en vez de a la pantalla de suscripción. Bug funcional concreto
+/// — Pedro lo detectó probando la app ("te lleva a una pantalla del
+/// teléfono"). Se corrigió para ir directo a `PremiumPaywallScreen`, que es
+/// el mismo destino que usan los demás CTA de "Premium"/"Upgrade" del
+/// proyecto (`ats_dashboard_screen.dart`, `b2b_paywall_screen.dart`,
+/// `settings_screen.dart`).
 ///
 class EmpresaHerramientasScreen extends StatelessWidget {
   /// Contadores reales. Null = no se muestra el subtítulo de esa tarjeta.
@@ -186,7 +196,7 @@ class EmpresaHerramientasScreen extends StatelessWidget {
     const white = Color(0xFFFFFFFF);
 
     return GestureDetector(
-      onTap: () => _push(context, const SettingsScreen()),
+      onTap: () => _push(context, const PremiumPaywallScreen()),
       behavior: HitTestBehavior.opaque,
       child: Container(
         padding: const EdgeInsets.all(MpTokens.space16),

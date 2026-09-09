@@ -6,6 +6,14 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../theme/app_theme.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
+// SIN USO desde el 29/8/2026: Pedro pidió sacar el tour de 7 pantallas que
+// se mostraba al entrar por primera vez al feed (home_feed_screen.dart) —
+// lo encontró muy largo y que no pegaba con el resto de la app. Se
+// reemplazó por un coach-mark contextual (CoachMarkService.showFeedTour)
+// que señala los elementos reales de la pantalla en vez de una intro
+// aparte. Se deja este archivo documentado (no se borra) siguiendo el
+// mismo criterio que onboarding_tour_screen.dart.
+// ─────────────────────────────────────────────────────────────────────────────
 // OnboardingTourOverlay — Guía premium de primera vez para nuevos usuarios
 //
 // Features:

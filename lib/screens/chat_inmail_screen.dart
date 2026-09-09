@@ -6,6 +6,7 @@ import '../services/my_profile_service.dart';
 import '../theme/app_theme.dart';
 import '../models/models.dart';
 import 'agora_call_screen.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 
 class ChatInmailScreen extends StatefulWidget {
   final NexUser? targetUser;
@@ -58,7 +59,14 @@ class _ChatInmailScreenState extends State<ChatInmailScreen> {
     try {
       final row = await loadMyProfile(client: _supabase);
       myName = row?['name']?.toString() ?? _supabase.auth.currentUser?.userMetadata?['full_name']?.toString() ?? 'Usuario';
-    } catch (_) {}
+    } catch (e, stackTrace) {
+      FirebaseCrashlytics.instance.recordError(
+        e,
+        stackTrace,
+        reason: 'chat_inmail_screen: cargar nombre propio',
+        fatal: false,
+      );
+    }
 
     try {
       await _supabase.from('messages').insert({

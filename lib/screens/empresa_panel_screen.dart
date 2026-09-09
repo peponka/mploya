@@ -19,6 +19,7 @@ import 'messaging_screen.dart';
 import 'nueva_vacante_screen.dart';
 import 'scheduling_screen.dart';
 import 'vacantes_screen.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 
 class EmpresaPanelScreen extends StatefulWidget {
   final bool embedded;
@@ -63,7 +64,14 @@ class _EmpresaPanelScreenState extends State<EmpresaPanelScreen> {
     try {
       final me = await loadMyProfile(client: _supabase);
       _companyName = (me?['name'] ?? 'NovaTech').toString();
-    } catch (_) {}
+    } catch (e, stackTrace) {
+      FirebaseCrashlytics.instance.recordError(
+        e,
+        stackTrace,
+        reason: 'empresa_panel_screen: cargar nombre de empresa',
+        fatal: false,
+      );
+    }
 
     try {
       final jobs = List<Map<String, dynamic>>.from(
@@ -99,7 +107,14 @@ class _EmpresaPanelScreenState extends State<EmpresaPanelScreen> {
               _contratados++;
             }
           }
-        } catch (_) {}
+        } catch (e, stackTrace) {
+          FirebaseCrashlytics.instance.recordError(
+            e,
+            stackTrace,
+            reason: 'empresa_panel_screen: calcular funnel',
+            fatal: false,
+          );
+        }
 
         try {
           final interviews = List<Map<String, dynamic>>.from(
@@ -109,14 +124,28 @@ class _EmpresaPanelScreenState extends State<EmpresaPanelScreen> {
                 .inFilter('job_id', jobIds),
           );
           _entrevistas = interviews.length;
-        } catch (_) {}
+        } catch (e, stackTrace) {
+          FirebaseCrashlytics.instance.recordError(
+            e,
+            stackTrace,
+            reason: 'empresa_panel_screen: contar entrevistas',
+            fatal: false,
+          );
+        }
 
         try {
           _topCandidates = await AIMatchService.instance.getCandidatesForJob(
             jobIds.first,
             limit: 5,
           );
-        } catch (_) {}
+        } catch (e, stackTrace) {
+          FirebaseCrashlytics.instance.recordError(
+            e,
+            stackTrace,
+            reason: 'empresa_panel_screen: getCandidatesForJob',
+            fatal: false,
+          );
+        }
       }
     } catch (e) {
       debugPrint('EmpresaPanelScreen load: $e');

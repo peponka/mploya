@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:tutorial_coach_mark/tutorial_coach_mark.dart';
+import '../theme/mploya_tokens.dart';
 
 // ── GlobalKeys accesibles desde cualquier widget ──────────────────────────────
 
@@ -21,6 +22,23 @@ final GlobalKey cmFeedMatchBadgeKey = GlobalKey(debugLabel: 'cm_feed_match_badge
 final GlobalKey cmFeedJobsBtnKey   = GlobalKey(debugLabel: 'cm_feed_jobs_btn');
 final GlobalKey cmFeedMsgBtnKey    = GlobalKey(debugLabel: 'cm_feed_msg_btn');
 final GlobalKey cmFeedBellBtnKey   = GlobalKey(debugLabel: 'cm_feed_bell_btn');
+
+// Dashboard de Empresa — reemplaza al tour de 5 pantallas (29/8/2026): en vez
+// de una pantalla aparte al arrancar, señala los dos accesos rápidos reales
+// del dashboard la primera vez que la empresa entra.
+final GlobalKey cmEmpresaPublicarKey = GlobalKey(debugLabel: 'cm_empresa_publicar');
+final GlobalKey cmEmpresaBuscarKey   = GlobalKey(debugLabel: 'cm_empresa_buscar');
+
+// Feed de talento de Empresa (Match IA) — agregado el 29/8/2026 después de
+// que a Pedro le costó entender que el Match IA necesita una vacante
+// elegida (probamos con "Lucas Martínez" y pensamos que el feed estaba
+// roto, cuando en realidad faltaba elegir vacante). Se ancla en el primer
+// TalentReelCard (isFirstCard == true).
+final GlobalKey cmEmpresaFeedMatchKey = GlobalKey(debugLabel: 'cm_empresa_feed_match');
+
+// Vacantes de Candidato (JobsScreen) — agregado el 29/8/2026, explica cómo
+// buscar y postularse. Se ancla en el buscador de la pantalla.
+final GlobalKey cmCandVacantesBuscarKey = GlobalKey(debugLabel: 'cm_cand_vacantes_buscar');
 
 // ── Servicio ──────────────────────────────────────────────────────────────────
 
@@ -127,6 +145,76 @@ class CoachMarkService {
     _show(context, targets);
   }
 
+  // ── Dashboard de Empresa (reemplaza el tour de 5 pantallas) ────────────────
+  static Future<void> showEmpresaDashboardTour(BuildContext context) async {
+    if (kIsWeb) return; // Coach marks only on native app
+    final key = 'coach_empresa_dash_v1_$_uid';
+    if (await _done(key)) return;
+    if (!context.mounted) return;
+    await _mark(key);
+
+    await Future.delayed(const Duration(milliseconds: 700));
+    if (!context.mounted) return;
+
+    final targets = <TargetFocus>[
+      if (_alive(cmEmpresaPublicarKey))
+        _t(cmEmpresaPublicarKey, 'Publicá vacantes 📣',
+            'Creá una búsqueda y empezá a recibir candidatos con video-pitch.',
+            ContentAlign.bottom),
+      if (_alive(cmEmpresaBuscarKey))
+        _t(cmEmpresaBuscarKey, 'Buscá candidatos 🎬',
+            'Descubrí talento por video, un candidato a la vez — deslizá como en el feed.',
+            ContentAlign.bottom),
+    ];
+
+    if (targets.isEmpty || !context.mounted) return;
+    _show(context, targets);
+  }
+
+  // ── Feed de talento de Empresa (Match IA) ──────────────────────────────────
+  static Future<void> showEmpresaTalentFeedTour(BuildContext context) async {
+    if (kIsWeb) return; // Coach marks only on native app
+    final key = 'coach_empresa_talent_feed_v1_$_uid';
+    if (await _done(key)) return;
+    if (!context.mounted) return;
+    await _mark(key);
+
+    await Future.delayed(const Duration(milliseconds: 700));
+    if (!context.mounted) return;
+
+    final targets = <TargetFocus>[
+      if (_alive(cmEmpresaFeedMatchKey))
+        _t(cmEmpresaFeedMatchKey, 'Elegí una vacante 🎯',
+            'El Match IA se calcula siempre contra una vacante concreta.\nTocá acá para elegir una y ver el % de cada candidato.',
+            ContentAlign.left),
+    ];
+
+    if (targets.isEmpty || !context.mounted) return;
+    _show(context, targets);
+  }
+
+  // ── Vacantes de Candidato ───────────────────────────────────────────────────
+  static Future<void> showCandVacantesTour(BuildContext context) async {
+    if (kIsWeb) return; // Coach marks only on native app
+    final key = 'coach_cand_vacantes_v1_$_uid';
+    if (await _done(key)) return;
+    if (!context.mounted) return;
+    await _mark(key);
+
+    await Future.delayed(const Duration(milliseconds: 700));
+    if (!context.mounted) return;
+
+    final targets = <TargetFocus>[
+      if (_alive(cmCandVacantesBuscarKey))
+        _t(cmCandVacantesBuscarKey, 'Buscá tu próximo trabajo 🔍',
+            'Filtrá por puesto, ubicación o modalidad.\nTocá una vacante para ver el detalle y postularte.',
+            ContentAlign.bottom),
+    ];
+
+    if (targets.isEmpty || !context.mounted) return;
+    _show(context, targets);
+  }
+
   // ── Helpers ───────────────────────────────────────────────────────────────
   static TargetFocus _t(
       GlobalKey key, String title, String body, ContentAlign align) {
@@ -204,12 +292,14 @@ class _CoachCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Barra naranja decorativa
+          // Barra decorativa — color de marca (antes un azul suelto que no
+          // era ninguno de los tokens; Pedro señaló que el tour viejo no
+          // pegaba con el resto de la app por esto mismo, 29/8/2026).
           Container(
             width: 32, height: 3,
             margin: const EdgeInsets.only(bottom: 12),
             decoration: BoxDecoration(
-              color: const Color(0xFF185FA5),
+              color: MpTokens.primary,
               borderRadius: BorderRadius.circular(4),
             ),
           ),
@@ -252,7 +342,7 @@ class _CoachCard extends StatelessWidget {
               CupertinoButton(
                 padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 10),
                 minSize: 0,
-                color: const Color(0xFF185FA5),
+                color: MpTokens.primary,
                 borderRadius: BorderRadius.circular(12),
                 onPressed: onNext,
                 child: const Text(

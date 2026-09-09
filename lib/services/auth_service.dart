@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../l10n/app_strings.dart';
 import 'feed_service.dart';
 import 'my_profile_service.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // AuthService — Singleton centralizado para toda la lógica de autenticación.
@@ -186,16 +187,32 @@ class AuthService {
   /// actúa como fallback en caso de que el trigger no esté activo.
   Future<void> upsertUserProfile(User user) async {
     try {
-      final metadataRole = user.userMetadata?['account_type']?.toString();
-      final initialRole = const {
+      const rolesValidos = {
         'candidato',
         'empresa',
         'headhunter',
         'confidencial',
         'stealth',
-      }.contains(metadataRole)
+      };
+      final metadataRole = user.userMetadata?['account_type']?.toString();
+
+      // ADENDA 30/8/2026. El fallback asumía 'candidato' cuando el metadata
+      // no traía rol, que es SIEMPRE en el alta por email —Supabase no lo
+      // pone—. Con eso, una empresa recién registrada nacía como candidato
+      // y la pantalla la corregía un instante después: dos escrituras
+      // peleando por la misma fila. El rol elegido en la pantalla inicial
+      // ya quedó en preferencias antes del alta, así que se usa ese.
+      String? prefsRole;
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        prefsRole = prefs.getString('mploya_account_type');
+      } catch (_) {
+        prefsRole = null;
+      }
+
+      final initialRole = rolesValidos.contains(metadataRole)
           ? metadataRole!
-          : 'candidato';
+          : (rolesValidos.contains(prefsRole) ? prefsRole! : 'candidato');
       await setMyInitialRole(
         role: initialRole,
         completeSelection: false,
@@ -242,7 +259,14 @@ class AuthService {
       try {
         final prefs = await SharedPreferences.getInstance();
         await prefs.remove('mploya_account_type');
-      } catch (_) {}
+      } catch (e, stackTrace) {
+        FirebaseCrashlytics.instance.recordError(
+          e,
+          stackTrace,
+          reason: 'auth_service.signOut: limpiar mploya_account_type',
+          fatal: false,
+        );
+      }
       await _client.auth.signOut();
       return null;
     } on AuthException catch (e) {

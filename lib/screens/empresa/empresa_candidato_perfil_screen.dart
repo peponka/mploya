@@ -70,6 +70,7 @@ class _EmpresaCandidatoPerfilScreenState
   bool _conectando = false;
   String? _aviso;
   bool _sobreMiExpandido = false;
+  bool _calificando = false;
 
   @override
   void initState() {
@@ -148,6 +149,66 @@ class _EmpresaCandidatoPerfilScreenState
           ? 'No pudimos conectar con este candidato.'
           : 'Listo: el candidato entró a tu pipeline.';
     });
+  }
+
+  /// Calificar a este candidato (1 a 5 estrellas). Usa el mismo RPC
+  /// `rate_user` que ya alimenta `ratingStars`/`ratingCount` en el modelo —
+  /// hasta ahora nada de la UI lo llamaba, asi que la calificacion promedio
+  /// quedaba siempre en 0.0 aunque el backend funcionara. Recarga el perfil
+  /// al terminar para reflejar el nuevo promedio.
+  Future<void> _calificar(double stars) async {
+    final data = _data;
+    if (data == null || _calificando) return;
+
+    setState(() {
+      _calificando = true;
+      _aviso = null;
+    });
+
+    final res = await SocialService.instance.rateUser(data.usuario.id, stars);
+    if (!mounted) return;
+
+    setState(() {
+      _calificando = false;
+      _aviso = res['error'] != null
+          ? 'No pudimos guardar la calificacion.'
+          : 'Gracias: calificacion guardada.';
+    });
+
+    if (res['error'] == null) {
+      await _load();
+    }
+  }
+
+  Future<void> _mostrarMenuCalificar() async {
+    final data = _data;
+    if (data == null) return;
+
+    final stars = await showCupertinoModalPopup<double>(
+      context: context,
+      builder: (context) => CupertinoActionSheet(
+        title: const Text('Calificar candidato'),
+        message: Text(
+          '\u00bfComo fue tu experiencia con ${data.usuario.name}?',
+        ),
+        actions: [
+          for (var i = 5; i >= 1; i--)
+            CupertinoActionSheetAction(
+              onPressed: () => Navigator.of(context).pop(i.toDouble()),
+              child: Text(i == 1 ? '1 estrella' : '$i estrellas'),
+            ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          isDefaultAction: true,
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancelar'),
+        ),
+      ),
+    );
+
+    if (stars != null) {
+      await _calificar(stars);
+    }
   }
 
   Future<void> _compartir() async {
@@ -605,6 +666,16 @@ class _EmpresaCandidatoPerfilScreenState
                 onTap: _compartir,
               ),
             ),
+          // "Más" del PNG 7: estaba en el mockup pero nunca se había
+          // implementado. Por ahora abre directo el flujo de calificación
+          // (único ítem), pensado para sumar más acciones acá después.
+          Expanded(
+            child: _accion(
+              icon: CupertinoIcons.ellipsis,
+              label: 'Más',
+              onTap: _mostrarMenuCalificar,
+            ),
+          ),
         ],
       ),
     );

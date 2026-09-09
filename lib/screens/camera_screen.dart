@@ -17,6 +17,7 @@ import '../services/ia_coach_service.dart';
 import '../services/claude_ai_service.dart';
 import '../services/my_profile_service.dart';
 import 'ia_coach_result_screen.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 
 class CameraScreen extends StatefulWidget {
   const CameraScreen({super.key});
@@ -227,7 +228,14 @@ class _CameraScreenState extends State<CameraScreen> with SingleTickerProviderSt
           final userData = await loadMyProfile();
           final type = userData?['account_type']?.toString().toLowerCase() ?? '';
           isStealth = type == 'stealth' || type.startsWith('confidenc');
-        } catch(_) {}
+        } catch (e, stackTrace) {
+          FirebaseCrashlytics.instance.recordError(
+            e,
+            stackTrace,
+            reason: 'camera_screen: leer account_type para stealth',
+            fatal: false,
+          );
+        }
 
         if (!mounted) return;
         setState(() => _isUploading = false);
@@ -557,7 +565,14 @@ class _CameraScreenState extends State<CameraScreen> with SingleTickerProviderSt
         final userData = await loadMyProfile();
         final type = userData?['account_type']?.toString().toLowerCase() ?? '';
         isStealth = type == 'stealth' || type.startsWith('confidenc');
-      } catch(_) {}
+      } catch (e, stackTrace) {
+        FirebaseCrashlytics.instance.recordError(
+          e,
+          stackTrace,
+          reason: 'camera_screen: leer account_type para stealth',
+          fatal: false,
+        );
+      }
 
       if (!mounted) return;
       setState(() => _isUploading = false);

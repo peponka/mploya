@@ -1237,6 +1237,7 @@ class CandCargandoLista extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListView.separated(
       padding: padding,
+      shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       itemCount: cantidad,
       separatorBuilder: (_, __) => const SizedBox(height: 12),

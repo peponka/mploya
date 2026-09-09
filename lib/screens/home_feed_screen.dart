@@ -23,7 +23,6 @@ import '../widgets/candidato/cand_ui.dart';
 import '../widgets/candidato/cand_vacantes.dart' show CandVacanteVista;
 import '../widgets/feature_hint.dart';
 import '../widgets/mploya_toast.dart';
-import '../widgets/onboarding_tour.dart';
 import '../widgets/premium_feed_reel_card.dart';
 import 'jobs_screen.dart';
 import 'notifications_screen.dart';
@@ -72,12 +71,14 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
 
   static const Map<String, String> _categoryLabels = {
     'todos': 'Para vos',
-    'tecnologia': 'Tecnologia',
+    'empresas': 'Empresas',
+    'headhunter': 'Headhunters',
+    'tecnologia': 'Tecnología',
     'finanzas': 'Finanzas',
     'marketing': 'Marketing',
     'ventas': 'Ventas',
-    'administracion': 'Admin',
-    'diseno': 'Diseno',
+    'administracion': 'Administración',
+    'diseno': 'Diseño',
   };
 
   static const Map<String, List<String>> _categoryKeywords = {
@@ -140,12 +141,13 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
       VideoPreloadManager.instance.pauseAll();
-      final shown = await OnboardingTourOverlay.showIfNeeded(context);
-      if (shown && mounted) {
-        VideoPreloadManager.instance.resumeCurrent();
-      } else if (!shown) {
-        VideoPreloadManager.instance.resumeCurrent();
-      }
+      // ADENDA (Pedro, 29/8/2026): se saca el tour de 7 pantallas
+      // (OnboardingTourOverlay) que aparecía acá al entrar por primera vez
+      // al feed — Pedro pidió sacarlo (no pegaba con la app, muy largo) y
+      // reemplazarlo por el coach-mark contextual de abajo
+      // (CoachMarkService.showFeedTour), que señala los elementos reales
+      // de esta misma pantalla en vez de una intro aparte.
+      VideoPreloadManager.instance.resumeCurrent();
       ref.read(feedProvider.notifier).loadInitial();
       if (mounted) CoachMarkService.showFeedTour(context);
     });
@@ -212,6 +214,16 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
     List<Map<String, dynamic>> items,
   ) {
     if (_selectedCategory == 'todos') return items;
+    if (_selectedCategory == 'empresas') {
+      return items
+          .where((row) => row['account_type']?.toString() == 'empresa')
+          .toList();
+    }
+    if (_selectedCategory == 'headhunter') {
+      return items
+          .where((row) => row['account_type']?.toString() == 'headhunter')
+          .toList();
+    }
     final keywords = _categoryKeywords[_selectedCategory] ?? const [];
     return items.where((row) {
       final haystack = _haystackFor(row);
@@ -221,6 +233,12 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
 
   Set<String> _categoriesWithData(List<Map<String, dynamic>> items) {
     final present = <String>{};
+    if (items.any((row) => row['account_type']?.toString() == 'empresa')) {
+      present.add('empresas');
+    }
+    if (items.any((row) => row['account_type']?.toString() == 'headhunter')) {
+      present.add('headhunter');
+    }
     for (final entry in _categoryKeywords.entries) {
       final hasMatch = items.any((row) {
         final haystack = _haystackFor(row);
@@ -277,15 +295,15 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
   Widget build(BuildContext context) {
     final preview = widget.previewData;
     if (preview == null) {
-    ref.listen(feedProvider, (prev, next) {
-      if (prev?.items != next.items) {
+      ref.listen(feedProvider, (prev, next) {
+        if (prev?.items != next.items) {
           final urls = _protectFeedRows(next.items)
-            .map((row) => row['video_url']?.toString() ?? '')
-            .where((url) => url.isNotEmpty)
-            .toList();
-        VideoPreloadManager.instance.updateFeedUrls(urls);
-      }
-    });
+              .map((row) => row['video_url']?.toString() ?? '')
+              .where((url) => url.isNotEmpty)
+              .toList();
+          VideoPreloadManager.instance.updateFeedUrls(urls);
+        }
+      });
     }
 
     final feedState = preview != null
@@ -301,7 +319,10 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
     // desktop se acota y aparece la columna de contexto.
     final formato = candFormatoDe(context);
     final ancho = formato != CandFormato.mobile;
-    final bottomInset = ancho ? 0.0 : MediaQuery.paddingOf(context).bottom + 94;
+    // La navegación móvil ahora vive fuera del feed en el shell compartido.
+    // Antes el reel reservaba 94 px para una barra superpuesta propia y eso
+    // dejaba una franja oscura vacía arriba de la barra nueva.
+    final bottomInset = 0.0;
 
     return CupertinoPageScaffold(
       backgroundColor: ancho ? MpTokens.lightBg : const Color(0xFF07111F),
@@ -369,12 +390,22 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
     }
 
     if (allItems.isEmpty) {
+      final isCandidate =
+          _viewerAccountType?.toLowerCase() != 'empresa' &&
+          _viewerAccountType?.toLowerCase() != 'headhunter';
       return _FeedEmptyState(
-        title: 'Todavia no hay contenido visible en tu feed',
-        body:
-            'Cuando haya mas perfiles y empresas con video pitch, el swipe vertical aparecera aca.',
-        primaryLabel: 'Actualizar feed',
-        onPrimaryTap: () => ref.read(feedProvider.notifier).refreshFeed(),
+        title: isCandidate
+            ? 'Todavía no hay empresas para mostrarte'
+            : 'Todavía no hay perfiles para mostrarte',
+        body: isCandidate
+            ? 'Completá tu perfil y preferencias para que el matching te acerque mejores oportunidades.'
+            : 'Publicá una vacante o ajustá tus filtros para empezar a descubrir perfiles relevantes.',
+        primaryLabel: isCandidate ? 'Completar mi perfil' : 'Actualizar feed',
+        onPrimaryTap: isCandidate
+            ? () => Navigator.of(
+                context,
+              ).push(CupertinoPageRoute(builder: (_) => const ProfileScreen()))
+            : () => ref.read(feedProvider.notifier).refreshFeed(),
       );
     }
 
@@ -416,23 +447,24 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
 
   /// Vacantes reales de la columna lateral.
   List<CandVacanteVista> get _vacantesVista => _vacantesPanel.map((job) {
-        final empresa = ((job['users'] as Map?)?['name']?.toString() ??
+    final empresa =
+        ((job['users'] as Map?)?['name']?.toString() ??
                 job['company']?.toString() ??
                 '')
             .trim();
-        return CandVacanteVista(
-          id: job['id']?.toString() ?? '',
-          puesto: job['title']?.toString().trim() ?? 'Vacante',
-          empresa: empresa.isEmpty ? 'Empresa' : empresa,
-          logoEmpresa: (job['users'] as Map?)?['avatar_url']?.toString(),
-          modalidad: switch (job['modality']?.toString()) {
-            'remote' => 'Remoto',
-            'hybrid' => 'Híbrido',
-            'onsite' => 'Presencial',
-            _ => '',
-          },
-        );
-      }).toList();
+    return CandVacanteVista(
+      id: job['id']?.toString() ?? '',
+      puesto: job['title']?.toString().trim() ?? 'Vacante',
+      empresa: empresa.isEmpty ? 'Empresa' : empresa,
+      logoEmpresa: (job['users'] as Map?)?['avatar_url']?.toString(),
+      modalidad: switch (job['modality']?.toString()) {
+        'remote' => 'Remoto',
+        'hybrid' => 'Híbrido',
+        'onsite' => 'Presencial',
+        _ => '',
+      },
+    );
+  }).toList();
 
   /// Gente del propio feed: son perfiles reales, los mismos que el reel muestra
   /// más adelante. No se inventa ninguno.
@@ -488,7 +520,7 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
       tip: esDesktop
           ? null
           : 'Completá tu video pitch: los perfiles con video reciben más '
-              'visitas de empresas.',
+                'visitas de empresas.',
       onPerfil: () => Navigator.of(
         context,
       ).push(CupertinoPageRoute<void>(builder: (_) => const ProfileScreen())),
@@ -598,9 +630,9 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
                         icon: CupertinoIcons.chevron_up,
                         onTap: activeIndex > 0
                             ? () => _pageController.previousPage(
-                                  duration: const Duration(milliseconds: 260),
-                                  curve: Curves.easeOutCubic,
-                                )
+                                duration: const Duration(milliseconds: 260),
+                                curve: Curves.easeOutCubic,
+                              )
                             : null,
                       ),
                     ),
@@ -620,9 +652,9 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
                         icon: CupertinoIcons.chevron_down,
                         onTap: activeIndex < rows.length - 1
                             ? () => _pageController.nextPage(
-                                  duration: const Duration(milliseconds: 260),
-                                  curve: Curves.easeOutCubic,
-                                )
+                                duration: const Duration(milliseconds: 260),
+                                curve: Curves.easeOutCubic,
+                              )
                             : null,
                       ),
                     ),
@@ -845,7 +877,8 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
                       final entry = visibleEntries[index];
                       final selected = _selectedCategory == entry.key;
                       return GestureDetector(
-                        onTap: () => setState(() => _selectedCategory = entry.key),
+                        onTap: () =>
+                            setState(() => _selectedCategory = entry.key),
                         child: AnimatedContainer(
                           duration: const Duration(milliseconds: 180),
                           padding: const EdgeInsets.symmetric(
@@ -894,7 +927,6 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
       ],
     );
   }
-
 }
 
 class _TopCircleButton extends StatelessWidget {

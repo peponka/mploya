@@ -17,6 +17,7 @@ import '../services/coach_mark_service.dart';
 import '../services/social_service.dart';
 import '../services/video_preload_manager.dart';
 import 'reel_card_video.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 
 class PremiumFeedReelCard extends ConsumerStatefulWidget {
   final Post post;
@@ -46,6 +47,27 @@ class PremiumFeedReelCard extends ConsumerStatefulWidget {
 /// natural, para que el CTA de al lado no quede recortado.
 Widget _flexible(bool estirar, Widget hijo) =>
     estirar ? Expanded(child: hijo) : hijo;
+
+class _IdentityInitials extends StatelessWidget {
+  const _IdentityInitials({required this.initials, required this.size});
+
+  final String initials;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Text(
+        initials,
+        style: TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.w800,
+          fontSize: size,
+        ),
+      ),
+    );
+  }
+}
 
 /// Fondo violeta del reel mientras el video todavía no está listo para
 /// reproducirse. Es el mismo lenguaje visual de la composición aprobada
@@ -193,7 +215,14 @@ class _PremiumFeedReelCardState extends ConsumerState<PremiumFeedReelCard>
       if (mounted) {
         setState(() => _isBookmarked = row != null);
       }
-    } catch (_) {}
+    } catch (e, stackTrace) {
+      FirebaseCrashlytics.instance.recordError(
+        e,
+        stackTrace,
+        reason: 'premium_feed_reel_card: leer si esta guardado',
+        fatal: false,
+      );
+    }
   }
 
   Future<void> _initVideo() async {
@@ -364,7 +393,8 @@ class _PremiumFeedReelCardState extends ConsumerState<PremiumFeedReelCard>
     final viewerType =
         (widget.viewerAccountType ?? currentUser?.accountType ?? 'candidato')
             .toLowerCase();
-    final seesVacancy = viewerType == 'candidato';
+    final isCompany = author.accountType.toLowerCase() == 'empresa';
+    final isHeadhunter = author.accountType.toLowerCase() == 'headhunter';
     // Sin match calculado no se dibuja el badge. Antes caía en un 82 % fijo:
     // un número inventado presentado como resultado de la IA.
     final int? matchScore = author.matchPercentage > 0
@@ -378,14 +408,19 @@ class _PremiumFeedReelCardState extends ConsumerState<PremiumFeedReelCard>
         ? author.headline
         : (author.isCompanyAct ? 'Oportunidad destacada' : author.name);
     final subtitle = author.isCompanyAct ? author.name : author.headline;
-    final detailActionLabel = seesVacancy ? 'Ver vacante' : 'Ver perfil';
+    // El CTA describe el destino, no el rol del espectador: un candidato
+    // puede ver empresas y headhunters en el mismo feed.
+    final detailActionLabel = isCompany ? 'Ver vacante' : 'Ver perfil';
+    final roleLabel = isCompany
+        ? 'Empresa'
+        : (isHeadhunter ? 'Headhunter' : 'Profesional');
     final playing = _controller?.value.isPlaying ?? false;
     // El reel llega a Supabase sin abrir el video en el render aislado
     // (tests, capturas): ahí queda siempre en el fondo violeta de espera.
     final mostrarFondoIdle =
         (author.videoUrl ?? '').isNotEmpty && !_isInitialized && !_hasError;
     final protectedForHeadhunter =
-        widget.viewerAccountType?.toLowerCase() == 'headhunter' &&
+        viewerType == 'headhunter' &&
         isConfidentialAccountType(author.accountType);
 
     Widget glassPill(IconData icon, String label) {
@@ -544,7 +579,9 @@ class _PremiumFeedReelCardState extends ConsumerState<PremiumFeedReelCard>
               ),
               const SizedBox(height: 16),
               sideAction(
-                icon: _isMatched ? CupertinoIcons.heart_fill : CupertinoIcons.heart,
+                icon: _isMatched
+                    ? CupertinoIcons.heart_fill
+                    : CupertinoIcons.heart,
                 label: 'Match',
                 value: '${_matchCount < 0 ? 0 : _matchCount}',
                 onTap: _toggleMatch,
@@ -592,7 +629,9 @@ class _PremiumFeedReelCardState extends ConsumerState<PremiumFeedReelCard>
         Positioned(
           left: widget.webMode ? 28 : 16,
           right: widget.webMode ? 138 : 86,
-          bottom: widget.webMode ? 28 : 18,
+          // En móvil la barra flota sobre el reel. La información queda por
+          // encima de esa zona para conservar el video a pantalla completa.
+          bottom: widget.webMode ? 28 : 112,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
@@ -603,30 +642,66 @@ class _PremiumFeedReelCardState extends ConsumerState<PremiumFeedReelCard>
                     width: widget.webMode ? 40 : 34,
                     height: widget.webMode ? 40 : 34,
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.16),
-                      shape: BoxShape.circle,
+                      color: MpTokens.primary.withValues(alpha: 0.86),
+                      borderRadius: BorderRadius.circular(10),
                     ),
                     alignment: Alignment.center,
-                    child: Text(
-                      author.initials,
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w800,
-                        fontSize: widget.webMode ? 15 : 13,
-                      ),
-                    ),
+                    child: author.avatarUrl?.trim().isNotEmpty == true
+                        ? ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: Image.network(
+                              author.avatarUrl!,
+                              width: double.infinity,
+                              height: double.infinity,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, _, _) => _IdentityInitials(
+                                initials: author.initials,
+                                size: widget.webMode ? 15 : 13,
+                              ),
+                            ),
+                          )
+                        : _IdentityInitials(
+                            initials: author.initials,
+                            size: widget.webMode ? 15 : 13,
+                          ),
                   ),
                   const SizedBox(width: 9),
                   Flexible(
-                    child: Text(
-                      subtitle.isNotEmpty ? subtitle : author.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w700,
-                        fontSize: widget.webMode ? 14 : 13,
-                      ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            subtitle.isNotEmpty ? subtitle : author.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                              fontSize: widget.webMode ? 14 : 13,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 7,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.16),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            roleLabel,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   if (author.isVerified) ...[
@@ -671,7 +746,11 @@ class _PremiumFeedReelCardState extends ConsumerState<PremiumFeedReelCard>
               LayoutBuilder(
                 builder: (context, restriccion) {
                   final compacto = restriccion.maxWidth < 340;
-                  final alto = compacto ? 58.0 : 72.0;
+                  // La CTA abre el detalle, no es el foco principal del reel.
+                  // Una altura de 72 y ancho expandido la convertían en un
+                  // bloque tosco que tapaba el video cuando no había match.
+                  final alto = compacto ? 42.0 : 46.0;
+                  final anchoCta = compacto ? 118.0 : 136.0;
                   return Row(
                     key: widget.isFirstCard ? cmFeedActionsKey : null,
                     children: [
@@ -735,15 +814,15 @@ class _PremiumFeedReelCardState extends ConsumerState<PremiumFeedReelCard>
                           ),
                         ),
                         const SizedBox(width: 10),
-                      ] else
-                        const Spacer(),
-                      Expanded(
+                      ],
+                      SizedBox(
+                        width: anchoCta,
                         child: GestureDetector(
                           onTap: _openProfile,
                           child: Container(
                             height: alto,
                             padding: EdgeInsets.symmetric(
-                              horizontal: compacto ? 14 : 26,
+                              horizontal: compacto ? 12 : 16,
                             ),
                             decoration: BoxDecoration(
                               color: MpTokens.primary,
@@ -756,7 +835,7 @@ class _PremiumFeedReelCardState extends ConsumerState<PremiumFeedReelCard>
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 color: Colors.white,
-                                fontSize: compacto ? 15 : 19,
+                                fontSize: compacto ? 13 : 14,
                                 fontWeight: FontWeight.w800,
                               ),
                             ),

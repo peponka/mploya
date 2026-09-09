@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/models.dart';
@@ -55,6 +56,23 @@ class FeedNotifier extends Notifier<FeedState> {
   }
 
   Future<String> _resolveMyAccountType(NexUser? user) async {
+    // La experiencia activa se elige en la app. Es prioritaria respecto a la
+    // fila histórica del perfil: una persona que alterna a Candidato debe ver
+    // empresas y vacantes aun si antes usó la misma cuenta como Empresa.
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final selected = prefs.getString('mploya_account_type');
+      if (const {
+        'candidato',
+        'confidencial',
+        'empresa',
+        'headhunter',
+      }.contains(selected)) {
+        return selected!;
+      }
+    } catch (e) {
+      debugPrint('FeedProvider: no se pudo leer experiencia activa: $e');
+    }
     final type = user?.accountType;
     if (type != null && type.isNotEmpty) return type;
     try {
@@ -65,9 +83,7 @@ class FeedNotifier extends Notifier<FeedState> {
         if (dbType != null && dbType.isNotEmpty) return dbType;
       }
     } catch (e) {
-      debugPrint(
-        'FeedProvider: no se pudo resolver account_type desde DB: $e',
-      );
+      debugPrint('FeedProvider: no se pudo resolver account_type desde DB: $e');
     }
     return 'candidato';
   }

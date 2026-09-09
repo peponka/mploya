@@ -180,6 +180,41 @@ class StorageService {
     }
   }
 
+  // ── Upload de Video de Cultura de la Empresa ─────────────────────────────
+
+  /// Sube un video de "Cultura de la Empresa" al bucket "videos" en ruta
+  /// `culture/<userId>_<slot>_<ts>.<ext>`. `slot` es `'intro'` para el video
+  /// institucional o `'story'` para una historia de un integrante del equipo
+  /// — separa ambos usos dentro del mismo prefijo sin mezclarlos con
+  /// `stories/` (que es para las Historias tipo feed, no relacionadas).
+  /// Detecta formato automáticamente (WebM en Chrome, MP4 en móvil).
+  Future<String?> uploadCultureVideo(String userId, XFile file, {required String slot}) async {
+    _lastError = null;
+    try {
+      final bytes = await file.readAsBytes();
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final fmt = _videoFormat(file, bytes);
+      final storagePath = 'culture/${userId}_${slot}_$timestamp.${fmt.ext}';
+
+      await _client.storage.from('videos').uploadBinary(
+            storagePath,
+            bytes,
+            fileOptions: FileOptions(
+              contentType: fmt.contentType,
+              upsert: true,
+            ),
+          );
+
+      return _client.storage.from('videos').getPublicUrl(storagePath);
+    } on StorageException catch (e) {
+      _lastError = _translateStorageError(e.message, e.statusCode);
+      return null;
+    } catch (e) {
+      _lastError = _classifyNetworkError(e);
+      return null;
+    }
+  }
+
   // ── Upload de Video de Entrevista IA ───────────────────────────────────────
 
   /// Sube un video de respuesta de entrevista al bucket "videos" en la ruta `interviews/<interviewId>_<questionId>.<ext>`.

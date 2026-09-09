@@ -1,10 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-bool _esCuentaConfidencial(dynamic raw) {
-  final tipo = raw?.toString().toLowerCase() ?? '';
-  return tipo.startsWith('confidenc') || tipo == 'stealth';
-}
+import '../../services/job_offer_service.dart';
 
 /// Datos compartidos por Ofertas, Contrataciones y Rendimiento de vacantes.
 ///
@@ -12,16 +9,30 @@ bool _esCuentaConfidencial(dynamic raw) {
 /// origen: `get_company_candidates` (postulaciones con perfil y vacante ya
 /// unidos) y `get_my_pipeline` (etapas de `connections.ats_status`).
 ///
-/// AUDITORÍA DEL CONCEPTO "OFERTA". No existe tabla de ofertas: ni salario
-/// ofrecido, ni vencimiento, ni contrato, ni firma. Lo único real es
-/// `job_applications.status = 'accepted'`, que es exactamente lo que el
-/// Dashboard ya cuenta como etapa "Oferta". Esta pantalla muestra eso y nada
-/// más.
+/// ╔═══════════════════════════════════════════════════════════════════════╗
+/// ║ ADENDA 30/8/2026 — migración 051, bloque E2 del plan de ofertas y     ║
+/// ║ pipeline.                                                              ║
+/// ╚═══════════════════════════════════════════════════════════════════════╝
 ///
-/// AUDITORÍA DE "CONTRATADO". Hay dos fuentes y no siempre coinciden:
-/// `connections.ats_status = 'hired'` (la que usa el Pipeline) y, si existiera,
-/// un `job_applications.status = 'hired'`. Se leen las dos y se fusionan por
-/// candidato, marcando de dónde salió cada una.
+/// Las dos auditorías de más abajo (conservadas por honestidad histórica) ya
+/// no describen el estado real de la base:
+///
+/// · "OFERTA" ahora es un dato real: `job_offers` (salario, moneda, modalidad,
+///   beneficios, fechas, mensaje, versiones). `loadOfertasEmpresa()` la lee
+///   directamente en vez de inferirla de `job_applications.status`.
+/// · "CONTRATADO" ya no se fusiona: `connections.ats_status` no tiene ninguna
+///   vía de escritura real en la app (ver la ADENDA de
+///   `empresa_pipeline_screen.dart`), así que dejó de leerse. La única fuente
+///   es `job_applications.status = 'hired'`.
+///
+/// AUDITORÍA ORIGINAL (ya no vigente, ver arriba):
+/// No existe tabla de ofertas: ni salario ofrecido, ni vencimiento, ni
+/// contrato, ni firma. Lo único real es `job_applications.status =
+/// 'accepted'`, que es exactamente lo que el Dashboard ya cuenta como etapa
+/// "Oferta". Hay dos fuentes de "contratado" y no siempre coinciden:
+/// `connections.ats_status = 'hired'` (la que usa el Pipeline) y, si
+/// existiera, un `job_applications.status = 'hired'`. Se leen las dos y se
+/// fusionan por candidato, marcando de dónde salió cada una.
 
 /// Una persona en una etapa concreta del proceso, con su vacante.
 @immutable
@@ -100,13 +111,9 @@ class ProcesoData {
   }
 }
 
-/// Estados de `job_applications` que representan una oferta hecha.
-///
-/// Es el estado canónico que el Dashboard también rotula como "Oferta".
-const _estadosOferta = {'accepted'};
-
-/// Estados que representan una contratación.
-const _estadosContratado = {'hired', 'contratado'};
+/// Estados que representan una contratación: un solo estado real,
+/// `hired` en `job_applications.status` (ver la ADENDA de más arriba).
+const _estadosContratado = {'hired'};
 
 /// Postulaciones de la empresa filtradas por un conjunto de estados.
 Future<ProcesoData> _loadPostulacionesPorEstado(Set<String> estados) async {
@@ -163,64 +170,111 @@ Future<ProcesoData> _loadPostulacionesPorEstado(Set<String> estados) async {
   }
 }
 
-/// Candidatos con oferta hecha.
-Future<ProcesoData> loadOfertas() =>
-    _loadPostulacionesPorEstado(_estadosOferta);
+/// Una oferta real (migración 051), con el candidato y la vacante ya
+/// resueltos con el mismo trato de confidencialidad que Pipeline y
+/// Contrataciones (`get_company_candidates`).
+@immutable
+class OfertaEmpresa {
+  const OfertaEmpresa({
+    required this.oferta,
+    required this.candidatoId,
+    required this.nombre,
+    required this.vacante,
+    this.headline,
+    this.avatarUrl,
+    this.confidencial = false,
+  });
 
-/// Contrataciones.
-///
-/// Fusiona las dos fuentes reales: las postulaciones marcadas como contratadas
-/// y el pipeline (`ats_status = 'hired'`). Si una persona aparece en las dos,
-/// gana la de postulaciones, que trae vacante.
-Future<ProcesoData> loadContrataciones() async {
-  final client = Supabase.instance.client;
-  if (client.auth.currentUser == null) return ProcesoData.empty;
+  final JobOffer oferta;
+  final String candidatoId;
+  final String nombre;
+  final String? headline;
+  final String? avatarUrl;
+  final bool confidencial;
+  final String vacante;
 
-  final porId = <String, PersonaEnProceso>{};
-  var error = false;
+  String get nombreVisible => confidencial ? 'Candidato confidencial' : nombre;
+}
 
-  final desdePostulaciones =
-      await _loadPostulacionesPorEstado(_estadosContratado);
-  if (desdePostulaciones.error) {
-    error = true;
-  } else {
-    for (final p in desdePostulaciones.personas) {
-      porId[p.candidatoId] = p;
+@immutable
+class OfertasEmpresaData {
+  const OfertasEmpresaData({required this.ofertas, this.error = false});
+
+  final List<OfertaEmpresa> ofertas;
+  final bool error;
+
+  static const empty = OfertasEmpresaData(ofertas: []);
+
+  int get total => ofertas.length;
+
+  Map<String, List<OfertaEmpresa>> get porVacante {
+    final mapa = <String, List<OfertaEmpresa>>{};
+    for (final o in ofertas) {
+      mapa.putIfAbsent(o.vacante, () => []).add(o);
     }
+    return mapa;
   }
+}
+
+/// Ofertas reales hechas por la empresa. Cruza `job_offers` (salario,
+/// moneda, modalidad, fechas, estado) con `get_company_candidates`
+/// (nombre, vacante, confidencialidad) por `application_id`.
+Future<OfertasEmpresaData> loadOfertasEmpresa() async {
+  final client = Supabase.instance.client;
+  if (client.auth.currentUser == null) return OfertasEmpresaData.empty;
+
+  List<JobOffer> ofertas;
+  try {
+    ofertas = await loadOffersForCompany(client: client);
+  } catch (e) {
+    debugPrint('proceso · loadOffersForCompany: $e');
+    return const OfertasEmpresaData(ofertas: [], error: true);
+  }
+  if (ofertas.isEmpty) return OfertasEmpresaData.empty;
+
+  final porApplicationId = {for (final o in ofertas) o.applicationId: o};
 
   try {
-    final filas = await client.rpc('get_my_pipeline') as List<dynamic>;
+    final filas = await client.rpc('get_company_candidates') as List<dynamic>;
+    final resultado = <OfertaEmpresa>[];
+
     for (final raw in filas) {
-      final f = raw as Map;
-      if (f['ats_status']?.toString() != 'hired') continue;
+      final p = raw as Map;
+      final appId = p['application_id']?.toString() ?? '';
+      final oferta = porApplicationId[appId];
+      if (oferta == null) continue;
 
-      final id = f['user_id']?.toString() ?? '';
-      if (id.isEmpty || porId.containsKey(id)) continue;
-
-      porId[id] = PersonaEnProceso(
-        candidatoId: id,
-        nombre: f['user_name']?.toString() ?? 'Candidato',
-        headline: (f['user_headline']?.toString().isNotEmpty ?? false)
-            ? f['user_headline'].toString()
-            : null,
-        avatarUrl: (f['user_avatar_url']?.toString().isNotEmpty ?? false)
-            ? f['user_avatar_url'].toString()
-            : null,
-        confidencial: f['is_confidential'] == true ||
-            _esCuentaConfidencial(f['user_account_type']),
-        estado: 'hired',
-        // El pipeline no dice para qué vacante: no se infiere.
-        origen: 'connections',
+      resultado.add(
+        OfertaEmpresa(
+          oferta: oferta,
+          candidatoId: p['candidate_id']?.toString() ?? '',
+          nombre: p['candidate_name']?.toString() ?? 'Candidato',
+          headline: (p['candidate_headline']?.toString().isNotEmpty ?? false)
+              ? p['candidate_headline'].toString()
+              : null,
+          avatarUrl: (p['candidate_avatar_url']?.toString().isNotEmpty ?? false)
+              ? p['candidate_avatar_url'].toString()
+              : null,
+          confidencial: p['is_confidential'] == true && p['is_unlocked'] != true,
+          vacante: p['job_title']?.toString() ?? 'Sin vacante',
+        ),
       );
     }
-  } catch (e) {
-    debugPrint('proceso · get_my_pipeline: $e');
-    if (porId.isEmpty) error = true;
-  }
 
-  return ProcesoData(personas: porId.values.toList(), error: error);
+    resultado.sort((a, b) => b.oferta.createdAt.compareTo(a.oferta.createdAt));
+    return OfertasEmpresaData(ofertas: resultado);
+  } catch (e) {
+    debugPrint('proceso · get_company_candidates (ofertas): $e');
+    return const OfertasEmpresaData(ofertas: [], error: true);
+  }
 }
+
+/// Contrataciones. Una sola fuente: `job_applications.status = 'hired'`,
+/// la misma que usa Pipeline desde la ADENDA del 30/8/2026. Ya no se lee
+/// `connections.ats_status`: esa columna no tiene ninguna vía de escritura
+/// real en la app (ver la ADENDA de `empresa_pipeline_screen.dart`).
+Future<ProcesoData> loadContrataciones() =>
+    _loadPostulacionesPorEstado(_estadosContratado);
 
 /// Rendimiento comparado de las vacantes propias.
 @immutable

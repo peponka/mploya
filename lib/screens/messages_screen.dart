@@ -7,6 +7,7 @@ import '../models/models.dart';
 import '../widgets/nex_avatar.dart';
 import '../utils/time_utils.dart';
 import 'chat_inmail_screen.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 
 class MessagesScreen extends StatefulWidget {
   const MessagesScreen({super.key});
@@ -175,7 +176,14 @@ class _ConversationTileState extends State<_ConversationTile> {
       if (res != null && mounted) {
         setState(() => _partner = NexUser.fromJson(res));
       }
-    } catch (_) {}
+    } catch (e, stackTrace) {
+      FirebaseCrashlytics.instance.recordError(
+        e,
+        stackTrace,
+        reason: 'messages_screen: cargar perfil del partner',
+        fatal: false,
+      );
+    }
   }
 
   @override

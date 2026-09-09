@@ -17,6 +17,7 @@ import '../services/saved_jobs_service.dart';
 import '../services/safe_profile_query_service.dart';
 import '../services/my_profile_service.dart';
 import '../widgets/coach_mark.dart';
+import '../services/coach_mark_service.dart';
 import '../widgets/web_ui.dart';
 import '../widgets/mploya_toast.dart';
 import 'saved_jobs_screen.dart';
@@ -37,6 +38,432 @@ class JobsPreviewData {
   final List<Map<String, dynamic>> vacantes;
   final Map<String, int> matchScores;
   final String viewerAccountType;
+}
+
+/// Acción compacta que se repite sobre los feeds inmersivos de candidato.
+/// El texto evita que iconos importantes queden crípticos para quien recién
+/// empieza a usar la app.
+class _FeedTopAction extends StatelessWidget {
+  const _FeedTopAction({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    onTap: onTap,
+    child: Container(
+      constraints: const BoxConstraints(minWidth: 43),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.26),
+        borderRadius: BorderRadius.circular(13),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: Colors.white, size: 18),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 9.5,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+/// Una vacante por pantalla, diseñada para leer primero y decidir después.
+/// Usa únicamente los datos que hoy devuelve `jobs`, por lo que no inventa ni
+/// depende de imágenes remotas para poder verse bien si una empresa aún no
+/// cargó video o logo.
+class _VacanteFeedReel extends StatelessWidget {
+  const _VacanteFeedReel({
+    required this.vacante,
+    required this.indice,
+    required this.total,
+    required this.guardada,
+    required this.postulada,
+    required this.onGuardar,
+    required this.onDetalle,
+    required this.onPostularme,
+  });
+
+  final CandVacanteVista vacante;
+  final int indice;
+  final int total;
+  final bool guardada;
+  final bool postulada;
+  final VoidCallback onGuardar;
+  final VoidCallback onDetalle;
+  final VoidCallback onPostularme;
+
+  @override
+  Widget build(BuildContext context) {
+    final v = vacante;
+    final accent = v.match != null && v.match! >= 85
+        ? const Color(0xFF4BE38B)
+        : const Color(0xFF8B6BFF);
+    final tags = <String>[
+      if (v.modalidad.isNotEmpty) v.modalidad,
+      ...v.etiquetas,
+    ].take(4).toList();
+
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF342175), Color(0xFF17102E), Color(0xFF080B18)],
+        ),
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            right: -75,
+            top: 130,
+            child: _GlowOrb(color: accent.withValues(alpha: 0.30), size: 260),
+          ),
+          Positioned(
+            left: -100,
+            bottom: 90,
+            child: _GlowOrb(
+              color: const Color(0xFFFF6B2C).withValues(alpha: 0.18),
+              size: 260,
+            ),
+          ),
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(22, 180, 22, 104),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 50,
+                        height: 50,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: v.logoEmpresa == null
+                            ? Text(
+                                v.empresa.isEmpty
+                                    ? 'M'
+                                    : v.empresa[0].toUpperCase(),
+                                style: const TextStyle(
+                                  color: Color(0xFF352278),
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              )
+                            : ClipRRect(
+                                borderRadius: BorderRadius.circular(16),
+                                child: CachedNetworkImage(
+                                  imageUrl: v.logoEmpresa!,
+                                  width: 50,
+                                  height: 50,
+                                  fit: BoxFit.cover,
+                                  errorWidget: (_, __, ___) => Center(
+                                    child: Text(
+                                      v.empresa.isEmpty
+                                          ? 'M'
+                                          : v.empresa[0].toUpperCase(),
+                                      style: const TextStyle(
+                                        color: Color(0xFF352278),
+                                        fontSize: 22,
+                                        fontWeight: FontWeight.w900,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              v.empresa.isEmpty
+                                  ? 'Empresa en Mploya'
+                                  : v.empresa,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 17,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            const Text(
+                              'Vacante publicada en Mploya',
+                              style: TextStyle(
+                                color: Color(0xFFB9F4D1),
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (v.match != null)
+                        _MatchBadge(valor: v.match!, color: accent),
+                    ],
+                  ),
+                  const Spacer(),
+                  Text(
+                    v.nueva ? 'NUEVA OPORTUNIDAD' : 'OPORTUNIDAD PARA VOS',
+                    style: TextStyle(
+                      color: accent,
+                      fontSize: 12,
+                      letterSpacing: 0.5,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    v.puesto,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 31,
+                      height: 1.08,
+                      letterSpacing: -1.0,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    [
+                      v.ubicacion,
+                      v.modalidad,
+                      v.publicada,
+                    ].where((item) => item.trim().isNotEmpty).join(' · '),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Color(0xFFE2DDFC),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  if (v.descripcion.isNotEmpty) ...[
+                    const SizedBox(height: 18),
+                    Text(
+                      v.descripcion,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Color(0xFFF0EEFB),
+                        fontSize: 15,
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                  if (tags.isNotEmpty) ...[
+                    const SizedBox(height: 18),
+                    Wrap(
+                      spacing: 7,
+                      runSpacing: 7,
+                      children: tags
+                          .map(
+                            (tag) => Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 11,
+                                vertical: 7,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(99),
+                                border: Border.all(
+                                  color: Colors.white.withValues(alpha: 0.14),
+                                ),
+                              ),
+                              child: Text(
+                                tag,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          )
+                          .toList(),
+                    ),
+                  ],
+                  const SizedBox(height: 20),
+                  Row(
+                    children: [
+                      _ReelAction(
+                        icon: guardada
+                            ? CupertinoIcons.bookmark_fill
+                            : CupertinoIcons.bookmark,
+                        label: guardada ? 'Guardada' : 'Guardar',
+                        onTap: onGuardar,
+                      ),
+                      const SizedBox(width: 10),
+                      _ReelAction(
+                        icon: CupertinoIcons.doc_text_search,
+                        label: 'Ver más',
+                        onTap: onDetalle,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: postulada ? null : onPostularme,
+                          child: Container(
+                            height: 52,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              gradient: postulada
+                                  ? null
+                                  : const LinearGradient(
+                                      colors: [
+                                        Color(0xFF9A72FF),
+                                        Color(0xFF5E39F4),
+                                      ],
+                                    ),
+                              color: postulada ? const Color(0xFF384052) : null,
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Text(
+                              postulada ? 'Postulación enviada' : 'Postularme',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Center(
+                    child: Text(
+                      '${indice + 1} de $total · deslizá para continuar',
+                      style: const TextStyle(
+                        color: Color(0xFFB8B1D5),
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GlowOrb extends StatelessWidget {
+  const _GlowOrb({required this.color, required this.size});
+  final Color color;
+  final double size;
+  @override
+  Widget build(BuildContext context) => Container(
+    width: size,
+    height: size,
+    decoration: BoxDecoration(shape: BoxShape.circle, color: color),
+  );
+}
+
+class _MatchBadge extends StatelessWidget {
+  const _MatchBadge({required this.valor, required this.color});
+  final int valor;
+  final Color color;
+  @override
+  Widget build(BuildContext context) => Container(
+    width: 66,
+    height: 66,
+    alignment: Alignment.center,
+    decoration: BoxDecoration(
+      shape: BoxShape.circle,
+      border: Border.all(color: color, width: 4),
+      color: Colors.black.withValues(alpha: 0.22),
+    ),
+    child: Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Text(
+          '$valor%',
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 17,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        const Text(
+          'MATCH',
+          style: TextStyle(
+            color: Color(0xFFD9D3F7),
+            fontSize: 8,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _ReelAction extends StatelessWidget {
+  const _ReelAction({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    onTap: onTap,
+    child: Container(
+      height: 52,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, color: Colors.white, size: 18),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 9,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
 }
 
 class JobsScreen extends ConsumerStatefulWidget {
@@ -96,6 +523,29 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
     'hybrid': 'Híbrido',
     'onsite': 'Presencial',
   };
+
+  String _jobModality(Map<String, dynamic> job) {
+    final direct = _modalityLabels[job['modality']?.toString()];
+    if (direct != null) return direct;
+    final tags = job['tags'];
+    if (tags is List) {
+      for (final tag in tags) {
+        switch (tag.toString().trim().toLowerCase()) {
+          case 'remoto':
+          case 'remote':
+            return 'Remoto';
+          case 'híbrido':
+          case 'hibrido':
+          case 'hybrid':
+            return 'Híbrido';
+          case 'presencial':
+          case 'onsite':
+            return 'Presencial';
+        }
+      }
+    }
+    return job['is_remote'] == true ? 'Remoto' : '';
+  }
 
   static const Map<String, String> _seniorityLabels = {
     'junior': 'Junior',
@@ -167,7 +617,8 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
         if (tag.isNotEmpty) counts[tag] = (counts[tag] ?? 0) + 1;
       }
     }
-    final sorted = counts.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+    final sorted = counts.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
     return sorted.take(12).map((e) => e.key).toList();
   }
 
@@ -184,7 +635,11 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
   List<String> get _availableCompanies {
     final set = <String>{};
     for (final j in _jobs) {
-      final name = ((j['users'] as Map?)?['name']?.toString() ?? j['company']?.toString() ?? '').trim();
+      final name =
+          ((j['users'] as Map?)?['name']?.toString() ??
+                  j['company']?.toString() ??
+                  '')
+              .trim();
       if (name.isNotEmpty) set.add(name);
     }
     final list = set.toList()..sort();
@@ -204,6 +659,14 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
     }
     _fetchJobs();
     _loadSavedJobs();
+    // Coach mark (29/8/2026): tour nuevo que reemplaza al tutorial de 7
+    // pantallas que se sacó del feed — explica cómo buscar y postularse acá,
+    // en Vacantes.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Future.delayed(const Duration(milliseconds: 700), () {
+        if (mounted) CoachMarkService.showCandVacantesTour(context);
+      });
+    });
   }
 
   @override
@@ -355,11 +818,13 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
 
         int score = 0;
         for (final t in userTags) {
-          if (jobTags.any((jt) => jt.toLowerCase() == t.toLowerCase())) score += 20;
+          if (jobTags.any((jt) => jt.toLowerCase() == t.toLowerCase()))
+            score += 20;
           if (jobTitle.contains(t.toLowerCase())) score += 10;
         }
         for (final s in userSkills) {
-          if (jobTags.any((jt) => jt.toLowerCase() == s.toLowerCase())) score += 15;
+          if (jobTags.any((jt) => jt.toLowerCase() == s.toLowerCase()))
+            score += 15;
         }
         scores[jobId] = score.clamp(0, 100);
       }
@@ -398,8 +863,21 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
 
   /// Guard de doble envío. El flujo real vive en `_applyToJobFlow` para no
   /// tener que envolver todo su cuerpo en un try/finally.
-  void _applyToJob(String jobId, String jobTitle) async {
-    if (_isApplying) return;
+  ///
+  /// ADENDA 31/8/2026. Antes devolvía void, y por eso la ficha de la
+  /// vacante se ponía en "✓ Postulación enviada" en cuanto se tocaba el
+  /// botón, sin saber si se había enviado algo. El flujo tiene varias
+  /// salidas donde legítimamente NO se postula a nadie —cancelar el
+  /// diálogo de video, cancelar la cámara, cancelar el Ghost Apply, o un
+  /// error leyendo el perfil— y en todas ellas la pantalla igual
+  /// afirmaba que la postulación estaba enviada.
+  ///
+  /// Devuelve `true` sólo si la postulación quedó registrada de verdad.
+  /// No hace falta tocar cada salida: `_appliedJobIds` ya es la señal
+  /// confiable —sólo se escribe cuando el INSERT (o el Ghost Apply) lo
+  /// confirmó—, así que se informa eso.
+  Future<bool> _applyToJob(String jobId, String jobTitle) async {
+    if (_isApplying) return _appliedJobIds.contains(jobId);
     _isApplying = true;
     try {
       await _applyToJobFlow(jobId, jobTitle);
@@ -414,6 +892,7 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
     } finally {
       _isApplying = false;
     }
+    return _appliedJobIds.contains(jobId);
   }
 
   Future<void> _applyToJobFlow(String jobId, String jobTitle) async {
@@ -701,10 +1180,11 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
   /// se completa con un valor de ejemplo: lo que no está, viaja vacío.
   CandVacanteVista _vista(Map<String, dynamic> job) {
     final id = job['id']?.toString() ?? '';
-    final empresa = ((job['users'] as Map?)?['name']?.toString() ??
-            job['company']?.toString() ??
-            '')
-        .trim();
+    final empresa =
+        ((job['users'] as Map?)?['name']?.toString() ??
+                job['company']?.toString() ??
+                '')
+            .trim();
     final logo = (job['users'] as Map?)?['avatar_url']?.toString();
     final tagsRaw = job['tags'];
     final match = _matchScores[id];
@@ -716,17 +1196,16 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
       empresa: empresa.isEmpty ? 'Empresa' : empresa,
       logoEmpresa: (logo != null && logo.isNotEmpty) ? logo : null,
       ubicacion: job['location']?.toString().trim() ?? '',
-      modalidad: _modalityLabels[job['modality']?.toString()] ?? '',
-      salario: (job['salary_range']?.toString() ??
-              job['salary']?.toString() ??
-              '')
-          .trim(),
+      modalidad: _jobModality(job),
+      salario:
+          (job['salary_range']?.toString() ?? job['salary']?.toString() ?? '')
+              .trim(),
       match: (match != null && match > 0) ? match : null,
       etiquetas: tagsRaw is List
           ? tagsRaw
-              .map((t) => t.toString().trim())
-              .where((t) => t.isNotEmpty)
-              .toList()
+                .map((t) => t.toString().trim())
+                .where((t) => t.isNotEmpty)
+                .toList()
           : const [],
       publicada: _publicada(creado),
       nueva: _esNueva(creado),
@@ -746,9 +1225,11 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
               ? score
               : null,
           isApplied: !isHeadhunter && _appliedJobIds.contains(jobId),
+          isSaved: !isHeadhunter && _savedJobIds.contains(jobId),
           onApply: isHeadhunter
               ? null
               : () => _applyToJob(jobId, job['title']?.toString() ?? 'Vacante'),
+          onToggleSaved: isHeadhunter ? null : () => _toggleSaved(jobId),
           viewerAccountType: isHeadhunter ? 'headhunter' : null,
           previewMode: widget.previewData != null,
         ),
@@ -872,10 +1353,10 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
   }
 
   void _abrirCerca() => Navigator.of(context).push(
-        CupertinoPageRoute(
-          builder: (_) => const ExploreScreen(filtroInicial: 'empresa'),
-        ),
-      );
+    CupertinoPageRoute(
+      builder: (_) => const ExploreScreen(filtroInicial: 'empresa'),
+    ),
+  );
 
   void _abrirGuardados() => Navigator.of(
     context,
@@ -905,10 +1386,11 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
   String _detalleCerca() {
     final empresas = <String>{};
     for (final j in _jobs) {
-      final nombre = ((j['users'] as Map?)?['name']?.toString() ??
-              j['company']?.toString() ??
-              '')
-          .trim();
+      final nombre =
+          ((j['users'] as Map?)?['name']?.toString() ??
+                  j['company']?.toString() ??
+                  '')
+              .trim();
       if (nombre.isNotEmpty) empresas.add(nombre);
     }
     if (empresas.isEmpty) return 'Explorá el mapa de empresas';
@@ -925,7 +1407,11 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
           : switch (formato) {
               CandFormato.desktop => _candidatoDesktop(),
               CandFormato.tablet => _candidatoAncho(padding: 24),
-              CandFormato.mobile => _candidatoAncho(padding: 20),
+              // Descubrir vacantes es un feed, no una lista de formularios.
+              // En móvil se navega una oportunidad por vez, con swipe vertical
+              // igual que Inicio. Tablet conserva la grilla, que aprovecha
+              // mejor el ancho adicional.
+              CandFormato.mobile => _candidatoFeedInmersivo(),
             },
     );
   }
@@ -937,6 +1423,103 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
         if (!formato.esDesktop) SizedBox(height: candTopInset(context)),
         const CandEncabezado(titulo: 'Vacantes', subtitulo: 'Buscando…'),
         const Expanded(child: CandCargandoLista(cantidad: 3)),
+      ],
+    );
+  }
+
+  /// Feed móvil de oportunidades. Mantiene los datos, acciones y filtros de
+  /// la lista clásica, pero cambia la jerarquía: primero se descubre una
+  /// vacante completa; luego se decide guardar, ver el detalle o postularse.
+  Widget _candidatoFeedInmersivo() {
+    final visible = _visibleJobs;
+    if (visible.isEmpty) {
+      return Column(
+        children: [
+          SizedBox(height: candTopInset(context)),
+          const CandEncabezado(titulo: 'Vacantes'),
+          Expanded(child: _vacioCandidato()),
+        ],
+      );
+    }
+
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: PageView.builder(
+            scrollDirection: Axis.vertical,
+            physics: const BouncingScrollPhysics(),
+            itemCount: visible.length,
+            itemBuilder: (context, index) {
+              final job = visible[index];
+              final vista = _vista(job);
+              return _VacanteFeedReel(
+                vacante: vista,
+                indice: index,
+                total: visible.length,
+                guardada: _savedJobIds.contains(vista.id),
+                postulada: _appliedJobIds.contains(vista.id),
+                onGuardar: () => _toggleSaved(vista.id),
+                onDetalle: () => _abrirDetalle(job),
+                onPostularme: () => _applyToJob(vista.id, vista.puesto),
+              );
+            },
+          ),
+        ),
+        Positioned(
+          top: candTopInset(context),
+          left: 0,
+          right: 0,
+          child: SafeArea(
+            bottom: false,
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 10, 20, 8),
+                  child: Row(
+                    children: [
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Vacantes para vos',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 23,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: -0.5,
+                              ),
+                            ),
+                            Text(
+                              'Deslizá para descubrir oportunidades',
+                              style: TextStyle(
+                                color: Color(0xFFD8D2FF),
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      _FeedTopAction(
+                        icon: CupertinoIcons.bookmark,
+                        label: 'Guardados',
+                        onTap: _abrirGuardados,
+                      ),
+                      const SizedBox(width: 8),
+                      _FeedTopAction(
+                        icon: CupertinoIcons.map_pin_ellipse,
+                        label: 'Mapa',
+                        onTap: _abrirCerca,
+                      ),
+                    ],
+                  ),
+                ),
+                CandFilaChips(padding: 20, children: _chipsFiltro()),
+              ],
+            ),
+          ),
+        ),
       ],
     );
   }
@@ -968,10 +1551,13 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
         ),
         Padding(
           padding: EdgeInsets.fromLTRB(padding, 0, padding, 12),
-          child: CandBuscador(
-            controller: _searchController,
-            placeholder: 'Buscar puesto, empresa o skill',
-            onChanged: (v) => setState(() => _titleSearch = v),
+          child: KeyedSubtree(
+            key: cmCandVacantesBuscarKey,
+            child: CandBuscador(
+              controller: _searchController,
+              placeholder: 'Buscar puesto, empresa o skill',
+              onChanged: (v) => setState(() => _titleSearch = v),
+            ),
           ),
         ),
         CandFilaChips(padding: padding, children: _chipsFiltro()),
@@ -1022,8 +1608,7 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
     final visible = _visibleJobs;
     final seleccionada = visible.firstWhere(
       (j) => j['id']?.toString() == _selectedJobId,
-      orElse: () =>
-          visible.isEmpty ? <String, dynamic>{} : visible.first,
+      orElse: () => visible.isEmpty ? <String, dynamic>{} : visible.first,
     );
     final hayDetalle = seleccionada.isNotEmpty;
 
@@ -1081,15 +1666,17 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
         ),
         CandDetalleVacante(
           vacante: hayDetalle ? _vista(seleccionada) : null,
-          guardada: hayDetalle &&
+          guardada:
+              hayDetalle &&
               _savedJobIds.contains(seleccionada['id']?.toString()),
-          postulada: hayDetalle &&
+          postulada:
+              hayDetalle &&
               _appliedJobIds.contains(seleccionada['id']?.toString()),
           onPostularme: hayDetalle
               ? () => _applyToJob(
-                    seleccionada['id']?.toString() ?? '',
-                    seleccionada['title']?.toString() ?? 'Vacante',
-                  )
+                  seleccionada['id']?.toString() ?? '',
+                  seleccionada['title']?.toString() ?? 'Vacante',
+                )
               : null,
           onGuardar: hayDetalle
               ? () => _toggleSaved(seleccionada['id']?.toString() ?? '')
@@ -1254,7 +1841,7 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
               ),
             ),
             Expanded(
-        child: _isLoading
+              child: _isLoading
                   ? const Center(child: CupertinoActivityIndicator())
                   : visible.isEmpty
                   ? _headhunterJobsEmpty()
@@ -1309,7 +1896,7 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
         '';
     final title = job['title']?.toString().trim() ?? '';
     final location = job['location']?.toString().trim() ?? '';
-    final modality = _modalityLabels[job['modality']?.toString()] ?? '';
+    final modality = _jobModality(job);
     final salary =
         (job['salary_range'] ?? job['salary'])?.toString().trim() ?? '';
     final tags = ((job['tags'] as List?) ?? const [])
@@ -1471,130 +2058,135 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
       physics: const BouncingScrollPhysics(
         parent: AlwaysScrollableScrollPhysics(),
       ),
-                    slivers: [
-                      // ── Pull-to-Refresh nativo iOS ──
-                      CupertinoSliverRefreshControl(
-                        onRefresh: () async {
-                          HapticFeedback.mediumImpact();
-                          await _fetchJobs();
-                        },
-                      ),
-                      // ── Barra de filtros web (Ubicación / Tipo / Seniority / Buscar) ──
-                      if (isWebWide(context))
-                        SliverToBoxAdapter(child: _buildWebFilterBar(context))
-                      else
-                        // ── Filtros (pills, mobile) ──
-                        SliverToBoxAdapter(
-                          child: SizedBox(
-                            height: 50,
-                            child: ListView(
-                              scrollDirection: Axis.horizontal,
-                              padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                              children: ['Para Ti', 'Todos', 'Remoto', 'Presencial', 'C-Level']
-                                  .map((f) => Padding(
-                                        padding: const EdgeInsets.only(right: 8),
-                                        child: GestureDetector(
-                                          onTap: () {
-                                            setState(() => _selectedFilter = f);
-                                            _fetchJobs();
-                                          },
-                                          child: Container(
+      slivers: [
+        // ── Pull-to-Refresh nativo iOS ──
+        CupertinoSliverRefreshControl(
+          onRefresh: () async {
+            HapticFeedback.mediumImpact();
+            await _fetchJobs();
+          },
+        ),
+        // ── Barra de filtros web (Ubicación / Tipo / Seniority / Buscar) ──
+        if (isWebWide(context))
+          SliverToBoxAdapter(child: _buildWebFilterBar(context))
+        else
+          // ── Filtros (pills, mobile) ──
+          SliverToBoxAdapter(
+            child: SizedBox(
+              height: 50,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                children:
+                    ['Para Ti', 'Todos', 'Remoto', 'Presencial', 'C-Level']
+                        .map(
+                          (f) => Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: GestureDetector(
+                              onTap: () {
+                                setState(() => _selectedFilter = f);
+                                _fetchJobs();
+                              },
+                              child: Container(
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 16,
                                   vertical: 8,
                                 ),
-                                            decoration: BoxDecoration(
+                                decoration: BoxDecoration(
                                   color: _selectedFilter == f
                                       ? context.brandAccent
                                       : context.cardColor,
-                                              borderRadius: BorderRadius.circular(20),
-                                              border: Border.all(
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
                                     color: _selectedFilter == f
                                         ? Colors.transparent
                                         : context.dividerColor.withValues(
                                             alpha: 0.5,
                                           ),
-                                                width: 0.5,
-                                              ),
-                                            ),
-                                            child: Text(
-                                              f,
-                                              style: TextStyle(
+                                    width: 0.5,
+                                  ),
+                                ),
+                                child: Text(
+                                  f,
+                                  style: TextStyle(
                                     color: _selectedFilter == f
                                         ? Colors.white
                                         : context.textSecondary,
-                                                fontSize: 13,
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                          ),
-                        )
-                                  .toList(),
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
                             ),
                           ),
-                        ),
+                        )
+                        .toList(),
+              ),
+            ),
+          ),
 
-                      // ── Coach Banner (first visit) ──
-                      SliverToBoxAdapter(
-                        child: CoachBanner(
-                          id: 'jobs_intro',
-                          icon: CupertinoIcons.bookmark_fill,
-                          title: 'Guardá vacantes',
-                          message: 'Tocá el ícono 🔖 en cada tarjeta para guardar las vacantes que te interesan.',
-                        ),
-                      ),
+        // ── Coach Banner (first visit) ──
+        SliverToBoxAdapter(
+          child: CoachBanner(
+            id: 'jobs_intro',
+            icon: CupertinoIcons.bookmark_fill,
+            title: 'Guardá vacantes',
+            message:
+                'Tocá el ícono 🔖 en cada tarjeta para guardar las vacantes que te interesan.',
+          ),
+        ),
 
-                      // ── Job Cards (grilla responsive: 2 columnas en web) ──
-                      SliverToBoxAdapter(
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
+        // ── Job Cards (grilla responsive: 2 columnas en web) ──
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
             child: WebGrid(
               children: [
-                            for (int index = 0; index < visible.length; index++)
+                for (int index = 0; index < visible.length; index++)
                   Builder(
                     builder: (context) {
-                                final job = visible[index];
-                                final jobId = job['id']?.toString() ?? '';
-                                final matchScore = _matchScores[jobId];
+                      final job = visible[index];
+                      final jobId = job['id']?.toString() ?? '';
+                      final matchScore = _matchScores[jobId];
                       final effectiveScore =
                           matchScore != null && matchScore > 0
                           ? matchScore
                           : null;
-                      void apply() => _applyToJob(
+                      Future<bool> apply() => _applyToJob(
                         jobId,
                         job['title']?.toString() ?? 'Vacante',
                       );
-                                return GestureDetector(
-                                  behavior: HitTestBehavior.opaque,
-                                  onTap: () => Navigator.of(context).push(
-                                    CupertinoPageRoute(
-                                      builder: (_) => JobDetailScreen(
-                                        job: job,
-                                        matchScore: effectiveScore,
-                                        isApplied: _appliedJobIds.contains(jobId),
-                                        onApply: apply,
-                                      ),
-                                    ),
-                                  ),
-                                  child: _JobListCard(
-                                    esPreview: widget.previewData != null,
-                                    job: job,
-                                    isApplied: _appliedJobIds.contains(jobId),
-                                    matchScore: effectiveScore,
-                                    onApply: apply,
-                                  ),
-                                );
+                      return GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () => Navigator.of(context).push(
+                          CupertinoPageRoute(
+                            builder: (_) => JobDetailScreen(
+                              job: job,
+                              matchScore: effectiveScore,
+                              isApplied: _appliedJobIds.contains(jobId),
+                              isSaved: _savedJobIds.contains(jobId),
+                              onApply: apply,
+                              onToggleSaved: () => _toggleSaved(jobId),
+                            ),
+                          ),
+                        ),
+                        child: _JobListCard(
+                          esPreview: widget.previewData != null,
+                          job: job,
+                          isApplied: _appliedJobIds.contains(jobId),
+                          matchScore: effectiveScore,
+                          onApply: apply,
+                        ),
+                      );
                     },
                   ),
               ],
             ),
-                        ),
-                      ),
-                      const SliverToBoxAdapter(child: SizedBox(height: 100)),
-                    ],
-                  );
+          ),
+        ),
+        const SliverToBoxAdapter(child: SizedBox(height: 100)),
+      ],
+    );
   }
 
   Widget _buildWebFilterBar(BuildContext context) {
@@ -1927,76 +2519,78 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
 
   Widget _buildEmptyState() {
     final userAsync = ref.watch(currentUserProvider);
-    final isCompany = userAsync.value?.accountType == 'empresa' || userAsync.value?.accountType == 'headhunter';
-    
+    final isCompany =
+        userAsync.value?.accountType == 'empresa' ||
+        userAsync.value?.accountType == 'headhunter';
+
     return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(40),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
+      child: Padding(
+        padding: const EdgeInsets.all(40),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
             Icon(
               CupertinoIcons.briefcase,
               size: 56,
               color: context.textTertiary.withValues(alpha: 0.3),
             ),
-              const SizedBox(height: 20),
-              Text(
+            const SizedBox(height: 20),
+            Text(
               isCompany
                   ? 'No tienes vacantes activas'
                   : 'No hay vacantes disponibles',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  color: context.textPrimary,
-                ),
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: context.textPrimary,
               ),
-              const SizedBox(height: 8),
-              Text(
-                isCompany
+            ),
+            const SizedBox(height: 8),
+            Text(
+              isCompany
                   ? 'Publicá tu primera posición para recibir video-pitches de los mejores perfiles.'
                   : 'Las empresas publicarán oportunidades pronto. ¡Mantené tu perfil actualizado!',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: context.textTertiary,
-                  height: 1.4,
-                ),
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 14,
+                color: context.textTertiary,
+                height: 1.4,
               ),
-              const SizedBox(height: 24),
-              GestureDetector(
-                onTap: () {
-                  HapticFeedback.selectionClick();
-                  if (isCompany) {
-                    Navigator.of(context).push(
+            ),
+            const SizedBox(height: 24),
+            GestureDetector(
+              onTap: () {
+                HapticFeedback.selectionClick();
+                if (isCompany) {
+                  Navigator.of(context).push(
                     CupertinoPageRoute<void>(
                       builder: (_) => const CreateJobScreen(),
                     ),
-                    );
-                  } else {
-                    _fetchJobs();
-                  }
-                },
-                child: Container(
+                  );
+                } else {
+                  _fetchJobs();
+                }
+              },
+              child: Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 28,
                   vertical: 13,
                 ),
-                  decoration: NexTheme.gradientButtonDecoration(borderRadius: 24),
-                  child: Text(
-                    isCompany ? 'Publicar vacante' : 'Actualizar',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 16,
-                    ),
+                decoration: NexTheme.gradientButtonDecoration(borderRadius: 24),
+                child: Text(
+                  isCompany ? 'Publicar vacante' : 'Actualizar',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 16,
                   ),
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
-      );
+      ),
+    );
   }
 
   Widget _buildLoadingSkeleton() {
@@ -2018,7 +2612,8 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
               Row(
                 children: [
                   Container(
-                    width: 44, height: 44,
+                    width: 44,
+                    height: 44,
                     decoration: BoxDecoration(
                       color: context.dividerColor.withValues(alpha: 0.3),
                       borderRadius: BorderRadius.circular(12),
@@ -2030,7 +2625,8 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Container(
-                          width: 160, height: 16,
+                          width: 160,
+                          height: 16,
                           decoration: BoxDecoration(
                             color: context.dividerColor.withValues(alpha: 0.3),
                             borderRadius: BorderRadius.circular(8),
@@ -2038,7 +2634,8 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
                         ),
                         const SizedBox(height: 6),
                         Container(
-                          width: 100, height: 12,
+                          width: 100,
+                          height: 12,
                           decoration: BoxDecoration(
                             color: context.dividerColor.withValues(alpha: 0.2),
                             borderRadius: BorderRadius.circular(6),
@@ -2051,7 +2648,8 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
               ),
               const SizedBox(height: 16),
               Container(
-                width: 120, height: 28,
+                width: 120,
+                height: 28,
                 decoration: BoxDecoration(
                   color: context.dividerColor.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(8),
@@ -2059,7 +2657,8 @@ class _JobsScreenState extends ConsumerState<JobsScreen> {
               ),
               const SizedBox(height: 16),
               Container(
-                width: double.infinity, height: 44,
+                width: double.infinity,
+                height: 44,
                 decoration: BoxDecoration(
                   color: context.dividerColor.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(12),
@@ -2129,7 +2728,9 @@ class _JobListCardState extends State<_JobListCard> {
     final companyName = companyData?['name']?.toString() ?? 'Empresa';
     final companyAvatar = companyData?['avatar_url']?.toString();
     final tagsRaw = job['tags'];
-    final tags = tagsRaw is List ? tagsRaw.map((t) => t.toString()).toList() : <String>[];
+    final tags = tagsRaw is List
+        ? tagsRaw.map((t) => t.toString()).toList()
+        : <String>[];
     final createdAt = job['created_at']?.toString() ?? '';
 
     final matchScore = widget.matchScore ?? 0;
@@ -2419,24 +3020,26 @@ class _JobListCardState extends State<_JobListCard> {
                         horizontal: 9,
                         vertical: 5,
                       ),
-                    decoration: BoxDecoration(
+                      decoration: BoxDecoration(
                         color: context.isDark
                             ? CupertinoColors.systemGrey6.darkColor
                             : const Color(0xFFF3F3F5),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Text(
-                      tag.startsWith('#') ? tag : '#$tag',
-                      style: TextStyle(
-                        color: context.textSecondary,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        tag.startsWith('#') ? tag : '#$tag',
+                        style: TextStyle(
+                          color: context.textSecondary,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
-                  )).toList(),
+                  )
+                  .toList(),
             ),
           ],
-          
+
           if (createdAt.isNotEmpty && DateTime.tryParse(createdAt) != null) ...[
             const SizedBox(height: 18),
             JobHeatmapBar(createdAt: DateTime.parse(createdAt).toLocal()),
@@ -2453,7 +3056,7 @@ class _JobListCardState extends State<_JobListCard> {
                   size: 13,
                   color: context.textTertiary,
                 ),
-              const SizedBox(width: 5),
+                const SizedBox(width: 5),
                 Flexible(
                   child: Text(
                     location,
@@ -2487,9 +3090,9 @@ class _JobListCardState extends State<_JobListCard> {
                             Color(0xFF0C447C),
                             Color(0xFFD4740A),
                           ],
-                    begin: Alignment.centerLeft,
-                    end: Alignment.centerRight,
-                  ),
+                          begin: Alignment.centerLeft,
+                          end: Alignment.centerRight,
+                        ),
                   color: isApplied ? CupertinoColors.systemGrey4 : null,
                   boxShadow: isApplied
                       ? null
@@ -2501,7 +3104,7 @@ class _JobListCardState extends State<_JobListCard> {
                             blurRadius: 12,
                             offset: const Offset(0, 4),
                           ),
-                  ],
+                        ],
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -2521,7 +3124,9 @@ class _JobListCardState extends State<_JobListCard> {
                       style: TextStyle(
                         fontWeight: FontWeight.w700,
                         fontSize: 15,
-                        color: isApplied ? CupertinoColors.systemGrey : Colors.white,
+                        color: isApplied
+                            ? CupertinoColors.systemGrey
+                            : Colors.white,
                       ),
                     ),
                   ],

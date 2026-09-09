@@ -49,7 +49,7 @@ Future<void> _loadFonts() async {
 
 CandidatoPipeline _c(String id, String nombre, String rol, EtapaPipeline e) {
   return CandidatoPipeline(
-    connectionId: id,
+    applicationId: id,
     etapa: e,
     usuario: NexUser(id: id, name: nombre, headline: rol),
   );

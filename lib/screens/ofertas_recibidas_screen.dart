@@ -1,30 +1,45 @@
 import 'package:flutter/cupertino.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../models/models.dart';
+import '../services/job_offer_service.dart';
 import '../services/safe_profile_query_service.dart';
 import '../widgets/candidato/cand_ui.dart';
 import '../widgets/ds/mploya_ds.dart';
-import 'chat_inmail_screen.dart';
+import 'oferta_detalle_candidato_screen.dart';
 
-/// OFERTAS RECIBIDAS (candidato) — Tanda 5, pantalla nueva.
+/// OFERTAS RECIBIDAS (candidato).
+///
+/// ╔═══════════════════════════════════════════════════════════════════════╗
+/// ║ ADENDA 30/8/2026 — migración 051, bloque E2 del plan de ofertas y     ║
+/// ║ pipeline.                                                              ║
+/// ╚═══════════════════════════════════════════════════════════════════════╝
+///
+/// Hasta esta migración no existía tabla de ofertas: esta pantalla listaba
+/// postulaciones con `status = 'accepted'` y la única acción posible era
+/// escribirle a la empresa por chat, porque no había nada más real que
+/// mostrar ni backend para aceptar o rechazar (ver el comentario original
+/// más abajo, que se conserva por honestidad histórica).
+///
+/// Ahora `job_offers` es una tabla real con salario, moneda, modalidad,
+/// beneficios, vencimiento y mensaje, y el candidato puede responder de
+/// verdad — aceptar, rechazar o pedir cambios — desde
+/// `OfertaDetalleCandidatoScreen`. Esta pantalla pasó a ser el listado: toda
+/// oferta recibida, abierta o ya respondida, ordenada de la más nueva a la
+/// más vieja.
+///
+/// ---
+/// COMENTARIO ORIGINAL (Tanda 5, pantalla nueva), conservado por honestidad
+/// histórica — ya no describe el comportamiento actual de esta pantalla:
 ///
 /// Referencia visual: design-reference/FINAL_SCREENS_CODEX/.../
 /// oferta recibida candidato.png.
 ///
 /// El mockup muestra una oferta con carta de oferta, beneficios detallados,
 /// bonos, revisión salarial, countdown de "5 días para responder" y botones
-/// Aceptar/Rechazar/Negociar. NADA de eso existe en `job_applications` (6
-/// columnas reales: id, job_id, candidate_id, status, created_at,
-/// is_favorite — confirmado en Tanda 2). No hay RPC que permita al candidato
-/// cambiar el status ni backend para carta/beneficios/countdown.
-///
-/// Adaptación honesta: una "oferta" es, con los datos reales, una
-/// postulación con `status = 'accepted'`. Esta pantalla lista esas
-/// postulaciones con lo que sí es real (puesto, empresa, ubicación,
-/// modalidad, fecha) y reemplaza Aceptar/Rechazar/Negociar (que necesitarían
-/// escribir un estado que no se puede escribir desde acá) por una acción
-/// real: escribirle a la empresa por el chat que ya existe.
+/// Aceptar/Rechazar/Negociar. Antes de la 051 nada de eso existía en
+/// `job_applications` (6 columnas reales). Ahora sí: `job_offers` guarda
+/// exactamente eso, salvo el countdown (el vencimiento se muestra como
+/// fecha, no como cuenta regresiva).
 @immutable
 class OfertasPreviewData {
   const OfertasPreviewData({required this.filas});
@@ -37,31 +52,26 @@ class OfertasRecibidasScreen extends StatefulWidget {
   final OfertasPreviewData? previewData;
 
   @override
-  State<OfertasRecibidasScreen> createState() => _OfertasRecibidasScreenState();
+  State<OfertasRecibidasScreen> createState() =>
+      _OfertasRecibidasScreenState();
 }
 
-class _Oferta {
-  const _Oferta({
-    required this.id,
-    required this.creada,
+class _OfertaConContexto {
+  const _OfertaConContexto({
+    required this.oferta,
     required this.jobTitle,
-    required this.location,
-    required this.isRemote,
-    required this.salaryRange,
-    required this.companyId,
     required this.companyName,
-    required this.companyAvatarUrl,
+    this.companyAvatarUrl,
+    this.location,
+    this.isRemote = false,
   });
 
-  final String id;
-  final DateTime? creada;
+  final JobOffer oferta;
   final String jobTitle;
-  final String? location;
-  final bool isRemote;
-  final String? salaryRange;
-  final String? companyId;
   final String companyName;
   final String? companyAvatarUrl;
+  final String? location;
+  final bool isRemote;
 }
 
 class _OfertasRecibidasScreenState extends State<OfertasRecibidasScreen> {
@@ -69,7 +79,7 @@ class _OfertasRecibidasScreenState extends State<OfertasRecibidasScreen> {
 
   bool _cargando = true;
   String? _error;
-  List<_Oferta> _ofertas = const [];
+  List<_OfertaConContexto> _ofertas = const [];
 
   @override
   void initState() {
@@ -82,17 +92,14 @@ class _OfertasRecibidasScreenState extends State<OfertasRecibidasScreen> {
     _cargar();
   }
 
-  static _Oferta _filaAOferta(Map<String, dynamic> row) {
+  static _OfertaConContexto _filaAOferta(Map<String, dynamic> row) {
     final job = row['jobs'] as Map<String, dynamic>?;
     final empresa = job?['users'] as Map<String, dynamic>?;
-    return _Oferta(
-      id: row['id'].toString(),
-      creada: DateTime.tryParse(row['created_at']?.toString() ?? ''),
+    return _OfertaConContexto(
+      oferta: JobOffer.fromRow(row),
       jobTitle: job?['title']?.toString() ?? 'Vacante',
       location: job?['location']?.toString(),
       isRemote: job?['is_remote'] == true,
-      salaryRange: job?['salary_range']?.toString(),
-      companyId: empresa?['id']?.toString(),
       companyName: empresa?['name']?.toString() ?? 'Empresa',
       companyAvatarUrl: empresa?['avatar_url']?.toString(),
     );
@@ -113,19 +120,13 @@ class _OfertasRecibidasScreenState extends State<OfertasRecibidasScreen> {
         return;
       }
       final rows = await _supabase
-          .from('job_applications')
-          .select(
-            'id, created_at, '
-            'jobs(title, location, is_remote, salary_range, company_id)',
-          )
+          .from('job_offers')
+          .select('*, jobs(title, location, is_remote, company_id)')
           .eq('candidate_id', uid)
-          .eq('status', 'accepted')
           .order('created_at', ascending: false);
 
       final hydrated = await hydrateNestedJobCompanies(rows, client: _supabase);
-      final lista = hydrated
-          .map(_filaAOferta)
-          .toList();
+      final lista = hydrated.map(_filaAOferta).toList();
 
       if (!mounted) return;
       setState(() {
@@ -141,20 +142,13 @@ class _OfertasRecibidasScreenState extends State<OfertasRecibidasScreen> {
     }
   }
 
-  void _escribirleALaEmpresa(_Oferta o) {
-    if (o.companyId == null) return;
-    Navigator.of(context).push(
+  Future<void> _abrir(_OfertaConContexto o) async {
+    final actualizo = await Navigator.of(context).push<bool>(
       CupertinoPageRoute(
-        builder: (_) => ChatInmailScreen(
-          targetUser: NexUser(
-            id: o.companyId!,
-            name: o.companyName,
-            headline: '',
-            avatarUrl: o.companyAvatarUrl,
-          ),
-        ),
+        builder: (_) => OfertaDetalleCandidatoScreen(offerId: o.oferta.id),
       ),
     );
+    if (actualizo == true) _cargar();
   }
 
   @override
@@ -188,7 +182,7 @@ class _OfertasRecibidasScreenState extends State<OfertasRecibidasScreen> {
       return const CandVacio(
         icono: CupertinoIcons.star,
         titulo: 'Todavía no tenés ofertas.',
-        detalle: 'Cuando una empresa acepte tu postulación real, la vas a ver acá.',
+        detalle: 'Cuando una empresa te haga una oferta, la vas a ver acá.',
       );
     }
     return ListView(
@@ -202,25 +196,37 @@ class _OfertasRecibidasScreenState extends State<OfertasRecibidasScreen> {
     );
   }
 
-  Widget _buildTarjeta(_Oferta o) {
+  Widget _buildTarjeta(_OfertaConContexto o) {
+    final abierta = o.oferta.abierta;
+    final color = abierta
+        ? MpTokens.success
+        : o.oferta.status == 'accepted'
+            ? MpTokens.success
+            : MpTokens.lightTextTertiary;
+
     return CandTarjeta(
+      onTap: () => _abrir(o),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(CupertinoIcons.star_fill, size: 16, color: MpTokens.success),
+              Icon(
+                abierta ? CupertinoIcons.star_fill : CupertinoIcons.checkmark_seal,
+                size: 16,
+                color: color,
+              ),
               const SizedBox(width: MpTokens.space8),
               Text(
-                'Oferta activa',
-                style: MpTokens.micro.copyWith(color: MpTokens.success, fontWeight: FontWeight.w700),
+                abierta ? 'Oferta activa' : offerStatusLabel(o.oferta.status),
+                style: MpTokens.micro
+                    .copyWith(color: color, fontWeight: FontWeight.w700),
               ),
               const Spacer(),
-              if (o.creada != null)
-                Text(
-                  'Recibida ${_fechaCorta(o.creada!)}',
-                  style: MpTokens.micro.copyWith(color: MpTokens.lightTextTertiary),
-                ),
+              Text(
+                _fechaCorta(o.oferta.createdAt),
+                style: MpTokens.micro.copyWith(color: MpTokens.lightTextTertiary),
+              ),
             ],
           ),
           const SizedBox(height: MpTokens.space12),
@@ -254,16 +260,8 @@ class _OfertasRecibidasScreenState extends State<OfertasRecibidasScreen> {
                   o.location!.trim().isNotEmpty &&
                   o.location!.trim().toLowerCase() != 'remoto')
                 CandChip(o.location!, compacto: true),
-              if (o.salaryRange != null && o.salaryRange!.trim().isNotEmpty)
-                CandChip(o.salaryRange!, compacto: true, color: MpTokens.success),
+              CandChip(o.oferta.salarioFormateado, compacto: true, color: MpTokens.success),
             ],
-          ),
-          const SizedBox(height: MpTokens.space12),
-          MpButton(
-            label: 'Escribirle a la empresa',
-            icon: CupertinoIcons.chat_bubble_2_fill,
-            expand: true,
-            onPressed: o.companyId == null ? null : () => _escribirleALaEmpresa(o),
           ),
         ],
       ),

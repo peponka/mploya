@@ -17,6 +17,7 @@ import 'premium_paywall_screen.dart';
 import 'admin_dashboard_screen.dart';
 import 'splash_screen.dart';
 import '../main.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 
 // Claves de persistencia — únicas por preferencia
 const _kPushNotif    = 'settings_push_notifications';
@@ -96,7 +97,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
           await prefs2.setBool(_kJobAlerts, _jobAlerts);
         }
       }
-    } catch (_) {}
+    } catch (e, stackTrace) {
+      FirebaseCrashlytics.instance.recordError(
+        e,
+        stackTrace,
+        reason: 'settings_screen: guardar preferencias de notificaciones',
+        fatal: false,
+      );
+    }
   }
 
   Future<void> _save(String key, bool value) async {

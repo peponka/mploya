@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../services/my_profile_service.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 
 /// Una etapa del embudo de `dashboard empresa.png`.
 @immutable
@@ -127,7 +128,14 @@ Future<EmpresaDashboardData> loadEmpresaDashboard() async {
   try {
     final me = await loadMyProfile(client: client);
     companyName = (me?['name'] ?? '').toString();
-  } catch (_) {}
+  } catch (e, stackTrace) {
+    FirebaseCrashlytics.instance.recordError(
+      e,
+      stackTrace,
+      reason: 'empresa_dashboard_data: cargar nombre de empresa',
+      fatal: false,
+    );
+  }
 
   var jobs = <Map<String, dynamic>>[];
   try {

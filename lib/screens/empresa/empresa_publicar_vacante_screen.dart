@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../services/ai_match_service.dart';
 import '../../widgets/ds/mploya_ds.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 
 /// Modalidad de trabajo. Se guarda como tag porque `jobs` no tiene columna
 /// propia y es de ahí de donde la lista de vacantes la deduce hoy.
@@ -252,7 +253,14 @@ class _EmpresaPublicarVacanteScreenState
       if (jobId is String && cambios.isNotEmpty) {
         try {
           await client.from('jobs').update(cambios).eq('id', jobId);
-        } catch (_) {}
+        } catch (e, stackTrace) {
+          FirebaseCrashlytics.instance.recordError(
+            e,
+            stackTrace,
+            reason: 'empresa_publicar_vacante_screen: actualizar job',
+            fatal: false,
+          );
+        }
       }
 
       // Vectorizar para el matching (best-effort, igual que en el alta previa).

@@ -29,6 +29,16 @@ class EmpresaShell extends StatelessWidget {
   final int unreadMessages;
   final String companyName;
 
+  /// El contenedor visual es compartido por las tres experiencias. Empresa
+  /// conserva estos valores por defecto para no alterar sus pantallas.
+  final MpRole role;
+  final List<int> bottomSlots;
+  final String? centerLabel;
+
+  /// Los reels se muestran hasta el borde inferior, con la navegación por
+  /// encima. Las pantallas de gestión conservan la barra fuera del contenido.
+  final bool overlayNavigation;
+
   const EmpresaShell({
     super.key,
     required this.currentIndex,
@@ -37,6 +47,10 @@ class EmpresaShell extends StatelessWidget {
     required this.body,
     this.unreadMessages = 0,
     this.companyName = '',
+    this.role = MpRole.empresa,
+    this.bottomSlots = _bottomSlots,
+    this.centerLabel,
+    this.overlayNavigation = false,
   });
 
   /// Ranuras de la barra inferior → índice global.
@@ -67,26 +81,32 @@ class EmpresaShell extends StatelessWidget {
   // ── Móvil ─────────────────────────────────────────────────────────────────
 
   Widget _narrow(BuildContext context) {
-    final selected = _bottomSlots.indexOf(currentIndex);
+    final selected = bottomSlots.indexOf(currentIndex);
+    final nav = MpBottomNav(
+      items: role.navItems(unreadMessages: unreadMessages),
+      currentIndex: selected,
+      onTap: (slot) => onTap(bottomSlots[slot]),
+      onCenterTap: onPrimaryAction,
+      centerLabel: centerLabel ?? role.centerLabel,
+    );
 
     return MpSurface(
       style: MpSurfaceStyle.light,
       child: CupertinoPageScaffold(
         backgroundColor: MpTokens.lightBg,
-        child: Column(
-          children: [
-            Expanded(child: body),
-            MpBottomNav(
-              items: MpRole.empresa.navItems(unreadMessages: unreadMessages),
-              // -1 cuando la pantalla activa no es una de las cuatro ranuras
-              // (p. ej. el feed de talento): no se marca ninguna en falso.
-              currentIndex: selected,
-              onTap: (slot) => onTap(_bottomSlots[slot]),
-              onCenterTap: onPrimaryAction,
-              centerLabel: MpRole.empresa.centerLabel,
-            ),
-          ],
-        ),
+        child: overlayNavigation
+            ? Stack(
+                children: [
+                  Positioned.fill(child: body),
+                  Align(alignment: Alignment.bottomCenter, child: nav),
+                ],
+              )
+            : Column(
+                children: [
+                  Expanded(child: body),
+                  nav,
+                ],
+              ),
       ),
     );
   }

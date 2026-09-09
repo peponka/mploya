@@ -34,6 +34,7 @@ class HeadhunterBusquedasScreen extends StatefulWidget {
 
 class _HeadhunterBusquedasScreenState extends State<HeadhunterBusquedasScreen> {
   bool _loading = true;
+  bool _error = false;
   List<Map<String, dynamic>> _searches = const [];
   int _filter = 0;
   final _search = TextEditingController();
@@ -51,16 +52,26 @@ class _HeadhunterBusquedasScreenState extends State<HeadhunterBusquedasScreen> {
   }
 
   Future<void> _load() async {
+    if (mounted) {
+      setState(() {
+        _loading = true;
+        _error = false;
+      });
+    }
     try {
       final searches = await listHeadhunterSearches();
       if (!mounted) return;
       setState(() {
         _searches = searches;
         _loading = false;
+        _error = false;
       });
     } catch (e) {
       if (!mounted) return;
-      setState(() => _loading = false);
+      setState(() {
+        _loading = false;
+        _error = true;
+      });
     }
   }
 
@@ -71,12 +82,19 @@ class _HeadhunterBusquedasScreenState extends State<HeadhunterBusquedasScreen> {
     if (creada == true) _load();
   }
 
-  static const _statusByFilter = [null, 'abierta', 'en_proceso', 'en_pausa', 'cerrada'];
+  static const _statusByFilter = [
+    null,
+    'abierta',
+    'en_proceso',
+    'en_pausa',
+    'cerrada',
+  ];
 
   List<Map<String, dynamic>> get _filtrados {
     final status = _statusByFilter[_filter];
-    final byStatus =
-        status == null ? _searches : _searches.where((s) => s['search_status'] == status);
+    final byStatus = status == null
+        ? _searches
+        : _searches.where((s) => s['search_status'] == status);
     final query = _search.text.trim().toLowerCase();
     if (query.isEmpty) return byStatus.toList();
     return byStatus.where((s) {
@@ -105,16 +123,23 @@ class _HeadhunterBusquedasScreenState extends State<HeadhunterBusquedasScreen> {
                 ),
                 child: MpHeader(
                   title: 'Búsquedas activas',
-                  subtitle: 'Gestioná todas tus búsquedas, seguí su progreso '
+                  subtitle:
+                      'Gestioná todas tus búsquedas, seguí su progreso '
                       'y encontrá al mejor talento.',
                   actions: [
-                    MpIconButton(icon: CupertinoIcons.add, solid: true, onPressed: _nuevaBusqueda),
+                    MpIconButton(
+                      icon: CupertinoIcons.add,
+                      solid: true,
+                      onPressed: _nuevaBusqueda,
+                    ),
                   ],
                 ),
               ),
               Expanded(
                 child: _loading
-                    ? const Center(child: CupertinoActivityIndicator(radius: 15))
+                    ? const Center(
+                        child: CupertinoActivityIndicator(radius: 15),
+                      )
                     : CustomScrollView(
                         slivers: [
                           CupertinoSliverRefreshControl(onRefresh: _load),
@@ -140,13 +165,26 @@ class _HeadhunterBusquedasScreenState extends State<HeadhunterBusquedasScreen> {
   }
 
   List<Widget> _content() {
+    if (_error) {
+      return [
+        const SizedBox(height: MpTokens.space32),
+        MpEmptyState(
+          icon: CupertinoIcons.exclamationmark_triangle,
+          title: 'No pudimos cargar tus búsquedas',
+          message: 'Revisá tu conexión y volvé a intentarlo.',
+          actionLabel: 'Reintentar',
+          onAction: _load,
+        ),
+      ];
+    }
     if (_searches.isEmpty) {
       return [
         const SizedBox(height: MpTokens.space32),
         MpEmptyState(
           icon: CupertinoIcons.scope,
           title: 'Sin búsquedas todavía',
-          message: 'Creá una búsqueda y empezá a encontrar el mejor talento '
+          message:
+              'Creá una búsqueda y empezá a encontrar el mejor talento '
               'para tus clientes.',
           actionLabel: 'Nueva búsqueda',
           onAction: _nuevaBusqueda,
@@ -168,10 +206,22 @@ class _HeadhunterBusquedasScreenState extends State<HeadhunterBusquedasScreen> {
         scrollable: true,
         options: [
           MpFilterOption('Todas', count: countBySearchStatus(_searches, null)),
-          MpFilterOption('Abiertas', count: countBySearchStatus(_searches, 'abierta')),
-          MpFilterOption('En proceso', count: countBySearchStatus(_searches, 'en_proceso')),
-          MpFilterOption('En pausa', count: countBySearchStatus(_searches, 'en_pausa')),
-          MpFilterOption('Cerradas', count: countBySearchStatus(_searches, 'cerrada')),
+          MpFilterOption(
+            'Abiertas',
+            count: countBySearchStatus(_searches, 'abierta'),
+          ),
+          MpFilterOption(
+            'En proceso',
+            count: countBySearchStatus(_searches, 'en_proceso'),
+          ),
+          MpFilterOption(
+            'En pausa',
+            count: countBySearchStatus(_searches, 'en_pausa'),
+          ),
+          MpFilterOption(
+            'Cerradas',
+            count: countBySearchStatus(_searches, 'cerrada'),
+          ),
         ],
         selectedIndex: _filter,
         onChanged: (i) => setState(() => _filter = i),
@@ -252,11 +302,13 @@ class _HeadhunterBusquedasScreenState extends State<HeadhunterBusquedasScreen> {
     final daysAgo = _daysAgo(job['created_at'] as String?);
 
     return MpCard(
-      onTap: () => Navigator.of(context).push(
-        CupertinoPageRoute(
-          builder: (_) => HeadhunterBusquedaDetalleScreen(job: job),
-        ),
-      ).then((_) => _load()),
+      onTap: () => Navigator.of(context)
+          .push(
+            CupertinoPageRoute(
+              builder: (_) => HeadhunterBusquedaDetalleScreen(job: job),
+            ),
+          )
+          .then((_) => _load()),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -284,7 +336,10 @@ class _HeadhunterBusquedasScreenState extends State<HeadhunterBusquedasScreen> {
                 ),
                 if (clientName != null && clientName.isNotEmpty) ...[
                   const SizedBox(height: 2),
-                  Text(clientName, style: MpTokens.caption.copyWith(color: s.textSecondary)),
+                  Text(
+                    clientName,
+                    style: MpTokens.caption.copyWith(color: s.textSecondary),
+                  ),
                 ],
                 const SizedBox(height: 4),
                 Wrap(
@@ -293,8 +348,12 @@ class _HeadhunterBusquedasScreenState extends State<HeadhunterBusquedasScreen> {
                   children: [
                     if (location != null && location.isNotEmpty)
                       _metaChip(CupertinoIcons.location_solid, location),
-                    if (daysAgo != null) _metaChip(CupertinoIcons.clock, daysAgo),
-                    _metaChip(CupertinoIcons.person_2, '$candidateCount candidatos'),
+                    if (daysAgo != null)
+                      _metaChip(CupertinoIcons.clock, daysAgo),
+                    _metaChip(
+                      CupertinoIcons.person_2,
+                      '$candidateCount candidatos',
+                    ),
                   ],
                 ),
                 const SizedBox(height: MpTokens.space12),
@@ -335,18 +394,18 @@ class _HeadhunterBusquedasScreenState extends State<HeadhunterBusquedasScreen> {
   }
 
   String _statusLabel(String status) => switch (status) {
-        'en_proceso' => 'En proceso',
-        'en_pausa' => 'En pausa',
-        'cerrada' => 'Cerrada',
-        _ => 'Abierta',
-      };
+    'en_proceso' => 'En proceso',
+    'en_pausa' => 'En pausa',
+    'cerrada' => 'Cerrada',
+    _ => 'Abierta',
+  };
 
   MpStatus _statusToMpStatus(String status) => switch (status) {
-        'en_proceso' => MpStatus.info,
-        'en_pausa' => MpStatus.paused,
-        'cerrada' => MpStatus.finished,
-        _ => MpStatus.active,
-      };
+    'en_proceso' => MpStatus.info,
+    'en_pausa' => MpStatus.paused,
+    'cerrada' => MpStatus.finished,
+    _ => MpStatus.active,
+  };
 }
 
 /// Mismo espíritu que `_ClientLogo` de `headhunter_clients_screen.dart`:
@@ -370,16 +429,24 @@ class _SearchLogo extends StatelessWidget {
   Widget build(BuildContext context) {
     final trimmed = name.trim();
     final letter = trimmed.isEmpty ? '?' : trimmed[0].toUpperCase();
-    final color = _palette[trimmed.isEmpty ? 0 : trimmed.codeUnitAt(0) % _palette.length];
+    final color =
+        _palette[trimmed.isEmpty ? 0 : trimmed.codeUnitAt(0) % _palette.length];
 
     return Container(
       width: 48,
       height: 48,
-      decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(MpTokens.radiusMD)),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(MpTokens.radiusMD),
+      ),
       alignment: Alignment.center,
       child: Text(
         letter,
-        style: const TextStyle(color: Color(0xFFFFFFFF), fontSize: 18, fontWeight: FontWeight.w800),
+        style: const TextStyle(
+          color: Color(0xFFFFFFFF),
+          fontSize: 18,
+          fontWeight: FontWeight.w800,
+        ),
       ),
     );
   }

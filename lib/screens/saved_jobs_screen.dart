@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../theme/app_theme.dart';
 import '../services/saved_jobs_service.dart';
 import '../services/safe_profile_query_service.dart';
+import '../services/job_application_flow.dart';
 import '../widgets/mploya_toast.dart';
 import '../widgets/mploya_shimmer.dart';
 import '../widgets/nex_avatar.dart';
@@ -71,7 +72,9 @@ class _SavedJobsScreenState extends ConsumerState<SavedJobsScreen> {
         debugPrint('⚠️ SavedScreen: no se pudo leer currentUser ($e)');
       }
       final type = currentUserData?.accountType.toLowerCase() ?? '';
-      debugPrint('🔍 SavedScreen: accountType="$type", name="${currentUserData?.name}"');
+      debugPrint(
+        '🔍 SavedScreen: accountType="$type", name="${currentUserData?.name}"',
+      );
       if (mounted) {
         setState(() {
           _isCompany = type == 'empresa' || type == 'headhunter';
@@ -143,9 +146,15 @@ class _SavedJobsScreenState extends ConsumerState<SavedJobsScreen> {
             .eq('user_id', uid)
             .order('created_at', ascending: false);
 
-        final ids = rows.map<String>((r) => r['saved_user_id'].toString()).toList();
+        final ids = rows
+            .map<String>((r) => r['saved_user_id'].toString())
+            .toList();
         if (ids.isEmpty) {
-          if (mounted) setState(() { _savedProfiles = []; _loadingProfiles = false; });
+          if (mounted)
+            setState(() {
+              _savedProfiles = [];
+              _loadingProfiles = false;
+            });
           return;
         }
 
@@ -154,7 +163,9 @@ class _SavedJobsScreenState extends ConsumerState<SavedJobsScreen> {
             .select(kUserColumns)
             .inFilter('id', ids);
 
-        final profiles = users.map<NexUser>((u) => NexUser.fromJson(u)).toList();
+        final profiles = users
+            .map<NexUser>((u) => NexUser.fromJson(u))
+            .toList();
 
         // Preserve saved order
         final ordered = <NexUser>[];
@@ -171,7 +182,11 @@ class _SavedJobsScreenState extends ConsumerState<SavedJobsScreen> {
         }
       } catch (e2) {
         debugPrint('Fallback also failed: $e2');
-        if (mounted) setState(() { _savedProfiles = []; _loadingProfiles = false; });
+        if (mounted)
+          setState(() {
+            _savedProfiles = [];
+            _loadingProfiles = false;
+          });
       }
     }
   }
@@ -186,7 +201,9 @@ class _SavedJobsScreenState extends ConsumerState<SavedJobsScreen> {
 
       final rows = await Supabase.instance.client
           .from('saved_jobs')
-          .select('*, jobs(id, title, salary_range, modality, tags, created_at, company_id)')
+          .select(
+            '*, jobs(id, title, salary_range, modality, tags, created_at, company_id)',
+          )
           .eq('user_id', uid)
           .order('saved_at', ascending: false);
       final hydrated = await hydrateNestedJobCompanies(rows);
@@ -220,7 +237,8 @@ class _SavedJobsScreenState extends ConsumerState<SavedJobsScreen> {
           .delete()
           .eq('user_id', uid)
           .eq('saved_user_id', userId);
-      if (mounted) MployaToast.removed(context, 'Perfil eliminado de guardados');
+      if (mounted)
+        MployaToast.removed(context, 'Perfil eliminado de guardados');
     } catch (e) {
       debugPrint('Error removing saved profile: $e');
       _loadSavedProfiles(); // Reload on error
@@ -269,7 +287,11 @@ class _SavedJobsScreenState extends ConsumerState<SavedJobsScreen> {
                       ),
                       child: Row(
                         children: [
-                          _buildTab(_profilesTabLabel, 0, _savedProfiles.length),
+                          _buildTab(
+                            _profilesTabLabel,
+                            0,
+                            _savedProfiles.length,
+                          ),
                           _buildTab('Vacantes', 1, _savedJobs.length),
                         ],
                       ),
@@ -303,7 +325,13 @@ class _SavedJobsScreenState extends ConsumerState<SavedJobsScreen> {
             color: active ? context.brandAccent : Colors.transparent,
             borderRadius: BorderRadius.circular(10),
             boxShadow: active
-                ? [BoxShadow(color: context.brandAccent.withValues(alpha: 0.3), blurRadius: 8, offset: const Offset(0, 2))]
+                ? [
+                    BoxShadow(
+                      color: context.brandAccent.withValues(alpha: 0.3),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ]
                 : null,
           ),
           child: Center(
@@ -315,15 +343,22 @@ class _SavedJobsScreenState extends ConsumerState<SavedJobsScreen> {
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: active ? FontWeight.w700 : FontWeight.w500,
-                    color: active ? CupertinoColors.white : context.textSecondary,
+                    color: active
+                        ? CupertinoColors.white
+                        : context.textSecondary,
                   ),
                 ),
                 if (count > 0) ...[
                   const SizedBox(width: 6),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 1,
+                    ),
                     decoration: BoxDecoration(
-                      color: active ? CupertinoColors.white.withValues(alpha: 0.25) : context.brandAccent.withValues(alpha: 0.12),
+                      color: active
+                          ? CupertinoColors.white.withValues(alpha: 0.25)
+                          : context.brandAccent.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
@@ -331,7 +366,9 @@ class _SavedJobsScreenState extends ConsumerState<SavedJobsScreen> {
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
-                        color: active ? CupertinoColors.white : context.brandAccent,
+                        color: active
+                            ? CupertinoColors.white
+                            : context.brandAccent,
                       ),
                     ),
                   ),
@@ -355,13 +392,16 @@ class _SavedJobsScreenState extends ConsumerState<SavedJobsScreen> {
       return _buildEmptyState(
         icon: CupertinoIcons.person_2,
         title: 'Sin perfiles guardados',
-        subtitle: 'Tocá el ícono 🔖 en los videos del feed para guardar candidatos o empresas.',
+        subtitle:
+            'Tocá el ícono 🔖 en los videos del feed para guardar candidatos o empresas.',
         actionLabel: 'Ir al Feed',
       );
     }
 
     return CustomScrollView(
-      physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+      physics: const BouncingScrollPhysics(
+        parent: AlwaysScrollableScrollPhysics(),
+      ),
       slivers: [
         CupertinoSliverRefreshControl(
           onRefresh: () async {
@@ -372,19 +412,16 @@ class _SavedJobsScreenState extends ConsumerState<SavedJobsScreen> {
         SliverPadding(
           padding: const EdgeInsets.all(16),
           sliver: SliverList(
-            delegate: SliverChildBuilderDelegate(
-              (context, index) {
-                final user = _savedProfiles[index];
-                return _SavedProfileCard(
-                  user: user,
-                  onRemove: () => _removeProfile(user.id, index),
-                  onTap: () => Navigator.of(context).push(
-                    CupertinoPageRoute(builder: (_) => ProfileScreen(user: user)),
-                  ),
-                );
-              },
-              childCount: _savedProfiles.length,
-            ),
+            delegate: SliverChildBuilderDelegate((context, index) {
+              final user = _savedProfiles[index];
+              return _SavedProfileCard(
+                user: user,
+                onRemove: () => _removeProfile(user.id, index),
+                onTap: () => Navigator.of(context).push(
+                  CupertinoPageRoute(builder: (_) => ProfileScreen(user: user)),
+                ),
+              );
+            }, childCount: _savedProfiles.length),
           ),
         ),
         const SliverToBoxAdapter(child: SizedBox(height: 40)),
@@ -403,13 +440,16 @@ class _SavedJobsScreenState extends ConsumerState<SavedJobsScreen> {
       return _buildEmptyState(
         icon: CupertinoIcons.briefcase,
         title: 'Sin vacantes guardadas',
-        subtitle: 'Guardá vacantes desde la sección de empleos para verlas aquí.',
+        subtitle:
+            'Guardá vacantes desde la sección de empleos para verlas aquí.',
         actionLabel: 'Explorar vacantes',
       );
     }
 
     return CustomScrollView(
-      physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+      physics: const BouncingScrollPhysics(
+        parent: AlwaysScrollableScrollPhysics(),
+      ),
       slivers: [
         CupertinoSliverRefreshControl(
           onRefresh: () async {
@@ -420,18 +460,16 @@ class _SavedJobsScreenState extends ConsumerState<SavedJobsScreen> {
         SliverPadding(
           padding: const EdgeInsets.all(16),
           sliver: SliverList(
-            delegate: SliverChildBuilderDelegate(
-              (context, index) {
-                final saved = _savedJobs[index];
-                final job = saved['jobs'] as Map<String, dynamic>? ?? saved;
-                final jobId = job['id']?.toString() ?? saved['job_id']?.toString() ?? '';
-                return _SavedJobCard(
-                  job: job,
-                  onRemove: () => _removeSavedJob(jobId, index),
-                );
-              },
-              childCount: _savedJobs.length,
-            ),
+            delegate: SliverChildBuilderDelegate((context, index) {
+              final saved = _savedJobs[index];
+              final job = saved['jobs'] as Map<String, dynamic>? ?? saved;
+              final jobId =
+                  job['id']?.toString() ?? saved['job_id']?.toString() ?? '';
+              return _SavedJobCard(
+                job: job,
+                onRemove: () => _removeSavedJob(jobId, index),
+              );
+            }, childCount: _savedJobs.length),
           ),
         ),
         const SliverToBoxAdapter(child: SizedBox(height: 40)),
@@ -461,25 +499,43 @@ class _SavedJobsScreenState extends ConsumerState<SavedJobsScreen> {
                 color: context.brandAccent.withValues(alpha: 0.08),
                 shape: BoxShape.circle,
               ),
-              child: Icon(icon, size: 48, color: context.brandAccent.withValues(alpha: 0.4)),
+              child: Icon(
+                icon,
+                size: 48,
+                color: context.brandAccent.withValues(alpha: 0.4),
+              ),
             ),
             const SizedBox(height: 24),
             Text(
               title,
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: context.textPrimary),
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+                color: context.textPrimary,
+              ),
             ),
             const SizedBox(height: 10),
             Text(
               subtitle,
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 15, color: context.textTertiary, height: 1.4),
+              style: TextStyle(
+                fontSize: 15,
+                color: context.textTertiary,
+                height: 1.4,
+              ),
             ),
             const SizedBox(height: 28),
             CupertinoButton(
               color: MployaTheme.brandAccent,
               borderRadius: BorderRadius.circular(14),
               onPressed: () => Navigator.pop(context),
-              child: Text(actionLabel, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+              child: Text(
+                actionLabel,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 15,
+                ),
+              ),
             ),
           ],
         ),
@@ -497,7 +553,11 @@ class _SavedProfileCard extends StatelessWidget {
   final VoidCallback onRemove;
   final VoidCallback onTap;
 
-  const _SavedProfileCard({required this.user, required this.onRemove, required this.onTap});
+  const _SavedProfileCard({
+    required this.user,
+    required this.onRemove,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -598,7 +658,9 @@ class _SavedJobCard extends StatelessWidget {
     final companyData = job['users'] as Map<String, dynamic>?;
     final companyName = companyData?['name']?.toString() ?? 'Empresa';
     final tagsRaw = job['tags'];
-    final tags = tagsRaw is List ? tagsRaw.map((t) => t.toString()).toList() : <String>[];
+    final tags = tagsRaw is List
+        ? tagsRaw.map((t) => t.toString()).toList()
+        : <String>[];
 
     String modalityLabel = '';
     if (modality == 'remote') modalityLabel = '🏠 Remoto';
@@ -615,7 +677,16 @@ class _SavedJobCard extends StatelessWidget {
       child: CupertinoButton(
         padding: EdgeInsets.zero,
         onPressed: () => Navigator.of(context).push(
-          CupertinoPageRoute(builder: (_) => JobDetailScreen(job: job)),
+          CupertinoPageRoute(
+            builder: (_) => JobDetailScreen(
+              job: job,
+              onApply: () => JobApplicationFlow.apply(
+                context: context,
+                jobId: job['id']?.toString() ?? '',
+                jobTitle: job['title']?.toString() ?? 'Vacante',
+              ),
+            ),
+          ),
         ),
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -631,7 +702,11 @@ class _SavedJobCard extends StatelessWidget {
                 child: Center(
                   child: Text(
                     companyName.isNotEmpty ? companyName[0].toUpperCase() : '?',
-                    style: TextStyle(color: context.brandAccent, fontSize: 20, fontWeight: FontWeight.w800),
+                    style: TextStyle(
+                      color: context.brandAccent,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                 ),
               ),
@@ -640,31 +715,77 @@ class _SavedJobCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: context.textPrimary, letterSpacing: -0.3), maxLines: 1, overflow: TextOverflow.ellipsis),
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: context.textPrimary,
+                        letterSpacing: -0.3,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                     const SizedBox(height: 3),
-                    Text(companyName, style: TextStyle(fontSize: 13, color: context.textSecondary)),
+                    Text(
+                      companyName,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: context.textSecondary,
+                      ),
+                    ),
                     const SizedBox(height: 6),
                     Row(
                       children: [
                         if (salary != null && salary.isNotEmpty)
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
+                            ),
                             margin: const EdgeInsets.only(right: 6),
-                            decoration: BoxDecoration(color: context.brandAccent.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(6)),
-                            child: Text('\$ $salary', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: context.brandAccent)),
+                            decoration: BoxDecoration(
+                              color: context.brandAccent.withValues(
+                                alpha: 0.08,
+                              ),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              '\$ $salary',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: context.brandAccent,
+                              ),
+                            ),
                           ),
                         if (modalityLabel.isNotEmpty)
-                          Text(modalityLabel, style: TextStyle(fontSize: 11, color: context.textTertiary)),
+                          Text(
+                            modalityLabel,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: context.textTertiary,
+                            ),
+                          ),
                       ],
                     ),
                     if (tags.isNotEmpty) ...[
                       const SizedBox(height: 6),
                       Wrap(
                         spacing: 4,
-                        children: tags.take(3).map((t) => Text(
-                          t.startsWith('#') ? t : '#$t',
-                          style: const TextStyle(fontSize: 11, color: Color(0xFF5F3DC4), fontWeight: FontWeight.w500),
-                        )).toList(),
+                        children: tags
+                            .take(3)
+                            .map(
+                              (t) => Text(
+                                t.startsWith('#') ? t : '#$t',
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: Color(0xFF5F3DC4),
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            )
+                            .toList(),
                       ),
                     ],
                   ],
@@ -679,8 +800,15 @@ class _SavedJobCard extends StatelessWidget {
                 },
                 child: Container(
                   padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(color: MployaTheme.danger.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(10)),
-                  child: const Icon(CupertinoIcons.bookmark_fill, size: 18, color: MployaTheme.brandAccent),
+                  decoration: BoxDecoration(
+                    color: MployaTheme.danger.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(
+                    CupertinoIcons.bookmark_fill,
+                    size: 18,
+                    color: MployaTheme.brandAccent,
+                  ),
                 ),
               ),
             ],

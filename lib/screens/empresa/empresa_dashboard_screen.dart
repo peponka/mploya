@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 
+import '../../services/coach_mark_service.dart';
 import '../../widgets/ds/mploya_ds.dart';
 import 'empresa_actividad_screen.dart';
 import 'empresa_dashboard_data.dart';
@@ -37,6 +38,12 @@ import 'empresa_vacantes_screen.dart';
 /// ningún dato real la respalda. La evolución de contrataciones, las fuentes
 /// y los tiempos por etapa siguen OCULTOS (backend inexistente) pero ahora con
 /// un estado vacío que explica qué falta en vez de desaparecer sin más.
+///
+/// ADENDA 29/8/2026: se agregó un coach mark (no está en el mockup) sobre
+/// "Publicar vacante" y "Buscar candidatos" — reemplaza al viejo tour de 5
+/// pantallas que se sacó de la app entera (ver `CoachMarkService`). No cambia
+/// el diseño de esta pantalla, sólo señala dos tarjetas ya existentes la
+/// primera vez que la empresa entra.
 ///
 class EmpresaDashboardScreen extends StatefulWidget {
   final int unreadNotifications;
@@ -83,11 +90,18 @@ class _EmpresaDashboardScreenState extends State<EmpresaDashboardScreen> {
   void initState() {
     super.initState();
     if (widget.previewData != null) {
+      // Render aislado (golden tests): sin coach marks, sin SharedPreferences.
       _data = widget.previewData!;
       _loading = false;
       return;
     }
     _load();
+    // Reemplaza al viejo tour de 5 pantallas (ADENDA 29/8/2026, ver
+    // CoachMarkService.showEmpresaDashboardTour): señala los dos accesos
+    // rápidos reales una sola vez, la primera vez que la empresa entra acá.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) CoachMarkService.showEmpresaDashboardTour(context);
+    });
   }
 
   Future<void> _load() async {
@@ -794,12 +808,14 @@ class _EmpresaDashboardScreenState extends State<EmpresaDashboardScreen> {
         color: MpTokens.primary,
         // Sólo la primera lleva círculo relleno, como en el mockup.
         solid: true,
+        coachKey: cmEmpresaPublicarKey,
         onTap: () => _push(const EmpresaPublicarVacanteScreen()),
       ),
       _QuickAction(
         icon: CupertinoIcons.person_2,
         label: 'Buscar\ncandidatos',
         color: MpTokens.catBlue,
+        coachKey: cmEmpresaBuscarKey,
         onTap: () => _push(const EmpresaTalentFeedScreen()),
       ),
       _QuickAction(
@@ -844,6 +860,13 @@ class _EmpresaDashboardScreenState extends State<EmpresaDashboardScreen> {
   }
 
   Widget _quickActionCard(_QuickAction action, bool wide) {
+    final card = _quickActionCardBody(action, wide);
+    return action.coachKey == null
+        ? card
+        : KeyedSubtree(key: action.coachKey, child: card);
+  }
+
+  Widget _quickActionCardBody(_QuickAction action, bool wide) {
     final s = context.mp;
 
     return MpCard(
@@ -927,11 +950,17 @@ class _QuickAction {
   final VoidCallback onTap;
   final bool solid;
 
+  /// Sólo en las dos primeras (Publicar vacante / Buscar candidatos), para
+  /// el coach mark que reemplaza al tour de 5 pantallas — ver
+  /// `CoachMarkService.showEmpresaDashboardTour`.
+  final Key? coachKey;
+
   const _QuickAction({
     required this.icon,
     required this.label,
     required this.color,
     required this.onTap,
     this.solid = false,
+    this.coachKey,
   });
 }

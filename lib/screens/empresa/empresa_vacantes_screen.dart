@@ -167,23 +167,28 @@ class _EmpresaVacantesScreenState extends State<EmpresaVacantesScreen> {
                         _topBar(),
                         const SizedBox(height: MpTokens.space20),
                         _titulo(),
-                        const SizedBox(height: MpTokens.space16),
-                        _buscador(),
-                        const SizedBox(height: MpTokens.space12),
-                        MpSegmentedFilter(
-                          options: _filtros,
-                          selectedIndex: _filtro,
-                          onChanged: (i) => setState(() => _filtro = i),
-                          scrollable: _filtros.length > 2,
-                        ),
-                        const SizedBox(height: MpTokens.space16),
-                        _metricas(),
-                        const SizedBox(height: MpTokens.space24),
-                        _encabezadoLista(),
-                        const SizedBox(height: MpTokens.space12),
-                        ..._listado(),
-                        const SizedBox(height: MpTokens.space20),
-                        _bannerCrear(),
+                        if (_data.error) ...[
+                          const SizedBox(height: MpTokens.space32),
+                          ..._listado(),
+                        ] else ...[
+                          const SizedBox(height: MpTokens.space16),
+                          _buscador(),
+                          const SizedBox(height: MpTokens.space12),
+                          MpSegmentedFilter(
+                            options: _filtros,
+                            selectedIndex: _filtro,
+                            onChanged: (i) => setState(() => _filtro = i),
+                            scrollable: _filtros.length > 2,
+                          ),
+                          const SizedBox(height: MpTokens.space16),
+                          _metricas(),
+                          const SizedBox(height: MpTokens.space24),
+                          _encabezadoLista(),
+                          const SizedBox(height: MpTokens.space12),
+                          ..._listado(),
+                          const SizedBox(height: MpTokens.space20),
+                          _bannerCrear(),
+                        ],
                       ]),
                     ),
                   ),
@@ -202,11 +207,7 @@ class _EmpresaVacantesScreenState extends State<EmpresaVacantesScreen> {
           icon: CupertinoIcons.chevron_left,
           onPressed: () => Navigator.of(context).maybePop(),
         ),
-        const Expanded(
-          child: Center(
-            child: MpWordmark(fontSize: 24),
-          ),
-        ),
+        const Expanded(child: Center(child: MpWordmark(fontSize: 24))),
         MpIconButton(
           icon: CupertinoIcons.bell,
           onPressed: () => Navigator.of(context).push(
@@ -227,10 +228,7 @@ class _EmpresaVacantesScreenState extends State<EmpresaVacantesScreen> {
         const SizedBox(height: MpTokens.space4),
         Text(
           'Gestioná tus vacantes, seguí su progreso y encontrá al mejor talento.',
-          style: MpTokens.body.copyWith(
-            color: s.textSecondary,
-            fontSize: 14.5,
-          ),
+          style: MpTokens.body.copyWith(color: s.textSecondary, fontSize: 14.5),
         ),
       ],
     );
@@ -270,10 +268,7 @@ class _EmpresaVacantesScreenState extends State<EmpresaVacantesScreen> {
                   color: s.text,
                 ),
                 const SizedBox(width: 7),
-                Text(
-                  'Orden',
-                  style: MpTokens.label.copyWith(color: s.text),
-                ),
+                Text('Orden', style: MpTokens.label.copyWith(color: s.text)),
               ],
             ),
           ),
@@ -425,6 +420,20 @@ class _EmpresaVacantesScreenState extends State<EmpresaVacantesScreen> {
   }
 
   List<Widget> _listado() {
+    if (_data.error) {
+      return [
+        MpCard(
+          padding: const EdgeInsets.symmetric(vertical: MpTokens.space24),
+          child: MpEmptyState(
+            icon: CupertinoIcons.exclamationmark_triangle,
+            title: 'No pudimos cargar tus vacantes',
+            message: 'Revisá tu conexión y volvé a intentarlo.',
+            actionLabel: 'Reintentar',
+            onAction: _load,
+          ),
+        ),
+      ];
+    }
     final visibles = _visibles;
 
     if (visibles.isEmpty) {
@@ -552,7 +561,7 @@ class _EmpresaVacantesScreenState extends State<EmpresaVacantesScreen> {
                         _data.conteoNoDisponible
                             ? 'Candidatos no disponibles'
                             : '${vacante.candidatos} '
-                                '${vacante.candidatos == 1 ? 'candidato' : 'candidatos'}',
+                                  '${vacante.candidatos == 1 ? 'candidato' : 'candidatos'}',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: MpTokens.label.copyWith(

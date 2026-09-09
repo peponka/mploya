@@ -4,8 +4,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/my_profile_service.dart';
 
 import '../models/models.dart';
+import '../navigation/main_navigation.dart';
 import '../widgets/ds/mploya_ds.dart';
-import 'onboarding_tour_screen.dart';
 
 /// "Tu perfil está listo" — Asistente A10, cierre del onboarding de candidato.
 /// Referencia: design-reference/FINAL_SCREENS_CODEX/.../perfil listo.png.
@@ -154,11 +154,14 @@ class _TalentOnboardingCompleteScreenState
                               size: MpButtonSize.large,
                               expand: true,
                               onPressed: () {
+                                // ADENDA 29/8/2026: antes abría el tour de 5
+                                // pantallas (OnboardingTourScreen), sacado de
+                                // toda la app a pedido de Pedro — ver
+                                // CoachMarkService.showEmpresaDashboardTour y
+                                // splash_screen.dart para el detalle.
                                 Navigator.of(context).pushReplacement(
                                   CupertinoPageRoute(
-                                    builder: (_) => const OnboardingTourScreen(
-                                      accountType: 'candidato',
-                                    ),
+                                    builder: (_) => const MainNavigation(),
                                   ),
                                 );
                               },

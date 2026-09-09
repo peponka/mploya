@@ -34,13 +34,18 @@ import '../screens/onboarding_pitch_screen.dart';
 import '../screens/post_composer_screen.dart';
 import '../screens/profile_screen.dart';
 import '../screens/tools_hub_entry_screen.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../providers/user_provider.dart';
+import '../providers/feed_provider.dart';
 import '../services/my_profile_service.dart';
 import '../services/coach_mark_service.dart';
 import '../services/connectivity_service.dart';
 import '../services/revenuecat_service.dart';
 import '../services/video_preload_manager.dart';
 import '../theme/app_theme.dart';
+import '../widgets/ds/mp_roles.dart';
 import '../widgets/mploya_shell.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 
 final ValueNotifier<int> currentMainTabNotifier = ValueNotifier<int>(0);
 
@@ -110,19 +115,17 @@ class _MainNavigationState extends State<MainNavigation> {
         ? const EmpresaMapaScreen()
         : (_accountType == 'headhunter' ? _headhunterTalentPool : _network),
     // 3 · Actividad / Notificaciones. Candidato llega desde Inicio, no por barra.
-    _accountType == 'empresa'
-        ? const EmpresaActividadScreen()
-        : _notifications,
+    _accountType == 'empresa' ? const EmpresaActividadScreen() : _notifications,
     // FASE DE CIERRE DE LEGACY — la ranura 4 es "Perfil". Para Empresa abre su
     // ficha institucional; `ProfileScreen` es el perfil personal del rol
     // candidato y no corresponde acá. Para los demás roles queda vacía: el
     // perfil personal vive en la ranura 9 y montarlo dos veces duplicaba
     // consultas sin que se pudiera llegar a esta copia.
-    _accountType == 'empresa' ? const EmpresaPerfilScreen() : const SizedBox.shrink(),
-    // 5 · Mensajes
     _accountType == 'empresa'
-        ? const EmpresaMensajesScreen()
-        : _messages,
+        ? const EmpresaPerfilScreen()
+        : const SizedBox.shrink(),
+    // 5 · Mensajes
+    _accountType == 'empresa' ? const EmpresaMensajesScreen() : _messages,
     // 6 · Empresa: Vacantes · Headhunter: Búsquedas · Candidato: vacía, porque
     //     sus Vacantes pasaron a la ranura 1 y montar `JobsScreen` dos veces
     //     dispararía dos veces la carga de vacantes.
@@ -138,13 +141,11 @@ class _MainNavigationState extends State<MainNavigation> {
         : (_accountType == 'headhunter'
               ? _headhunterDashboard
               : const SizedBox.shrink()),
-    // 8 · Herramientas. Candidato: vacía por ahora; su acceso será un push desde
-    //     Perfil en el paso siguiente del bloque.
+    // 8 · Herramientas. El hub es compartido: ningún rol queda con destinos
+    //     invisibles sólo porque su barra móvil tiene cuatro pestañas.
     _accountType == 'empresa'
-        ? EmpresaHerramientasScreen(
-            unreadNotifications: _unreadNotifications,
-          )
-        : (_accountType == 'headhunter' ? _tools : const SizedBox.shrink()),
+        ? EmpresaHerramientasScreen(unreadNotifications: _unreadNotifications)
+        : _tools,
     // 9 · Perfil personal
     _profile,
   ];
@@ -182,10 +183,9 @@ class _MainNavigationState extends State<MainNavigation> {
       case 'headhunter':
         return const {0, 1, 2, 3, 5, 6, 7, 8, 9}.contains(index);
       default:
-        // Candidato: exactamente los cinco destinos que publica su barra.
-        // Antes declaraba {0,1,2,3,5,6,8,9} —ocho— mientras la barra sólo
-        // mostraba cuatro, así que había ranuras "permitidas" inalcanzables.
-        return const {0, 1, 2, 5, 9}.contains(index);
+        // La barra presenta cuatro destinos; Red y Perfil quedan disponibles
+        // desde el menú central. Herramientas ya no queda escondida.
+        return const {0, 1, 2, 5, 8, 9}.contains(index);
     }
   }
 
@@ -205,24 +205,63 @@ class _MainNavigationState extends State<MainNavigation> {
     final uid = Supabase.instance.client.auth.currentUser?.id;
     if (uid == null) return;
 
+    String? selectedExperience;
     try {
       final prefs = await SharedPreferences.getInstance();
       final cached = prefs.getString('mploya_account_type');
       if (cached != null &&
+          const {
+            'candidato',
+            'confidencial',
+            'empresa',
+            'headhunter',
+          }.contains(cached) &&
           (cached != _accountType ||
               !_isIndexAllowedForAccount(cached, _currentIndex))) {
+        selectedExperience = cached;
         _applyAccountType(cached);
       }
-    } catch (_) {}
+      // La experiencia elegida es deliberada. No debe ser reemplazada por el
+      // último rol que quedó guardado en el servidor: eso hacía que alguien
+      // que acababa de elegir Candidato volviera al feed de Empresa.
+      if (cached != null &&
+          const {
+            'candidato',
+            'confidencial',
+            'empresa',
+            'headhunter',
+          }.contains(cached)) {
+        selectedExperience ??= cached;
+      }
+    } catch (e, stackTrace) {
+      FirebaseCrashlytics.instance.recordError(
+        e,
+        stackTrace,
+        reason: 'main_navigation: leer mploya_account_type cacheado',
+        fatal: false,
+      );
+    }
 
     try {
       final res = await loadMyProfile();
-      final newType = res?['account_type']?.toString() ?? 'candidato';
+      final serverType = res?['account_type']?.toString() ?? 'candidato';
+      final newType = selectedExperience ?? serverType;
 
       try {
         final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('mploya_account_type', newType);
-      } catch (_) {}
+        // Sólo se hidrata la preferencia si todavía no se eligió una
+        // experiencia en este dispositivo. La elección del usuario manda.
+        if (selectedExperience == null) {
+          await prefs.setString('mploya_account_type', newType);
+        }
+      } catch (e, stackTrace) {
+        FirebaseCrashlytics.instance.recordError(
+          e,
+          stackTrace,
+          reason: 'main_navigation: guardar mploya_account_type',
+          fatal: false,
+        );
+      }
 
       if (mounted &&
           (newType != _accountType ||
@@ -312,18 +351,83 @@ class _MainNavigationState extends State<MainNavigation> {
 
   Future<void> _toggleDemoRole() async {
     final newType = _accountType == 'empresa' ? 'candidato' : 'empresa';
+    await _activateExperience(newType);
+  }
+
+  /// Cambia la experiencia activa sin depender del rol histórico que quedó en
+  /// el perfil. La preferencia local permite que el cambio sea inmediato y la
+  /// sincronización con el servidor se intenta en segundo plano.
+  Future<void> _activateExperience(String newType) async {
+    if (!const {
+      'candidato',
+      'confidencial',
+      'empresa',
+      'headhunter',
+    }.contains(newType)) {
+      return;
+    }
     _applyAccountType(newType);
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('mploya_account_type', newType);
       final uid = Supabase.instance.client.auth.currentUser?.id;
       if (uid != null) {
-        await setMyInitialRole(
-          role: newType,
-          completeSelection: true,
-        );
+        await setMyInitialRole(role: newType, completeSelection: true);
       }
-    } catch (_) {}
+      // ADENDA (Pedro, 29/8/2026): "me metí como candidato y debería ver
+      // empresas/headhunters en el feed, pero veo candidatos" — el rol se
+      // actualizaba bien en el backend (set_my_initial_role) pero nada
+      // invalidaba currentUserProvider/manualUserRefreshProvider, así que
+      // feedProvider seguía leyendo el account_type VIEJO desde el usuario
+      // cacheado y armaba el feed con el filtro equivocado. Mismo patrón
+      // que ya usa tiktok_reel_card.dart tras otras acciones que cambian
+      // el perfil propio.
+      if (mounted) {
+        final container = ProviderScope.containerOf(context, listen: false);
+        container.invalidate(currentUserProvider);
+        container.invalidate(manualUserRefreshProvider);
+        container.invalidate(feedProvider);
+      }
+    } catch (e, stackTrace) {
+      FirebaseCrashlytics.instance.recordError(
+        e,
+        stackTrace,
+        reason: 'main_navigation: setMyInitialRole',
+        fatal: false,
+      );
+    }
+  }
+
+  Future<void> _chooseExperience() async {
+    await showCupertinoModalPopup<void>(
+      context: context,
+      builder: (sheetContext) => CupertinoActionSheet(
+        title: const Text('Cambiar experiencia'),
+        message: const Text(
+          'Elegí cómo querés usar Mploya ahora. El feed cambia al instante.',
+        ),
+        actions: [
+          for (final option in const [
+            ('candidato', 'Candidato · ver empresas y vacantes'),
+            ('empresa', 'Empresa · descubrir candidatos'),
+            ('headhunter', 'Headhunter · gestionar búsquedas'),
+            ('confidencial', 'Candidato confidencial'),
+          ])
+            CupertinoActionSheetAction(
+              isDefaultAction: option.$1 == _accountType,
+              onPressed: () {
+                Navigator.pop(sheetContext);
+                _activateExperience(option.$1);
+              },
+              child: Text(option.$2),
+            ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () => Navigator.pop(sheetContext),
+          child: const Text('Cancelar'),
+        ),
+      ),
+    );
   }
 
   Future<void> _openPrimaryAction() async {
@@ -339,6 +443,13 @@ class _MainNavigationState extends State<MainNavigation> {
             'Elegí el módulo que querés abrir dentro de la experiencia Empresa.',
           ),
           actions: [
+            CupertinoActionSheetAction(
+              onPressed: () {
+                Navigator.pop(sheetContext);
+                _chooseExperience();
+              },
+              child: const Text('Cambiar experiencia'),
+            ),
             CupertinoActionSheetAction(
               onPressed: () {
                 Navigator.pop(sheetContext);
@@ -435,6 +546,13 @@ class _MainNavigationState extends State<MainNavigation> {
             CupertinoActionSheetAction(
               onPressed: () {
                 Navigator.pop(sheetContext);
+                _chooseExperience();
+              },
+              child: const Text('Cambiar experiencia'),
+            ),
+            CupertinoActionSheetAction(
+              onPressed: () {
+                Navigator.pop(sheetContext);
                 navigator.push(
                   CupertinoPageRoute(
                     builder: (_) => const HeadhunterPublishJobScreen(),
@@ -460,6 +578,13 @@ class _MainNavigationState extends State<MainNavigation> {
             CupertinoActionSheetAction(
               onPressed: () {
                 Navigator.pop(sheetContext);
+                _onTabTap(2);
+              },
+              child: const Text('Talent Pool'),
+            ),
+            CupertinoActionSheetAction(
+              onPressed: () {
+                Navigator.pop(sheetContext);
                 _onTabTap(9);
               },
               child: const Text('Mi perfil'),
@@ -477,7 +602,10 @@ class _MainNavigationState extends State<MainNavigation> {
     await showCupertinoModalPopup<void>(
       context: context,
       builder: (sheetContext) => CupertinoActionSheet(
-        title: const Text('Crear'),
+        title: const Text('Crear y explorar'),
+        message: const Text(
+          'Primero creá contenido. Tus accesos personales están abajo.',
+        ),
         actions: [
           CupertinoActionSheetAction(
             onPressed: () {
@@ -508,6 +636,27 @@ class _MainNavigationState extends State<MainNavigation> {
             },
             child: const Text('Actualizar video pitch'),
           ),
+          CupertinoActionSheetAction(
+            onPressed: () {
+              Navigator.pop(sheetContext);
+              _onTabTap(2);
+            },
+            child: const Text('Abrir mi red'),
+          ),
+          CupertinoActionSheetAction(
+            onPressed: () {
+              Navigator.pop(sheetContext);
+              _onTabTap(9);
+            },
+            child: const Text('Abrir mi perfil'),
+          ),
+          CupertinoActionSheetAction(
+            onPressed: () {
+              Navigator.pop(sheetContext);
+              _chooseExperience();
+            },
+            child: const Text('Cambiar experiencia'),
+          ),
         ],
         cancelButton: CupertinoActionSheetAction(
           onPressed: () => Navigator.pop(sheetContext),
@@ -523,15 +672,35 @@ class _MainNavigationState extends State<MainNavigation> {
     final isDesktopShell = kIsWeb && width >= 980;
     final navItems = _navItemsForAccount(_accountType);
 
-    // TANDA 1 — Empresa usa el shell del sistema de diseño (barra inferior con
-    // FAB central en móvil, barra lateral oscura en ancho). Los demás roles
-    // siguen con el shell anterior hasta su propia tanda.
-    if (_accountType == 'empresa') {
+    // Las tres experiencias usan la misma estructura: cuatro destinos, acción
+    // central elevada y el mismo sistema de espaciado. Sólo cambian contenidos
+    // y etiquetas según el rol.
+    if (!isDesktopShell) {
+      final role = switch (_accountType) {
+        'empresa' => MpRole.empresa,
+        'headhunter' => MpRole.headhunter,
+        'confidencial' => MpRole.confidencial,
+        _ => MpRole.candidato,
+      };
+      final slots = switch (_accountType) {
+        'empresa' => const [7, 2, 5, 8],
+        'headhunter' => const [7, 1, 6, 8],
+        _ => const [0, 1, 5, 8],
+      };
       return EmpresaShell(
         currentIndex: _currentIndex,
         onTap: _onTabTap,
         onPrimaryAction: _openPrimaryAction,
         unreadMessages: _unreadMessages,
+        role: role,
+        bottomSlots: slots,
+        centerLabel:
+            _accountType == 'candidato' || _accountType == 'confidencial'
+            ? 'Crear / Más'
+            : null,
+        overlayNavigation:
+            (_accountType == 'candidato' || _accountType == 'confidencial') &&
+            _currentIndex == 0,
         body: Column(
           children: [
             const OfflineBanner(),
@@ -560,48 +729,7 @@ class _MainNavigationState extends State<MainNavigation> {
       );
     }
 
-    return DecoratedBox(
-      decoration: BoxDecoration(gradient: context.shellGradient),
-      child: Column(
-        children: [
-          const SafeArea(bottom: false, child: OfflineBanner()),
-          Expanded(
-            child: Stack(
-              children: [
-                IndexedStack(index: _currentIndex, children: _screens),
-                if (_supportsRoleToggle(_accountType))
-                  Positioned(
-                    top: 14,
-                    right: 14,
-                    child: SafeArea(
-                      bottom: false,
-                      child: _CompactRoleToggleButton(
-                        label: _roleToggleLabel(_accountType),
-                        onTap: _toggleDemoRole,
-                      ),
-                    ),
-                  ),
-                Positioned(
-                  left: 12,
-                  right: 12,
-                  bottom: 10,
-                  child: SafeArea(
-                    top: false,
-                    child: _MobileNavigationBar(
-                      items: navItems,
-                      currentIndex: _currentIndex,
-                      onTap: _onTabTap,
-                      onPrimaryAction: _openPrimaryAction,
-                      accountType: _accountType,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
+    return const SizedBox.shrink();
   }
 }
 

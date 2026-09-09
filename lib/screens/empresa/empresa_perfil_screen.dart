@@ -3,6 +3,8 @@ import 'package:video_player/video_player.dart';
 
 import '../../services/share_service.dart';
 import '../../widgets/ds/mploya_ds.dart';
+import 'company_cultura_screen.dart';
+import 'empresa_cultura_editor_screen.dart';
 import 'empresa_editar_perfil_screen.dart';
 import 'empresa_perfil_data.dart';
 import 'empresa_publicar_vacante_screen.dart';
@@ -36,6 +38,11 @@ import 'empresa_vacantes_data.dart';
 /// postulaciones y valoración como empleador (`employer_rating_*`), esta última
 /// sólo si alguien la calificó.
 ///
+/// Cantidad de empleados, año de fundación, crecimiento, galería de cultura
+/// y valores DEJARON de estar omitidos el 29/8/2026: ver ADENDA más abajo y
+/// `046_company_culture.sql`. Beneficios y oficinas con dirección siguen sin
+/// tener dónde guardarse.
+///
 /// POLISH VISUAL 15/8/2026 — héroe con VIDEO cuando `empresa.videoUrl` existe
 /// (la empresa grabó su pitch en la pantalla congelada
 /// `EmpresaVideoPitchScreen`, pero hasta ahora ningún otro lugar de la app lo
@@ -48,6 +55,12 @@ import 'empresa_vacantes_data.dart';
 /// forzar oscuro rompía el contraste de los títulos de sección (pensados
 /// contra fondo claro). El héroe, en cambio, siempre fue un bloque oscuro
 /// sobre cuerpo claro — el video sigue esa misma convención ya aprobada.
+///
+/// ADENDA 29/8/2026 — se agregó la tarjeta "Cultura de la empresa" (antes
+/// OMITIDA, ver más arriba) porque Pedro pidió construirla en serio y ya
+/// existe dónde guardarla (`046_company_culture.sql` + `CompanyCultureService`).
+/// Es aditiva: no toca el héroe ni las métricas, sólo agrega una tarjeta más
+/// en `_cuerpo()`, mismo patrón que `_ubicacion()`.
 class EmpresaPerfilScreen extends StatefulWidget {
   /// Datos ya resueltos, para los golden tests.
   final PerfilEmpresa? previewData;
@@ -121,39 +134,39 @@ class _EmpresaPerfilScreenState extends State<EmpresaPerfilScreen> {
         child: _loading
             ? const Center(child: CupertinoActivityIndicator(radius: 15))
             : _data == null
-                ? SafeArea(
-                    child: MpEmptyState(
-                      icon: CupertinoIcons.building_2_fill,
-                      title: 'No pudimos cargar tu perfil',
-                      message: 'Revisá tu conexión y volvé a intentar.',
-                      actionLabel: 'Reintentar',
-                      onAction: _load,
-                    ),
-                  )
-                : Column(
-                    children: [
-                      Expanded(
-                        child: CustomScrollView(
-                          slivers: [
-                            CupertinoSliverRefreshControl(onRefresh: _load),
-                            SliverToBoxAdapter(child: _hero()),
-                            SliverPadding(
-                              padding: const EdgeInsets.fromLTRB(
-                                MpTokens.screenPadding,
-                                MpTokens.space16,
-                                MpTokens.screenPadding,
-                                MpTokens.space24,
-                              ),
-                              sliver: SliverList(
-                                delegate: SliverChildListDelegate(_cuerpo()),
-                              ),
-                            ),
-                          ],
+            ? SafeArea(
+                child: MpEmptyState(
+                  icon: CupertinoIcons.building_2_fill,
+                  title: 'No pudimos cargar tu perfil',
+                  message: 'Revisá tu conexión y volvé a intentar.',
+                  actionLabel: 'Reintentar',
+                  onAction: _load,
+                ),
+              )
+            : Column(
+                children: [
+                  Expanded(
+                    child: CustomScrollView(
+                      slivers: [
+                        CupertinoSliverRefreshControl(onRefresh: _load),
+                        SliverToBoxAdapter(child: _hero()),
+                        SliverPadding(
+                          padding: const EdgeInsets.fromLTRB(
+                            MpTokens.screenPadding,
+                            MpTokens.space16,
+                            MpTokens.screenPadding,
+                            MpTokens.space24,
+                          ),
+                          sliver: SliverList(
+                            delegate: SliverChildListDelegate(_cuerpo()),
+                          ),
                         ),
-                      ),
-                      _barraAcciones(),
-                    ],
+                      ],
+                    ),
                   ),
+                  _barraAcciones(),
+                ],
+              ),
       ),
     );
   }
@@ -222,7 +235,7 @@ class _EmpresaPerfilScreenState extends State<EmpresaPerfilScreen> {
                         child: const Icon(
                           CupertinoIcons.chevron_left,
                           size: 19,
-                          color: MpTokens.darkText,
+                          color: Color(0xFFFFFFFF),
                         ),
                       ),
                     ),
@@ -240,7 +253,7 @@ class _EmpresaPerfilScreenState extends State<EmpresaPerfilScreen> {
                       child: const Icon(
                         CupertinoIcons.refresh,
                         size: 18,
-                        color: MpTokens.darkText,
+                        color: Color(0xFFFFFFFF),
                       ),
                     ),
                   ),
@@ -288,7 +301,7 @@ class _EmpresaPerfilScreenState extends State<EmpresaPerfilScreen> {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: MpTokens.h1.copyWith(
-                              color: MpTokens.darkText,
+                              color: const Color(0xFFFFFFFF),
                               fontSize: 23,
                             ),
                           ),
@@ -300,12 +313,46 @@ class _EmpresaPerfilScreenState extends State<EmpresaPerfilScreen> {
                       ],
                     ),
                     if (_data!.empresa.headline.isNotEmpty)
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _data!.empresa.headline,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: MpTokens.caption.copyWith(
+                              color: const Color(0xE6FFFFFF),
+                            ),
+                          ),
+                          const SizedBox(height: 5),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0x33FFFFFF),
+                              borderRadius: BorderRadius.circular(999),
+                              border: Border.all(
+                                color: const Color(0x33FFFFFF),
+                              ),
+                            ),
+                            child: Text(
+                              'Empresa · Perfil público',
+                              style: MpTokens.micro.copyWith(
+                                color: const Color(0xFFFFFFFF),
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      )
+                    else
                       Text(
-                        _data!.empresa.headline,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
+                        'Empresa · Perfil público',
                         style: MpTokens.caption.copyWith(
-                          color: MpTokens.darkTextSecondary,
+                          color: const Color(0xE6FFFFFF),
                         ),
                       ),
                   ],
@@ -349,8 +396,70 @@ class _EmpresaPerfilScreenState extends State<EmpresaPerfilScreen> {
         _sectores(),
       ],
       const SizedBox(height: MpTokens.space24),
+      _culturaCard(),
+      const SizedBox(height: MpTokens.space24),
       ..._vacantes(),
     ];
+  }
+
+  Widget _culturaCard() {
+    final s = context.mp;
+    final empresa = _data!.empresa;
+
+    return MpCard(
+      child: Row(
+        children: [
+          const MpIconTile(
+            icon: CupertinoIcons.building_2_fill,
+            color: MpTokens.catPurple,
+            size: 42,
+          ),
+          const SizedBox(width: MpTokens.space12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Cultura de la empresa',
+                  style: MpTokens.title.copyWith(color: s.text, fontSize: 15),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Video institucional, valores y el equipo.',
+                  style: MpTokens.caption.copyWith(color: s.textSecondary),
+                ),
+              ],
+            ),
+          ),
+          MpButton(
+            label: 'Ver',
+            size: MpButtonSize.small,
+            variant: MpButtonVariant.outline,
+            onPressed: () => Navigator.of(context).push(
+              CupertinoPageRoute(
+                builder: (_) => CompanyCulturaScreen(
+                  companyUserId: empresa.id,
+                  companyName: empresa.name,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: MpTokens.space8),
+          MpButton(
+            label: 'Cargar',
+            size: MpButtonSize.small,
+            onPressed: () async {
+              await Navigator.of(context).push(
+                CupertinoPageRoute(
+                  builder: (_) => EmpresaCulturaEditorScreen(empresa: empresa),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
   }
 
   /// Banda de métricas con divisores, la misma que usan la Shortlist y
@@ -377,9 +486,7 @@ class _EmpresaPerfilScreenState extends State<EmpresaPerfilScreen> {
       (
         icon: CupertinoIcons.person_2,
         color: MpTokens.catBlue,
-        valor: data.postulacionesNoDisponibles
-            ? '—'
-            : '${data.postulaciones}',
+        valor: data.postulacionesNoDisponibles ? '—' : '${data.postulaciones}',
         etiqueta: 'Postulaciones',
       ),
       // Sólo si alguien calificó de verdad: un 0.0 con estrella parecería una
@@ -446,7 +553,8 @@ class _EmpresaPerfilScreenState extends State<EmpresaPerfilScreen> {
     return MpBanner(
       icon: CupertinoIcons.pencil_outline,
       title: 'Tu perfil está incompleto',
-      message: 'Los candidatos ven esta ficha antes de postularse. Sumá una '
+      message:
+          'Los candidatos ven esta ficha antes de postularse. Sumá una '
           'descripción y un titular para que sepan quién sos.',
       actionLabel: 'Completar perfil',
       onAction: _editar,
@@ -525,9 +633,7 @@ class _EmpresaPerfilScreenState extends State<EmpresaPerfilScreen> {
         Wrap(
           spacing: MpTokens.space8,
           runSpacing: MpTokens.space8,
-          children: [
-            for (final t in _data!.sectores) MpTagChip(label: t),
-          ],
+          children: [for (final t in _data!.sectores) MpTagChip(label: t)],
         ),
       ],
     );
@@ -544,7 +650,8 @@ class _EmpresaPerfilScreenState extends State<EmpresaPerfilScreen> {
           child: MpEmptyState(
             icon: CupertinoIcons.briefcase,
             title: 'Todavía no publicaste vacantes',
-            message: 'Los candidatos que entren a tu perfil no van a encontrar '
+            message:
+                'Los candidatos que entren a tu perfil no van a encontrar '
                 'a qué postularse.',
             actionLabel: 'Publicar vacante',
             onAction: () async {
@@ -561,10 +668,7 @@ class _EmpresaPerfilScreenState extends State<EmpresaPerfilScreen> {
     }
 
     return [
-      Text(
-        'Vacantes activas',
-        style: MpTokens.h2.copyWith(color: s.text),
-      ),
+      Text('Vacantes activas', style: MpTokens.h2.copyWith(color: s.text)),
       const SizedBox(height: MpTokens.space12),
       for (final v in vacantes.take(6)) ...[
         _filaVacante(v),
@@ -766,21 +870,21 @@ class _CompanyVideoPlayerPageState extends State<_CompanyVideoPlayerPage> {
                     ),
                   )
                 : !ready
-                    ? const CupertinoActivityIndicator(
-                        radius: 15,
-                        color: Color(0xFFFFFFFF),
-                      )
-                    : GestureDetector(
-                        onTap: () => setState(() {
-                          controller.value.isPlaying
-                              ? controller.pause()
-                              : controller.play();
-                        }),
-                        child: AspectRatio(
-                          aspectRatio: controller.value.aspectRatio,
-                          child: VideoPlayer(controller),
-                        ),
-                      ),
+                ? const CupertinoActivityIndicator(
+                    radius: 15,
+                    color: Color(0xFFFFFFFF),
+                  )
+                : GestureDetector(
+                    onTap: () => setState(() {
+                      controller.value.isPlaying
+                          ? controller.pause()
+                          : controller.play();
+                    }),
+                    child: AspectRatio(
+                      aspectRatio: controller.value.aspectRatio,
+                      child: VideoPlayer(controller),
+                    ),
+                  ),
           ),
           Positioned(
             top: MediaQuery.of(context).padding.top + MpTokens.space8,

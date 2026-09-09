@@ -25,9 +25,7 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
   bool _isLoading = false;
   String _selectedRole = 'candidato';
 
-  Future<void> _persistSelectedRole({
-    required String role,
-  }) async {
+  Future<void> _persistSelectedRole({required String role}) async {
     await setMyInitialRole(role: role, completeSelection: true);
   }
 
@@ -39,9 +37,16 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
     try {
       final user = Supabase.instance.client.auth.currentUser;
       if (user != null) {
-        await _persistSelectedRole(role: role);
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('mploya_account_type', role);
+        // Guardamos primero la experiencia elegida. Si el servidor todavía
+        // conserva un rol anterior, la navegación no puede devolver al usuario
+        // al feed equivocado mientras se sincroniza.
+        try {
+          await _persistSelectedRole(role: role);
+        } catch (e) {
+          debugPrint('Rol activo guardado localmente; sync pendiente: $e');
+        }
         if (!mounted) return;
         if (role == 'confidencial') {
           Navigator.of(context).pushReplacement(

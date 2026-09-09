@@ -35,96 +35,87 @@ enum MpRole { candidato, confidencial, empresa, headhunter }
 extension MpRolePattern on MpRole {
   /// Etiqueta tal como aparece en la pantalla de bienvenida.
   String get title => switch (this) {
-        MpRole.candidato => 'Soy Candidato',
-        MpRole.confidencial => 'Candidato Confidencial',
-        MpRole.empresa => 'Soy Empresa',
-        MpRole.headhunter => 'Soy Headhunter',
-      };
+    MpRole.candidato => 'Soy Candidato',
+    MpRole.confidencial => 'Candidato Confidencial',
+    MpRole.empresa => 'Soy Empresa',
+    MpRole.headhunter => 'Soy Headhunter',
+  };
 
   String get tagline => switch (this) {
-        MpRole.candidato => 'Busco oportunidades',
-        MpRole.confidencial => 'Exploro en privado',
-        MpRole.empresa => 'Publico vacantes',
-        MpRole.headhunter => 'Busco talento',
-      };
+    MpRole.candidato => 'Busco oportunidades',
+    MpRole.confidencial => 'Exploro en privado',
+    MpRole.empresa => 'Publico vacantes',
+    MpRole.headhunter => 'Busco talento',
+  };
 
   IconData get icon => switch (this) {
-        MpRole.candidato => CupertinoIcons.person_fill,
-        MpRole.confidencial => CupertinoIcons.eye_slash_fill,
-        MpRole.empresa => CupertinoIcons.building_2_fill,
-        MpRole.headhunter => CupertinoIcons.briefcase_fill,
-      };
+    MpRole.candidato => CupertinoIcons.person_fill,
+    MpRole.confidencial => CupertinoIcons.eye_slash_fill,
+    MpRole.empresa => CupertinoIcons.building_2_fill,
+    MpRole.headhunter => CupertinoIcons.briefcase_fill,
+  };
 
   /// Color del círculo de la tarjeta de rol. Medidos en
   /// `01_Bienvenida_SeleccionRol.png`.
   Color get color => switch (this) {
-        MpRole.candidato => MpTokens.catOrange,
-        MpRole.confidencial => MpTokens.catIndigo,
-        MpRole.empresa => MpTokens.catGreen,
-        MpRole.headhunter => MpTokens.catPurple,
-      };
+    MpRole.candidato => MpTokens.catOrange,
+    MpRole.confidencial => MpTokens.catIndigo,
+    MpRole.empresa => MpTokens.catGreen,
+    MpRole.headhunter => MpTokens.catPurple,
+  };
 
   /// Superficie de las pantallas de gestión de este rol.
   MpSurfaceKind get surface => MpSurfaceKind.light;
 
   /// Las 4 pestañas de la barra inferior. La acción central va aparte.
   List<MpNavItem> navItems({int unreadMessages = 0}) => switch (this) {
-        MpRole.candidato || MpRole.confidencial => [
-            const MpNavItem(icon: CupertinoIcons.house_fill, label: 'Inicio'),
-            const MpNavItem(icon: CupertinoIcons.search, label: 'Explorar'),
-            MpNavItem(
-              icon: CupertinoIcons.chat_bubble_2_fill,
-              label: 'Mensajes',
-              badge: unreadMessages,
-            ),
-            const MpNavItem(icon: CupertinoIcons.person, label: 'Perfil'),
-          ],
-        // Medido en `dashboard empresa.png` y `video pantalla completa
-        // candidato.png`: la barra de Empresa es Inicio · Mapa · (+) ·
-        // Mensajes · Herramientas.
-        MpRole.empresa => [
-            const MpNavItem(icon: CupertinoIcons.house, label: 'Inicio'),
-            const MpNavItem(
-              // Pin de mapa, no la flecha de navegación.
-              icon: CupertinoIcons.placemark,
-              label: 'Mapa',
-            ),
-            MpNavItem(
-              icon: CupertinoIcons.chat_bubble_2,
-              label: 'Mensajes',
-              badge: unreadMessages,
-            ),
-            const MpNavItem(
-              icon: CupertinoIcons.briefcase,
-              label: 'Herramientas',
-            ),
-          ],
-        MpRole.headhunter => [
-            const MpNavItem(
-              icon: CupertinoIcons.house_fill,
-              label: 'Dashboard',
-            ),
-            const MpNavItem(
-              icon: CupertinoIcons.building_2_fill,
-              label: 'Clientes',
-            ),
-            const MpNavItem(
-              icon: CupertinoIcons.scope,
-              label: 'Búsquedas',
-            ),
-            const MpNavItem(
-              icon: CupertinoIcons.person_2,
-              label: 'Talent Pool',
-            ),
-          ],
-      };
+    MpRole.candidato || MpRole.confidencial => [
+      const MpNavItem(icon: CupertinoIcons.house_fill, label: 'Inicio'),
+      const MpNavItem(icon: CupertinoIcons.briefcase_fill, label: 'Vacantes'),
+      MpNavItem(
+        icon: CupertinoIcons.chat_bubble_2_fill,
+        label: 'Mensajes',
+        badge: unreadMessages,
+      ),
+      const MpNavItem(
+        icon: CupertinoIcons.square_grid_2x2,
+        label: 'Herramientas',
+      ),
+    ],
+    // Medido en `dashboard empresa.png` y `video pantalla completa
+    // candidato.png`: la barra de Empresa es Inicio · Mapa · (+) ·
+    // Mensajes · Herramientas.
+    MpRole.empresa => [
+      const MpNavItem(icon: CupertinoIcons.house, label: 'Inicio'),
+      const MpNavItem(
+        // Pin de mapa, no la flecha de navegación.
+        icon: CupertinoIcons.placemark,
+        label: 'Mapa',
+      ),
+      MpNavItem(
+        icon: CupertinoIcons.chat_bubble_2,
+        label: 'Mensajes',
+        badge: unreadMessages,
+      ),
+      const MpNavItem(icon: CupertinoIcons.briefcase, label: 'Herramientas'),
+    ],
+    MpRole.headhunter => [
+      const MpNavItem(icon: CupertinoIcons.house_fill, label: 'Dashboard'),
+      const MpNavItem(icon: CupertinoIcons.building_2_fill, label: 'Clientes'),
+      const MpNavItem(icon: CupertinoIcons.scope, label: 'Búsquedas'),
+      const MpNavItem(
+        icon: CupertinoIcons.square_grid_2x2,
+        label: 'Herramientas',
+      ),
+    ],
+  };
 
   /// Etiqueta bajo el botón central, cuando el mockup la muestra.
   /// En `dashboard empresa.png` y en el dashboard de headhunter el botón
   /// central va sin texto; solo el feed de candidato lo rotula.
   String? get centerLabel => switch (this) {
-        MpRole.candidato || MpRole.confidencial => 'Publicar',
-        MpRole.empresa => null,
-        MpRole.headhunter => null,
-      };
+    MpRole.candidato || MpRole.confidencial => 'Publicar',
+    MpRole.empresa => null,
+    MpRole.headhunter => null,
+  };
 }

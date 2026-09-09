@@ -12,6 +12,7 @@ import '../screens/scheduling_screen.dart';
 import '../services/video_preload_manager.dart';
 import '../theme/app_theme.dart';
 import 'reel_card_video.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 
 class CandidateTalentReelCard extends StatefulWidget {
   final NexUser candidate;
@@ -174,7 +175,14 @@ class _CandidateTalentReelCardState extends State<CandidateTalentReelCard>
       if (mounted) {
         setState(() => _isSaved = row != null);
       }
-    } catch (_) {}
+    } catch (e, stackTrace) {
+      FirebaseCrashlytics.instance.recordError(
+        e,
+        stackTrace,
+        reason: 'candidate_talent_reel_card: leer si esta guardado',
+        fatal: false,
+      );
+    }
   }
 
   Future<void> _toggleSaved() async {

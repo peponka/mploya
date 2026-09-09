@@ -86,10 +86,15 @@ class VacantesData {
   /// "—" en vez de un 0 que mentiría.
   final bool conteoNoDisponible;
 
+  /// La consulta principal de vacantes falló. Es distinto de una empresa que
+  /// todavía no publicó ninguna y permite que la UI no mienta con un vacío.
+  final bool error;
+
   const VacantesData({
     required this.vacantes,
     required this.soportaEstados,
     this.conteoNoDisponible = false,
+    this.error = false,
   });
 
   static const empty = VacantesData(vacantes: [], soportaEstados: false);
@@ -101,8 +106,7 @@ class VacantesData {
       vacantes.where((v) => v.estado == VacanteEstado.pausada).length;
 
   /// Total de postulaciones sobre todas las vacantes.
-  int get candidatos =>
-      vacantes.fold<int>(0, (sum, v) => sum + v.candidatos);
+  int get candidatos => vacantes.fold<int>(0, (sum, v) => sum + v.candidatos);
 }
 
 /// Las tres modalidades que el alta de vacante ofrece, tal como se guardan.
@@ -221,7 +225,7 @@ Future<VacantesData> loadEmpresaVacantes() async {
     );
   } catch (e) {
     debugPrint('vacantes · jobs: $e');
-    return VacantesData.empty;
+    return const VacantesData(vacantes: [], soportaEstados: false, error: true);
   }
 
   // ¿La base expone un campo de estado? Se mira la primera fila real.

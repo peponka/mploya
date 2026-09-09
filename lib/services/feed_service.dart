@@ -52,18 +52,20 @@ class FeedService {
     List<String> mySkills = const [],
   }) async {
     if (offset == 0 && !forceRefresh && _isCacheValid && _cachedUsers != null) {
-      debugPrint('⚡ FeedService: Usando caché (${_cachedUsers!.length} usuarios)');
+      debugPrint(
+        '⚡ FeedService: Usando caché (${_cachedUsers!.length} usuarios)',
+      );
       return _cachedUsers!;
     }
 
     try {
       List<dynamic> rows;
-      
+
       try {
         // Intentar con la vista optimizada feed_ranked
         var query = _db.from('feed_ranked').select();
         if (_uid != null) query = query.neq('id', _uid!);
-        
+
         if (myAccountType == 'headhunter') {
           // Headhunter = visibilidad cruzada completa: ve candidatos, confidenciales
           // Y empresas. Es el único rol que ve ambos lados → no se filtra por tipo.
@@ -72,7 +74,7 @@ class FeedService {
         } else {
           query = query.inFilter('account_type', ['empresa', 'headhunter']);
         }
-        
+
         rows = await query
             .order('base_score', ascending: false)
             .order('created_at', ascending: false)
@@ -80,10 +82,12 @@ class FeedService {
             .timeout(const Duration(seconds: 10));
       } catch (viewError) {
         // feed_ranked no existe → fallback a tabla users directamente
-        debugPrint('⚠️ feed_ranked no disponible, usando tabla users: $viewError');
+        debugPrint(
+          '⚠️ feed_ranked no disponible, usando tabla users: $viewError',
+        );
         var query = _db.from('accessible_user_profiles').select(kUserColumns);
         if (_uid != null) query = query.neq('id', _uid!);
-        
+
         // Filtro cruzado
         if (myAccountType == 'headhunter') {
           // Headhunter = visibilidad cruzada completa: ve candidatos, confidenciales
@@ -93,7 +97,7 @@ class FeedService {
         } else {
           query = query.inFilter('account_type', ['empresa', 'headhunter']);
         }
-        
+
         rows = await query
             .not('video_url', 'is', null)
             .neq('video_url', '')
@@ -103,7 +107,7 @@ class FeedService {
       }
 
       var result = List<Map<String, dynamic>>.from(rows);
-      
+
       // Apply advanced social algorithm for the first page,
       // fallback to basic sort for subsequent pages.
       if (offset == 0) {
@@ -122,9 +126,13 @@ class FeedService {
       if (offset == 0) {
         _cachedUsers = result;
         _cacheTimestamp = DateTime.now();
-        debugPrint('📡 FeedService: Fetch fresco (${result.length} usuarios, algo social v2)');
+        debugPrint(
+          '📡 FeedService: Fetch fresco (${result.length} usuarios, algo social v2)',
+        );
       } else {
-        debugPrint('📡 FeedService: Página +${result.length} usuarios (offset=$offset)');
+        debugPrint(
+          '📡 FeedService: Página +${result.length} usuarios (offset=$offset)',
+        );
       }
 
       return result;
@@ -144,11 +152,15 @@ class FeedService {
     String myAccountType,
   ) {
     return users.where((r) {
-      final hasVideo = r['video_url'] != null && r['video_url'].toString().isNotEmpty;
+      final hasVideo =
+          r['video_url'] != null && r['video_url'].toString().isNotEmpty;
       if (!hasVideo) return false;
 
       final t = (r['account_type'] as String?) ?? 'candidato';
-      if (myAccountType == 'empresa' || myAccountType == 'headhunter') {
+      // Empresa descubre talento, HeadHunter puede ver ambos lados y
+      // Candidato descubre empresas y headhunters.
+      if (myAccountType == 'headhunter') return true;
+      if (myAccountType == 'empresa') {
         return t == 'candidato' || t == 'confidencial';
       } else {
         return t == 'empresa' || t == 'headhunter';
@@ -191,8 +203,10 @@ class FeedService {
       if (scoreA != scoreB) return scoreB.compareTo(scoreA);
 
       // Desempate: más recientes primero
-      final dateA = DateTime.tryParse(a['created_at'].toString()) ?? DateTime.now();
-      final dateB = DateTime.tryParse(b['created_at'].toString()) ?? DateTime.now();
+      final dateA =
+          DateTime.tryParse(a['created_at'].toString()) ?? DateTime.now();
+      final dateB =
+          DateTime.tryParse(b['created_at'].toString()) ?? DateTime.now();
       return dateB.compareTo(dateA);
     });
 
@@ -208,7 +222,8 @@ class FeedService {
 
     return users.where((r) {
       final headline = (r['headline']?.toString() ?? '').toLowerCase();
-      final tags = (r['tags'] as List?)
+      final tags =
+          (r['tags'] as List?)
               ?.map((t) => t.toString().toLowerCase())
               .toSet() ??
           <String>{};
@@ -226,16 +241,36 @@ class FeedService {
               tags.contains('remoto') ||
               tags.contains('remote');
         case 3: // Tech
-          return tags.any((t) => const [
-                'tech', 'react', 'node', 'flutter', 'python', 'aws',
-                'devops', 'javascript', 'ios', 'android', 'backend',
-                'frontend', 'fullstack'
-              ].contains(t));
+          return tags.any(
+            (t) => const [
+              'tech',
+              'react',
+              'node',
+              'flutter',
+              'python',
+              'aws',
+              'devops',
+              'javascript',
+              'ios',
+              'android',
+              'backend',
+              'frontend',
+              'fullstack',
+            ].contains(t),
+          );
         case 4: // Fintech
-          return tags.any((t) => const [
-                'fintech', 'blockchain', 'crypto', 'cripto', 'defi',
-                'banking', 'finanzas', 'payments'
-              ].contains(t));
+          return tags.any(
+            (t) => const [
+              'fintech',
+              'blockchain',
+              'crypto',
+              'cripto',
+              'defi',
+              'banking',
+              'finanzas',
+              'payments',
+            ].contains(t),
+          );
         default:
           return true;
       }

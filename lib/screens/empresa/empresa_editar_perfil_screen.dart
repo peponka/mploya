@@ -65,6 +65,10 @@ Future<bool> guardarPerfilEmpresa({
 /// mezclados en un texto libre: al volver a abrir no se pueden separar, así que
 /// no son campos editables — son un párrafo. Esta pantalla no repite eso: cada
 /// campo que muestra se lee y se escribe uno a uno.
+///
+/// ADENDA 29/8/2026 — Cultura y valores dejaron de estar entre lo omitido:
+/// tienen su propio editor y su propia tabla (ver `_queFaltaGuardar()`). Esta
+/// pantalla sigue sin tocarlos porque no viven en `users`.
 class EmpresaEditarPerfilScreen extends StatefulWidget {
   /// Empresa ya cargada (la trae el Perfil de Empresa, que la acaba de leer).
   final NexUser empresa;
@@ -336,18 +340,22 @@ class _EmpresaEditarPerfilScreenState extends State<EmpresaEditarPerfilScreen> {
     ];
   }
 
-  /// El mockup promete cultura, valores, beneficios y oficinas. No hay dónde
-  /// guardarlos: decirlo es más honesto que ofrecer campos que se pierden al
-  /// salir, que es lo que hace hoy el formulario legacy.
+  /// ADENDA 29/8/2026 — Cultura, valores, año de fundación y cantidad de
+  /// empleados YA tienen dónde guardarse (`046_company_culture.sql`), en su
+  /// propio editor (`EmpresaCulturaEditorScreen`, entrada desde "Cultura de
+  /// la empresa" en el Perfil de Empresa) — no se movieron a ESTE formulario
+  /// porque no son campos de `users`, son otra tabla. Beneficios y oficinas
+  /// con dirección siguen sin tener dónde guardarse.
   Widget _queFaltaGuardar() {
     final s = context.mp;
 
     return MpBanner(
       icon: CupertinoIcons.info,
-      title: 'Qué todavía no se puede cargar',
-      message: 'Cultura, valores, beneficios, oficinas, cantidad de empleados '
-          'y año de fundación no tienen dónde guardarse todavía, así que no se '
-          'piden acá. Si querés contarlos, sumalos a "Sobre la empresa".',
+      title: 'Qué todavía no se puede cargar acá',
+      message: 'Beneficios y oficinas con dirección no tienen dónde '
+          'guardarse todavía. Cultura, valores, año de fundación y cantidad '
+          'de empleados sí se cargan, pero desde "Cultura de la empresa" en '
+          'tu Perfil de Empresa — no desde este formulario.',
       color: s.textTertiary,
     );
   }

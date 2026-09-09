@@ -6,6 +6,7 @@ import '../../models/models.dart';
 import '../../navigation/main_navigation.dart';
 import '../../providers/feed_provider.dart';
 import '../../services/ai_match_service.dart';
+import '../../services/coach_mark_service.dart';
 import '../../services/video_preload_manager.dart';
 import '../../widgets/ds/mploya_ds.dart';
 import '../../widgets/empresa/talent_reel_card.dart';
@@ -28,6 +29,23 @@ import 'empresa_publicar_vacante_screen.dart';
 /// Auditada el 12/8/2026: se eliminaron de la tarjeta los "N+ años" (que eran
 /// `experience.length * 2`) y la modalidad inferida de tags. El porcentaje de
 /// Match sale de la RPC `match_candidates_for_job` y sin match no se dibuja.
+///
+/// ADENDA 29/8/2026: dispose() no pausaba `VideoPreloadManager` — bug
+/// funcional concreto y demostrable (audio de fondo tras salir de la
+/// pantalla). Ver comentario en dispose().
+///
+/// ADENDA 29/8/2026 (2): se agrega un coach mark en el primer card
+/// (cmEmpresaFeedMatchKey / showEmpresaTalentFeedTour) que explica que el
+/// Match IA necesita una vacante elegida — a Pedro le costó entender esto
+/// mismo hoy y llegó a pensar que el feed estaba roto. No cambia diseño ni
+/// comportamiento aprobado, solo agrega una capa explicativa opcional.
+///
+/// ADENDA 30/8/2026: bug funcional concreto y demostrable — en "Para ti"
+/// (sin vacante elegida) se pintaba el estado vacío ("Todavía no hay
+/// talento con video pitch") ANTES de que terminara de cargar el feed
+/// general, porque el spinner de carga sólo miraba _loadingJobs/
+/// _loadingMatches y nunca el isInitialLoading de feedProvider. Ver
+/// comentario en build().
 class EmpresaTalentFeedScreen extends ConsumerStatefulWidget {
   /// `true` cuando vive como pestaña del shell (índice 0). En ese caso la
   /// reproducción depende de la pestaña activa; si se abre como ruta, no.
@@ -64,12 +82,41 @@ class _EmpresaTalentFeedScreenState
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(feedProvider.notifier).refreshFeed();
       _loadJobs();
+      // Coach mark (29/8/2026): explica que el Match IA necesita una
+      // vacante elegida. Se ancla en el primer card, así que se dispara
+      // recién cuando el feed ya renderizó al menos una fila.
+      Future.delayed(const Duration(milliseconds: 900), () {
+        if (mounted) CoachMarkService.showEmpresaTalentFeedTour(context);
+      });
     });
+    // ADENDA (Pedro, 29/8/2026, segunda vuelta): el fix anterior (pauseAll
+    // en dispose) no alcanzaba porque esta pantalla vive dentro del
+    // IndexedStack de main_navigation.dart — al cambiar de pestaña (ej. a
+    // "Mi Perfil") este widget NUNCA se dispone, solo queda oculto. El
+    // `visible` que se le pasa a TalentReelCard se calculaba leyendo
+    // `currentMainTabNotifier.value` una sola vez en build, sin escucharlo,
+    // así que quedaba pegado en `true` y el video seguía sonando de fondo
+    // aunque main_navigation ya había llamado a pauseAll(). Ahora esta
+    // pantalla escucha el notifier y se reconstruye cuando cambia la
+    // pestaña, para que `screenVisible` (ver _pager) refleje la realidad.
+    currentMainTabNotifier.addListener(_onMainTabChanged);
+  }
+
+  void _onMainTabChanged() {
+    if (widget.embedded && mounted) setState(() {});
   }
 
   @override
   void dispose() {
+    currentMainTabNotifier.removeListener(_onMainTabChanged);
     _pageController.dispose();
+    // Bug real (Pedro, 29/8/2026): "se filtra el sonido del feed" — al salir
+    // de esta pantalla el video que estaba activo seguía sonando de fondo.
+    // Causa: TalentReelCard NO dispone los controllers precargados (son del
+    // VideoPreloadManager, se reutilizan entre cards) y esta pantalla nunca
+    // llamaba a pauseAll() al salir — el mismo patrón que sí tiene
+    // home_feed_screen.dart (el feed de Candidato) en su propio dispose().
+    VideoPreloadManager.instance.pauseAll();
     super.dispose();
   }
 
@@ -276,9 +323,23 @@ class _EmpresaTalentFeedScreenState
   @override
   Widget build(BuildContext context) {
     // Se observa el feed para reconstruir cuando llegan filas nuevas.
-    ref.watch(feedProvider);
+    final feedState = ref.watch(feedProvider);
     final rows = _activeRows();
     final wide = mpIsWide(context);
+
+    // FIX (Pedro, 30/8/2026): en "Para ti" (sin vacante elegida) esta
+    // pantalla mostraba el estado vacío ("Todavía no hay talento con video
+    // pitch") ANTES de que terminara de llegar el feed general, porque acá
+    // sólo se esperaba _loadingJobs/_loadingMatches — el propio
+    // isInitialLoading de feedProvider (que puede tardar varios segundos:
+    // resuelve el usuario actual y reintenta hasta 3 veces) no se
+    // consultaba. Como _activeRows() cae en _candidatesWithVideo() cuando
+    // no hay vacante elegida, mientras el feed seguía cargando `rows` daba
+    // vacío igual y se pintaba el estado vacío antes de tiempo.
+    final showingGeneralFeed = _selectedJobId == null;
+    final loading = _loadingJobs ||
+        _loadingMatches ||
+        (showingGeneralFeed && feedState.isInitialLoading);
 
     final feed = MpSurface(
       style: MpSurfaceStyle.dark,
@@ -286,7 +347,7 @@ class _EmpresaTalentFeedScreenState
         color: MpTokens.darkBg,
         child: Stack(
           children: [
-            if (_loadingJobs || _loadingMatches)
+            if (loading)
               const Center(
                 child: CupertinoActivityIndicator(
                   radius: 15,
@@ -345,6 +406,7 @@ class _EmpresaTalentFeedScreenState
           isActive: index == _currentPage,
           screenVisible: visible,
           muted: _muted,
+          isFirstCard: index == 0,
           selectedJobTitle: _selectedJobTitle(),
           selectedJobMeta: _selectedJobMeta(),
           matchPercentage: _matchFor(rows, index),

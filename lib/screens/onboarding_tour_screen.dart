@@ -10,6 +10,18 @@ import '../l10n/app_strings.dart';
 ///
 /// v2: Added bounce animations, parallax icon movement, interactive demo hints,
 ///     animated progress bar, and haptic-like visual feedback.
+///
+/// ╔═══════════════════════════════════════════════════════════════════════╗
+/// ║ SIN USO desde el 29/8/2026 — Pedro pidió sacarlo de toda la app: muy   ║
+/// ║ largo (5 pantallas para poder entrar), colores propios que no eran    ║
+/// ║ los de la marca, y aparecía en momentos que no correspondían. Los     ║
+/// ║ tres lugares que lo abrían (splash_screen.dart,                      ║
+/// ║ onboarding_pitch_screen.dart, talent_onboarding_complete_screen.dart) ║
+/// ║ ahora van directo a MainNavigation. Reemplazo: coach marks            ║
+/// ║ contextuales sobre los controles reales — ver CoachMarkService        ║
+/// ║ (showFeedTour para Candidato, showEmpresaDashboardTour para Empresa). ║
+/// ║ Se deja el archivo sin borrar por si se quiere reciclar contenido.    ║
+/// ╚═══════════════════════════════════════════════════════════════════════╝
 class OnboardingTourScreen extends StatefulWidget {
   final String? accountType;
 

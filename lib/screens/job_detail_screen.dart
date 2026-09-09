@@ -9,6 +9,7 @@ import '../widgets/profile_video_widgets.dart' show VideoPlayerModal;
 import '../models/models.dart' show resolveVideoUrl;
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 
 /// Detalle de una oferta rediseñado con estética premium y adaptabilidad responsive
 /// según el mockup del usuario.
@@ -16,7 +17,15 @@ class JobDetailScreen extends StatefulWidget {
   final Map<String, dynamic> job;
   final int? matchScore;
   final bool isApplied;
-  final VoidCallback? onApply;
+  final bool isSaved;
+
+  /// Postula a esta vacante y devuelve si quedó registrada.
+  ///
+  /// ADENDA 31/8/2026 — antes era un `VoidCallback`: se disparaba y la
+  /// pantalla asumía éxito en el mismo instante. Ahora informa el
+  /// resultado real y el botón espera esa respuesta.
+  final Future<bool> Function()? onApply;
+  final VoidCallback? onToggleSaved;
   final String? viewerAccountType;
   final bool previewMode;
 
@@ -25,7 +34,9 @@ class JobDetailScreen extends StatefulWidget {
     required this.job,
     this.matchScore,
     this.isApplied = false,
+    this.isSaved = false,
     this.onApply,
+    this.onToggleSaved,
     this.viewerAccountType,
     this.previewMode = false,
   });
@@ -38,15 +49,24 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
   String? _companyVideoUrl;
   double? _distanceKm;
   bool _applied = false;
+  bool _applying = false;
+  bool _saved = false;
 
   @override
   void initState() {
     super.initState();
     _applied = widget.isApplied;
+    _saved = widget.isSaved;
     if (!widget.previewMode && !_isHeadhunter) {
-    _loadCompanyVideo();
-    _computeDistance();
+      _loadCompanyVideo();
+      _computeDistance();
+    }
   }
+
+  void _toggleSaved() {
+    if (widget.onToggleSaved == null) return;
+    setState(() => _saved = !_saved);
+    widget.onToggleSaved!.call();
   }
 
   bool get _isHeadhunter =>
@@ -73,7 +93,14 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
         Uri.parse(cleanUrl),
         mode: LaunchMode.externalApplication,
       );
-    } catch (_) {}
+    } catch (e, stackTrace) {
+      FirebaseCrashlytics.instance.recordError(
+        e,
+        stackTrace,
+        reason: 'job_detail_screen: launchUrl',
+        fatal: false,
+      );
+    }
   }
 
   Future<void> _loadCompanyVideo() async {
@@ -89,7 +116,14 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
       if (mounted && url != null && url.isNotEmpty) {
         setState(() => _companyVideoUrl = resolveVideoUrl(url));
       }
-    } catch (_) {}
+    } catch (e, stackTrace) {
+      FirebaseCrashlytics.instance.recordError(
+        e,
+        stackTrace,
+        reason: 'job_detail_screen: cargar video de la empresa',
+        fatal: false,
+      );
+    }
   }
 
   Future<void> _computeDistance() async {
@@ -104,7 +138,14 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
         _lng!,
       );
       setState(() => _distanceKm = meters / 1000);
-    } catch (_) {}
+    } catch (e, stackTrace) {
+      FirebaseCrashlytics.instance.recordError(
+        e,
+        stackTrace,
+        reason: 'job_detail_screen: calcular distancia',
+        fatal: false,
+      );
+    }
   }
 
   Map<String, String?> _parseDescription(String? desc) {
@@ -122,7 +163,7 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
     String? techStack;
     String? cultura;
     String? beneficios;
-    
+
     bool foundSeparator = false;
     for (var line in lines) {
       final trimmed = line.trim();
@@ -130,34 +171,62 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
         foundSeparator = true;
         continue;
       }
-      
+
       if (!foundSeparator) {
         if (aboutText.isNotEmpty) aboutText += '\n';
         aboutText += line;
       } else {
         final lower = trimmed.toLowerCase();
         if (lower.contains('tipo:')) {
-          tipo = trimmed.split(RegExp(r'tipo:', caseSensitive: false)).last.trim();
+          tipo = trimmed
+              .split(RegExp(r'tipo:', caseSensitive: false))
+              .last
+              .trim();
         } else if (lower.contains('tamaño:') || lower.contains('tamano:')) {
-          tamano = trimmed.split(RegExp(r'tamaño:|tamano:', caseSensitive: false)).last.trim();
+          tamano = trimmed
+              .split(RegExp(r'tamaño:|tamano:', caseSensitive: false))
+              .last
+              .trim();
         } else if (lower.contains('fundada:')) {
-          fundada = trimmed.split(RegExp(r'fundada:', caseSensitive: false)).last.trim();
-        } else if (lower.contains('ubicación:') || lower.contains('ubicacion:')) {
-          ubicacion = trimmed.split(RegExp(r'ubicación:|ubicacion:', caseSensitive: false)).last.trim();
+          fundada = trimmed
+              .split(RegExp(r'fundada:', caseSensitive: false))
+              .last
+              .trim();
+        } else if (lower.contains('ubicación:') ||
+            lower.contains('ubicacion:')) {
+          ubicacion = trimmed
+              .split(RegExp(r'ubicación:|ubicacion:', caseSensitive: false))
+              .last
+              .trim();
         } else if (lower.contains('modalidad:')) {
-          modalidad = trimmed.split(RegExp(r'modalidad:', caseSensitive: false)).last.trim();
+          modalidad = trimmed
+              .split(RegExp(r'modalidad:', caseSensitive: false))
+              .last
+              .trim();
         } else if (lower.contains('web:')) {
-          web = trimmed.split(RegExp(r'web:', caseSensitive: false)).last.trim();
+          web = trimmed
+              .split(RegExp(r'web:', caseSensitive: false))
+              .last
+              .trim();
         } else if (lower.contains('tech stack:')) {
-          techStack = trimmed.split(RegExp(r'tech stack:', caseSensitive: false)).last.trim();
+          techStack = trimmed
+              .split(RegExp(r'tech stack:', caseSensitive: false))
+              .last
+              .trim();
         } else if (lower.contains('cultura:')) {
-          cultura = trimmed.split(RegExp(r'cultura:', caseSensitive: false)).last.trim();
+          cultura = trimmed
+              .split(RegExp(r'cultura:', caseSensitive: false))
+              .last
+              .trim();
         } else if (lower.contains('beneficios:')) {
-          beneficios = trimmed.split(RegExp(r'beneficios:', caseSensitive: false)).last.trim();
+          beneficios = trimmed
+              .split(RegExp(r'beneficios:', caseSensitive: false))
+              .last
+              .trim();
         }
       }
     }
-    
+
     String cleanField(String? val) {
       if (val == null) return '';
       return val.replaceAll(RegExp(r'^[🏢👥📅📍🏠🌐⚡🎯🎁]\s*'), '').trim();
@@ -181,7 +250,7 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
   Widget build(BuildContext context) {
     if (_isHeadhunter) return _buildHeadhunterDetail(context);
     final parsed = _parseDescription(job['description']?.toString());
-    
+
     return CupertinoPageScaffold(
       backgroundColor: const Color(0xFFFAF8F5), // Premium light cream
       child: LayoutBuilder(
@@ -467,11 +536,14 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
         job['company_name']?.toString() ??
         'Empresa';
     final salary =
-        job['salary_range']?.toString() ??
-        job['salary']?.toString() ??
-        'A convenir';
-    final location =
-        parsed['ubicacion'] ?? job['location']?.toString() ?? 'Asunción';
+        (job['salary_range']?.toString() ?? job['salary']?.toString() ?? '')
+            .trim();
+    final location = (job['location']?.toString() ?? parsed['ubicacion'] ?? '')
+        .trim();
+    final modality =
+        _jobModality() ??
+        (parsed['modalidad']?.isNotEmpty == true ? parsed['modalidad'] : null);
+    final seniority = job['seniority']?.toString().trim() ?? '';
     final tags = (job['tags'] is List)
         ? (job['tags'] as List).map((t) => t.toString()).toList()
         : <String>[];
@@ -506,36 +578,28 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
               ),
               Expanded(
                 child: Center(
-                  child: Text(
-                    companyName.toLowerCase(),
+                  child: const Text(
+                    'Vacante',
                     style: const TextStyle(
-                      fontFamily: 'Georgia',
-                      fontSize: 22,
+                      fontSize: 17,
                       fontWeight: FontWeight.w700,
                       color: Colors.white,
-                      letterSpacing: -0.5,
                     ),
                   ),
                 ),
               ),
-              CupertinoButton(
-                padding: EdgeInsets.zero,
-                onPressed: () {
-                  Share.share(
-                    'Mirá esta oferta de empleo en Mploya: $title en $companyName',
-                  );
-                },
-                child: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    CupertinoIcons.share,
-                    color: Colors.white,
-                    size: 20,
-                  ),
+              _headerAction(
+                icon: _saved
+                    ? CupertinoIcons.bookmark_fill
+                    : CupertinoIcons.bookmark,
+                tooltip: _saved ? 'Vacante guardada' : 'Guardar vacante',
+                onPressed: widget.onToggleSaved == null ? null : _toggleSaved,
+              ),
+              _headerAction(
+                icon: CupertinoIcons.share,
+                tooltip: 'Compartir vacante',
+                onPressed: () => Share.share(
+                  'Mirá esta oferta de empleo en Mploya: $title en $companyName',
                 ),
               ),
               const SizedBox(width: 8),
@@ -555,42 +619,59 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                 const SizedBox(height: 24),
               ],
 
-              // ── Title & Salary ──
+              // ── Employer, title & compensation ──
+              Text(
+                companyName,
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: Color(0xFF5B39E6),
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 5),
               Text(
                 title,
                 style: const TextStyle(
-                  fontFamily: 'Georgia',
                   fontSize: 26,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w800,
                   color: Color(0xFF22211F),
-                  height: 1.2,
+                  height: 1.14,
                 ),
               ),
-              const SizedBox(height: 6),
-              Text(
-                salary,
-                style: const TextStyle(
-                  fontSize: 16,
-                  color: Color(0xFF6C6C70),
-                  fontWeight: FontWeight.w500,
+              if (salary.isNotEmpty) ...[
+                const SizedBox(height: 7),
+                Text(
+                  salary,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    color: Color(0xFF3B6D11),
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
-              ),
+              ],
               const SizedBox(height: 16),
 
               // ── Chips ──
-              _buildChips(context, location, tags),
-              const SizedBox(height: 24),
+              _buildChips(context, location, tags, modality: modality),
+              const SizedBox(height: 20),
 
-              // ── Grid of Info Cards (4 Cards) ──
-              _buildMobileGrid(parsed, location),
-              const SizedBox(height: 24),
+              // ── Actual job facts only ──
+              if (location.isNotEmpty ||
+                  modality != null ||
+                  seniority.isNotEmpty) ...[
+                _buildMobileFacts(
+                  location: location,
+                  modality: modality,
+                  seniority: seniority,
+                ),
+                const SizedBox(height: 24),
+              ],
 
               // ── Description ──
               if (parsed['about'] != null && parsed['about']!.isNotEmpty) ...[
                 const Text(
                   'Sobre el rol',
                   style: TextStyle(
-                    fontFamily: 'Georgia',
                     fontSize: 18,
                     fontWeight: FontWeight.w700,
                     color: Color(0xFF22211F),
@@ -609,7 +690,8 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
               ],
 
               // ── Tech Stack ──
-              if (parsed['techStack'] != null && parsed['techStack']!.isNotEmpty) ...[
+              if (parsed['techStack'] != null &&
+                  parsed['techStack']!.isNotEmpty) ...[
                 _buildTechStackBlock(parsed['techStack']!),
                 const SizedBox(height: 24),
               ],
@@ -633,59 +715,65 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
           ),
         ),
 
-        // ── Pinned CTA Button at Bottom ──
-        Container(
-          padding: EdgeInsets.fromLTRB(
-            20,
-            12,
-            20,
-            MediaQuery.of(context).padding.bottom + 12,
-          ),
-          decoration: const BoxDecoration(
-            color: Color(0xFFFAF8F5),
-            border: Border(
-              top: BorderSide(color: Color(0xFFE2DFD5), width: 0.5),
+        // Sólo se muestra si este acceso puede realizar una postulación real.
+        // Así no aparece un botón apagado en enlaces informativos (por ejemplo,
+        // al recorrer vacantes desde el perfil público de una empresa).
+        if (widget.onApply != null || _applied)
+          Container(
+            padding: EdgeInsets.fromLTRB(
+              20,
+              12,
+              20,
+              MediaQuery.of(context).padding.bottom + 12,
             ),
+            decoration: const BoxDecoration(
+              color: Color(0xFFFAF8F5),
+              border: Border(
+                top: BorderSide(color: Color(0xFFE2DFD5), width: 0.5),
+              ),
+            ),
+            child: _buildGoldCTA(context),
           ),
-          child: _buildGoldCTA(context),
-        ),
       ],
     );
   }
 
-  Widget _buildMobileGrid(Map<String, String?> parsed, String location) {
-    final tipo = parsed['tipo']?.isNotEmpty == true
-        ? parsed['tipo']!
-        : 'Startup';
-    final fundada = parsed['fundada']?.isNotEmpty == true
-        ? parsed['fundada']!
-        : '2022';
-    final web = parsed['web']?.isNotEmpty == true ? parsed['web']! : 'jilo.com';
-
-    return GridView.count(
-      crossAxisCount: 2,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      mainAxisSpacing: 12,
-      crossAxisSpacing: 12,
-      childAspectRatio: 2.1,
-      children: [
-        _infoGridCard(CupertinoIcons.briefcase, tipo, 'Size'),
-        _infoGridCard(CupertinoIcons.calendar, 'Fundada', fundada),
-        _infoGridCard(CupertinoIcons.location, 'Location', location),
-        GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: () => _openWeb(web),
-          child: MouseRegion(
-            cursor: SystemMouseCursors.click,
-            child: _infoGridCard(CupertinoIcons.globe, 'Web', web),
-          ),
+  Widget _buildMobileFacts({
+    required String location,
+    required String? modality,
+    required String seniority,
+  }) {
+    final facts = <({IconData icon, String title, String value})>[
+      if (location.isNotEmpty)
+        (
+          icon: CupertinoIcons.location_solid,
+          title: 'Ubicación',
+          value: location,
         ),
-      ],
+      if (modality != null && modality.isNotEmpty)
+        (icon: CupertinoIcons.house_fill, title: 'Modalidad', value: modality),
+      if (seniority.isNotEmpty)
+        (
+          icon: CupertinoIcons.chart_bar_fill,
+          title: 'Experiencia',
+          value: seniority,
+        ),
+    ];
+    return Wrap(
+      spacing: 10,
+      runSpacing: 10,
+      children: facts
+          .map(
+            (fact) => SizedBox(
+              width: (facts.length == 1) ? double.infinity : 165,
+              child: _infoFactCard(fact.icon, fact.title, fact.value),
+            ),
+          )
+          .toList(),
     );
   }
 
-  Widget _infoGridCard(IconData icon, String title, String value) {
+  Widget _infoFactCard(IconData icon, String title, String value) {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -735,20 +823,23 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
   // ───────────────────────────────────────────────────────────────────────────
   Widget _buildWebLayout(BuildContext context, Map<String, String?> parsed) {
     final title = job['title']?.toString() ?? 'Oferta';
-    final companyName = (job['users'] as Map<String, dynamic>?)?['name']?.toString()
-        ?? job['company_name']?.toString()
-        ?? 'Empresa';
-    final salary = job['salary_range']?.toString() ?? job['salary']?.toString() ?? 'A convenir';
-    final location = parsed['ubicacion'] ?? job['location']?.toString() ?? 'Asunción';
+    final companyName =
+        (job['users'] as Map<String, dynamic>?)?['name']?.toString() ??
+        job['company_name']?.toString() ??
+        'Empresa';
+    final salary =
+        (job['salary_range']?.toString() ?? job['salary']?.toString() ?? '')
+            .trim();
+    final location = (job['location']?.toString() ?? parsed['ubicacion'] ?? '')
+        .trim();
     final tags = (job['tags'] is List)
         ? (job['tags'] as List).map((t) => t.toString()).toList()
         : <String>[];
 
-    final tipo = parsed['tipo']?.isNotEmpty == true ? parsed['tipo']! : 'Startup';
-    final tamano = parsed['tamano']?.isNotEmpty == true ? parsed['tamano']! : '20 empleados';
-    final fundada = parsed['fundada']?.isNotEmpty == true ? parsed['fundada']! : '2022';
-    final web = parsed['web']?.isNotEmpty == true ? parsed['web']! : 'jilo.com';
-    final modalidad = parsed['modalidad']?.isNotEmpty == true ? parsed['modalidad']! : 'Remoto';
+    final modalidad =
+        _jobModality() ??
+        (parsed['modalidad']?.isNotEmpty == true ? parsed['modalidad'] : null);
+    final seniority = job['seniority']?.toString().trim() ?? '';
 
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
@@ -788,40 +879,41 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                             ),
                           ),
                         ),
-                        Text(
-                          companyName.toLowerCase(),
+                        const Text(
+                          'Vacante',
                           style: const TextStyle(
-                            fontFamily: 'Georgia',
-                            fontSize: 26,
+                            fontSize: 18,
                             fontWeight: FontWeight.w700,
                             color: Colors.white,
                             letterSpacing: -0.5,
                           ),
                         ),
-                        CupertinoButton(
-                          padding: EdgeInsets.zero,
-                          onPressed: () {
-                            Share.share(
-                              'Mirá esta oferta de empleo en Mploya: $title en $companyName',
-                            );
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.1),
-                              shape: BoxShape.circle,
+                        Row(
+                          children: [
+                            _headerAction(
+                              icon: _saved
+                                  ? CupertinoIcons.bookmark_fill
+                                  : CupertinoIcons.bookmark,
+                              tooltip: _saved
+                                  ? 'Vacante guardada'
+                                  : 'Guardar vacante',
+                              onPressed: widget.onToggleSaved == null
+                                  ? null
+                                  : _toggleSaved,
                             ),
-                            child: const Icon(
-                              CupertinoIcons.share,
-                              color: Colors.white,
-                              size: 20,
+                            _headerAction(
+                              icon: CupertinoIcons.share,
+                              tooltip: 'Compartir vacante',
+                              onPressed: () => Share.share(
+                                'Mirá esta oferta de empleo en Mploya: $title en $companyName',
+                              ),
                             ),
-                          ),
+                          ],
                         ),
                       ],
                     ),
                     const SizedBox(height: 40),
-                    
+
                     // Row for overlapping Video & Stacked Info Cards
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -847,36 +939,35 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                                 ),
                         ),
                         const SizedBox(width: 40),
-                        
+
                         // Right: stacked transparent info cards
                         Expanded(
                           flex: 2,
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.start,
                             children: [
-                              _infoListCard(
-                                CupertinoIcons.briefcase,
-                                '$tipo | $tamano',
-                              ),
-                              _infoListCard(
-                                CupertinoIcons.calendar,
-                                'Fundada: $fundada',
-                              ),
-                              _infoListCard(
-                                CupertinoIcons.location,
-                                'Ubicación: $location | Modalidad: $modalidad',
-                              ),
-                              GestureDetector(
-                                behavior: HitTestBehavior.opaque,
-                                onTap: () => _openWeb(web),
-                                child: MouseRegion(
-                                  cursor: SystemMouseCursors.click,
-                                  child: _infoListCard(
-                                    CupertinoIcons.globe,
-                                    'Website: $web',
-                                  ),
+                              if (location.isNotEmpty)
+                                _infoListCard(
+                                  CupertinoIcons.location,
+                                  'Ubicación: $location',
                                 ),
-                              ),
+                              if (modalidad != null)
+                                _infoListCard(
+                                  CupertinoIcons.house,
+                                  'Modalidad: $modalidad',
+                                ),
+                              if (seniority.isNotEmpty)
+                                _infoListCard(
+                                  CupertinoIcons.chart_bar,
+                                  'Experiencia: $seniority',
+                                ),
+                              if (location.isEmpty &&
+                                  modalidad == null &&
+                                  seniority.isEmpty)
+                                _infoListCard(
+                                  CupertinoIcons.briefcase,
+                                  'Consultá los detalles con la empresa',
+                                ),
                             ],
                           ),
                         ),
@@ -913,20 +1004,27 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                           ),
                         ),
                         const SizedBox(height: 8),
-                        Text(
-                          salary,
-                          style: const TextStyle(
-                            fontSize: 18,
-                            color: Color(0xFF6C6C70),
-                            fontWeight: FontWeight.w500,
+                        if (salary.isNotEmpty)
+                          Text(
+                            salary,
+                            style: const TextStyle(
+                              fontSize: 18,
+                              color: Color(0xFF3B6D11),
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
-                        ),
                         const SizedBox(height: 16),
-                        _buildChips(context, location, tags),
+                        _buildChips(
+                          context,
+                          location,
+                          tags,
+                          modality: modalidad,
+                        ),
                         const SizedBox(height: 32),
-                        
+
                         // Description
-                        if (parsed['about'] != null && parsed['about']!.isNotEmpty) ...[
+                        if (parsed['about'] != null &&
+                            parsed['about']!.isNotEmpty) ...[
                           const Text(
                             'Sobre el rol',
                             style: TextStyle(
@@ -949,7 +1047,8 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                         ],
 
                         // Tech Stack
-                        if (parsed['techStack'] != null && parsed['techStack']!.isNotEmpty) ...[
+                        if (parsed['techStack'] != null &&
+                            parsed['techStack']!.isNotEmpty) ...[
                           _buildTechStackBlock(parsed['techStack']!),
                           const SizedBox(height: 32),
                         ],
@@ -1005,10 +1104,12 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                                 ),
                               ),
                               const SizedBox(height: 16),
-                              _detailRow('Fundada', fundada),
-                              _detailRow('Ubicación', location),
-                              _detailRow('Modalidad', modalidad),
-                              _detailRow('Website', web),
+                              if (location.isNotEmpty)
+                                _detailRow('Ubicación', location),
+                              if (modalidad != null)
+                                _detailRow('Modalidad', modalidad),
+                              if (seniority.isNotEmpty)
+                                _detailRow('Experiencia', seniority),
                             ],
                           ),
                         ),
@@ -1093,6 +1194,61 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
   // ───────────────────────────────────────────────────────────────────────────
   // COMMON HELPER COMPONENT WIDGETS
   // ───────────────────────────────────────────────────────────────────────────
+  String? _modalityLabel(String? raw) {
+    switch (raw?.trim().toLowerCase()) {
+      case 'remote':
+      case 'remoto':
+        return 'Remoto';
+      case 'hybrid':
+      case 'híbrido':
+      case 'hibrido':
+        return 'Híbrido';
+      case 'onsite':
+      case 'presencial':
+        return 'Presencial';
+      default:
+        return null;
+    }
+  }
+
+  String? _jobModality() {
+    final direct = _modalityLabel(job['modality']?.toString());
+    if (direct != null) return direct;
+    final tags = job['tags'];
+    if (tags is List) {
+      for (final tag in tags) {
+        final fromTag = _modalityLabel(tag.toString());
+        if (fromTag != null) return fromTag;
+      }
+    }
+    return job['is_remote'] == true ? 'Remoto' : null;
+  }
+
+  Widget _headerAction({
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback? onPressed,
+  }) {
+    return CupertinoButton(
+      padding: const EdgeInsets.only(left: 3),
+      minSize: 40,
+      onPressed: onPressed,
+      child: Semantics(
+        label: tooltip,
+        button: true,
+        child: Container(
+          width: 38,
+          height: 38,
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.10),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(icon, color: Colors.white, size: 19),
+        ),
+      ),
+    );
+  }
+
   Widget _buildVideoHero(BuildContext context, String videoUrl) {
     return GestureDetector(
       onTap: () => showCupertinoModalPopup<void>(
@@ -1164,8 +1320,9 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
   Widget _buildChips(
     BuildContext context,
     String? location,
-    List<String> tags,
-  ) {
+    List<String> tags, {
+    String? modality,
+  }) {
     final chips = <Widget>[];
 
     if (widget.matchScore != null && widget.matchScore! > 0) {
@@ -1177,10 +1334,9 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
           : '${_distanceKm!.toStringAsFixed(1)} km';
       chips.add(_chip('A $d', const Color(0xFF185FA5)));
     }
-    if (location != null && location.toLowerCase().contains('remoto')) {
-      chips.add(_chip('Remoto', const Color(0xFF3B6D11)));
+    if (modality != null && modality.isNotEmpty) {
+      chips.add(_chip(modality, const Color(0xFF3B6D11)));
     }
-    chips.add(_chip('Sin CV', const Color(0xFF3B6D11)));
     for (final t in tags.take(4)) {
       chips.add(_chip(t.startsWith('#') ? t : '#$t', const Color(0xFF6B7280)));
     }
@@ -1198,14 +1354,21 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
       ),
       child: Text(
         label,
-        style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: color),
+        style: TextStyle(
+          fontSize: 11.5,
+          fontWeight: FontWeight.w700,
+          color: color,
+        ),
       ),
     );
   }
 
   Widget _buildTechStackBlock(String techStack) {
-    final List<String> bullets = techStack.split(',').map((s) => s.trim()).toList();
-    
+    final List<String> bullets = techStack
+        .split(',')
+        .map((s) => s.trim())
+        .toList();
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
@@ -1286,10 +1449,10 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                 ),
                 MarkerLayer(
                   markers: [
-                  Marker(
-                    point: point,
-                    width: 40,
-                    height: 40,
+                    Marker(
+                      point: point,
+                      width: 40,
+                      height: 40,
                       child: const Icon(
                         CupertinoIcons.location_solid,
                         color: MployaTheme.brandAccent,
@@ -1297,7 +1460,7 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                       ),
                     ),
                   ],
-                  ),
+                ),
               ],
             ),
             if (location != null && location.isNotEmpty)
@@ -1327,20 +1490,20 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
                         CupertinoIcons.location_solid,
                         size: 15,
                         color: MployaTheme.brandAccent,
-                  ),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        location,
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          location,
                           style: const TextStyle(
                             fontSize: 12.5,
                             color: Color(0xFF22211F),
                             fontWeight: FontWeight.w600,
                           ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
-                    ),
                     ],
                   ),
                 ),
@@ -1351,47 +1514,73 @@ class _JobDetailScreenState extends State<JobDetailScreen> {
     );
   }
 
+  /// Postula y recién entonces cambia el botón.
+  ///
+  /// ADENDA 31/8/2026 — LA POSTULACIÓN QUE NO SE GUARDABA. Acá se hacía
+  /// `setState(() => _applied = true)` en la misma línea que la llamada,
+  /// sin esperarla. Quien cancelaba el diálogo del video, o la cámara, o
+  /// se quedaba sin conexión, veía igual "✓ Postulación enviada" y se iba
+  /// convencido de haberse postulado, mientras `job_applications` seguía
+  /// vacía. Una pantalla no puede afirmar algo que no le consta.
+  Future<void> _postularse() async {
+    final postular = widget.onApply;
+    if (postular == null) return;
+    setState(() => _applying = true);
+    final enviada = await postular();
+    if (!mounted) return;
+    setState(() {
+      _applying = false;
+      _applied = enviada;
+    });
+  }
+
   Widget _buildGoldCTA(BuildContext context) {
-    final bool isEnabled = !_applied && widget.onApply != null;
+    final bool isEnabled = !_applied && !_applying && widget.onApply != null;
     return CupertinoButton(
       padding: EdgeInsets.zero,
-      onPressed: isEnabled
-          ? () {
-              widget.onApply?.call();
-              setState(() => _applied = true);
-            }
-          : null,
+      onPressed: isEnabled ? _postularse : null,
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
         decoration: BoxDecoration(
-          color: _applied 
-              ? CupertinoColors.systemGrey4 
-              : const Color(0xFFDCAE50), // Gold/Mustard yellow from mockup
-          borderRadius: BorderRadius.circular(12),
+          color: _applied
+              ? CupertinoColors.systemGrey4
+              : const Color(0xFF4B24F5),
+          borderRadius: BorderRadius.circular(15),
           boxShadow: _applied
               ? null
               : [
                   BoxShadow(
-                    color: const Color(0xFFDCAE50).withValues(alpha: 0.3),
-                    blurRadius: 12,
+                    color: const Color(0xFF4B24F5).withValues(alpha: 0.28),
+                    blurRadius: 14,
                     offset: const Offset(0, 4),
                   ),
                 ],
         ),
-        child: Center(
-          child: Text(
-            _applied
-                ? '✓ Postulación enviada'
-                : 'Postularme con mi Video-Pitch',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-              color: _applied
-                  ? CupertinoColors.systemGrey
-                  : const Color(0xFF22211F), // Dark charcoal text on gold
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              _applied
+                  ? CupertinoIcons.check_mark_circled_solid
+                  : CupertinoIcons.paperplane_fill,
+              size: 18,
+              color: _applied ? CupertinoColors.systemGrey : Colors.white,
             ),
-          ),
+            const SizedBox(width: 9),
+            Text(
+              _applying
+                  ? 'Enviando postulación…'
+                  : _applied
+                  ? 'Postulación enviada'
+                  : 'Postularme',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                color: _applied ? CupertinoColors.systemGrey : Colors.white,
+              ),
+            ),
+          ],
         ),
       ),
     );

@@ -76,6 +76,13 @@ class MployaGlassPanel extends StatelessWidget {
   }
 }
 
+// FIX (Pedro, 30/8/2026): Crashlytics reportaba un RenderFlex overflow
+// (._handleFlutterError, ~15 crashes / 8 usuarios en 1.0.24) causado por
+// estos botones — el Row interno (mainAxisSize.min) con ícono + Text sin
+// límite se desbordaba cuando el label era largo (ej. "Invitar a
+// entrevista") dentro de un botón angosto (Expanded en la barra inferior
+// del perfil). Se envuelve el Text en Flexible + ellipsis para que trunque
+// en vez de desbordar.
 class MployaPrimaryButton extends StatelessWidget {
   final String label;
   final VoidCallback? onPressed;
@@ -116,13 +123,16 @@ class MployaPrimaryButton extends StatelessWidget {
               Icon(icon, size: compact ? 16 : 18, color: Colors.white),
               const SizedBox(width: 8),
             ],
-            Text(
-              label,
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w700,
-                fontSize: compact ? 13.5 : 14.5,
-                letterSpacing: -0.2,
+            Flexible(
+              child: Text(
+                label,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                  fontSize: compact ? 13.5 : 14.5,
+                  letterSpacing: -0.2,
+                ),
               ),
             ),
           ],
@@ -164,13 +174,16 @@ class MployaSecondaryButton extends StatelessWidget {
               Icon(icon, size: 18, color: context.textPrimary),
               const SizedBox(width: 8),
             ],
-            Text(
-              label,
-              style: TextStyle(
-                color: context.textPrimary,
-                fontWeight: FontWeight.w700,
-                fontSize: 14,
-                letterSpacing: -0.2,
+            Flexible(
+              child: Text(
+                label,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: context.textPrimary,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14,
+                  letterSpacing: -0.2,
+                ),
               ),
             ),
           ],

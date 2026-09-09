@@ -12,7 +12,6 @@ import '../services/deep_link_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../screens/role_selection_screen.dart';
 import '../screens/onboarding_pitch_screen.dart';
-import '../screens/onboarding_tour_screen.dart';
 
 import '../screens/candidate_profile_form_screen.dart';
 import '../screens/stealth_profile_form_screen.dart';
@@ -21,6 +20,26 @@ import '../screens/headhunter_profile_form_screen.dart';
 import '../screens/forgot_password_screen.dart';
 import '../services/video_preload_manager.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+/// El formulario de perfil que le corresponde a cada rol.
+///
+/// ADENDA 30/8/2026. Esta correspondencia estaba escrita tres veces en
+/// este archivo (OAuth pendiente, paso 0 y paso 1). Tenerla una sola vez
+/// evita que una de las ramas quede vieja: ya pasó una vez que el
+/// headhunter cayera en el `else` equivocado y terminara con el
+/// formulario —y el rol— de candidato.
+Widget formularioDeRol(String role) {
+  switch (role) {
+    case 'headhunter':
+      return const HeadhunterProfileFormScreen();
+    case 'empresa':
+      return const CompanyProfileFormScreen();
+    case 'confidencial':
+      return const StealthProfileFormScreen();
+    default:
+      return const CandidateProfileFormScreen();
+  }
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // NOTA SQL — Ejecuta esto en Supabase SQL Editor para que el trigger cree
@@ -266,10 +285,7 @@ class _SplashScreenState extends State<SplashScreen>
           await prefs.remove('pending_oauth_account_type');
           await prefs.setString('mploya_account_type', pendingRole);
           try {
-            await setMyInitialRole(
-              role: pendingRole,
-              completeSelection: true,
-            );
+            await setMyInitialRole(role: pendingRole, completeSelection: true);
           } catch (e) {
             debugPrint('Error applying pending OAuth role: $e');
           }
@@ -287,6 +303,28 @@ class _SplashScreenState extends State<SplashScreen>
           Navigator.of(
             context,
           ).pushReplacement(CupertinoPageRoute(builder: (_) => form));
+          return;
+        }
+        // ADENDA 30/8/2026 — LOOP DE REGISTRO. `set_my_initial_role` con
+        // `p_complete_selection = false` deja `onboarding_step = 0` aunque
+        // el rol YA esté elegido y guardado en la fila. Este router leía
+        // ese 0 como "cuenta nueva sin rol" y devolvía a elegir rol: la
+        // persona tocaba "Soy Candidato", creaba la cuenta, y volvía al
+        // principio —en loop, y sin ningún mensaje que lo explicara—.
+        //
+        // Si la fila trae un rol válido, la elección ya ocurrió: volver a
+        // preguntarla es pedir dos veces lo mismo. Se sigue preguntando
+        // sólo cuando de verdad no hay rol.
+        final rolPaso0 = (data?['account_type'] as String?) ?? '';
+        if (const {
+          'candidato',
+          'confidencial',
+          'empresa',
+          'headhunter',
+        }.contains(rolPaso0)) {
+          Navigator.of(context).pushReplacement(
+            CupertinoPageRoute(builder: (_) => formularioDeRol(rolPaso0)),
+          );
           return;
         }
         Navigator.of(context).pushReplacement(
@@ -325,27 +363,20 @@ class _SplashScreenState extends State<SplashScreen>
         return;
       }
 
-      // step >= 3: onboarding completo → check if tour was seen
-      // Cuentas creadas hace más de 7 días nunca muestran el tour (reinstala / usuario existente)
-      final createdAt = DateTime.tryParse(user.createdAt);
-      final isNewAccount =
-          createdAt == null || DateTime.now().difference(createdAt).inDays <= 7;
-      final hasSeenTour =
-          !isNewAccount || await OnboardingTourScreen.hasSeenTour(user.id);
+      // step >= 3: onboarding completo.
+      //
+      // ADENDA 29/8/2026: se sacó el tour de 5 pantallas (OnboardingTourScreen)
+      // a pedido de Pedro — "hay que sacarlo ahora e inventar otra forma de
+      // comunicar cómo funciona". Motivos concretos que dio: muy largo, colores
+      // propios que no son los de la marca, y aparecía en momentos que no
+      // correspondían. En su lugar, la explicación de "cómo funciona" ahora
+      // vive en el lugar donde se usa: coach marks contextuales sobre los
+      // controles reales (mismo patrón que ya usa el feed de Candidato vía
+      // `CoachMarkService`), no una pantalla aparte al arrancar.
       if (!mounted) return;
-
-      if (!hasSeenTour) {
-        final accountType = data?['account_type']?.toString();
-        Navigator.of(context).pushReplacement(
-          CupertinoPageRoute(
-            builder: (_) => OnboardingTourScreen(accountType: accountType),
-          ),
-        );
-      } else {
-        Navigator.of(context).pushReplacement(
-          CupertinoPageRoute(builder: (_) => const MainNavigation()),
-        );
-      }
+      Navigator.of(context).pushReplacement(
+        CupertinoPageRoute(builder: (_) => const MainNavigation()),
+      );
 
       // Resolver deep links pendientes (si el usuario llegó desde un link sin estar logueado)
       Future.delayed(const Duration(milliseconds: 500), () {
@@ -639,6 +670,7 @@ class _SplashScreenState extends State<SplashScreen>
             // Candidato — principal
             _SignInButton(
               label: 'Soy Candidato',
+              subtitle: 'Descubrí empresas y vacantes para vos',
               icon: CupertinoIcons.person_fill,
               backgroundColor: const Color(0xFF1C1C1E),
               textColor: Colors.white,
@@ -649,6 +681,7 @@ class _SplashScreenState extends State<SplashScreen>
             // Candidato Confidencial
             _SignInButton(
               label: 'Candidato Confidencial',
+              subtitle: 'Explorá oportunidades en privado',
               icon: CupertinoIcons.eye_slash_fill,
               backgroundColor: Colors.white,
               textColor: const Color(0xFF3A3A3C),
@@ -660,6 +693,7 @@ class _SplashScreenState extends State<SplashScreen>
             // Empresa
             _SignInButton(
               label: 'Soy Empresa',
+              subtitle: 'Encontrá talento para tu equipo',
               icon: CupertinoIcons.building_2_fill,
               backgroundColor: Colors.white,
               textColor: const Color(0xFF3A3A3C),
@@ -671,6 +705,7 @@ class _SplashScreenState extends State<SplashScreen>
             // Headhunter — recluta y ve candidatos Y empresas
             _SignInButton(
               label: 'Soy Headhunter',
+              subtitle: 'Gestioná clientes, búsquedas y talento',
               icon: CupertinoIcons.person_2_square_stack_fill,
               backgroundColor: Colors.white,
               textColor: const Color(0xFF3A3A3C),
@@ -1004,20 +1039,34 @@ class _AuthBottomSheetState extends State<_AuthBottomSheet> {
 
     setState(() => _loading = true);
 
+    // La experiencia se elige antes de abrir este formulario. Guardarla para
+    // login y registro evita que una cuenta existente vuelva a su antiguo
+    // modo (por ejemplo Empresa) al entrar como Candidato.
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('mploya_account_type', widget.accountType);
+
     String? error;
     if (_tabIndex == 0) {
       error = await AuthService.instance.signInWithEmail(email, password);
     } else {
+      // El rol lo eligió la persona en la pantalla inicial ("Soy
+      // Candidato", "Soy Empresa", …) ANTES de abrir este formulario. Se
+      // guarda en preferencias antes del alta, porque el listener de auth
+      // corre apenas Supabase confirma la sesión —puede ganarle a estas
+      // líneas— y sin ese dato crea la fila asumiendo 'candidato'.
       error = await AuthService.instance.signUpWithEmail(email, password);
-      // Guardar el account_type seleccionado en la tabla users
       if (error == null) {
         final uid = Supabase.instance.client.auth.currentUser?.id;
         if (uid != null) {
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setString('mploya_account_type', widget.accountType);
+          // ADENDA 30/8/2026 — acá iba `completeSelection: false`, que deja
+          // el onboarding en el paso 0, y el paso 0 significa "todavía no
+          // eligió rol". Pero el rol YA está elegido: es el que trajo esta
+          // pantalla. Registrarlo como incompleto era lo que mandaba a la
+          // persona de vuelta a la pantalla de elegir rol recién creada la
+          // cuenta.
           await setMyInitialRole(
             role: widget.accountType,
-            completeSelection: false,
+            completeSelection: true,
           );
         }
       }
@@ -1428,6 +1477,7 @@ class _AuthBottomSheetState extends State<_AuthBottomSheet> {
 
 class _SignInButton extends StatelessWidget {
   final String label;
+  final String? subtitle;
   final IconData icon;
   final Color backgroundColor;
   final Color textColor;
@@ -1436,6 +1486,7 @@ class _SignInButton extends StatelessWidget {
 
   const _SignInButton({
     required this.label,
+    this.subtitle,
     required this.icon,
     required this.backgroundColor,
     required this.textColor,
@@ -1448,7 +1499,7 @@ class _SignInButton extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        height: 52,
+        height: subtitle == null ? 52 : 64,
         decoration: BoxDecoration(
           color: backgroundColor,
           borderRadius: BorderRadius.circular(MployaTheme.radiusPill),
@@ -1456,22 +1507,53 @@ class _SignInButton extends StatelessWidget {
               ? Border.all(color: borderColor!, width: 1.5)
               : null,
         ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 20, color: textColor),
-            const SizedBox(width: 10),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: textColor,
-                fontFamily: '.SF Pro Text',
-                decoration: TextDecoration.none,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 18),
+          child: Row(
+            children: [
+              Icon(icon, size: 20, color: textColor),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: textColor,
+                        fontFamily: '.SF Pro Text',
+                        decoration: TextDecoration.none,
+                      ),
+                    ),
+                    if (subtitle != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: textColor.withValues(alpha: 0.66),
+                          fontFamily: '.SF Pro Text',
+                          decoration: TextDecoration.none,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
               ),
-            ),
-          ],
+              Icon(
+                CupertinoIcons.chevron_right,
+                size: 16,
+                color: textColor.withValues(alpha: 0.55),
+              ),
+              const SizedBox(width: 18),
+            ],
+          ),
         ),
       ),
     );

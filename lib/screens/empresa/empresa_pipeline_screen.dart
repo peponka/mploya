@@ -2,62 +2,102 @@ import 'package:flutter/cupertino.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../models/models.dart';
+import '../../services/application_stage_service.dart';
 import '../../widgets/ds/mploya_ds.dart';
+import '../../services/job_offer_service.dart';
+import '../../widgets/empresa/cambio_etapa_sheet.dart';
 import '../chat_inmail_screen.dart';
 import 'empresa_candidato_perfil_screen.dart';
+import 'empresa_candidatura_historial_screen.dart';
+import 'empresa_crear_oferta_screen.dart';
+import 'empresa_oferta_detalle_screen.dart';
 import 'empresa_mensajes_screen.dart';
 import 'empresa_talent_feed_screen.dart';
 
 /// Etapas del pipeline de Empresa.
 ///
-/// Son EXACTAMENTE las que soporta `connections.ats_status`
-/// (new | interviewing | hired | rejected). El mockup de referencia tiene siete,
-/// pero dos —"Presentados al cliente" y "Entrevista con cliente"— pertenecen al
-/// flujo de headhunter, donde hay un tercero. En Empresa la vacante es propia:
-/// esas etapas no existen y no se inventan.
-enum EtapaPipeline { nuevos, entrevista, contratados, descartados }
+/// ADENDA 30/8/2026 · ETAPA E1 DEL PLAN. Estas etapas eran las cuatro de
+/// `connections.ats_status` (new | interviewing | hired | rejected). Se
+/// cambian por las SEIS de `job_applications.status`, que es la vía canónica
+/// de la migración 029: la anterior no la escribía ninguna ruta productiva
+/// —el propio encabezado de esta pantalla lo dejó documentado el 12/8— así
+/// que el Pipeline era una lista de lectura sobre una columna muerta y no
+/// podía mover a nadie de etapa.
+///
+/// Son EXACTAMENTE los seis estados que admite el CHECK de la tabla. No se
+/// agrupan dos en una columna ni se inventa ninguna: "Con oferta" y
+/// "Contratado" son estados distintos en la base, y esa distinción es
+/// justamente lo que hacía falta para cerrar el proceso.
+enum EtapaPipeline {
+  nuevos,
+  vistos,
+  entrevista,
+  oferta,
+  contratados,
+  descartados,
+}
 
 extension EtapaInfo on EtapaPipeline {
-  String get etiqueta => switch (this) {
-        EtapaPipeline.nuevos => 'Nuevos',
-        EtapaPipeline.entrevista => 'En entrevista',
-        EtapaPipeline.contratados => 'Contratados',
-        EtapaPipeline.descartados => 'Descartados',
-      };
-
-  /// Valor real de `connections.ats_status`.
-  String get atsStatus => switch (this) {
-        EtapaPipeline.nuevos => 'new',
+  /// Valor real de `job_applications.status`.
+  String get status => switch (this) {
+        EtapaPipeline.nuevos => 'pending',
+        EtapaPipeline.vistos => 'viewed',
         EtapaPipeline.entrevista => 'interviewing',
+        EtapaPipeline.oferta => 'accepted',
         EtapaPipeline.contratados => 'hired',
         EtapaPipeline.descartados => 'rejected',
       };
 
+  /// La etiqueta sale del servicio para que Pipeline, historial y
+  /// Contrataciones llamen igual a la misma etapa.
+  String get etiqueta => applicationStageLabel(status);
+
   Color get color => switch (this) {
         EtapaPipeline.nuevos => MpTokens.primary,
+        EtapaPipeline.vistos => MpTokens.catBlue,
         EtapaPipeline.entrevista => MpTokens.catOrange,
+        EtapaPipeline.oferta => MpTokens.catPurple,
         EtapaPipeline.contratados => MpTokens.catGreen,
         EtapaPipeline.descartados => MpTokens.danger,
       };
 
   IconData get icono => switch (this) {
         EtapaPipeline.nuevos => CupertinoIcons.person_badge_plus,
+        EtapaPipeline.vistos => CupertinoIcons.eye,
         EtapaPipeline.entrevista => CupertinoIcons.calendar,
+        EtapaPipeline.oferta => CupertinoIcons.doc_text,
         EtapaPipeline.contratados => CupertinoIcons.checkmark_seal,
         EtapaPipeline.descartados => CupertinoIcons.xmark_circle,
       };
 }
 
+/// La etapa que corresponde a un `status` crudo, o null si no lo conocemos.
+EtapaPipeline? etapaDeStatus(String status) {
+  for (final e in EtapaPipeline.values) {
+    if (e.status == status) return e;
+  }
+  return null;
+}
+
 @immutable
 class CandidatoPipeline {
-  final String connectionId;
+  /// `job_applications.id`. Es lo que necesita `update_application_status`
+  /// para mover a esta persona de etapa.
+  final String applicationId;
+
   final NexUser usuario;
   final EtapaPipeline etapa;
 
+  /// Título de la vacante a la que se postuló. Una misma persona puede estar
+  /// en el pipeline dos veces si se postuló a dos vacantes: son dos
+  /// postulaciones distintas y se muestran por separado.
+  final String? vacante;
+
   const CandidatoPipeline({
-    required this.connectionId,
+    required this.applicationId,
     required this.usuario,
     required this.etapa,
+    this.vacante,
   });
 }
 
@@ -66,12 +106,12 @@ class PipelineData {
   final List<CandidatoPipeline> candidatos;
   final bool error;
 
-  /// Filas que la RPC devolvió con un `ats_status` que esta app no soporta.
+  /// Postulaciones cuyo `status` no pertenece al vocabulario de la app.
   ///
-  /// Existe para poder decir la verdad en pantalla: hay gente conectada, pero
-  /// su estado no pertenece al vocabulario del pipeline, así que no se la puede
-  /// ubicar en ninguna etapa. Verificado el 12/8/2026: la base tiene
-  /// `pendiente`, y el código sólo entiende new/interviewing/hired/rejected.
+  /// Con la vía canónica esto debería ser siempre cero —el CHECK de la tabla
+  /// no admite otro valor—, pero la guarda se conserva: si alguna vez se
+  /// agrega un estado en la base antes que en la app, la pantalla lo dice en
+  /// vez de meter esas filas en la primera columna como si fueran nuevas.
   final int sinSoporte;
 
   const PipelineData({
@@ -91,50 +131,106 @@ class PipelineData {
   int get total => candidatos.length;
 }
 
-/// Carga el pipeline real vía la RPC `get_my_pipeline`, la misma que usa el
-/// Kanban existente. No hay datos de relleno.
+/// Carga el pipeline real desde `job_applications` — la vía canónica de la
+/// migración 029.
+///
+/// TRES CONSULTAS, Y CADA UNA POR UN MOTIVO:
+///
+///   1. `jobs` — las vacantes propias. Da los ids con los que acotar las
+///      postulaciones y, de paso, el título de cada vacante.
+///   2. `job_applications` — el ESTADO y, sobre todo, el `id` de cada
+///      postulación, que es lo único que permite moverla de etapa.
+///   3. `get_company_candidates` — el perfil del candidato ya resuelto, con
+///      la confidencialidad aplicada. Se usa esta RPC y no un SELECT sobre
+///      `users` para no rehacer a mano las reglas de perfiles confidenciales.
+///
+/// POR QUÉ NO SE SACA TODO DE LA RPC. El contrato de columnas de
+/// `get_company_candidates` no vive en ninguna migración: se escribió a mano
+/// contra la base (ver la nota de la 038), así que no se asume que devuelva
+/// el id de la postulación. Se une por (candidato, vacante), que es la clave
+/// real de una postulación.
+///
+/// Si el perfil de alguien no aparece en la RPC, la fila se muestra igual con
+/// el nombre en blanco: perder una postulación del tablero por no tener el
+/// nombre sería peor que mostrarla incompleta.
 Future<PipelineData> loadEmpresaPipeline() async {
   final client = Supabase.instance.client;
-  if (client.auth.currentUser == null) return PipelineData.empty;
+  final uid = client.auth.currentUser?.id;
+  if (uid == null) return PipelineData.empty;
 
   try {
-    final filas = await client.rpc('get_my_pipeline') as List<dynamic>;
+    // ── 1. Vacantes propias ──
+    final vacantes = await client
+        .from('jobs')
+        .select('id, title')
+        .eq('company_id', uid);
+
+    final titulos = <String, String>{};
+    for (final raw in vacantes as List<dynamic>) {
+      final v = raw as Map;
+      final id = v['id']?.toString();
+      if (id == null || id.isEmpty) continue;
+      titulos[id] = v['title']?.toString() ?? 'Vacante';
+    }
+    if (titulos.isEmpty) return PipelineData.empty;
+
+    // ── 2. Postulaciones a esas vacantes ──
+    final postulaciones = await client
+        .from('job_applications')
+        .select('id, status, job_id, candidate_id, created_at')
+        .inFilter('job_id', titulos.keys.toList())
+        .order('created_at', ascending: false);
+
+    // ── 3. Perfiles, indexados por (candidato, vacante) ──
+    final perfiles = <String, Map>{};
+    try {
+      final filas = await client.rpc('get_company_candidates') as List<dynamic>;
+      for (final raw in filas) {
+        final f = raw as Map;
+        final clave =
+            '${f['candidate_id']}|${f['job_id']}';
+        perfiles[clave] = f;
+      }
+    } catch (e) {
+      // El perfil es adorno; el proceso no. Si la RPC falla, el tablero
+      // igual se dibuja con los estados reales.
+      debugPrint('pipeline · get_company_candidates: $e');
+    }
+
     final candidatos = <CandidatoPipeline>[];
     var sinSoporte = 0;
 
-    for (final raw in filas) {
+    for (final raw in postulaciones as List<dynamic>) {
       final fila = raw as Map;
-      // NO se adivina la etapa. Antes había un `orElse: () => nuevos`, que
-      // convertía CUALQUIER estado desconocido en "Nuevos" — verificado contra
-      // la base, las filas reales tienen `ats_status = 'pendiente'`, así que
-      // todas habrían aparecido como nuevas sin serlo.
-      final estado = fila['ats_status']?.toString() ?? '';
-      EtapaPipeline? etapa;
-      for (final e in EtapaPipeline.values) {
-        if (e.atsStatus == estado) {
-          etapa = e;
-          break;
-        }
-      }
+      final estado = fila['status']?.toString() ?? '';
+
+      // NO se adivina la etapa: un estado desconocido se cuenta aparte y se
+      // dice en pantalla, en vez de caer en la primera columna.
+      final etapa = etapaDeStatus(estado);
       if (etapa == null) {
         sinSoporte++;
         continue;
       }
 
+      final candidatoId = fila['candidate_id']?.toString() ?? '';
+      final jobId = fila['job_id']?.toString() ?? '';
+      final perfil = perfiles['$candidatoId|$jobId'];
+
+      final confidencial = perfil?['is_confidential'] == true;
+      final tags = perfil?['candidate_tags'];
+
       candidatos.add(
         CandidatoPipeline(
-          connectionId: fila['connection_id']?.toString() ?? '',
+          applicationId: fila['id']?.toString() ?? '',
           etapa: etapa,
+          vacante: titulos[jobId],
           usuario: NexUser.fromJson({
-            'id': fila['user_id'],
-            'name': fila['user_name'],
-            'headline': fila['user_headline'],
-            'avatar_url': fila['user_avatar_url'],
-            'account_type': fila['is_confidential'] == true
-                ? 'confidencial'
-                : fila['user_account_type'],
-            'video_url': fila['user_video_url'],
-            'tags': <String>[],
+            'id': candidatoId,
+            'name': perfil?['candidate_name']?.toString() ?? 'Candidato',
+            'headline': perfil?['candidate_headline'],
+            'avatar_url': perfil?['candidate_avatar_url'],
+            'account_type': confidencial ? 'confidencial' : 'candidato',
+            'tags': tags is List ? List<String>.from(tags.map((t) => '$t')) : <String>[],
           }),
         ),
       );
@@ -142,7 +238,7 @@ Future<PipelineData> loadEmpresaPipeline() async {
 
     return PipelineData(candidatos: candidatos, sinSoporte: sinSoporte);
   } catch (e) {
-    debugPrint('pipeline · get_my_pipeline: $e');
+    debugPrint('pipeline · job_applications: $e');
     return const PipelineData(candidatos: [], error: true);
   }
 }
@@ -162,6 +258,22 @@ Future<PipelineData> loadEmpresaPipeline() async {
 /// hacía (`ats_kanban_screen`) es inalcanzable, y las filas reales tienen
 /// `ats_status = pendiente`. La pantalla ya no afirma que hay un pipeline por
 /// etapas cuando no lo hay.
+///
+/// ADENDA 30/8/2026 · ETAPA E1 DEL PLAN — se cierra aquella contención. La
+/// pantalla deja de leer `connections.ats_status` (la columna muerta) y pasa
+/// a `job_applications`, la vía canónica de la migración 029, que sí tiene
+/// una ruta de escritura productiva: la RPC `update_application_status`. Con
+/// eso el tablero recupera lo que nunca pudo hacer —mover a alguien de
+/// etapa— y cada movimiento queda registrado con actor y motivo en el
+/// historial de la migración 050.
+///
+/// Tres consecuencias visibles, todas deliberadas:
+///   · Las columnas pasan de cuatro a seis, porque ése es el vocabulario
+///     real de la base ("Con oferta" y "Contratado" son estados distintos).
+///   · La unidad del tablero pasa a ser la POSTULACIÓN, no la conexión: una
+///     persona que se postuló a dos vacantes aparece dos veces, que es lo
+///     correcto porque cada proceso avanza por su cuenta.
+///   · Tocar una tarjeta abre un menú en vez de ir directo al perfil.
 ///
 /// POLISH VISUAL 2 (15/8/2026): se agregó "Acciones rápidas" (Buscar
 /// candidatos / Mensajes) entre las columnas y las métricas — el mockup tiene
@@ -183,6 +295,35 @@ class EmpresaPipelineScreen extends StatefulWidget {
 class _EmpresaPipelineScreenState extends State<EmpresaPipelineScreen> {
   PipelineData _data = PipelineData.empty;
   bool _loading = true;
+
+  /// FIX (Pedro, 30/8/2026): con seis columnas en una pantalla de teléfono
+  /// entran menos de dos a la vez, así que después de mover a alguien la
+  /// tarjeta desaparecía de la vista y había que ir buscándola a mano
+  /// columna por columna. Ahora el tablero se desplaza solo hasta la etapa
+  /// donde quedó, y las métricas de abajo —que sí muestran las seis juntas—
+  /// funcionan como índice: tocar una lleva a su columna.
+  final ScrollController _columnasCtrl = ScrollController();
+
+  /// Ancho de una columna (208) más la separación (space12).
+  static const double _anchoColumna = 208 + MpTokens.space12;
+
+  @override
+  void dispose() {
+    _columnasCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _irAEtapa(EtapaPipeline etapa) async {
+    if (!_columnasCtrl.hasClients) return;
+    final destino = (EtapaPipeline.values.indexOf(etapa) * _anchoColumna)
+        .clamp(0.0, _columnasCtrl.position.maxScrollExtent)
+        .toDouble();
+    await _columnasCtrl.animateTo(
+      destino,
+      duration: const Duration(milliseconds: 320),
+      curve: Curves.easeOutCubic,
+    );
+  }
 
   @override
   void initState() {
@@ -303,19 +444,190 @@ class _EmpresaPipelineScreenState extends State<EmpresaPipelineScreen> {
     if (_data.sinSoporte > 0) {
       return MpEmptyState(
         icon: CupertinoIcons.exclamationmark_circle,
-        title: 'El seguimiento por etapas todavía no está disponible',
+        title: 'Hay postulaciones que la app no sabe ubicar',
         message: 'Tenés ${_data.sinSoporte} '
-            '${_data.sinSoporte == 1 ? "candidato conectado" : "candidatos conectados"}, '
-            'pero su estado no corresponde a ninguna etapa que la app pueda '
-            'seguir. Mientras tanto, gestionalos desde Candidatos.',
+            '${_data.sinSoporte == 1 ? "postulación" : "postulaciones"} '
+            'con un estado que esta versión no reconoce. Actualizá la app; '
+            'mientras tanto podés gestionarlas desde Candidatos.',
       );
     }
 
     return const MpEmptyState(
       icon: CupertinoIcons.person_2,
-      title: 'Todavía no hay candidatos en proceso',
-      message: 'Cuando marques candidatos como interesantes desde el feed, van '
-          'a aparecer acá por etapa.',
+      title: 'Todavía no hay postulaciones',
+      message: 'Cuando alguien se postule a una de tus vacantes va a aparecer '
+          'acá, y desde este tablero lo movés de etapa.',
+    );
+  }
+
+  // ── Acciones sobre una postulación ────────────────────────────────────────
+
+  /// Menú de la tarjeta. Antes la tarjeta abría el perfil directo; ahora
+  /// desde acá también se mueve de etapa, que es lo que este tablero no podía
+  /// hacer (ver la adenda del 30/8 arriba).
+  Future<void> _acciones(CandidatoPipeline c) async {
+    final confidencial =
+        c.usuario.accountType.toLowerCase().startsWith('confidenc');
+    final nombre = confidencial ? 'Candidato confidencial' : c.usuario.name;
+
+    await showCupertinoModalPopup<void>(
+      context: context,
+      builder: (sheetContext) => CupertinoActionSheet(
+        title: Text(nombre),
+        message: Text(
+          c.vacante == null
+              ? 'Está en ${c.etapa.etiqueta}'
+              : '${c.vacante} · ${c.etapa.etiqueta}',
+        ),
+        actions: [
+          CupertinoActionSheetAction(
+            onPressed: () {
+              Navigator.pop(sheetContext);
+              _moverEtapa(c, nombre);
+            },
+            child: const Text('Mover de etapa'),
+          ),
+          CupertinoActionSheetAction(
+            onPressed: () {
+              Navigator.pop(sheetContext);
+              Navigator.of(context).push(
+                CupertinoPageRoute(
+                  builder: (_) => EmpresaCandidaturaHistorialScreen(
+                    applicationId: c.applicationId,
+                    nombreCandidato: nombre,
+                    vacante: c.vacante,
+                  ),
+                ),
+              );
+            },
+            child: const Text('Ver historial'),
+          ),
+          CupertinoActionSheetAction(
+            onPressed: () {
+              Navigator.pop(sheetContext);
+              Navigator.of(context).push(
+                CupertinoPageRoute(
+                  builder: (_) =>
+                      EmpresaCandidatoPerfilScreen(candidatoId: c.usuario.id),
+                ),
+              );
+            },
+            child: const Text('Ver perfil'),
+          ),
+          CupertinoActionSheetAction(
+            onPressed: () {
+              Navigator.pop(sheetContext);
+              _oferta(c, nombre);
+            },
+            child: const Text('Oferta'),
+          ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () => Navigator.pop(sheetContext),
+          child: const Text('Cancelar'),
+        ),
+      ),
+    );
+  }
+
+  /// Abre la oferta de esta postulación si ya existe, o el formulario para
+  /// crear una si no. La empresa no tiene que saber cuál es: acá se
+  /// consulta y se decide (migración 051, bloque E2).
+  Future<void> _oferta(CandidatoPipeline c, String nombre) async {
+    setState(() => _loading = true);
+    JobOffer? existente;
+    try {
+      existente = await loadOfferForApplication(c.applicationId);
+    } catch (_) {
+      existente = null;
+    }
+    if (!mounted) return;
+    setState(() => _loading = false);
+
+    final vacante = c.vacante ?? 'Vacante';
+    if (existente == null) {
+      await Navigator.of(context).push(
+        CupertinoPageRoute(
+          builder: (_) => EmpresaCrearOfertaScreen(
+            applicationId: c.applicationId,
+            candidatoNombre: nombre,
+            vacante: vacante,
+          ),
+        ),
+      );
+    } else {
+      await Navigator.of(context).push(
+        CupertinoPageRoute(
+          builder: (_) => EmpresaOfertaDetalleScreen(
+            applicationId: c.applicationId,
+            candidatoNombre: nombre,
+            vacante: vacante,
+          ),
+        ),
+      );
+    }
+    if (!mounted) return;
+    _load();
+  }
+
+  /// El estado nuevo lo decide el servidor: acá no se toca `_data` a mano.
+  /// Si la RPC acepta el cambio se recarga el tablero completo, así el
+  /// contador de cada columna y la etapa quedan siempre como los ve la base.
+  Future<void> _moverEtapa(CandidatoPipeline c, String nombre) async {
+    final eleccion = await mostrarCambioEtapa(
+      context,
+      nombreCandidato: nombre,
+      estadoActual: c.etapa.status,
+    );
+    if (eleccion == null || !mounted) return;
+
+    setState(() => _loading = true);
+    try {
+      await setApplicationStage(
+        applicationId: c.applicationId,
+        status: eleccion.status,
+        reason: eleccion.reason,
+        notes: eleccion.notes,
+      );
+    } on StageChangeException catch (e) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+      await _avisar('No se pudo mover', e.mensaje);
+      return;
+    }
+    if (!mounted) return;
+    await _load();
+    if (!mounted) return;
+
+    // El tablero ya se recargó: llevar la vista a donde quedó la persona.
+    // Se espera al frame siguiente porque el ListView de columnas recién se
+    // vuelve a construir cuando termina la recarga, y antes de eso el
+    // controller todavía no tiene clientes.
+    final destino = etapaDeStatus(eleccion.status);
+    if (destino != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _irAEtapa(destino);
+      });
+    }
+  }
+
+  Future<void> _avisar(String titulo, String mensaje) {
+    return showCupertinoDialog<void>(
+      context: context,
+      builder: (dialogContext) => CupertinoAlertDialog(
+        title: Text(titulo),
+        content: Padding(
+          padding: const EdgeInsets.only(top: MpTokens.space8),
+          child: Text(mensaje),
+        ),
+        actions: [
+          CupertinoDialogAction(
+            isDefaultAction: true,
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Entendido'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -325,6 +637,7 @@ class _EmpresaPipelineScreenState extends State<EmpresaPipelineScreen> {
     return SizedBox(
       height: 316,
       child: ListView.separated(
+        controller: _columnasCtrl,
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(
           horizontal: MpTokens.screenPadding,
@@ -434,12 +747,7 @@ class _EmpresaPipelineScreenState extends State<EmpresaPipelineScreen> {
     return MpCard(
       radius: MpTokens.radiusLG,
       padding: const EdgeInsets.all(MpTokens.space12),
-      onTap: () => Navigator.of(context).push(
-        CupertinoPageRoute(
-          builder: (_) =>
-              EmpresaCandidatoPerfilScreen(candidatoId: c.usuario.id),
-        ),
-      ),
+      onTap: () => _acciones(c),
       child: Row(
         children: [
           MpAvatar(
@@ -584,7 +892,10 @@ class _EmpresaPipelineScreenState extends State<EmpresaPipelineScreen> {
         ? '0%'
         : '${(cantidad / _data.total * 100).round()}%';
 
-    return Column(
+    return GestureDetector(
+      onTap: () => _irAEtapa(etapa),
+      behavior: HitTestBehavior.opaque,
+      child: Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         MpIconTile(
@@ -620,6 +931,7 @@ class _EmpresaPipelineScreenState extends State<EmpresaPipelineScreen> {
           ),
         ),
       ],
+      ),
     );
   }
 }

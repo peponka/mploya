@@ -13,7 +13,7 @@ import '../services/my_profile_service.dart';
 import 'camera_screen.dart';
 import 'micro_pitch_web_stub.dart'
     if (dart.library.html) 'micro_pitch_web_recorder.dart';
-import 'onboarding_tour_screen.dart';
+import '../navigation/main_navigation.dart';
 import 'talent_onboarding_complete_screen.dart';
 
 class OnboardingPitchScreen extends StatefulWidget {
@@ -86,10 +86,14 @@ class _OnboardingPitchScreenState extends State<OnboardingPitchScreen> {
 
       if (!mounted) return;
 
+      // ADENDA 29/8/2026: antes abría el tour de 5 pantallas
+      // (OnboardingTourScreen), sacado de toda la app a pedido de Pedro. El
+      // dashboard de Empresa ahora explica "cómo funciona" con un coach mark
+      // contextual — ver CoachMarkService.showEmpresaDashboardTour.
       Navigator.of(context, rootNavigator: true).pushReplacement(
         PageRouteBuilder(
           pageBuilder: (context, animation, secondaryAnimation) =>
-              OnboardingTourScreen(accountType: 'empresa'),
+              const MainNavigation(),
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
             return FadeTransition(opacity: animation, child: child);
           },
@@ -563,9 +567,30 @@ class _OnboardingPitchScreenState extends State<OnboardingPitchScreen> {
                                   ],
                                 ),
                                 const SizedBox(height: 22),
-                                AspectRatio(
-                                  aspectRatio: 16 / 9,
+                                GestureDetector(
+                                  behavior: HitTestBehavior.opaque,
+                                  // ADENDA 30/8/2026 — este recuadro se veía
+                                  // como un botón de grabar y no lo era: el
+                                  // círculo rojo era decoración sin gesto, y
+                                  // la única vía real era el botón de abajo.
+                                  // Ahora hace lo mismo que ese botón.
+                                  onTap: _isUploading
+                                      ? null
+                                      : (kIsWeb
+                                            ? _toggleRecording
+                                            : _pickFromGallery),
                                   child: Container(
+                                    // Altura MÍNIMA, no fija: antes era
+                                    // `AspectRatio(16/9)` y el contenido no
+                                    // entraba —36 px de overflow—, porque los
+                                    // textos envuelven distinto en cada ancho.
+                                    constraints: const BoxConstraints(
+                                      minHeight: 190,
+                                    ),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                      vertical: 20,
+                                    ),
                                     decoration: BoxDecoration(
                                       borderRadius: BorderRadius.circular(24),
                                       color: Colors.white.withValues(
@@ -601,6 +626,7 @@ class _OnboardingPitchScreenState extends State<OnboardingPitchScreen> {
                                           ),
                                         ),
                                         Column(
+                                          mainAxisSize: MainAxisSize.min,
                                           mainAxisAlignment:
                                               MainAxisAlignment.center,
                                           children: [

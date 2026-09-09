@@ -22,6 +22,7 @@ import 'settings_screen.dart';
 import 'admin_dashboard_screen.dart';
 import '../widgets/web_ui.dart';
 import '../services/my_profile_service.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 
 /// Pantalla privada del usuario: todas las herramientas que usa él mismo,
 /// separadas de su perfil público. Agrupadas por los mismos 4 pilares que la
@@ -407,7 +408,13 @@ class ConfidentialModeCardState extends State<ConfidentialModeCard> {
         await setMyCandidatePrivacy(value);
       }
       if (mounted) setState(() => _isConfidential = value);
-    } catch (_) {
+    } catch (e, stackTrace) {
+      FirebaseCrashlytics.instance.recordError(
+        e,
+        stackTrace,
+        reason: 'mis_herramientas_screen: setMyCandidatePrivacy',
+        fatal: false,
+      );
     } finally {
       if (mounted) setState(() => _loading = false);
     }

@@ -1,33 +1,38 @@
 import 'package:flutter/cupertino.dart';
 
+import '../../services/job_offer_service.dart';
 import '../../widgets/ds/mploya_ds.dart';
-import 'empresa_candidato_perfil_screen.dart';
+import 'empresa_oferta_detalle_screen.dart';
 import 'empresa_proceso_data.dart';
 
-/// Ofertas: candidatos que ya recibieron una oferta.
+/// Ofertas: candidatos con una oferta laboral real hecha (migración 051).
+///
+/// ╔═══════════════════════════════════════════════════════════════════════╗
+/// ║ ADENDA 30/8/2026 — migración 051, bloque E2. Reemplaza la versión      ║
+/// ║ CONGELADA del 12/8/2026 (comentario original más abajo, conservado    ║
+/// ║ por honestidad histórica).                                             ║
+/// ╚═══════════════════════════════════════════════════════════════════════╝
+///
+/// Antes de esta migración no existía tabla de ofertas: esta pantalla listaba
+/// postulaciones con `status = 'accepted'` y decía explícitamente que no
+/// podía mostrar salario, vencimiento, beneficios ni historial porque nada de
+/// eso se guardaba. Ahora `job_offers` es una tabla real y esta pantalla la
+/// lee directamente vía `loadOfertasEmpresa()` — salario, moneda, modalidad,
+/// vencimiento y estado real de cada oferta.
+///
+/// ---
+/// COMENTARIO ORIGINAL (CONGELADA 12/8/2026), conservado por honestidad
+/// histórica — ya no describe el comportamiento actual de esta pantalla:
 ///
 /// DERIVACIÓN CONTROLADA. Entre los 87 PNG no hay una pantalla de "gestión de
 /// ofertas" de Empresa: `ofertadigital.png` y `oferta recibida candidato.png`
 /// están escritas desde el lado del CANDIDATO (reciben la oferta, la aceptan).
-/// Se conserva de ellas la idea de ficha por oferta con la vacante y el estado,
-/// y la estructura de listado de las pantallas de Empresa ya aprobadas.
-///
-/// QUÉ ES UNA OFERTA ACÁ. No hay tabla de ofertas. Lo único real es
-/// `job_applications.status = 'accepted'`, que es exactamente lo que el
-/// Dashboard cuenta como etapa "Oferta". Por eso esta pantalla no muestra
-/// salario ofrecido, vencimiento, contrato, firma, beneficios ni historial de
-/// negociación: nada de eso se guarda en ningún lado.
-///
-/// La fecha que se muestra es la de la POSTULACIÓN, y está rotulada como tal:
-/// cuándo se hizo la oferta no queda registrado.
-/// ╔═══════════════════════════════════════════════════════════════════════╗
-/// ║ CONGELADA el 12/8/2026 — diseño Y comportamiento aprobados.           ║
-/// ║ No modificar salvo bug funcional o responsive concreto y demostrable. ║
-/// ╚═══════════════════════════════════════════════════════════════════════╝
-///
+/// Se conserva de ellas la idea de ficha por oferta con la vacante y el
+/// estado, y la estructura de listado de las pantallas de Empresa ya
+/// aprobadas.
 class EmpresaOfertasScreen extends StatefulWidget {
   /// Datos ya resueltos, para los golden tests.
-  final ProcesoData? previewData;
+  final OfertasEmpresaData? previewData;
 
   const EmpresaOfertasScreen({super.key, this.previewData});
 
@@ -36,7 +41,7 @@ class EmpresaOfertasScreen extends StatefulWidget {
 }
 
 class _EmpresaOfertasScreenState extends State<EmpresaOfertasScreen> {
-  ProcesoData _data = ProcesoData.empty;
+  OfertasEmpresaData _data = OfertasEmpresaData.empty;
   bool _loading = true;
 
   @override
@@ -54,7 +59,7 @@ class _EmpresaOfertasScreenState extends State<EmpresaOfertasScreen> {
     if (widget.previewData != null) return;
     if (!mounted) return;
     setState(() => _loading = true);
-    final data = await loadOfertas();
+    final data = await loadOfertasEmpresa();
     if (!mounted) return;
     setState(() {
       _data = data;
@@ -94,8 +99,6 @@ class _EmpresaOfertasScreenState extends State<EmpresaOfertasScreen> {
   }
 
   List<Widget> _cuerpo() {
-    final s = context.mp;
-
     if (_data.total == 0) return [_encabezado(), _vacio()];
 
     final grupos = _data.porVacante;
@@ -108,22 +111,21 @@ class _EmpresaOfertasScreenState extends State<EmpresaOfertasScreen> {
       for (final entrada in grupos.entries) ...[
         Text(
           entrada.key,
-          style: MpTokens.h2.copyWith(color: s.text, fontSize: 17),
+          style: MpTokens.h2.copyWith(color: context.mp.text, fontSize: 17),
         ),
         const SizedBox(height: MpTokens.space4),
         Text(
           '${entrada.value.length} '
           '${entrada.value.length == 1 ? 'oferta' : 'ofertas'}',
-          style: MpTokens.micro.copyWith(color: s.textTertiary),
+          style: MpTokens.micro.copyWith(color: context.mp.textTertiary),
         ),
         const SizedBox(height: MpTokens.space12),
-        for (final p in entrada.value) ...[
-          _tarjeta(p),
+        for (final o in entrada.value) ...[
+          _tarjeta(o),
           const SizedBox(height: MpTokens.space8),
         ],
         const SizedBox(height: MpTokens.space16),
       ],
-      _queNoSeGuarda(),
     ];
   }
 
@@ -147,7 +149,7 @@ class _EmpresaOfertasScreenState extends State<EmpresaOfertasScreen> {
               Text('Ofertas', style: MpTokens.h1.copyWith(color: s.text)),
               const SizedBox(height: MpTokens.space4),
               Text(
-                'Candidatos con oferta, por vacante.',
+                'Ofertas hechas, por vacante.',
                 style: MpTokens.body.copyWith(
                   color: s.textSecondary,
                   fontSize: 14,
@@ -174,8 +176,8 @@ class _EmpresaOfertasScreenState extends State<EmpresaOfertasScreen> {
             : 'Todavía no hay ofertas',
         message: _data.error
             ? 'Revisá tu conexión y volvé a intentar.'
-            : 'Cuando una postulación pase a la etapa de oferta, el candidato '
-                'aparece acá con su vacante.',
+            : 'Las ofertas que le hagas a un candidato desde Pipeline '
+                'aparecen acá.',
         actionLabel: _data.error ? 'Reintentar' : null,
         onAction: _data.error ? _load : null,
       ),
@@ -185,9 +187,11 @@ class _EmpresaOfertasScreenState extends State<EmpresaOfertasScreen> {
   Widget _resumen() {
     final s = context.mp;
     final vacantes = _data.porVacante.length;
+    final abiertas = _data.ofertas.where((o) => o.oferta.abierta).length;
 
     final items = <({String valor, String etiqueta})>[
       (valor: '${_data.total}', etiqueta: 'Ofertas'),
+      (valor: '$abiertas', etiqueta: abiertas == 1 ? 'Abierta' : 'Abiertas'),
       (valor: '$vacantes', etiqueta: vacantes == 1 ? 'Vacante' : 'Vacantes'),
     ];
 
@@ -235,26 +239,36 @@ class _EmpresaOfertasScreenState extends State<EmpresaOfertasScreen> {
     );
   }
 
-  Widget _tarjeta(PersonaEnProceso p) {
+  Widget _tarjeta(OfertaEmpresa o) {
     final s = context.mp;
+    final status = switch (o.oferta.status) {
+      'accepted' => MpStatus.active,
+      'declined' => MpStatus.danger,
+      'withdrawn' || 'expired' => MpStatus.finished,
+      'changes_requested' => MpStatus.paused,
+      _ => MpStatus.info,
+    };
 
     return MpCard(
       radius: MpTokens.radiusLG,
       padding: const EdgeInsets.all(MpTokens.space12),
       onTap: () => Navigator.of(context).push(
         CupertinoPageRoute(
-          builder: (_) =>
-              EmpresaCandidatoPerfilScreen(candidatoId: p.candidatoId),
+          builder: (_) => EmpresaOfertaDetalleScreen(
+            applicationId: o.oferta.applicationId,
+            candidatoNombre: o.nombreVisible,
+            vacante: o.vacante,
+          ),
         ),
       ),
       child: Row(
         children: [
           MpAvatar(
-            name: p.nombreVisible,
+            name: o.nombreVisible,
             size: 46,
-            image: p.avatarUrl == null || p.confidencial
+            image: o.avatarUrl == null || o.confidencial
                 ? null
-                : NetworkImage(p.avatarUrl!),
+                : NetworkImage(o.avatarUrl!),
           ),
           const SizedBox(width: MpTokens.space12),
           Expanded(
@@ -263,47 +277,24 @@ class _EmpresaOfertasScreenState extends State<EmpresaOfertasScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                p.nombreVisible,
+                  o.nombreVisible,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: MpTokens.title.copyWith(color: s.text, fontSize: 15),
                 ),
-                if (p.headline != null)
-                  Text(
-                    p.headline!,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: MpTokens.micro.copyWith(color: s.textSecondary),
-                  ),
-                if (p.antiguedad != null)
-                  Text(
-                    'Se postuló ${p.antiguedad!.toLowerCase()}',
-                    style: MpTokens.micro.copyWith(
-                      color: s.textTertiary,
-                      fontSize: 10.5,
-                    ),
-                  ),
+                Text(
+                  o.oferta.salarioFormateado,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: MpTokens.micro.copyWith(color: s.textSecondary),
+                ),
               ],
             ),
           ),
           const SizedBox(width: MpTokens.space8),
-          MpStatusBadge(label: 'Con oferta', status: MpStatus.info),
+          MpStatusBadge(label: offerStatusLabel(o.oferta.status), status: status),
         ],
       ),
-    );
-  }
-
-  /// Sin esto, la ausencia de salario o vencimiento se lee como un olvido.
-  Widget _queNoSeGuarda() {
-    final s = context.mp;
-
-    return MpBanner(
-      icon: CupertinoIcons.info,
-      title: 'Qué no queda registrado',
-      message: 'Mploya no guarda el salario ofrecido, la fecha de la oferta ni '
-          'su vencimiento: la etapa de oferta es un estado de la postulación. '
-          'La fecha que ves es la de la postulación.',
-      color: s.textTertiary,
     );
   }
 }

@@ -358,6 +358,104 @@ class CandPerfilAcciones extends StatelessWidget {
   }
 }
 
+/// Siguiente paso concreto para que el candidato no tenga que adivinar cómo
+/// mejorar su perfil antes de empezar a postularse.
+class CandPerfilProgreso extends StatelessWidget {
+  const CandPerfilProgreso({
+    super.key,
+    required this.porcentaje,
+    required this.tieneVideo,
+    required this.tieneExperiencia,
+    this.onEditar,
+    this.onGrabar,
+  });
+
+  final int porcentaje;
+  final bool tieneVideo;
+  final bool tieneExperiencia;
+  final VoidCallback? onEditar;
+  final VoidCallback? onGrabar;
+
+  @override
+  Widget build(BuildContext context) {
+    final complete = porcentaje >= 100 && tieneVideo && tieneExperiencia;
+    final actionIsVideo = !tieneVideo;
+    final message = complete
+        ? 'Tu perfil está listo para postularte.'
+        : actionIsVideo
+        ? 'Grabá tu Video Pitch para destacar en las vacantes.'
+        : !tieneExperiencia
+        ? 'Sumá tu experiencia para que las empresas te conozcan mejor.'
+        : 'Completá los datos que faltan para mejorar tus matches.';
+    final actionLabel = actionIsVideo ? 'Grabar pitch' : 'Completar perfil';
+
+    return CandTarjeta(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Container(
+            width: 46,
+            height: 46,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: MpTokens.primary.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Text(
+              '$porcentaje%',
+              style: const TextStyle(
+                color: MpTokens.primary,
+                fontSize: 12,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Impulsá tu perfil',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  message,
+                  style: const TextStyle(
+                    fontSize: 12.5,
+                    height: 1.25,
+                    color: MpTokens.lightTextSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          GestureDetector(
+            onTap: actionIsVideo ? onGrabar : onEditar,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(
+                color: MpTokens.primary,
+                borderRadius: BorderRadius.circular(MpTokens.radiusPill),
+              ),
+              child: Text(
+                actionLabel,
+                style: const TextStyle(
+                  color: CupertinoColors.white,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// Bloque de video pitch. Sin video grabado el bloque lo dice y ofrece grabarlo,
 /// en vez de simular una reproducción que no existe.
 class CandPerfilVideoPitch extends StatelessWidget {
@@ -451,8 +549,9 @@ class CandPerfilVideoPitch extends StatelessWidget {
                           ),
                           decoration: BoxDecoration(
                             color: CupertinoColors.white.withValues(alpha: 0.2),
-                            borderRadius:
-                                BorderRadius.circular(MpTokens.radiusPill),
+                            borderRadius: BorderRadius.circular(
+                              MpTokens.radiusPill,
+                            ),
                           ),
                           child: Text(
                             tieneVideo ? 'Regrabar' : 'Grabar',
@@ -808,8 +907,9 @@ class CandPerfilConfidencial extends StatelessWidget {
                         : CupertinoColors.white.withValues(alpha: 0.22),
                     borderRadius: BorderRadius.circular(MpTokens.radiusPill),
                   ),
-                  alignment:
-                      activo ? Alignment.centerRight : Alignment.centerLeft,
+                  alignment: activo
+                      ? Alignment.centerRight
+                      : Alignment.centerLeft,
                   padding: const EdgeInsets.symmetric(horizontal: 3),
                   child: Container(
                     width: 19,
@@ -864,8 +964,7 @@ class CandPerfilConfidencial extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             fontSize: 11.5,
-                            color:
-                                CupertinoColors.white.withValues(alpha: 0.7),
+                            color: CupertinoColors.white.withValues(alpha: 0.7),
                           ),
                         ),
                     ],

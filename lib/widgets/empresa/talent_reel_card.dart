@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:video_player/video_player.dart';
 
 import '../../models/models.dart';
+import '../../services/coach_mark_service.dart';
 import '../../navigation/main_navigation.dart';
 import '../../screens/chat_inmail_screen.dart';
 import '../../screens/empresa/empresa_candidato_perfil_screen.dart';
@@ -11,8 +12,17 @@ import '../../screens/scheduling_screen.dart';
 import '../../services/video_preload_manager.dart';
 import '../ds/mploya_ds.dart';
 import '../reel_card_video.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 
 /// Reel de UN candidato para el feed de talento de Empresa.
+///
+/// ADENDA 30/8/2026: el riel de acciones se metía debajo de la barra
+/// superior de la pantalla (el anillo de Match pisaba los botones de sonido
+/// y menú). Bug de layout concreto y demostrable, reportado con captura. Ver
+/// el comentario de `railTop` en build(). Al mover el riel cambian los
+/// goldens `empresa_feed_con_vacante.png` / `empresa_feed_sin_vacante.png`
+/// (hay que regenerarlos con --update-goldens); el test que verifica que el
+/// riel NO se comprime en 393x852 sigue pasando.
 ///
 /// UI reconstruida desde `video pantalla completa candidato.png`
 /// (15. Video a Pantalla Completa - Candidato).
@@ -44,6 +54,10 @@ class TalentReelCard extends StatefulWidget {
   final VoidCallback onSelectJob;
   final VoidCallback? onShortlist;
 
+  /// Primer card del feed embebido: acá se ancla el coach mark que
+  /// explica que el Match IA necesita una vacante elegida (29/8/2026).
+  final bool isFirstCard;
+
   const TalentReelCard({
     super.key,
     required this.candidate,
@@ -56,6 +70,7 @@ class TalentReelCard extends StatefulWidget {
     this.selectedJobMeta,
     this.matchPercentage,
     this.onShortlist,
+    this.isFirstCard = false,
   });
 
   @override
@@ -250,7 +265,14 @@ class _TalentReelCardState extends State<TalentReelCard> with RouteAware {
           .eq('saved_user_id', widget.candidate.id)
           .maybeSingle();
       if (mounted) setState(() => _isSaved = row != null);
-    } catch (_) {}
+    } catch (e, stackTrace) {
+      FirebaseCrashlytics.instance.recordError(
+        e,
+        stackTrace,
+        reason: 'talent_reel_card: leer si esta guardado',
+        fatal: false,
+      );
+    }
   }
 
   Future<void> _toggleSaved() async {
@@ -381,16 +403,29 @@ class _TalentReelCardState extends State<TalentReelCard> with RouteAware {
         child: LayoutBuilder(
           builder: (context, constraints) {
             // Alto real del REEL, que no es el de la pantalla: la barra
-            // inferior le resta ~80pt. En un 393x852 el reel mide ~772, y ahí
-            // el separador debe seguir siendo 200 para no mover el diseño
-            // aprobado (hay un test que lo verifica).
+            // inferior le resta ~80pt (en un 393x852 el reel mide ~772).
             final alto = constraints.maxHeight;
+
+            // FIX (Pedro, 30/8/2026): la barra superior de la pantalla
+            // (volver · Para ti/Explorar · sonido · menú) se dibuja ENCIMA de
+            // este card, dentro de un SafeArea, y mide 58pt (42 de botón +
+            // 8+8 de padding) más el notch. Acá se reservaba 0 en pantallas
+            // altas, así que el riel —alineado abajo, pero más alto que el
+            // hueco libre— terminaba metiéndose DEBAJO de esa barra: el
+            // anillo de Match ("Elegí vacante" / "Match IA") quedaba pisando
+            // los botones de sonido y menú. El golden test no lo detectaba
+            // porque monta el card solo, sin la barra de la pantalla.
+            final topInset = MediaQuery.of(context).padding.top;
+            final railTop = topInset + 66;
+
+            // Separador inferior. El bloque de datos sólo ocupa TODO el ancho
+            // en su última fila (la tarjeta de vacante, ~85pt); el resto del
+            // texto ya se angosta solo para no cruzarse con el riel. 130
+            // despeja esa tarjeta con margen y, al mismo tiempo, le devuelve
+            // al riel el alto que ahora se reserva arriba, para que siga
+            // entrando a tamaño natural en vez de comprimirse.
             final railBottom =
-                alto >= 740 ? 200.0 : (alto >= 620 ? 150.0 : 120.0);
-            // Reserva superior SÓLO en pantallas bajas. Con altura de sobra va
-            // en 0 para que el riel conserve su tamaño natural y el diseño
-            // aprobado quede intacto; cuando falta espacio, protege la barra.
-            final railTop = alto >= 740 ? 0.0 : 58.0;
+                alto >= 740 ? 130.0 : (alto >= 620 ? 120.0 : 100.0);
 
             return Stack(
           fit: StackFit.expand,
@@ -504,7 +539,10 @@ class _TalentReelCardState extends State<TalentReelCard> with RouteAware {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        _matchIndicator(),
+        KeyedSubtree(
+          key: widget.isFirstCard ? cmEmpresaFeedMatchKey : null,
+          child: _matchIndicator(),
+        ),
         const SizedBox(height: 18),
         _railAction(
           icon: _isSaved

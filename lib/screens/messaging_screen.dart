@@ -25,6 +25,7 @@ import 'agora_call_screen.dart';
 import 'headhunter/headhunter_interviews_screen.dart';
 import 'profile_screen.dart';
 import 'scheduling_screen.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MessagingScreen — inbox & matches reales (Premium "No-Line" Theme)
@@ -911,7 +912,14 @@ class ChatDetailScreenState extends State<ChatDetailScreen> {
       if (row != null && mounted) {
         setState(() => _myDisplayName = row['name']?.toString() ?? 'Usuario');
       }
-    } catch (_) {}
+    } catch (e, stackTrace) {
+      FirebaseCrashlytics.instance.recordError(
+        e,
+        stackTrace,
+        reason: 'messaging_screen: cargar nombre propio',
+        fatal: false,
+      );
+    }
   }
 
   void _setupTypingChannel() {

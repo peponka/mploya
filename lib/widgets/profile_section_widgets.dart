@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import '../theme/app_theme.dart';
 import '../models/models.dart';
 import '../screens/trending_hashtags_screen.dart';
@@ -223,7 +224,14 @@ class _SkillPillState extends State<SkillPill> with SingleTickerProviderStateMix
             'p_type': 'endorsement',
             'p_description': '⭐ Alguien validó tu habilidad "${widget.skill}"',
             'p_actor_id': uid,
-          }).catchError((_) {});
+          }).catchError((e, stackTrace) {
+            FirebaseCrashlytics.instance.recordError(
+              e,
+              stackTrace,
+              reason: 'profile_section_widgets: create_system_notification (endorsement)',
+              fatal: false,
+            );
+          });
         }
       }
     }

@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/models.dart';
 import '../services/my_profile_service.dart';
+import 'empresa/empresa_herramientas_screen.dart';
 import 'headhunter/headhunter_tools_screen.dart';
 import 'mis_herramientas_screen.dart';
 
@@ -59,15 +60,16 @@ class _ToolsHubEntryScreenState extends State<ToolsHubEntryScreen> {
         final data = snapshot.data;
         if (data == null) {
           return const CupertinoPageScaffold(
-            child: Center(
-              child: Text('No se pudo cargar Mis herramientas.'),
-            ),
+            child: Center(child: Text('No se pudo cargar Mis herramientas.')),
           );
         }
 
         final profile = NexUser.fromJson(data.profile);
         if (profile.accountType == 'headhunter') {
           return const HeadhunterToolsScreen();
+        }
+        if (profile.accountType == 'empresa') {
+          return const EmpresaHerramientasScreen();
         }
         return MisHerramientasScreen(profile: profile, isAdmin: data.isAdmin);
       },
