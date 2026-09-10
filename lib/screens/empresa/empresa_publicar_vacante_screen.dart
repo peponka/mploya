@@ -3,6 +3,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../services/ai_match_service.dart';
+import '../../services/coach_mark_service.dart';
 import '../../widgets/ds/mploya_ds.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 
@@ -82,6 +83,30 @@ class _EmpresaPublicarVacanteScreenState
     MpStep('Requisitos', icon: CupertinoIcons.checkmark_seal),
     MpStep('Publicar', icon: CupertinoIcons.paperplane),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    // Intro de 3 pasos, una sola vez por empresa — inspirada en JobToday
+    // pero con el flujo real de Mploya (video, no texto). Se muestra
+    // ANTES de que la empresa toque el wizard, así entiende qué viene
+    // después de publicar y no se pierde entre "Descubrí candidatos" y
+    // "Pipeline" cuando llegue ahí.
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      if (await CoachMarkService.shouldShowPublicarIntro()) {
+        if (!mounted) return;
+        await CoachMarkService.markPublicarIntroShown();
+        if (!mounted) return;
+        await Navigator.of(context).push(
+          CupertinoPageRoute(
+            fullscreenDialog: true,
+            builder: (_) => const _PublicarVacanteIntro(),
+          ),
+        );
+      }
+    });
+  }
 
   @override
   void dispose() {
@@ -894,6 +919,132 @@ class _EmpresaPublicarVacanteScreenState
                   ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Intro de 3 pasos antes del wizard de Publicar vacante — una sola vez por
+/// empresa (`CoachMarkService.shouldShowPublicarIntro`).
+///
+/// Inspirada en la pantalla "Cómo contratar con Job Today" (JobToday, capturas
+/// que mandó Pedro el 10/9/2026), pero NO es una traducción literal: los 3
+/// pasos de Job Today son "publicá tu oferta · revisá perfiles y chateá ·
+/// invitá a los mejores", que asume un flujo de texto/CV. Acá los 3 pasos son
+/// los reales de Mploya, donde el video es el centro: grabar la vacante,
+/// descubrir candidatos deslizando su video en el feed, e invitar a
+/// entrevista desde el Pipeline. Un solo acento violeta, sin colores
+/// decorativos por ítem — mismo criterio que el resto de la auditoría.
+class _PublicarVacanteIntro extends StatelessWidget {
+  const _PublicarVacanteIntro();
+
+  static const _pasos = [
+    (
+      CupertinoIcons.video_camera_solid,
+      'Grabá tu vacante en video',
+      'Contá el puesto en cámara (o dejá que la IA te arme el texto). '
+          'Un video se nota más humano que un anuncio de texto y filtra mejor.',
+    ),
+    (
+      CupertinoIcons.play_rectangle_fill,
+      'Descubrí candidatos en el feed',
+      'Deslizá videos de talento uno a la vez, igual que en el feed de '
+          'Inicio — no listas de CVs para leer.',
+    ),
+    (
+      CupertinoIcons.person_3_fill,
+      'Invitá a entrevista desde Pipeline',
+      'Cuando alguien te interesa, avanzá su postulación y coordiná la '
+          'entrevista ahí mismo.',
+    ),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final s = context.mp;
+
+    return MpSurface(
+      style: MpSurfaceStyle.light,
+      child: CupertinoPageScaffold(
+        backgroundColor: MpTokens.lightBg,
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(
+              MpTokens.screenPadding,
+              MpTokens.space12,
+              MpTokens.screenPadding,
+              MpTokens.space16,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: MpIconButton(
+                    icon: CupertinoIcons.xmark,
+                    onPressed: () => Navigator.of(context).maybePop(),
+                  ),
+                ),
+                const SizedBox(height: MpTokens.space16),
+                Text(
+                  'Así se publica en Mploya',
+                  style: MpTokens.h1.copyWith(color: s.text, fontSize: 26),
+                ),
+                const SizedBox(height: MpTokens.space24),
+                Expanded(
+                  child: ListView.separated(
+                    itemCount: _pasos.length,
+                    separatorBuilder: (_, __) =>
+                        const SizedBox(height: MpTokens.space20),
+                    itemBuilder: (_, i) {
+                      final (icon, titulo, texto) = _pasos[i];
+                      return Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          MpIconTile(
+                            icon: icon,
+                            color: MpTokens.primary,
+                            size: 44,
+                            circular: true,
+                          ),
+                          const SizedBox(width: MpTokens.space12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  titulo,
+                                  style: MpTokens.h2.copyWith(
+                                    color: s.text,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                                const SizedBox(height: MpTokens.space4),
+                                Text(
+                                  texto,
+                                  style: MpTokens.body.copyWith(
+                                    color: s.textSecondary,
+                                    fontSize: 14,
+                                    height: 1.4,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                ),
+                MpButton(
+                  label: 'Empezar',
+                  expand: true,
+                  onPressed: () => Navigator.of(context).maybePop(),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

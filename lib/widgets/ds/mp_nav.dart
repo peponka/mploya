@@ -38,6 +38,11 @@ class MpBottomNav extends StatelessWidget {
 
   final IconData centerIcon;
 
+  /// Ancla para el coach mark que explica qué hay detrás del botón central
+  /// (CoachMarkService.showPlusButtonTour). Opcional: si no se pasa, no se
+  /// puede anclar ningún tour a este botón.
+  final GlobalKey? centerButtonKey;
+
   const MpBottomNav({
     super.key,
     required this.items,
@@ -46,6 +51,7 @@ class MpBottomNav extends StatelessWidget {
     this.onCenterTap,
     this.centerLabel,
     this.centerIcon = CupertinoIcons.add,
+    this.centerButtonKey,
   }) : assert(items.length == 4, 'La barra lleva 4 pestañas + acción central');
 
   /// Cuánto sobresale el botón central por encima del borde de la barra.
@@ -174,6 +180,7 @@ class MpBottomNav extends StatelessWidget {
     final s = context.mp;
 
     return GestureDetector(
+      key: centerButtonKey,
       onTap: onCenterTap,
       behavior: HitTestBehavior.opaque,
       child: Column(

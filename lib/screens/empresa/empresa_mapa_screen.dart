@@ -187,9 +187,26 @@ Future<MapaData> loadCandidatosCercanos({
 /// llamada directa a la RPC (o cualquier otro consumidor futuro) seguiría
 /// recibiendo el dato crudo. Arreglar eso de raíz requiere tocar la función
 /// SQL, fuera del alcance de esta tanda (prohibido backend/migraciones).
+/// LAYOUT (10/9/2026) — Pedro pidió, tras ver capturas de JobToday, que el
+/// mapa fuera protagonista a pantalla completa en vez de compartir la mitad
+/// de arriba con encabezado/filtros y la mitad de abajo con la lista.
+/// Encabezado y filtros ahora flotan sobre el mapa (`_controlesFlotantes`,
+/// `_mapa(fullBleed: true)`); la lista de candidatos queda como una hoja fija
+/// más chica abajo. Pendiente, pedido explícitamente por Pedro pero NO hecho
+/// en esta tanda por requerir tocar el HTML/JS embebido de Leaflet en
+/// `mobile_map.dart`/`web_map.dart` sin forma de probarlo visualmente en esta
+/// sesión: (a) ícono por categoría en cada pin — hoy `CandidatoCercano` ni
+/// siquiera trae un campo de categoría/rubro, así que primero habría que
+/// sumar ese dato; (b) agrupar pines cercanos con un número (clustering) —
+/// requiere sumar una librería (Leaflet.markercluster) al HTML embebido.
+/// Mejor hacerlas junto con una prueba real en el teléfono.
+///
 /// ╔═══════════════════════════════════════════════════════════════════════╗
 /// ║ CONGELADA el 12/8/2026 — diseño Y comportamiento aprobados.           ║
 /// ║ No modificar salvo bug funcional o responsive concreto y demostrable. ║
+/// ║ Actualizada el 10/9/2026 por el cambio de layout de arriba, con OK    ║
+/// ║ explícito de Pedro. El resto de la pantalla (datos, filtros, mapa     ║
+/// ║ embebido) sigue congelado igual que antes.                            ║
 /// ╚═══════════════════════════════════════════════════════════════════════╝
 ///
 class EmpresaMapaScreen extends StatefulWidget {
@@ -269,19 +286,31 @@ class _EmpresaMapaScreenState extends State<EmpresaMapaScreen> {
             ? const Center(child: CupertinoActivityIndicator(radius: 15))
             : LayoutBuilder(
                 builder: (context, constraints) {
-                  // El mapa es protagonista pero nunca se come la lista: con
-                  // poca altura cede espacio en vez de desbordar.
+                  // Mapa a pantalla completa (pedido de Pedro tras ver
+                  // JobToday, 10/9/2026): el mapa es lo primero que se ve, de
+                  // punta a punta. Encabezado y filtros flotan arriba sobre
+                  // él; la lista de candidatos es una hoja fija abajo, más
+                  // chica que antes, no un panel que se come casi media
+                  // pantalla.
                   final alto = constraints.maxHeight;
-                  final altoMapa = (alto * 0.42).clamp(180.0, 340.0);
+                  final alturaHoja = (alto * 0.30).clamp(200.0, 300.0);
 
-                  return Column(
+                  return Stack(
                     children: [
-                      _encabezado(),
-                      const SizedBox(height: MpTokens.space12),
-                      _filtros(),
-                      const SizedBox(height: MpTokens.space12),
-                      SizedBox(height: altoMapa, child: _mapa()),
-                      Expanded(child: _hoja()),
+                      Positioned.fill(child: _mapa(fullBleed: true)),
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        top: 0,
+                        child: _controlesFlotantes(),
+                      ),
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        height: alturaHoja,
+                        child: _hoja(),
+                      ),
                     ],
                   );
                 },
@@ -290,19 +319,48 @@ class _EmpresaMapaScreenState extends State<EmpresaMapaScreen> {
     );
   }
 
-  // ── Encabezado ────────────────────────────────────────────────────────────
+  // ── Encabezado + filtros flotando sobre el mapa ─────────────────────────────
 
-  Widget _encabezado() {
+  Widget _controlesFlotantes() {
     final s = context.mp;
-    final total = _visibles.length;
-
-    return Padding(
+    return Container(
       padding: const EdgeInsets.fromLTRB(
         MpTokens.screenPadding,
         MpTokens.space12,
         MpTokens.screenPadding,
-        0,
+        MpTokens.space12,
       ),
+      decoration: BoxDecoration(color: s.card, boxShadow: MpTokens.cardShadow),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _encabezado(flotante: true),
+          const SizedBox(height: MpTokens.space12),
+          _filtros(flotante: true),
+        ],
+      ),
+    );
+  }
+
+  // ── Encabezado ────────────────────────────────────────────────────────────
+
+  /// [flotante]: cuando el encabezado vive dentro de `_controlesFlotantes()`
+  /// (mapa a pantalla completa), el padding ya lo pone el contenedor de
+  /// afuera y el título va más chico — es una barra compacta sobre el mapa,
+  /// no el título grande de una pantalla con scroll normal.
+  Widget _encabezado({bool flotante = false}) {
+    final s = context.mp;
+    final total = _visibles.length;
+
+    return Padding(
+      padding: flotante
+          ? EdgeInsets.zero
+          : const EdgeInsets.fromLTRB(
+              MpTokens.screenPadding,
+              MpTokens.space12,
+              MpTokens.screenPadding,
+              0,
+            ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -312,7 +370,10 @@ class _EmpresaMapaScreenState extends State<EmpresaMapaScreen> {
               children: [
                 Text(
                   'Mapa de candidatos',
-                  style: MpTokens.h1.copyWith(color: s.text, fontSize: 25),
+                  style: MpTokens.h1.copyWith(
+                    color: s.text,
+                    fontSize: flotante ? 19 : 25,
+                  ),
                 ),
                 const SizedBox(height: MpTokens.space4),
                 Text(
@@ -334,11 +395,11 @@ class _EmpresaMapaScreenState extends State<EmpresaMapaScreen> {
     );
   }
 
-  Widget _filtros() {
+  Widget _filtros({bool flotante = false}) {
     return Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: MpTokens.screenPadding,
-      ),
+      padding: flotante
+          ? EdgeInsets.zero
+          : const EdgeInsets.symmetric(horizontal: MpTokens.screenPadding),
       child: MpSegmentedFilter(
         options: [
           MpFilterOption('Todos', count: _data.candidatos.length),
@@ -361,17 +422,16 @@ class _EmpresaMapaScreenState extends State<EmpresaMapaScreen> {
 
   // ── Mapa ──────────────────────────────────────────────────────────────────
 
-  Widget _mapa() {
+  /// [fullBleed]: mapa a pantalla completa (sin margen ni bordes
+  /// redondeados) para el layout nuevo, donde el mapa va de punta a punta y
+  /// el encabezado/filtros flotan arriba (`_controlesFlotantes`). Los
+  /// controles propios del mapa (ubicación / deseleccionar) bajan para no
+  /// quedar tapados por esa barra flotante.
+  Widget _mapa({bool fullBleed = false}) {
     final s = context.mp;
     final visibles = _visibles;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: MpTokens.screenPadding,
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(MpTokens.radiusXL),
-        child: Stack(
+    final contenido = Stack(
           children: [
             Positioned.fill(
               child: ColoredBox(
@@ -402,7 +462,10 @@ class _EmpresaMapaScreenState extends State<EmpresaMapaScreen> {
             ),
             Positioned(
               right: MpTokens.space12,
-              top: MpTokens.space12,
+              // Full-bleed: la barra flotante de encabezado + filtros ocupa
+              // la parte de arriba, así que estos botones bajan para no
+              // quedar tapados por ella.
+              top: fullBleed ? 148 : MpTokens.space12,
               child: Column(
                 children: [
                   _controlMapa(CupertinoIcons.location_fill, _load),
@@ -415,7 +478,15 @@ class _EmpresaMapaScreenState extends State<EmpresaMapaScreen> {
               ),
             ),
           ],
-        ),
+        );
+
+    if (fullBleed) return contenido;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: MpTokens.screenPadding),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(MpTokens.radiusXL),
+        child: contenido,
       ),
     );
   }

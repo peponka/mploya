@@ -292,7 +292,7 @@ class _EmpresaVacantesScreenState extends State<EmpresaVacantesScreen> {
       if (_data.soportaEstados)
         _metrica(
           icon: CupertinoIcons.play_circle,
-          color: MpTokens.catGreen,
+          color: MpTokens.primary,
           valor: '${_data.activas}',
           etiqueta: 'Activas',
           pie: _porcentaje(_data.activas),
@@ -300,14 +300,14 @@ class _EmpresaVacantesScreenState extends State<EmpresaVacantesScreen> {
       if (_data.soportaEstados)
         _metrica(
           icon: CupertinoIcons.pause_circle,
-          color: MpTokens.premium,
+          color: MpTokens.primary,
           valor: '${_data.pausadas}',
           etiqueta: 'Pausadas',
           pie: _porcentaje(_data.pausadas),
         ),
       _metrica(
         icon: CupertinoIcons.person_2,
-        color: MpTokens.catBlue,
+        color: MpTokens.primary,
         valor: _data.conteoNoDisponible ? '—' : '${_data.candidatos}',
         etiqueta: 'Candidatos',
         pie: _data.conteoNoDisponible ? 'Sin acceso' : 'Postulaciones',

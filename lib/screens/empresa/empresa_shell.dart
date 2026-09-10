@@ -35,6 +35,9 @@ class EmpresaShell extends StatelessWidget {
   final List<int> bottomSlots;
   final String? centerLabel;
 
+  /// Ancla para el coach mark del botón central (ver `MpBottomNav`).
+  final GlobalKey? centerButtonKey;
+
   /// Los reels se muestran hasta el borde inferior, con la navegación por
   /// encima. Las pantallas de gestión conservan la barra fuera del contenido.
   final bool overlayNavigation;
@@ -50,11 +53,13 @@ class EmpresaShell extends StatelessWidget {
     this.role = MpRole.empresa,
     this.bottomSlots = _bottomSlots,
     this.centerLabel,
+    this.centerButtonKey,
     this.overlayNavigation = false,
   });
 
   /// Ranuras de la barra inferior → índice global.
-  static const _bottomSlots = <int>[7, 2, 5, 8];
+  /// Vacantes (6) reemplaza a Herramientas (8) — ver mp_roles.dart.
+  static const _bottomSlots = <int>[7, 2, 5, 6];
 
   /// Destinos de la barra lateral → índice global.
   ///
@@ -88,6 +93,7 @@ class EmpresaShell extends StatelessWidget {
       onTap: (slot) => onTap(bottomSlots[slot]),
       onCenterTap: onPrimaryAction,
       centerLabel: centerLabel ?? role.centerLabel,
+      centerButtonKey: centerButtonKey,
     );
 
     return MpSurface(

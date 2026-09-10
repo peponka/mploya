@@ -319,7 +319,7 @@ class _EmpresaDashboardScreenState extends State<EmpresaDashboardScreen> {
       ),
       _Kpi(
         icon: CupertinoIcons.person_2,
-        color: MpTokens.catGreen,
+        color: MpTokens.primary,
         value: _data.candidatosEnProceso,
         label: 'Candidatos\nen proceso',
         link: 'Ver pipeline',
@@ -327,7 +327,7 @@ class _EmpresaDashboardScreenState extends State<EmpresaDashboardScreen> {
       ),
       _Kpi(
         icon: CupertinoIcons.calendar,
-        color: MpTokens.catOrange,
+        color: MpTokens.primary,
         value: _data.entrevistasSemana,
         label: 'Entrevistas\nesta semana',
         link: 'Ver agenda',
@@ -335,7 +335,7 @@ class _EmpresaDashboardScreenState extends State<EmpresaDashboardScreen> {
       ),
       _Kpi(
         icon: CupertinoIcons.check_mark_circled,
-        color: MpTokens.catBlue,
+        color: MpTokens.primary,
         value: _data.contratacionesMes,
         // `accepted` de job_applications. NO es una contratación: el sistema
         // todavía no puede registrar contrataciones.

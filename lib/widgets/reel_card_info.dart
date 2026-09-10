@@ -463,11 +463,8 @@ class ReelInfoPanel extends StatelessWidget {
                     alignment: Alignment.center,
                     padding: const EdgeInsets.symmetric(vertical: 9),
                     decoration: BoxDecoration(
-                      gradient: const LinearGradient(colors: [Color(0xFF185FA5), Color(0xFF378ADD)]),
+                      color: NexTheme.brandAccent,
                       borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(color: const Color(0xFF185FA5).withValues(alpha: 0.4), blurRadius: 12, offset: const Offset(0, 4)),
-                      ],
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,

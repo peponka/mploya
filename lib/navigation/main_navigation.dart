@@ -199,6 +199,13 @@ class _MainNavigationState extends State<MainNavigation> {
       _currentIndex = nextIndex;
       currentMainTabNotifier.value = nextIndex;
     });
+
+    // El texto del tour depende del rol, así que espera a que el tipo de
+    // cuenta real esté aplicado (no el 'candidato' por defecto del arranque).
+    // El propio servicio se asegura de mostrarlo una sola vez por usuario.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) CoachMarkService.showPlusButtonTour(context, newType);
+    });
   }
 
   Future<void> _fetchAccountType() async {
@@ -408,7 +415,7 @@ class _MainNavigationState extends State<MainNavigation> {
         ),
         actions: [
           for (final option in const [
-            ('candidato', 'Candidato · ver empresas y vacantes'),
+            ('candidato', 'Talento · ver empresas y vacantes'),
             ('empresa', 'Empresa · descubrir candidatos'),
             ('headhunter', 'Headhunter · gestionar búsquedas'),
             ('confidencial', 'Candidato confidencial'),
@@ -440,31 +447,14 @@ class _MainNavigationState extends State<MainNavigation> {
         builder: (sheetContext) => CupertinoActionSheet(
           title: const Text('Accesos Empresa'),
           message: const Text(
-            'Elegí el módulo que querés abrir dentro de la experiencia Empresa.',
+            'Publicá una vacante o saltá a cualquier módulo de la experiencia Empresa.',
           ),
           actions: [
+            // Única acción de creación real de esta hoja: va primera y en
+            // negrita (isDefaultAction) para separarla visualmente del resto,
+            // que es navegación pura.
             CupertinoActionSheetAction(
-              onPressed: () {
-                Navigator.pop(sheetContext);
-                _chooseExperience();
-              },
-              child: const Text('Cambiar experiencia'),
-            ),
-            CupertinoActionSheetAction(
-              onPressed: () {
-                Navigator.pop(sheetContext);
-                _onTabTap(7);
-              },
-              child: const Text('Dashboard'),
-            ),
-            CupertinoActionSheetAction(
-              onPressed: () {
-                Navigator.pop(sheetContext);
-                _onTabTap(0);
-              },
-              child: const Text('Feed talento'),
-            ),
-            CupertinoActionSheetAction(
+              isDefaultAction: true,
               onPressed: () {
                 Navigator.pop(sheetContext);
                 navigator.push(
@@ -473,56 +463,77 @@ class _MainNavigationState extends State<MainNavigation> {
                   ),
                 );
               },
-              child: const Text('Publicar vacante'),
+              child: const Text('+ Publicar vacante'),
+            ),
+            CupertinoActionSheetAction(
+              onPressed: () {
+                Navigator.pop(sheetContext);
+                _onTabTap(7);
+              },
+              child: const Text('Ir a Dashboard'),
+            ),
+            CupertinoActionSheetAction(
+              onPressed: () {
+                Navigator.pop(sheetContext);
+                _onTabTap(0);
+              },
+              child: const Text('Ir a Feed talento'),
             ),
             CupertinoActionSheetAction(
               onPressed: () {
                 Navigator.pop(sheetContext);
                 _onTabTap(6);
               },
-              child: const Text('Vacantes'),
+              child: const Text('Ir a Vacantes'),
             ),
             CupertinoActionSheetAction(
               onPressed: () {
                 Navigator.pop(sheetContext);
                 _onTabTap(1);
               },
-              child: const Text('Pipeline'),
+              child: const Text('Ir a Pipeline'),
             ),
             CupertinoActionSheetAction(
               onPressed: () {
                 Navigator.pop(sheetContext);
                 _onTabTap(5);
               },
-              child: const Text('Mensajes'),
+              child: const Text('Ir a Mensajes'),
             ),
             CupertinoActionSheetAction(
               onPressed: () {
                 Navigator.pop(sheetContext);
                 _onTabTap(2);
               },
-              child: const Text('Mapa'),
+              child: const Text('Ir a Mapa'),
             ),
             CupertinoActionSheetAction(
               onPressed: () {
                 Navigator.pop(sheetContext);
                 _onTabTap(3);
               },
-              child: const Text('Alertas'),
+              child: const Text('Ir a Alertas'),
             ),
             CupertinoActionSheetAction(
               onPressed: () {
                 Navigator.pop(sheetContext);
                 _onTabTap(4);
               },
-              child: const Text('Perfil empresa'),
+              child: const Text('Ir a Perfil empresa'),
             ),
             CupertinoActionSheetAction(
               onPressed: () {
                 Navigator.pop(sheetContext);
                 _onTabTap(8);
               },
-              child: const Text('Herramientas'),
+              child: const Text('Ir a Herramientas'),
+            ),
+            CupertinoActionSheetAction(
+              onPressed: () {
+                Navigator.pop(sheetContext);
+                _chooseExperience();
+              },
+              child: const Text('Cambiar experiencia'),
             ),
           ],
           cancelButton: CupertinoActionSheetAction(
@@ -540,17 +551,14 @@ class _MainNavigationState extends State<MainNavigation> {
         builder: (sheetContext) => CupertinoActionSheet(
           title: const Text('Acción rápida'),
           message: const Text(
-            'Accedé a tus búsquedas, herramientas y perfil profesional.',
+            'Publicá una búsqueda o saltá a tus herramientas y perfil profesional.',
           ),
           actions: [
+            // Única acción de creación real de esta hoja: va primera y en
+            // negrita (isDefaultAction) para separarla del resto, que es
+            // navegación pura.
             CupertinoActionSheetAction(
-              onPressed: () {
-                Navigator.pop(sheetContext);
-                _chooseExperience();
-              },
-              child: const Text('Cambiar experiencia'),
-            ),
-            CupertinoActionSheetAction(
+              isDefaultAction: true,
               onPressed: () {
                 Navigator.pop(sheetContext);
                 navigator.push(
@@ -559,35 +567,42 @@ class _MainNavigationState extends State<MainNavigation> {
                   ),
                 );
               },
-              child: const Text('Publicar vacante'),
+              child: const Text('+ Publicar vacante'),
             ),
             CupertinoActionSheetAction(
               onPressed: () {
                 Navigator.pop(sheetContext);
                 _onTabTap(5);
               },
-              child: const Text('Abrir mensajes'),
+              child: const Text('Ir a Mensajes'),
             ),
             CupertinoActionSheetAction(
               onPressed: () {
                 Navigator.pop(sheetContext);
                 _onTabTap(8);
               },
-              child: const Text('Mis herramientas'),
+              child: const Text('Ir a Herramientas'),
             ),
             CupertinoActionSheetAction(
               onPressed: () {
                 Navigator.pop(sheetContext);
                 _onTabTap(2);
               },
-              child: const Text('Talent Pool'),
+              child: const Text('Ir a Talent Pool'),
             ),
             CupertinoActionSheetAction(
               onPressed: () {
                 Navigator.pop(sheetContext);
                 _onTabTap(9);
               },
-              child: const Text('Mi perfil'),
+              child: const Text('Ir a mi perfil'),
+            ),
+            CupertinoActionSheetAction(
+              onPressed: () {
+                Navigator.pop(sheetContext);
+                _chooseExperience();
+              },
+              child: const Text('Cambiar experiencia'),
             ),
           ],
           cancelButton: CupertinoActionSheetAction(
@@ -683,7 +698,7 @@ class _MainNavigationState extends State<MainNavigation> {
         _ => MpRole.candidato,
       };
       final slots = switch (_accountType) {
-        'empresa' => const [7, 2, 5, 8],
+        'empresa' => const [7, 2, 5, 6],
         'headhunter' => const [7, 1, 6, 8],
         _ => const [0, 1, 5, 8],
       };
@@ -694,6 +709,7 @@ class _MainNavigationState extends State<MainNavigation> {
         unreadMessages: _unreadMessages,
         role: role,
         bottomSlots: slots,
+        centerButtonKey: cmPlusButtonKey,
         centerLabel:
             _accountType == 'candidato' || _accountType == 'confidencial'
             ? 'Crear / Más'

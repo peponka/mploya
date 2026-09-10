@@ -40,6 +40,12 @@ final GlobalKey cmEmpresaFeedMatchKey = GlobalKey(debugLabel: 'cm_empresa_feed_m
 // buscar y postularse. Se ancla en el buscador de la pantalla.
 final GlobalKey cmCandVacantesBuscarKey = GlobalKey(debugLabel: 'cm_cand_vacantes_buscar');
 
+// Botón "+" de la barra inferior — agregado el 10/9/2026: la auditoría de
+// navegabilidad mostró que en Empresa/Headhunter ese botón es en la práctica
+// el menú principal del rol (Vacantes, Pipeline, Perfil, etc. viven ahí
+// adentro), no solo "crear". Se ancla en el botón central de MpBottomNav.
+final GlobalKey cmPlusButtonKey = GlobalKey(debugLabel: 'cm_plus_button');
+
 // ── Servicio ──────────────────────────────────────────────────────────────────
 
 class CoachMarkService {
@@ -209,6 +215,53 @@ class CoachMarkService {
         _t(cmCandVacantesBuscarKey, 'Buscá tu próximo trabajo 🔍',
             'Filtrá por puesto, ubicación o modalidad.\nTocá una vacante para ver el detalle y postularte.',
             ContentAlign.bottom),
+    ];
+
+    if (targets.isEmpty || !context.mounted) return;
+    _show(context, targets);
+  }
+
+  // ── Intro de "Cómo publicar" (antes del wizard de Publicar vacante) ────────
+  // Agregado el 10/9/2026, inspirado en el explicador de 3 pasos que muestra
+  // JobToday antes de dejar entrar a la empresa al flujo de publicar — pero
+  // con los 3 pasos reales de Mploya (video, no texto). Es una intro de
+  // pantalla completa, no un coach mark de `TutorialCoachMark`, así que no
+  // usa `_show`/`_t`: la pantalla de Publicar vacante la muestra ella misma
+  // y sólo le pide a este servicio si corresponde mostrarla y que quede
+  // marcada como vista.
+  static Future<bool> shouldShowPublicarIntro() async {
+    if (kIsWeb) return false;
+    return !(await _done('coach_empresa_publicar_intro_v1_$_uid'));
+  }
+
+  static Future<void> markPublicarIntroShown() async {
+    await _mark('coach_empresa_publicar_intro_v1_$_uid');
+  }
+
+  // ── Botón "+" de la barra inferior ──────────────────────────────────────────
+  static Future<void> showPlusButtonTour(
+      BuildContext context, String accountType) async {
+    if (kIsWeb) return; // Coach marks only on native app
+    final key = 'coach_plus_button_v1_$_uid';
+    if (await _done(key)) return;
+    if (!context.mounted) return;
+    await _mark(key);
+
+    await Future.delayed(const Duration(milliseconds: 700));
+    if (!context.mounted) return;
+
+    final body = switch (accountType) {
+      'empresa' =>
+        'Publicá una vacante o entrá a Vacantes, Pipeline, Mapa, Alertas y más — todo vive acá.',
+      'headhunter' =>
+        'Publicá una búsqueda o entrá a Talent Pool, Mensajes y tu perfil — todo vive acá.',
+      _ =>
+        'Creá contenido o abrí tu Red y tu Perfil — todo vive acá.',
+    };
+
+    final targets = <TargetFocus>[
+      if (_alive(cmPlusButtonKey))
+        _t(cmPlusButtonKey, 'Tu menú principal 📋', body, ContentAlign.top),
     ];
 
     if (targets.isEmpty || !context.mounted) return;

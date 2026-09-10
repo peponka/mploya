@@ -97,7 +97,11 @@ extension MpRolePattern on MpRole {
         label: 'Mensajes',
         badge: unreadMessages,
       ),
-      const MpNavItem(icon: CupertinoIcons.briefcase, label: 'Herramientas'),
+      // Antes "Herramientas" — la auditoría de navegabilidad (10/9/2026)
+      // mostró que Vacantes, el objeto central del flujo de Empresa, vivía
+      // sólo escondido dentro del menú "+". Herramientas sigue accesible
+      // desde ahí ("Ir a Herramientas").
+      const MpNavItem(icon: CupertinoIcons.briefcase, label: 'Vacantes'),
     ],
     MpRole.headhunter => [
       const MpNavItem(icon: CupertinoIcons.house_fill, label: 'Dashboard'),
@@ -110,12 +114,13 @@ extension MpRolePattern on MpRole {
     ],
   };
 
-  /// Etiqueta bajo el botón central, cuando el mockup la muestra.
-  /// En `dashboard empresa.png` y en el dashboard de headhunter el botón
-  /// central va sin texto; solo el feed de candidato lo rotula.
+  /// Etiqueta bajo el botón central. Antes iba sin texto en Empresa y
+  /// Headhunter (medido en `dashboard empresa.png`), pero ese botón en la
+  /// práctica abre el menú principal de esos roles, no solo "crear" — así
+  /// que lleva etiqueta para no leerse como un simple botón de publicar.
   String? get centerLabel => switch (this) {
     MpRole.candidato || MpRole.confidencial => 'Publicar',
-    MpRole.empresa => null,
-    MpRole.headhunter => null,
+    MpRole.empresa => 'Accesos',
+    MpRole.headhunter => 'Accesos',
   };
 }
