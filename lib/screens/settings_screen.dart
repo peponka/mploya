@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../navigation/main_navigation.dart' show requestRoleSwitchNotifier;
 import '../theme/app_theme.dart';
 import '../theme/mploya_tokens.dart';
 import '../services/auth_service.dart';
@@ -197,6 +198,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   iconBg: const Color(0xFF5F3DC4),
                   title: 'Contraseña y seguridad',
                   onTap: _showChangePassword,
+                ),
+                // ADENDA 10/9/2026, con OK explícito de Pedro: mismo disparador
+                // que la nueva fila de "Mis Herramientas" — ver ese archivo
+                // para el porqué. Acá vive junto al resto de "Cuenta".
+                _SettingsTile(
+                  icon: CupertinoIcons.arrow_2_squarepath,
+                  iconBg: MpTokens.primary,
+                  title: 'Cambiar experiencia',
+                  subtitle: _accountType == 'empresa' ||
+                          _accountType == 'headhunter'
+                      ? 'Volvé a modo Talento o probá Headhunter'
+                      : '¿Buscás talento? Probá Mploya como Empresa',
+                  onTap: () => requestRoleSwitchNotifier.value++,
                 ),
               ],
             ),

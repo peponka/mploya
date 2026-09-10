@@ -2,7 +2,9 @@ import 'dart:ui';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart' show Divider;
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../navigation/main_navigation.dart' show requestRoleSwitchNotifier;
 import '../theme/app_theme.dart';
+import '../theme/mploya_tokens.dart';
 import '../models/models.dart';
 import '../widgets/nex_avatar.dart';
 import '../widgets/profile_section_widgets.dart';
@@ -248,6 +250,23 @@ class MisHerramientasScreen extends StatelessWidget {
         title: 'Cuenta',
         subtitle: 'Ajustes y sesión',
         tiles: [
+          // ADENDA 10/9/2026, con OK explícito de Pedro (idea tomada de
+          // JobToday, adaptada): antes cambiar de experiencia sólo se
+          // descubría desde el botón "+" de la barra inferior. Acá, en el hub
+          // que agrupa "todo lo que usás vos", es donde alguien que se
+          // pregunta "¿puedo probar el lado Empresa?" va a buscar la
+          // respuesta. Dispara `requestRoleSwitchNotifier`, que
+          // `main_navigation.dart` escucha para abrir el mismo diálogo
+          // "Cambiar experiencia" que ya usan el botón "+" y Configuración.
+          _ToolTile(
+            icon: CupertinoIcons.arrow_2_squarepath,
+            color: MpTokens.primary,
+            title: 'Cambiar experiencia',
+            subtitle: _isCompany
+                ? 'Volvé a modo Talento o probá Headhunter'
+                : '¿Buscás talento? Probá Mploya como Empresa',
+            onTap: () => requestRoleSwitchNotifier.value++,
+          ),
           _ToolTile(
             icon: CupertinoIcons.gear_solid,
             color: const Color(0xFF6B7280),

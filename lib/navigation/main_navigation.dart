@@ -49,6 +49,13 @@ import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 
 final ValueNotifier<int> currentMainTabNotifier = ValueNotifier<int>(0);
 
+/// Se incrementa para pedirle a `_MainNavigationState` que abra "Cambiar
+/// experiencia" desde una pantalla que no conoce su estado interno — mismo
+/// patrón que `currentMainTabNotifier` (ver `empresa_talent_feed_screen.dart`
+/// y `premium_feed_reel_card.dart` para el mismo idioma). El valor en sí no
+/// importa, sólo que cambie.
+final ValueNotifier<int> requestRoleSwitchNotifier = ValueNotifier<int>(0);
+
 final RouteObserver<ModalRoute<dynamic>> feedRouteObserver =
     RouteObserver<ModalRoute<dynamic>>();
 
@@ -155,6 +162,7 @@ class _MainNavigationState extends State<MainNavigation> {
     super.initState();
     _subscribeToCounters();
     _fetchAccountType();
+    requestRoleSwitchNotifier.addListener(_onRoleSwitchRequested);
 
     final uid = Supabase.instance.client.auth.currentUser?.id;
     if (uid != null) {
@@ -164,6 +172,15 @@ class _MainNavigationState extends State<MainNavigation> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) CoachMarkService.showNavTour(context);
     });
+  }
+
+  /// Reacciona a `requestRoleSwitchNotifier` — la tarjeta contextual de
+  /// "Cambiar experiencia" en `profile_screen.dart` y la fila del mismo
+  /// nombre en `settings_screen.dart` no pueden llamar a `_chooseExperience`
+  /// directo porque viven en otro archivo, así que piden esto y el diálogo se
+  /// abre acá, con el `_accountType` real.
+  void _onRoleSwitchRequested() {
+    if (mounted) _chooseExperience();
   }
 
   int _defaultIndexForAccount(String accountType) {
@@ -335,6 +352,7 @@ class _MainNavigationState extends State<MainNavigation> {
     _notifSub?.cancel();
     _connSub?.cancel();
     _msgSub?.cancel();
+    requestRoleSwitchNotifier.removeListener(_onRoleSwitchRequested);
     super.dispose();
   }
 

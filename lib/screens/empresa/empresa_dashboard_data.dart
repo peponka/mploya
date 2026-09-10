@@ -63,6 +63,12 @@ class EmpresaDashboardData {
   /// tiempo por transición de etapa.
   final Map<String, double> stageDays;
 
+  /// `true` si falta `about` o `headline` en el perfil de la empresa —
+  /// mismo criterio que `PerfilEmpresa.perfilIncompleto`. Se calcula acá y no
+  /// se reutiliza esa clase para no sumarle al Dashboard una segunda consulta
+  /// a `jobs`: `loadMyProfile()` ya se pide para `companyName`.
+  final bool perfilIncompleto;
+
   const EmpresaDashboardData({
     required this.companyName,
     required this.vacantesActivas,
@@ -73,6 +79,7 @@ class EmpresaDashboardData {
     required this.hiringTrend,
     required this.sources,
     required this.stageDays,
+    this.perfilIncompleto = false,
   });
 
   bool get hasFunnel => funnel.any((stage) => stage.value > 0);
@@ -125,9 +132,15 @@ Future<EmpresaDashboardData> loadEmpresaDashboard() async {
   if (uid == null) return EmpresaDashboardData.empty;
 
   var companyName = '';
+  // Mismo criterio que `PerfilEmpresa.perfilIncompleto`: sin `about` o sin
+  // `headline`, el perfil que ve el candidato está a medio llenar.
+  var perfilIncompleto = false;
   try {
     final me = await loadMyProfile(client: client);
     companyName = (me?['name'] ?? '').toString();
+    final about = (me?['about'] ?? '').toString().trim();
+    final headline = (me?['headline'] ?? '').toString().trim();
+    perfilIncompleto = about.isEmpty || headline.isEmpty;
   } catch (e, stackTrace) {
     FirebaseCrashlytics.instance.recordError(
       e,
@@ -252,5 +265,6 @@ Future<EmpresaDashboardData> loadEmpresaDashboard() async {
     // El backend todavía no registra origen ni tiempos por etapa.
     sources: const [],
     stageDays: const {},
+    perfilIncompleto: perfilIncompleto,
   );
 }

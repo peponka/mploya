@@ -6,6 +6,7 @@ import 'empresa_actividad_screen.dart';
 import 'empresa_dashboard_data.dart';
 import 'empresa_entrevistas_screen.dart';
 import 'empresa_mensajes_screen.dart';
+import 'empresa_perfil_screen.dart';
 import 'empresa_pipeline_screen.dart';
 import 'empresa_publicar_vacante_screen.dart';
 import 'empresa_rendimiento_screen.dart';
@@ -44,6 +45,13 @@ import 'empresa_vacantes_screen.dart';
 /// pantallas que se sacó de la app entera (ver `CoachMarkService`). No cambia
 /// el diseño de esta pantalla, sólo señala dos tarjetas ya existentes la
 /// primera vez que la empresa entra.
+///
+/// ADENDA 10/9/2026, con OK explícito de Pedro: se agrega un banner de
+/// "Completá tu perfil" entre el saludo y los KPI cuando `about` o `headline`
+/// están vacíos (mismo criterio que `PerfilEmpresa.perfilIncompleto`). Antes
+/// ese aviso sólo vivía dentro de "Mi perfil" — una pantalla escondida en el
+/// menú "+" — así que una empresa nueva podía no verlo nunca. El resto de la
+/// pantalla sigue congelado.
 ///
 class EmpresaDashboardScreen extends StatefulWidget {
   final int unreadNotifications;
@@ -188,6 +196,10 @@ class _EmpresaDashboardScreenState extends State<EmpresaDashboardScreen> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _greeting(wide),
+        if (_data.perfilIncompleto) ...[
+          SizedBox(height: wide ? MpTokens.space20 : MpTokens.space16),
+          _bannerPerfilIncompleto(),
+        ],
         SizedBox(height: wide ? MpTokens.space24 : MpTokens.space20),
         _kpiRow(wide),
         SizedBox(height: wide ? MpTokens.space32 : MpTokens.space24),
@@ -302,6 +314,20 @@ class _EmpresaDashboardScreenState extends State<EmpresaDashboardScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  /// Mismo texto y acción que `EmpresaPerfilScreen._bannerIncompleto()`, pero
+  /// visible desde el primer momento: acá es donde la empresa realmente
+  /// aterriza, no dentro de "Mi perfil".
+  Widget _bannerPerfilIncompleto() {
+    return MpBanner(
+      icon: CupertinoIcons.pencil_outline,
+      title: 'Tu perfil está incompleto',
+      message: 'Los candidatos ven esta ficha antes de postularse. Sumá una '
+          'descripción y un titular para que sepan quién sos.',
+      actionLabel: 'Completar perfil',
+      onAction: () => _push(const EmpresaPerfilScreen()),
     );
   }
 
