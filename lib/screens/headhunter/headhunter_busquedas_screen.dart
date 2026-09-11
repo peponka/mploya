@@ -227,6 +227,12 @@ class _HeadhunterBusquedasScreenState extends State<HeadhunterBusquedasScreen> {
         onChanged: (i) => setState(() => _filter = i),
       ),
       const SizedBox(height: MpTokens.space16),
+      // ADENDA 11/9/2026, con OK de Pedro: mismo criterio que ya se aplicó en
+      // Empresa — ver `_metrica` en empresa_vacantes_screen.dart, que deja
+      // "Activas" y "Pausadas" en `MpTokens.primary` pese a ser estados
+      // distintos. La tarjeta acá es un CONTADOR, no un indicador de estado
+      // de UN registro puntual; el estado real de cada búsqueda lo sigue
+      // marcando su propio chip en la lista, no esta fila de métricas.
       Row(
         children: [
           Expanded(
@@ -242,7 +248,7 @@ class _HeadhunterBusquedasScreenState extends State<HeadhunterBusquedasScreen> {
           Expanded(
             child: MpStatTile(
               icon: CupertinoIcons.play_circle_fill,
-              color: MpTokens.success,
+              color: MpTokens.primary,
               value: '${countBySearchStatus(_searches, 'abierta')}',
               label: 'Abiertas',
               compact: true,
@@ -252,7 +258,7 @@ class _HeadhunterBusquedasScreenState extends State<HeadhunterBusquedasScreen> {
           Expanded(
             child: MpStatTile(
               icon: CupertinoIcons.person_2_fill,
-              color: MpTokens.premium,
+              color: MpTokens.primary,
               value: '${countBySearchStatus(_searches, 'en_proceso')}',
               label: 'En proceso',
               compact: true,
@@ -262,7 +268,7 @@ class _HeadhunterBusquedasScreenState extends State<HeadhunterBusquedasScreen> {
           Expanded(
             child: MpStatTile(
               icon: CupertinoIcons.pause_circle_fill,
-              color: MpTokens.danger,
+              color: MpTokens.primary,
               value: '${countBySearchStatus(_searches, 'en_pausa')}',
               label: 'En pausa',
               compact: true,

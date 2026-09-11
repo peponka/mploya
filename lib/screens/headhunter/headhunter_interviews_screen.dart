@@ -239,6 +239,9 @@ class _HeadhunterInterviewsScreenState
     );
   }
 
+  // ADENDA 11/9/2026, con OK de Pedro: mismo criterio de
+  // `headhunter_busquedas_screen.dart` — tres contadores del mismo tipo en
+  // una fila usan un único acento, no uno por estado.
   Widget _metricsRow(int pending, int inProgress, int completed) {
     return IntrinsicHeight(
       child: Row(
@@ -247,7 +250,7 @@ class _HeadhunterInterviewsScreenState
           Expanded(
             child: MpStatTile(
               icon: CupertinoIcons.calendar,
-              color: MpTokens.premium,
+              color: MpTokens.primary,
               value: '$pending',
               label: 'Pendientes',
               compact: true,
@@ -267,7 +270,7 @@ class _HeadhunterInterviewsScreenState
           Expanded(
             child: MpStatTile(
               icon: CupertinoIcons.calendar,
-              color: MpTokens.success,
+              color: MpTokens.primary,
               value: '$completed',
               label: 'Completadas',
               compact: true,

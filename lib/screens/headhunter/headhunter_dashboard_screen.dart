@@ -290,7 +290,13 @@ class _HeadhunterDashboardScreenState extends State<HeadhunterDashboardScreen> {
           Expanded(
             child: MpStatTile(
               icon: CupertinoIcons.calendar,
-              color: MpTokens.catOrange,
+              // ADENDA 11/9/2026: mismo criterio que ya se aplicó en
+              // Empresa (ver `_kpiRow` en empresa_dashboard_screen.dart y
+              // `_metrica` en empresa_vacantes_screen.dart) — tres métricas
+              // del mismo tipo (contadores lado a lado) usan un único acento
+              // violeta en vez de un color distinto por tarjeta sin ningún
+              // significado detrás.
+              color: MpTokens.primary,
               value: '${_interviews.length}',
               label: 'Entrevistas',
               linkLabel: 'Ver agenda',
@@ -302,7 +308,7 @@ class _HeadhunterDashboardScreenState extends State<HeadhunterDashboardScreen> {
           Expanded(
             child: MpStatTile(
               icon: CupertinoIcons.checkmark_alt_circle,
-              color: MpTokens.catGreen,
+              color: MpTokens.primary,
               value: '$_hired',
               label: 'Colocaciones',
               linkLabel: 'Ver analytics',
