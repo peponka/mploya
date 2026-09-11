@@ -31,6 +31,15 @@ import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 /// acciones del mockup es, en orden: Match IA · Guardar · Mensaje · Invitar ·
 /// Interesado (relleno violeta = acción principal) · Compartir.
 /// No existe "Postularme".
+///
+/// INVESTIGADO 11/9/2026 — Pedro reportó "los videos faltan" al ver una
+/// CAPTURA de este reel. No era un bug: el video carga y reproduce solo bien
+/// (confirmado en vivo en el teléfono), pero una captura nunca muestra
+/// movimiento, así que un video andando y una foto fija se ven idénticos en
+/// una imagen — es una limitación de probar con capturas, no algo que se
+/// arregle en la UI. Se evaluó agregar un ícono de video fijo y se descartó:
+/// no prueba nada distinto en una captura y el autoplay ya es el
+/// comportamiento correcto (el video arranca solo, sin pedir ningún tap).
 class TalentReelCard extends StatefulWidget {
   final NexUser candidate;
 

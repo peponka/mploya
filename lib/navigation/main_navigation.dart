@@ -185,7 +185,13 @@ class _MainNavigationState extends State<MainNavigation> {
 
   int _defaultIndexForAccount(String accountType) {
     switch (accountType) {
+      // ADENDA (11/9/2026, pedido explícito de Pedro): Empresa arrancaba en
+      // el Dashboard (KPIs). Ahora arranca directo en el Feed de Talento
+      // (los videos de candidatos) — es lo primero que se ve al abrir la
+      // cuenta, no un panel de números. Headhunter no se tocó, sigue en
+      // Dashboard (7).
       case 'empresa':
+        return 0;
       case 'headhunter':
         return 7;
       default:
@@ -460,6 +466,14 @@ class _MainNavigationState extends State<MainNavigation> {
     final navigator = Navigator.of(context);
 
     if (_accountType == 'empresa') {
+      // ADENDA (11/9/2026, OK de Pedro): esta hoja tenía 4 accesos que
+      // duplicaban EXACTAMENTE la barra de abajo (`bottomSlots` en build():
+      // Dashboard=7/Inicio, Mapa=2, Mensajes=5, Vacantes=6, todas a un toque
+      // de distancia siempre en pantalla). Repetirlos acá solo alargaba la
+      // lista sin sumar ningún destino nuevo — se sacan. Lo que queda es la
+      // acción real (Publicar vacante) más lo que NO está en la barra de
+      // abajo: Feed talento, Pipeline, Alertas, Perfil empresa, Herramientas,
+      // Cambiar experiencia.
       await showCupertinoModalPopup<void>(
         context: context,
         builder: (sheetContext) => CupertinoActionSheet(
@@ -486,13 +500,6 @@ class _MainNavigationState extends State<MainNavigation> {
             CupertinoActionSheetAction(
               onPressed: () {
                 Navigator.pop(sheetContext);
-                _onTabTap(7);
-              },
-              child: const Text('Ir a Dashboard'),
-            ),
-            CupertinoActionSheetAction(
-              onPressed: () {
-                Navigator.pop(sheetContext);
                 _onTabTap(0);
               },
               child: const Text('Ir a Feed talento'),
@@ -500,30 +507,9 @@ class _MainNavigationState extends State<MainNavigation> {
             CupertinoActionSheetAction(
               onPressed: () {
                 Navigator.pop(sheetContext);
-                _onTabTap(6);
-              },
-              child: const Text('Ir a Vacantes'),
-            ),
-            CupertinoActionSheetAction(
-              onPressed: () {
-                Navigator.pop(sheetContext);
                 _onTabTap(1);
               },
               child: const Text('Ir a Pipeline'),
-            ),
-            CupertinoActionSheetAction(
-              onPressed: () {
-                Navigator.pop(sheetContext);
-                _onTabTap(5);
-              },
-              child: const Text('Ir a Mensajes'),
-            ),
-            CupertinoActionSheetAction(
-              onPressed: () {
-                Navigator.pop(sheetContext);
-                _onTabTap(2);
-              },
-              child: const Text('Ir a Mapa'),
             ),
             CupertinoActionSheetAction(
               onPressed: () {
